@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, interactive-widget=resizes-content">
+<meta name="theme-color" content="#0b0e14">
+<title>Pocket Dev</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.css">
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10/lib/addon-fit.js"></script>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #131823; --panel-2: #1b2130; --line: #252d3c;
+    --text: #d7dce5; --muted: #7d8799; --accent: #6aa9ff; --danger: #ff7b72;
+    --mono: ui-monospace, "SF Mono", Menlo, "Roboto Mono", "Droid Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--bg); color: var(--text); font: 14px/1.3 system-ui, -apple-system, Roboto, sans-serif; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  input { font: inherit; }
+
+  #app { position: fixed; top: 0; left: 0; right: 0; height: 100dvh; display: flex; flex-direction: column; }
+
+  header { display: flex; align-items: center; gap: 6px; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #tabs { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  #tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: none; display: flex; align-items: center; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+  .tab.active { border-color: var(--accent); background: var(--panel-2); }
+  .tab.exited .tab-label { color: var(--muted); }
+  .tab-label { height: 34px; padding: 0 2px 0 10px; max-width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tab-x { width: 30px; height: 34px; color: var(--muted); font-size: 12px; }
+  .icon-btn { flex: none; height: 36px; min-width: 36px; padding: 0 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+  #new { font-size: 20px; line-height: 1; padding: 0; }
+  #portsBtn.open { border-color: var(--accent); }
+  #portsCount { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #08101e; font-size: 12px; font-weight: 600; }
+  #portsCount:empty { display: none; }
+
+  #ports { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #ports[hidden] { display: none; }
+  #portForm { display: flex; gap: 6px; }
+  #portInput { width: 92px; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); outline: none; }
+  #portInput:focus { border-color: var(--accent); }
+  .primary { height: 34px; padding: 0 14px; border-radius: 8px; background: var(--accent); color: #08101e; font-weight: 600; }
+  .chip { display: flex; align-items: center; border-radius: 17px; background: var(--panel-2); border: 1px solid var(--line); }
+  .chip a { padding: 0 4px 0 12px; line-height: 32px; color: var(--accent); text-decoration: none; font-family: var(--mono); }
+  .chip button { width: 30px; height: 32px; color: var(--muted); font-size: 12px; }
+  #portErr { flex-basis: 100%; margin: 0; color: var(--danger); font-size: 13px; }
+  #portErr:empty { display: none; }
+
+  #terms { position: relative; flex: 1; min-height: 0; }
+  .term { position: absolute; inset: 0; visibility: hidden; }
+  .term.active { visibility: visible; }
+  .term .xterm { height: 100%; padding: 4px 0 0 6px; }
+  #latest { position: absolute; right: 14px; bottom: 12px; z-index: 5; height: 34px; padding: 0 14px; border-radius: 17px; background: var(--accent); color: #08101e; font-weight: 600; box-shadow: 0 2px 10px #0008; }
+  #badge { position: absolute; top: 8px; right: 10px; z-index: 5; padding: 3px 9px; border-radius: 10px; background: #3a2a10; color: #f0c674; font-size: 12px; }
+  [hidden] { display: none !important; }
+
+  #inputBar { display: flex; gap: 6px; padding: 6px; border-top: 1px solid var(--line); background: var(--panel); }
+  #cmd { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 16px; outline: none; }
+  #cmd:focus { border-color: var(--accent); }
+  #send { height: 42px; padding: 0 16px; border-radius: 10px; background: var(--accent); color: #08101e; font-weight: 600; }
+
+  #keys { display: flex; gap: 6px; padding: 0 6px 6px; overflow-x: auto; background: var(--panel); scrollbar-width: none; }
+  #keys::-webkit-scrollbar { display: none; }
+  .key { flex: none; min-width: 52px; height: 42px; padding: 0 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-family: var(--mono); font-size: 13px; }
+  .key:active, .icon-btn:active { background: var(--line); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div id="tabs"></div>
+    <button id="new" class="icon-btn" aria-label="New terminal">+</button>
+    <button id="portsBtn" class="icon-btn">Ports<span id="portsCount"></span></button>
+  </header>
+  <div id="ports" hidden>
+    <form id="portForm">
+      <input id="portInput" type="number" inputmode="numeric" min="1" max="65535" placeholder="3000" enterkeyhint="go" aria-label="Port">
+      <button class="primary">Open</button>
+    </form>
+    <div id="chips" style="display:contents"></div>
+    <p id="portErr"></p>
+  </div>
+  <main id="terms">
+    <div id="badge" hidden></div>
+    <button id="latest" hidden>↓ latest</button>
+  </main>
+  <form id="inputBar">
+    <input id="cmd" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" placeholder="Type a command">
+    <button id="send">Send</button>
+  </form>
+  <div id="keys"></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const h = (tag, cls, text) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text != null) node.textContent = text;
+  return node;
+};
+
+const store = {
+  get() { try { return localStorage.getItem('pd.active'); } catch { return null; } },
+  set(id) { try { localStorage.setItem('pd.active', id); } catch {} },
+};
+
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: body ? { 'content-type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (res.status === 401) {
+    location.replace('/login.html');
+    throw new Error('Not logged in');
+  }
+  const data = res.status === 204 ? null : await res.json();
+  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  return data;
+}
+
+const views = new Map();
+let activeId = null;
+const active = () => views.get(activeId);
+
+const THEME = {
+  background: '#0b0e14', foreground: '#d7dce5', cursor: '#6aa9ff', selectionBackground: '#2a3550',
+  black: '#1b2130', red: '#ff7b72', green: '#7ee787', yellow: '#f0c674', blue: '#6aa9ff', magenta: '#d2a8ff', cyan: '#76e3ea', white: '#d7dce5',
+  brightBlack: '#5c6577', brightRed: '#ffa198', brightGreen: '#a5f0b0', brightYellow: '#f5d896', brightBlue: '#9cc6ff', brightMagenta: '#e2c5ff', brightCyan: '#a2eef2', brightWhite: '#ffffff',
+};
+
+function sendMsg(view, msg) {
+  if (view.ws?.readyState === WebSocket.OPEN) view.ws.send(JSON.stringify(msg));
+}
+const sendInput = (view, d) => sendMsg(view, { t: 'in', d });
+
+function makeView(session) {
+  const el = h('div', 'term');
+  $('terms').appendChild(el);
+  const term = new Terminal({
+    fontSize: 13, scrollback: 5000, cursorBlink: true, theme: THEME,
+    fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mono'),
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(el);
+  const view = { id: session.id, title: session.title, exitCode: session.exitCode, term, fit, el, ws: null, online: false, everOnline: false, retry: 0, closed: false };
+  term.onData((d) => sendInput(view, d));
+  term.onResize(({ cols, rows }) => sendMsg(view, { t: 'resize', cols, rows }));
+  term.onScroll(() => view.id === activeId && renderLatest());
+  term.onWriteParsed(() => view.id === activeId && renderLatest());
+  attachTouchScroll(view);
+  views.set(view.id, view);
+  fitView(view);
+  connect(view);
+  return view;
+}
+
+function connect(view) {
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/${view.id}`);
+  view.ws = ws;
+  ws.onopen = () => {
+    view.online = view.everOnline = true;
+    view.term.reset();
+    sendMsg(view, { t: 'resize', cols: view.term.cols, rows: view.term.rows });
+    renderBadge();
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.t === 'out') view.term.write(msg.d);
+    else if (msg.t === 'exit') {
+      view.exitCode = msg.code;
+      view.term.write(`\r\n\x1b[2m[process exited ${msg.code}]\x1b[0m\r\n`);
+      renderTabs();
+    }
+  };
+  ws.onclose = () => {
+    if (view.ws !== ws || view.closed) return;
+    view.online = false;
+    renderBadge();
+    clearTimeout(view.retry);
+    view.retry = setTimeout(reconnect, 2000, view);
+  };
+}
+
+// Syncing first drops views whose session is gone and redirects to login if the cookie died,
+// neither of which a failed WebSocket handshake can report.
+async function reconnect(view) {
+  try { await syncSessions(); } catch {}
+  if (views.get(view.id) !== view) return;
+  if (view.ws?.readyState === WebSocket.OPEN || view.ws?.readyState === WebSocket.CONNECTING) return;
+  connect(view);
+}
+
+function dropView(view) {
+  view.closed = true;
+  clearTimeout(view.retry);
+  view.ws?.close();
+  view.term.dispose();
+  view.el.remove();
+  views.delete(view.id);
+}
+
+async function syncSessions() {
+  const list = await api('GET', '/api/sessions');
+  const ids = new Set(list.map((s) => s.id));
+  for (const view of [...views.values()]) if (!ids.has(view.id)) dropView(view);
+  for (const s of list) {
+    const view = views.get(s.id);
+    if (view) view.exitCode = s.exitCode ?? view.exitCode;
+    else makeView(s);
+  }
+  if (!views.has(activeId) && views.size) activate(views.keys().next().value);
+  renderTabs();
+}
+
+async function newSession() {
+  const s = await api('POST', '/api/sessions', {});
+  activate(makeView(s).id);
+}
+
+async function closeSession(view) {
+  if (!confirm(`Close ${view.title}? Anything running in it will be killed.`)) return;
+  try { await api('DELETE', `/api/sessions/${view.id}`); } catch {}
+  const wasActive = view.id === activeId;
+  dropView(view);
+  if (!views.size) return newSession();
+  if (wasActive) activate(views.keys().next().value);
+  else renderTabs();
+}
+
+function activate(id) {
+  activeId = id;
+  store.set(id);
+  for (const v of views.values()) v.el.classList.toggle('active', v.id === id);
+  renderTabs();
+  renderBadge();
+  renderLatest();
+  const view = active();
+  if (view) fitView(view);
+  $('tabs').querySelector('.tab.active')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+}
+
+function renderTabs() {
+  $('tabs').replaceChildren(...[...views.values()].map((v) => {
+    const exited = v.exitCode !== null;
+    const tab = h('div', `tab${v.id === activeId ? ' active' : ''}${exited ? ' exited' : ''}`);
+    const label = h('button', 'tab-label', exited ? `${v.title} [process exited ${v.exitCode}]` : v.title);
+    label.onclick = () => activate(v.id);
+    const close = h('button', 'tab-x', '✕');
+    close.setAttribute('aria-label', `Close ${v.title}`);
+    close.onclick = () => closeSession(v);
+    tab.append(label, close);
+    return tab;
+  }));
+}
+
+function renderBadge() {
+  const view = active();
+  $('badge').hidden = !view || view.online;
+  if (view) $('badge').textContent = view.everOnline ? 'reconnecting…' : 'connecting…';
+}
+
+function renderLatest() {
+  const buf = active()?.term.buffer.active;
+  $('latest').hidden = !buf || buf.viewportY >= buf.baseY;
+}
+
+function fitView(view) {
+  // A hidden tab can be laid out at a bogus width and would push that size to the shared shell.
+  if (document.hidden) return;
+  try { view.fit.fit(); } catch {}
+}
+
+let fitFrame = 0;
+function scheduleFit() {
+  cancelAnimationFrame(fitFrame);
+  fitFrame = requestAnimationFrame(() => {
+    for (const v of views.values()) fitView(v);
+    renderLatest();
+  });
+}
+
+// xterm 5's own touch scrolling is unreliable on Android, so drive scrollLines from touch deltas with a small fling.
+function attachTouchScroll(view) {
+  let lastY = 0, lastT = 0, velocity = 0, carry = 0, dragging = false, frame = 0;
+  const rowPx = () => (view.el.querySelector('.xterm-screen')?.clientHeight || 0) / view.term.rows || 16;
+  const scrollPx = (dy) => {
+    carry += dy;
+    const lines = Math.trunc(carry / rowPx());
+    if (lines) {
+      view.term.scrollLines(lines);
+      carry -= lines * rowPx();
+    }
+  };
+  view.el.addEventListener('touchstart', (e) => {
+    cancelAnimationFrame(frame);
+    if (e.touches.length !== 1) return;
+    lastY = e.touches[0].clientY;
+    lastT = e.timeStamp;
+    velocity = carry = 0;
+    dragging = false;
+  }, { passive: true });
+  view.el.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 1) return;
+    const y = e.touches[0].clientY;
+    const dy = lastY - y;
+    if (!dragging && Math.abs(dy) < 6) return;
+    dragging = true;
+    e.preventDefault();
+    e.stopPropagation();
+    velocity = dy / Math.max(1, e.timeStamp - lastT);
+    lastY = y;
+    lastT = e.timeStamp;
+    scrollPx(dy);
+  }, { passive: false, capture: true });
+  view.el.addEventListener('touchend', (e) => {
+    if (!dragging || e.timeStamp - lastT > 100) return;
+    let perFrame = velocity * 16;
+    const step = () => {
+      perFrame *= 0.95;
+      if (Math.abs(perFrame) < 0.5) return;
+      scrollPx(perFrame);
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+  }, { passive: true });
+}
+
+const KEYS = [
+  ['Ctrl+C', '\x03'], ['Enter', '\r'], ['Esc', '\x1b'], ['Tab', '\t'],
+  ['↑', 'A'], ['↓', 'B'], ['←', 'D'], ['→', 'C'], ['Ctrl+D', '\x04'],
+];
+const ARROWS = 'ABCD';
+
+const closeKeyboard = () => document.activeElement?.blur();
+
+// Buttons that take focus would close the phone keyboard, so swallow the press and act on click.
+function keepFocus(button) {
+  button.tabIndex = -1;
+  button.addEventListener('pointerdown', (e) => e.preventDefault());
+  button.addEventListener('mousedown', (e) => e.preventDefault());
+}
+
+for (const [label, seq] of KEYS) {
+  const key = h('button', 'key', label);
+  keepFocus(key);
+  key.onclick = () => {
+    const view = active();
+    if (!view) return;
+    // Match what xterm sends for a real arrow key: SS3 form when the app enabled application cursor mode.
+    const data = ARROWS.includes(seq) ? (view.term.modes.applicationCursorKeysMode ? '\x1bO' : '\x1b[') + seq : seq;
+    sendInput(view, data);
+    if (seq === '\r') closeKeyboard();
+  };
+  $('keys').appendChild(key);
+}
+
+keepFocus($('send'));
+$('inputBar').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const view = active();
+  if (!view) return;
+  const text = $('cmd').value;
+  $('cmd').value = '';
+  if (text) {
+    sendInput(view, text);
+    // A TUI that detects pastes by chunk can read text+CR arriving together as a pasted newline, not a submit.
+    setTimeout(sendInput, 30, view, '\r');
+  } else {
+    sendInput(view, '\r');
+  }
+  view.term.scrollToBottom();
+  closeKeyboard();
+});
+
+$('latest').addEventListener('click', () => {
+  active()?.term.scrollToBottom();
+  renderLatest();
+});
+keepFocus($('latest'));
+
+$('new').addEventListener('click', () => newSession().catch((err) => alert(err.message)));
+
+let forwards = [];
+function renderForwards() {
+  $('portsCount').textContent = forwards.length || '';
+  $('chips').replaceChildren(...forwards.map(({ port, url }) => {
+    const chip = h('span', 'chip');
+    const link = h('a', null, `:${port}`);
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    const stop = h('button', null, '✕');
+    stop.setAttribute('aria-label', `Stop forwarding ${port}`);
+    stop.onclick = async () => {
+      try { await api('DELETE', `/api/forwards/${port}`); } catch {}
+      refreshForwards();
+    };
+    chip.append(link, stop);
+    return chip;
+  }));
+}
+
+async function refreshForwards() {
+  forwards = (await api('GET', '/api/info')).forwards;
+  renderForwards();
+}
+
+$('portsBtn').addEventListener('click', () => {
+  $('ports').hidden = !$('ports').hidden;
+  $('portsBtn').classList.toggle('open', !$('ports').hidden);
+  scheduleFit();
+});
+
+$('portForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const port = Number($('portInput').value);
+  $('portErr').textContent = '';
+  try {
+    await api('POST', '/api/forwards', { port });
+    $('portInput').value = '';
+  } catch (err) {
+    $('portErr').textContent = err.message;
+  }
+  refreshForwards();
+});
+
+const vv = window.visualViewport;
+function onViewportChange() {
+  if (vv) {
+    $('app').style.height = `${vv.height}px`;
+    $('app').style.transform = `translateY(${vv.offsetTop}px)`;
+  }
+  scheduleFit();
+}
+vv?.addEventListener('resize', onViewportChange);
+vv?.addEventListener('scroll', onViewportChange);
+window.addEventListener('orientationchange', onViewportChange);
+new ResizeObserver(scheduleFit).observe($('terms'));
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  scheduleFit();
+  for (const view of views.values()) {
+    if (view.ws?.readyState === WebSocket.CLOSED) {
+      clearTimeout(view.retry);
+      reconnect(view);
+    }
+  }
+  refreshForwards().catch(() => {});
+});
+
+(async () => {
+  const stored = store.get();
+  await syncSessions();
+  if (!views.size) await newSession();
+  activate(views.has(stored) ? stored : activeId);
+  refreshForwards().catch(() => {});
+})();
+</script>
+</body>
+</html>
