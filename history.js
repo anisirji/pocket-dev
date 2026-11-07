@@ -351,23 +351,6 @@ function collapse(msgs) {
   }));
 }
 
-// Waits for the login shell to print its prompt and go quiet, so the command is not typed into
-// a half-initialised shell (slow .zshrc, compinit questions).
-function typeWhenIdle(proc, text) {
-  let timer = null;
-  const done = () => {
-    clearTimeout(timer);
-    clearTimeout(cap);
-    sub.dispose();
-    try { proc.write(text); } catch {}
-  };
-  const sub = proc.onData(() => {
-    clearTimeout(timer);
-    timer = setTimeout(done, 300);
-  });
-  const cap = setTimeout(done, 5000);
-}
-
 export function createHistoryApi({ createSession, sessionView, sendJson }) {
   // The first scan reads a few hundred MB of jsonl; do it at startup so the phone's first list is warm.
   listSessions(Object.keys(TOOLS), 30).catch(() => {});
@@ -397,9 +380,8 @@ export function createHistoryApi({ createSession, sessionView, sendJson }) {
 
     const cwdExists = s.cwd && fs.statSync(s.cwd, { throwIfNoEntry: false })?.isDirectory();
     const project = !s.cwd ? id.slice(0, 8) : s.cwd === os.homedir() ? '~' : path.basename(s.cwd);
-    const session = createSession(cwdExists ? s.cwd : os.homedir(), `${tool} · ${project}`);
     // The id passed ID_RE and names a file in the store, so it is safe to put on the shell line.
-    typeWhenIdle(session.pty, `${TOOLS[tool].resumeCommand(s.id)}\r`);
+    const session = createSession(cwdExists ? s.cwd : os.homedir(), `${tool} · ${project}`, TOOLS[tool].resumeCommand(s.id));
     const note = cwdExists ? undefined : `${s.cwd || 'The original folder'} no longer exists, so this terminal starts in your home folder.`;
     return sendJson(res, 201, { ...sessionView(session), note });
   };

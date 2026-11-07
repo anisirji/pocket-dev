@@ -216,7 +216,25 @@ function appendScrollback(session, chunk) {
   session.scrollback = buf;
 }
 
-function createSession(cwd, base = folderName(cwd)) {
+// Waits for the login shell to print its prompt and go quiet, so the command is not typed into
+// a half-initialised shell (slow .zshrc, compinit questions).
+function typeWhenIdle(proc, text) {
+  let timer = null;
+  const done = () => {
+    clearTimeout(timer);
+    clearTimeout(cap);
+    sub.dispose();
+    try { proc.write(text); } catch {}
+  };
+  const sub = proc.onData(() => {
+    clearTimeout(timer);
+    timer = setTimeout(done, 300);
+  });
+  const cap = setTimeout(done, 5000);
+}
+
+// `command`, when given, is typed into the new shell once its prompt is up.
+function createSession(cwd, base = folderName(cwd), command) {
   const shell = process.env.SHELL || '/bin/zsh';
   const proc = pty.spawn(shell, ['-l'], {
     name: 'xterm-256color',
@@ -244,6 +262,7 @@ function createSession(cwd, base = folderName(cwd)) {
     broadcast(session, { t: 'exit', code: exitCode });
   });
   sessions.set(session.id, session);
+  if (command) typeWhenIdle(proc, `${command}\r`);
   return session;
 }
 
@@ -450,10 +469,11 @@ async function handleApi(req, res, url) {
     case 'GET sessions':
       return sendJson(res, 200, [...sessions.values()].map(sessionView));
     case 'POST sessions': {
-      const { cwd = HOME } = await readJson(req);
+      const { cwd = HOME, command } = await readJson(req);
       const dir = resolveDir(cwd);
       if (!dir) return sendJson(res, 400, { error: `Not a folder: ${cwd}` });
-      const session = createSession(dir);
+      if (command !== undefined && !isShortcut(command)) return sendJson(res, 400, { error: 'command must be one line of 1 to 200 characters.' });
+      const session = createSession(dir, undefined, command);
       rememberRecent(dir);
       return sendJson(res, 201, sessionView(session));
     }
