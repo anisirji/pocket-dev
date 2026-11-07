@@ -572,8 +572,8 @@ async function start() {
 repoSelect.onchange = () => selectRepo(repoSelect.value);
 root.append(el('div', { class: 'g-bar' }, tabBar, refreshBtn), screensEl);
 document.getElementById('app').append(root);
-// The repo picker takes the tabs' place in the header; git.css hides the tabs in the Git view.
-document.getElementById('tabs').after(repoSelect);
+// The repo picker fills the header's free space in the Git view; the terminal tab bar is hidden there.
+document.getElementById('viewSwitch').after(repoSelect);
 
 window.addEventListener('pd:view', (e) => {
   if (e.detail === 'git' && !state.started) start();
