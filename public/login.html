@@ -42,7 +42,7 @@
     try {
       const r = await fetch('/api/login', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-pocket-dev': '1' },
         body: JSON.stringify({ password: document.getElementById('pw').value }),
       });
       if (r.ok) return location.replace('/');

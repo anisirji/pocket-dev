@@ -132,6 +132,7 @@ Tap **Git** in the top bar. The terminals keep running while the Git view is ope
 ## Limits
 
 - Forwarded ports have no password. Anyone on your Wi-Fi can reach them while they are open. Stop a forward with the ✕ on its chip.
+- A forwarded dev server shares the Mac's IP with Pocket Dev, so the browser sends it the Pocket Dev cookie too. To keep its pages from changing anything, Pocket Dev accepts a POST, PUT, PATCH or DELETE only with the header `x-pocket-dev: 1`, and JSON bodies only as `application/json`. Scripts that call the API must send both.
 - Pocket Dev uses plain HTTP. Use it only on a network you trust.
 - Forwards listen on the Mac's LAN IP. When the IP changes, Pocket Dev moves every forward to the new IP within about 10 seconds and logs the change. Without a network, a chip shows **no network** and the forward reopens when the Mac gets an IP. If the forward cannot listen on the new IP, the chip shows **failed**. Tap it to see why.
 - The QR codes and **Settings** always use the current IP. **Settings** also shows the `.local` address, which keeps working when the IP changes but only on the same Wi-Fi, and not on every Android phone.

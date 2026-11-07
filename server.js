@@ -386,7 +386,12 @@ const sendJson = (res, status, body, headers = {}) => {
   res.end(body === undefined ? '' : JSON.stringify(body));
 };
 
+const httpError = (status, message) => Object.assign(new Error(message), { status });
+
 function readJson(req) {
+  if (!/^application\/json\s*(;|$)/i.test(req.headers['content-type'] ?? '')) {
+    return Promise.reject(httpError(415, 'Send the body as JSON with content-type: application/json.'));
+  }
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
@@ -410,9 +415,18 @@ function parsePort(value) {
   return { port };
 }
 
+// Forwarded dev servers on other ports of this IP are same-site, so their pages can send simple cross-origin requests
+// (form posts, text/plain fetches) that carry the cookie. A custom header makes the browser ask first with a CORS
+// preflight, which Pocket Dev never grants, so only Pocket Dev's own pages can change anything.
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const CSRF_HEADER = 'x-pocket-dev';
+
 async function handleApi(req, res, url) {
   const [, , resource, key] = url.pathname.split('/');
   const route = `${req.method} ${resource}${key ? '/:key' : ''}`;
+  if (MUTATING.has(req.method) && req.headers[CSRF_HEADER] !== '1') {
+    return sendJson(res, 403, { error: 'This page is older than the server. Reload Pocket Dev and try again.' });
+  }
 
   const authReply = await auth.handleApi(req, url.pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
@@ -517,7 +531,7 @@ const server = http.createServer(async (req, res) => {
     } else if (url.pathname.startsWith('/api/')) await handleApi(req, res, url);
     else servePage(req, res, url.pathname);
   } catch (err) {
-    if (!res.headersSent) sendJson(res, 400, { error: err.message });
+    if (!res.headersSent) sendJson(res, err.status ?? 400, { error: err.message });
   }
 });
 

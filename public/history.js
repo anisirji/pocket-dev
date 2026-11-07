@@ -10,16 +10,7 @@
     return node;
   };
 
-  async function request(method, url) {
-    const res = await fetch(url, { method });
-    if (res.status === 401) {
-      location.replace('/login.html');
-      throw new Error('Not logged in');
-    }
-    const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-    return data;
-  }
+  const { api } = window;
 
   function ago(iso) {
     const s = (Date.now() - Date.parse(iso)) / 1000;
@@ -129,7 +120,7 @@
     if (!ui.list.querySelector('.hist-card')) status(ui.list, 'Loading conversations…');
     ui.refresh.classList.add('spin');
     try {
-      const items = await request('GET', `/api/history?limit=30&tool=${filter}`);
+      const items = await api('GET', `/api/history?limit=30&tool=${filter}`);
       if (seq !== listSeq) return;
       if (!items.length) {
         const where = filter === 'all' ? '~/.claude or ~/.codex' : filter === 'claude' ? '~/.claude' : '~/.codex';
@@ -156,7 +147,7 @@
     ui.warn.hidden = !item.live;
     ui.warn.textContent = LIVE_WARNING;
     try {
-      const data = await request('GET', `/api/history/${item.tool}/${encodeURIComponent(item.id)}`);
+      const data = await api('GET', `/api/history/${item.tool}/${encodeURIComponent(item.id)}`);
       if (seq !== detailSeq) return;
       current = { ...item, ...data };
       ui.warn.hidden = !current.live;
@@ -217,7 +208,7 @@
     ui.go.disabled = true;
     ui.go.textContent = 'Starting…';
     try {
-      const view = await request('POST', `/api/history/${current.tool}/${encodeURIComponent(current.id)}/resume`);
+      const view = await api('POST', `/api/history/${current.tool}/${encodeURIComponent(current.id)}/resume`);
       leave();
       window.pocketDev.openSession(view);
       document.activeElement?.blur();

@@ -12,7 +12,7 @@ try { local = JSON.parse(fs.readFileSync(LOCAL_SECRET_PATH, 'utf8')); } catch { 
 
 let res;
 try {
-  res = await fetch(`http://127.0.0.1:${local.port}/api/qr-key`, { method: 'POST', headers: { 'x-pocket-dev-secret': local.secret } });
+  res = await fetch(`http://127.0.0.1:${local.port}/api/qr-key`, { method: 'POST', headers: { 'x-pocket-dev': '1', 'x-pocket-dev-secret': local.secret } });
 } catch {
   notRunning();
 }

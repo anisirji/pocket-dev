@@ -168,10 +168,11 @@ const store = {
   set(key, value) { try { localStorage.setItem(key, value); } catch {} },
 };
 
+// The one request helper for every page script: the server refuses changes without x-pocket-dev (see server.js).
 async function api(method, url, body) {
   const res = await fetch(url, {
     method,
-    headers: body ? { 'content-type': 'application/json' } : {},
+    headers: { 'x-pocket-dev': '1', ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401) {
@@ -729,6 +730,7 @@ function uploadFile(file, onProgress) {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/upload');
     xhr.setRequestHeader('x-filename', encodeURIComponent(file.name));
+    xhr.setRequestHeader('x-pocket-dev', '1');
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
     xhr.onload = () => {
       if (xhr.status === 401) location.replace('/login.html');

@@ -11,20 +11,7 @@
     return node;
   };
 
-  async function call(method, url, body) {
-    const res = await fetch(url, {
-      method,
-      headers: body ? { 'content-type': 'application/json' } : {},
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (res.status === 401) {
-      location.replace('/login.html');
-      throw new Error('Not logged in');
-    }
-    const data = res.status === 204 ? null : await res.json();
-    if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-    return data;
-  }
+  const { api } = window;
 
   function ago(ms) {
     const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
@@ -125,7 +112,7 @@
       form.onsubmit = async (e) => {
         e.preventDefault();
         try {
-          await call('PATCH', `/api/devices/${d.id}`, { name: input.value });
+          await api('PATCH', `/api/devices/${d.id}`, { name: input.value });
           editingId = null;
           msg('err', 'devices', '');
           await refresh();
@@ -166,7 +153,7 @@
     const question = isCurrent ? LOGOUT_SELF : `Log out ${d.name}? Its open terminals disconnect now.`;
     if (!confirm(question)) return;
     try {
-      await call('DELETE', `/api/devices/${d.id}`);
+      await api('DELETE', `/api/devices/${d.id}`);
       if (isCurrent) return location.replace('/login.html');
       await refresh();
     } catch (err) {
@@ -194,7 +181,7 @@
 
   async function refresh() {
     try {
-      const fresh = await call('GET', '/api/settings');
+      const fresh = await api('GET', '/api/settings');
       const stepperUntouched = !settings || settings.maxDevices === limit;
       settings = fresh;
       if (stepperUntouched) limit = fresh.maxDevices;
@@ -218,7 +205,7 @@
   $('[data-act="limit"]').addEventListener('click', async () => {
     msg('err', 'limit', '');
     try {
-      const { maxDevices } = await call('PUT', '/api/settings/max-devices', { maxDevices: limit });
+      const { maxDevices } = await api('PUT', '/api/settings/max-devices', { maxDevices: limit });
       settings.maxDevices = limit = maxDevices;
       msg('ok', 'limit', 'Saved');
       renderLimit();
@@ -230,7 +217,7 @@
   $('[data-act="qr"]').addEventListener('click', async (e) => {
     msg('err', 'qr', '');
     try {
-      const { svg } = await call('POST', '/api/settings/qr-key');
+      const { svg } = await api('POST', '/api/settings/qr-key');
       const box = $('.st-qr');
       box.innerHTML = svg;
       box.hidden = false;
@@ -251,7 +238,7 @@
     const button = form.querySelector('button');
     button.disabled = true;
     try {
-      const { loggedOut } = await call('POST', '/api/settings/password', { current: current.value, next: next.value, logoutOthers: logoutOthers.checked });
+      const { loggedOut } = await api('POST', '/api/settings/password', { current: current.value, next: next.value, logoutOthers: logoutOthers.checked });
       form.reset();
       msg('ok', 'password', loggedOut ? `Password changed. Logged out ${plural(loggedOut, 'other device')}.` : 'Password changed.');
       await refresh();
@@ -264,7 +251,7 @@
 
   $('[data-act="logout"]').addEventListener('click', async () => {
     if (!confirm(LOGOUT_SELF)) return;
-    try { await call('POST', '/api/logout'); } catch {}
+    try { await api('POST', '/api/logout'); } catch {}
     location.replace('/login.html');
   });
 
