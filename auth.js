@@ -95,7 +95,12 @@ function loadDevices() {
 }
 
 const reply = (status, body, headers = {}) => ({ status, body, headers });
-const redirect = (location, cookie) => reply(302, undefined, { location, ...(cookie && { 'set-cookie': cookie }) });
+const redirect = (location) => reply(302, undefined, { location });
+// A scanner app can open the QR link as a cross-site navigation. SameSite=Strict then withholds the new cookie on a
+// redirect in that same navigation, so a same-origin script starts a fresh one; replace() also drops ?k= from history.
+const BOUNCE_HOME = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+  + '<title>Pocket Dev</title><style>html{background:#0b0e14}</style><script>location.replace("/")</script>';
+const bounceHome = (cookie) => reply(200, BOUNCE_HOME, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': cookie });
 const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 
 function parseDeviceName(v) {
@@ -220,7 +225,7 @@ export function createAuth({ config, saveConfig, port, lanIp }) {
     if (deviceFor(req)) return redirect('/');
     if (!expiresAt || expiresAt <= Date.now()) return redirect('/login.html?e=qr');
     if (devices.size >= maxDevices()) evictLeastRecent();
-    return redirect('/', addDevice(req, 'qr'));
+    return bounceHome(addDevice(req, 'qr'));
   }
 
   const passwordMatches = (given) => (envPassword ? sameSecret(given, envPassword) : verifyPassword(given, config.passwordHash));

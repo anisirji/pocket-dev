@@ -296,9 +296,9 @@ const server = http.createServer(async (req, res) => {
   const { pathname, searchParams } = new URL(req.url, 'http://localhost');
   try {
     if (pathname === '/' && searchParams.has('k')) {
-      const { status, headers } = auth.redeemQrKey(req, searchParams.get('k'));
+      const { status, headers, body } = auth.redeemQrKey(req, searchParams.get('k'));
       res.writeHead(status, { 'cache-control': 'no-store', ...headers });
-      res.end();
+      res.end(body);
     } else if (pathname.startsWith('/api/')) await handleApi(req, res, pathname);
     else servePage(req, res, pathname);
   } catch (err) {
