@@ -62,11 +62,12 @@ const parse = (text) => {
 const SHELL_TOOLS = /^(Bash|shell|exec_command|local_shell)$/;
 const EDIT_TOOLS = /^(Edit|MultiEdit|Write|NotebookEdit|apply_patch)$/;
 
-function toolNote(name, input) {
+function toolNote(name, input, cwd) {
   const file = input?.file_path ?? input?.notebook_path ?? input?.path;
   const arg = input?.command ?? input?.cmd ?? file ?? input?.pattern ?? input?.url
     ?? Object.values(input ?? {}).find((v) => typeof v === 'string') ?? '';
-  const flat = oneLine(Array.isArray(arg) ? arg.join(' ') : String(arg));
+  let flat = oneLine(Array.isArray(arg) ? arg.join(' ') : String(arg));
+  if (cwd) flat = flat.replaceAll(`${cwd}/`, '').replaceAll(`cd ${cwd} && `, '');
   // A path's tail (the file name) matters more than its head.
   const text = arg === file && flat.length > 80 ? `…${flat.slice(-79)}` : clip(flat, 80);
   if (EDIT_TOOLS.test(name)) return `✏️ ${name} ${text}`.trimEnd();
@@ -74,10 +75,10 @@ function toolNote(name, input) {
 }
 
 // Codex's code-mode tool wraps shell calls in JavaScript: text(await tools.exec_command({cmd:"ls"})).
-function codexScriptNote(name, script) {
+function codexScriptNote(name, script, cwd) {
   const cmd = /exec_command\(\{\s*cmd\s*:\s*("(?:[^"\\]|\\.)*")/.exec(script);
   const command = cmd && parse(cmd[1]);
-  return typeof command === 'string' ? toolNote('exec_command', { cmd: command }) : toolNote(name, { input: script });
+  return typeof command === 'string' ? toolNote('exec_command', { cmd: command }, cwd) : toolNote(name, { input: script }, cwd);
 }
 
 // Tags Claude Code and IDEs wrap around injected context: <command-name>, <local-command-stdout>,
@@ -108,7 +109,7 @@ const claude = {
     return out;
   },
 
-  messages(o) {
+  messages(o, cwd) {
     if (o.isSidechain || o.isMeta || o.isCompactSummary) return [];
     const time = o.timestamp;
     const content = o.message?.content;
@@ -120,7 +121,7 @@ const claude = {
     if (o.type !== 'assistant') return [];
     return blocks.flatMap((b) => {
       if (b.type === 'text' && b.text.trim()) return [{ role: 'assistant', text: b.text.trim(), time }];
-      if (b.type === 'tool_use') return [{ role: 'tool', text: toolNote(b.name, b.input), time }];
+      if (b.type === 'tool_use') return [{ role: 'tool', text: toolNote(b.name, b.input, cwd), time }];
       return [];
     });
   },
@@ -191,7 +192,7 @@ const codex = {
     return names;
   },
 
-  messages(o) {
+  messages(o, cwd) {
     const p = o.payload;
     if (o.type !== 'response_item' || !p) return [];
     const time = o.timestamp;
@@ -200,8 +201,8 @@ const codex = {
       const text = (p.role === 'user' ? texts.map(codexUserText) : texts.map((t) => t.trim())).filter(Boolean).join('\n\n');
       return text ? [{ role: p.role, text, time }] : [];
     }
-    if (p.type === 'function_call') return [{ role: 'tool', text: toolNote(p.name, parse(p.arguments) ?? {}), time }];
-    if (p.type === 'custom_tool_call') return [{ role: 'tool', text: codexScriptNote(p.name, String(p.input ?? '')), time }];
+    if (p.type === 'function_call') return [{ role: 'tool', text: toolNote(p.name, parse(p.arguments) ?? {}, cwd), time }];
+    if (p.type === 'custom_tool_call') return [{ role: 'tool', text: codexScriptNote(p.name, String(p.input ?? ''), cwd), time }];
     return [];
   },
 
@@ -324,7 +325,7 @@ async function lastMessages(s) {
     await scanLines(s.file, start, s.offset, (line) => {
       if (skipFirst) { skipFirst = false; return; }
       const o = parse(line.toString());
-      if (o) msgs.push(...adapter.messages(o));
+      if (o) msgs.push(...adapter.messages(o, s.cwd));
     });
     const texts = msgs.filter((m) => m.role !== 'tool').length;
     if (texts >= DETAIL_MESSAGES || start === 0) return collapse(msgs);
