@@ -260,7 +260,7 @@ function createSession(cwd, base = folderName(cwd), command) {
     rows: 24,
     cwd,
     // launchd and nohup start node without LANG, which makes ls print non-ASCII filenames as ???.
-    env: { LANG: 'en_US.UTF-8', ...process.env, TERM: 'xterm-256color' },
+    env: { ...process.env, LANG: 'en_US.UTF-8', LC_CTYPE: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', TERM: 'xterm-256color' },
   });
   const session = {
     id: crypto.randomBytes(6).toString('hex'),

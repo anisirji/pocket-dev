@@ -107,7 +107,7 @@ function parseAnswer(event, body) {
 // Mount after the auth check: every route here assumes a logged-in caller. config is { read(), update(changes) };
 // chat uses its chatIdleMinutes and chatDefaults keys. `wss` is the server's WebSocketServer, which pings its clients.
 export function createChatApi({ sendJson, readJson, config, wss }) {
-  const dir = process.env.POCKET_DEV_CHAT_DIR || path.join(HOME, '.pocket-dev', 'chats');
+  const dir = process.env.POCKET_DEV_CHAT_DIR || path.join(process.env.POCKET_DEV_STATE_DIR || path.join(HOME, '.pocket-dev'), 'chats');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const idleMs = () => Number(process.env.POCKET_DEV_CHAT_IDLE_SECONDS) * 1000 || (Number(config.read().chatIdleMinutes) || 10) * 60_000;
   const schemaOf = (tool) => ENGINES[tool].settingsSchema();

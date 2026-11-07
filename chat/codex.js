@@ -62,16 +62,17 @@ const server = {
     let stderrTail = '';
     proc.stderr.on('data', (d) => { stderrTail = (stderrTail + d).slice(-2000); });
     readline.createInterface({ input: proc.stdout }).on('line', (line) => this.onLine(line));
-    proc.on('error', () => {});
-    proc.on('exit', (code) => {
+    const gone = (err) => {
       if (this.proc !== proc) return;
-      const err = new Error(`codex app-server exited (${code ?? 'signal'})${stderrTail ? `: ${stderrTail.trim().split('\n').pop()}` : ''}`);
       this.proc = this.ready = null;
       for (const { reject } of this.calls.values()) reject(err);
       this.calls.clear();
       for (const engine of [...this.threads.values()]) engine.gone(err);
       this.threads.clear();
-    });
+    };
+    proc.on('error', (err) => gone(new Error(`Could not start codex app-server: ${err.message}`)));
+    proc.stdin.on('error', gone);
+    proc.on('exit', (code) => gone(new Error(`codex app-server exited (${code ?? 'signal'})${stderrTail ? `: ${stderrTail.trim().split('\n').pop()}` : ''}`)));
     this.ready = this.call('initialize', {
       clientInfo: { name: 'pocket-dev', title: 'Pocket Dev', version: '1.0.0' },
       capabilities: { experimentalApi: false, requestAttestation: false },
