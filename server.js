@@ -18,6 +18,7 @@ import { createAppsApi, snapshot as appsSnapshot } from './apps.js';
 import { startAdmin } from './admin.js';
 import { createPhoneAccess } from './access.js';
 import { createChatApi } from './chat/index.js';
+import { createFilesApi } from './files.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SCROLLBACK_MAX = 500_000;
@@ -485,6 +486,7 @@ async function handleApi(req, res, url) {
   if (resource === 'apps') return handleApps(req, res, url);
   if (resource === 'power') return handlePowerApi(req, res, key, { readJson, sendJson, wss, sessions });
   if (resource === 'chat') return chatApi.handleApi(req, res, url.pathname);
+  if (resource === 'files') return handleFiles(req, res, url);
 
   switch (route) {
     case 'GET sessions':
@@ -550,6 +552,7 @@ async function handleApi(req, res, url) {
 const handleGit = createGitApi({ config });
 const handleHistory = createHistoryApi({ createSession, sessionView, sendJson });
 const handleApps = createAppsApi({ sendJson });
+const handleFiles = createFilesApi({ sendJson, readJson, config });
 
 const PAGES = {
   '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html',
@@ -557,7 +560,7 @@ const PAGES = {
   '/history.js': 'history.js', '/history.css': 'history.css',
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
   '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/power.js': 'power.js', '/service.js': 'service.js',
-  '/chat.js': 'chat.js', '/chat.css': 'chat.css',
+  '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
 };
 const PUBLIC_PAGES = new Set(['login.html']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };

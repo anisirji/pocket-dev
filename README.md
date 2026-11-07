@@ -280,6 +280,40 @@ The app that runs Pocket Dev is `node` for the launchd service. For a server tha
 
 Windows on another Space may not appear in the list.
 
+## Files
+
+Files moves files between the phone and the Mac. It shows your home folder and nothing outside it.
+
+1. Open **Files**. For now the button is in the **Ports** panel.
+2. Tap a folder to open it. Tap a file to preview it. Images, video, audio, PDF and text show in the sheet. Text shows the first 200 KB.
+3. In the preview, tap **Download**, **Rename**, **Trash** or **Copy path**.
+4. To send files to the Mac, tap **Upload** and pick one or more files. On Android the picker also offers the camera. Each file shows its progress, and **✕** cancels it. Files go into the folder you are in. A name that is already taken becomes `name (1).ext`, so Files never overwrites a file.
+5. To act on several items, long-press one, then tap others. **Zip** downloads them as one zip file, and **Trash** moves them to the Trash. With one item selected, the pencil renames it, folders included.
+
+- The back gesture goes back one level: the preview, select mode, then the previous folder.
+- **⋯** has **New folder**, **Select**, **Show hidden files**, and **Pin folder**. Pinned folders appear as chips at the top of Home, next to Desktop, Downloads and Documents. They are the same pins as the terminal folder picker (`folders` in `config.json`).
+- Search finds names that contain the text, in the current folder and 4 levels below. It skips `node_modules` and `.git`. It stops after 500 results or 2 seconds and then says the results are partial.
+- **Trash** moves items to the macOS Trash. To get an item back, open the Trash in Finder on the Mac. Files never deletes anything.
+- A folder downloads as a zip that the Mac builds while it streams. Files asks first when the folder is larger than 500 MB.
+
+### Settings
+
+You can add these keys to `config.json`:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `fileRoots` | `["~"]` | Folders Files may show. Every path, after symlinks are followed, must stay inside one of them. |
+| `fileUploadMax` | 2 GB | Largest upload, in bytes. |
+| `fileZipMax` | 4 GB | Largest folder that Files zips, in bytes. |
+
+### Notes
+
+- macOS protects Desktop, Documents and Downloads. When the server runs as a launchd agent, those folders can show "macOS blocked access". To fix it, give `node` Full Disk Access in System Settings > Privacy & Security.
+- A symlink that points outside the shared folders is listed but cannot be opened. A zip leaves such links out. A link to a file inside the shared folders goes into the zip as a copy of that file. Zips do not include links to folders.
+- Zip stores file names as UTF-8 bytes without the UTF-8 flag, because the macOS `zip` has no Unicode support. macOS unzips such names correctly. Tools that rely on the flag, such as Windows Explorer, can show non-ASCII names garbled.
+- Previews do not run code. HTML and other markup show as text, and every preview is served with a CSP sandbox.
+- If a PDF does not show in the preview, tap **Open PDF in a new tab**.
+
 ## Limits
 
 - Forwarded ports have no password. Anyone on your Wi-Fi can reach them while they are open. Stop a forward with the ✕ on its chip.

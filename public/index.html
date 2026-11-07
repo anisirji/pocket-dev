@@ -16,6 +16,8 @@
 <script src="/apps.js" defer></script>
 <link rel="stylesheet" href="/chat.css">
 <script src="/chat.js" defer></script>
+<link rel="stylesheet" href="/files.css">
+<script src="/files.js" defer></script>
 <style>
   :root {
     --bg: #0b0e14; --panel: #131823; --panel-2: #1b2130; --line: #252d3c;
@@ -136,6 +138,7 @@
       <button class="primary">Open</button>
     </form>
     <div id="chips" style="display:contents"></div>
+    <button id="filesBtn" class="icon-btn" onclick="openFiles()">Files</button>
     <p id="portErr"></p>
   </div>
   <main id="terms">
