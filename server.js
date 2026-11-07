@@ -298,16 +298,22 @@ async function handleApi(req, res, url) {
   }
 }
 
-const PAGES = { '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html' };
+const PAGES = {
+  '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html',
+  '/git.js': 'git.js', '/graph.js': 'graph.js', '/git.css': 'git.css',
+};
+const PUBLIC_PAGES = new Set(['login.html']);
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function servePage(req, res, pathname) {
   const file = PAGES[pathname];
   if (!file || req.method !== 'GET') return sendJson(res, 404, { error: 'Not found' });
-  if (file === 'index.html' && !isAuthed(req)) {
+  if (!PUBLIC_PAGES.has(file) && !isAuthed(req)) {
+    if (!file.endsWith('.html')) return sendJson(res, 401, { error: 'Not logged in' });
     res.writeHead(302, { location: '/login.html' });
     return res.end();
   }
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store' });
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
