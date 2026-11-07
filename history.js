@@ -265,8 +265,9 @@ const runningCommands = () => new Promise((resolve) => {
 });
 
 // A warning, not a lock: a session counts as live when a process mentions its id on the command line
-// (`claude --resume <id>`, `codex resume <id>`) or its file was written in the last two minutes.
-// The VS Code extensions do not put the id on the command line, so for them only the mtime signal applies.
+// (`claude --resume <id>`, the VS Code extension's `--resume=<id>` for a reopened tab, `codex resume <id>`)
+// or its file was written in the last two minutes. A brand-new session has no id on any command line,
+// so only the mtime signal catches it.
 const isLive = (s, ps) => ps.includes(s.id) || Date.now() - s.mtimeMs < LIVE_MS;
 
 function view(s, ps, names) {
