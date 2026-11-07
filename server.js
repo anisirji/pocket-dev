@@ -4,6 +4,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
@@ -12,6 +13,7 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json');
 const SCROLLBACK_MAX = 500_000;
 const BODY_MAX = 64_000;
+const UPLOAD_MAX = 25 * 1024 * 1024;
 
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
@@ -107,6 +109,62 @@ function rememberRecent(dir) {
 const DEFAULT_SHORTCUTS = ['claude', 'codex', 'npm run dev', 'git status', 'git pull'];
 const isShortcut = (s) => typeof s === 'string' && s.trim() !== '' && s.length <= 200 && !/[\x00-\x1f\x7f]/.test(s);
 const isShortcutList = (v) => Array.isArray(v) && v.length <= 30 && v.every(isShortcut);
+
+const UPLOAD_DIR = path.join(HOME, '.pocket-dev', 'uploads');
+
+function uploadName(header) {
+  let name = '';
+  try { name = decodeURIComponent(header ?? ''); } catch {}
+  name = name.split(/[\\/]/).pop()
+    .replace(/[\x00-\x1f\x7f:]/g, '')
+    .replace(/\s+/g, '-')
+    .slice(-100)
+    .replace(/^[.-]+/, '');
+  return name || 'upload';
+}
+
+function timestamp(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+function openUploadFile(name) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true, mode: 0o700 });
+  const stamp = timestamp();
+  for (let n = 1; ; n++) {
+    const file = path.join(UPLOAD_DIR, `${stamp}-${n === 1 ? '' : `${n}-`}${name}`);
+    try {
+      return { file, fd: fs.openSync(file, 'wx', 0o600) };
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+    }
+  }
+}
+
+function tooLarge(res) {
+  res.setHeader('connection', 'close');
+  sendJson(res, 413, { error: 'File is larger than 25 MB' });
+}
+
+async function upload(req, res) {
+  if (Number(req.headers['content-length']) > UPLOAD_MAX) return tooLarge(res);
+  const { file, fd } = openUploadFile(uploadName(req.headers['x-filename']));
+  let size = 0;
+  try {
+    await pipeline(req, async function* (chunks) {
+      for await (const chunk of chunks) {
+        size += chunk.length;
+        if (size > UPLOAD_MAX) throw new Error('File is larger than 25 MB');
+        yield chunk;
+      }
+    }, fs.createWriteStream(null, { fd }));
+  } catch (err) {
+    fs.rmSync(file, { force: true });
+    if (size > UPLOAD_MAX) return tooLarge(res);
+    throw err;
+  }
+  sendJson(res, 201, { path: file });
+}
 
 const sessions = new Map();
 
@@ -342,6 +400,8 @@ async function handleApi(req, res, pathname) {
       setPinned(dir, pinned);
       return sendJson(res, 200, listFolders());
     }
+    case 'POST upload':
+      return upload(req, res);
     case 'GET shortcuts':
       return sendJson(res, 200, config.shortcuts ?? DEFAULT_SHORTCUTS);
     case 'PUT shortcuts': {
