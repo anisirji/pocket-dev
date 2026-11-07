@@ -6,6 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper",
     "start": "node server.js",
+    "qr": "node scripts/qr.js",
     "service:install": "scripts/install-service.sh",
     "service:uninstall": "scripts/uninstall-service.sh",
     "service:status": "scripts/status.sh",
