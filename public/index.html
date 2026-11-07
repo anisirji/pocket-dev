@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.css">
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10/lib/addon-fit.js"></script>
+<link rel="stylesheet" href="/history.css">
 <style>
   :root {
     --bg: #0b0e14; --panel: #131823; --panel-2: #1b2130; --line: #252d3c;
@@ -71,6 +72,7 @@
   <header>
     <div id="tabs"></div>
     <button id="new" class="icon-btn" aria-label="New terminal">+</button>
+    <button id="resumeBtn" class="icon-btn" aria-label="Resume a laptop conversation"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:auto"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
     <button id="portsBtn" class="icon-btn">Ports<span id="portsCount"></span></button>
   </header>
   <div id="ports" hidden>
@@ -452,6 +454,8 @@ document.addEventListener('visibilitychange', () => {
   refreshForwards().catch(() => {});
 });
 
+window.pocketDev = { openSession: (s) => activate((views.get(s.id) ?? makeView(s)).id) };
+
 (async () => {
   const stored = store.get();
   await syncSessions();
@@ -460,5 +464,6 @@ document.addEventListener('visibilitychange', () => {
   refreshForwards().catch(() => {});
 })();
 </script>
+<script src="/history.js"></script>
 </body>
 </html>
