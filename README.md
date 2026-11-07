@@ -71,6 +71,23 @@ The service runs the server under `caffeinate -i -s`, so the Mac does not idle-s
 - You can also tap the terminal and type into it directly.
 - Terminals keep running when the phone locks or disconnects. When the phone reconnects, the page replays the recent output.
 
+## Chat
+
+Chat runs Claude Code and Codex as phone chat screens instead of terminals. Open it from the Chat view, or add `#chat` to the URL.
+
+1. Tap **New chat**, pick Claude or Codex, a folder, and the engine settings.
+2. Type a prompt and tap **Send**. Enter adds a new line.
+3. When the engine wants to edit a file or run a command, a card appears above the composer. Pick **Allow once**, **Always allow in this chat**, **Always allow in this project** (Claude only), or **Deny** with an optional reason.
+
+- Claude chats use the Claude Agent SDK with the `claude` CLI on your PATH, so they use your Claude Code login. No API key is needed. Sessions are the usual `~/.claude/projects` files, so they also appear in VS Code and in the Resume sheet.
+- Codex chats use `codex app-server` with your Codex login. All Codex chats share one app-server process.
+- The chips under the chat title change the model, the permission mode (Claude) or approval policy and sandbox (Codex), and the reasoning effort. A toast says whether the change applied now or applies from the next turn.
+- **Always allow in this project** writes the rule that Claude Code suggests, such as `Bash(npm test:*)`, to `<folder>/.claude/settings.local.json`. The Permissions screen in chat settings lists and removes these rules and the chat's own rules.
+- A run keeps going when the phone locks or disconnects. A card waits until you answer it. The chat list shows **waiting for you**.
+- After 10 idle minutes the engine process stops and the chat shows **sleeping**. The next message resumes the same session. Set `chatIdleMinutes` in `config.json` to change the delay. An engine never stops while a turn runs or a card waits.
+- Chat logs are in `~/.pocket-dev/chats/` with mode 0600. Deleting a chat removes its log, not the engine's session files.
+- New chats start with the tool, folder, and settings you used last (`chatDefaults` in `config.json`). A bypass or full-access setting is never remembered.
+
 ## Open a port
 
 1. Start your dev server on the Mac, for example `npm run dev` on port 3000.
