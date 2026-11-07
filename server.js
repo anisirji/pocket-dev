@@ -27,12 +27,6 @@ const config = loadConfig();
 const PASSWORD = process.env.POCKET_DEV_PASSWORD || config.password;
 const PORT = Number(process.env.PORT) || config.port || 7777;
 
-function saveConfig() {
-  const tmp = `${CONFIG_PATH}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
-  fs.renameSync(tmp, CONFIG_PATH);
-}
-
 function lanIp() {
   const ifaces = os.networkInterfaces();
   const names = ['en0', ...Object.keys(ifaces).filter((n) => n !== 'en0')];
@@ -301,7 +295,17 @@ async function handleApi(req, res, pathname) {
   }
 }
 
-const handleFiles = createFilesApi({ sendJson, readJson, config, saveConfig });
+// Same shape as integration's config.js, so this adapter goes away on merge.
+const filesConfig = {
+  read: () => config,
+  update(changes) {
+    Object.assign(config, changes);
+    const tmp = `${CONFIG_PATH}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+    fs.renameSync(tmp, CONFIG_PATH);
+  },
+};
+const handleFiles = createFilesApi({ sendJson, readJson, config: filesConfig });
 
 const PAGES = { '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html', '/files.js': 'files.js', '/files.css': 'files.css' };
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
@@ -309,7 +313,8 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 function servePage(req, res, pathname) {
   const file = PAGES[pathname];
   if (!file || req.method !== 'GET') return sendJson(res, 404, { error: 'Not found' });
-  if (file === 'index.html' && !isAuthed(req)) {
+  if (file !== 'login.html' && !isAuthed(req)) {
+    if (!file.endsWith('.html')) return sendJson(res, 401, { error: 'Not logged in' });
     res.writeHead(302, { location: '/login.html' });
     return res.end();
   }
