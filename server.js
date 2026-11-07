@@ -7,6 +7,8 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
+import { startPower, handlePowerApi } from './power.js';
+import { ensureLocalSecret, isLocalRequest } from './local-secret.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(ROOT, 'config.json');
@@ -255,7 +257,11 @@ async function handleApi(req, res, pathname) {
   const route = `${req.method} ${resource}${key ? '/:key' : ''}`;
 
   if (route === 'POST login') return login(req, res);
+  if (resource === 'local' && key === 'power') {
+    return isLocalRequest(req) ? handlePowerApi(req, res, { readJson, sendJson }) : sendJson(res, 403, { error: 'Local CLI only' });
+  }
   if (!isAuthed(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  if (resource === 'power' && !key) return handlePowerApi(req, res, { readJson, sendJson });
 
   switch (route) {
     case 'GET sessions':
@@ -342,6 +348,9 @@ setInterval(() => {
     ws.ping();
   }
 }, 30_000).unref();
+
+ensureLocalSecret();
+startPower(CONFIG_PATH, config.awake);
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Pocket Dev running at http://${lanIp()}:${PORT}`);
