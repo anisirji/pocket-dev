@@ -57,11 +57,12 @@ function toast(text, bad = false) {
   toastTimer = setTimeout(() => { t.hidden = true; }, bad ? 6000 : 3000);
 }
 
-// A styled confirm. Resolves true when the person presses the confirm button.
-function ask({ title, body, confirm, danger = false }) {
+// A styled confirm. Resolves true when the person presses the confirm button. `extra` is shown under the body.
+function ask({ title, body, confirm, danger = false, extra = null }) {
   const dialog = $('ask');
   $('askTitle').textContent = title;
   $('askBody').textContent = body;
+  $('askExtra').replaceChildren(...(extra ? [extra] : []));
   $('askOk').textContent = confirm;
   dialog.classList.toggle('danger', danger);
   dialog.returnValue = '';
@@ -201,24 +202,26 @@ const DEVICE_BUTTONS = {
   blocked: [
     ['Rename', null],
     ['Unblock', 'unblock'],
+    ['Remove', 'remove'],
   ],
 };
 
 const CONFIRMS = {
   revoke: (d) => ({ title: `Log out ${d.name}?`, body: 'Its terminals disconnect now. It can log in again with the password or a QR code.', confirm: 'Log out', danger: true }),
   block: (d) => ({ title: `Block ${d.name}?`, body: 'It disconnects now and every request it sends is refused until you unblock it.\n\nIf that browser clears its cookies it becomes a new device. Turn on "Approve new devices" so a fresh login has to wait for you.', confirm: 'Block', danger: true }),
+  remove: (d) => ({ title: `Remove ${d.name}?`, body: 'Its record is deleted, so that browser is no longer blocked: it can try the password again as a new device, or wait for approval if that is on.', confirm: 'Remove', danger: true }),
   deny: (d) => ({ title: `Deny ${d.name}?`, body: 'The request is removed and the phone goes back to the login form.', confirm: 'Deny', danger: true }),
 };
 
 async function deviceAction(d, action) {
   if (CONFIRMS[action] && !(await ask(CONFIRMS[action](d)))) return;
-  const done = { revoke: `${d.name} logged out`, block: `${d.name} blocked`, unblock: `${d.name} unblocked`, approve: `${d.name} approved`, deny: `${d.name} denied` }[action];
+  const done = { remove: `${d.name} removed`, revoke: `${d.name} logged out`, block: `${d.name} blocked`, unblock: `${d.name} unblocked`, approve: `${d.name} approved`, deny: `${d.name} denied` }[action];
   await act(() => api('POST', `/api/devices/${d.id}/${action}`), done);
 }
 
 function deviceRow(d) {
   const buttons = (DEVICE_BUTTONS[d.status] ?? []).map(([label, action]) => h('button', {
-    class: `btn btn-sm${action === 'revoke' ? ' btn-danger' : ''}`,
+    class: `btn btn-sm${action === 'revoke' || action === 'remove' ? ' btn-danger' : ''}`,
     type: 'button',
     onclick: action ? () => deviceAction(d, action) : () => { editingId = d.id; renderDevices(); },
   }, label));
@@ -257,7 +260,7 @@ function renderPending() {
 
 // ---- Security log
 
-const BY = { admin: 'on this page', phone: 'from a phone', cli: 'from the command line', startup: 'at startup', self: 'itself' };
+const BY = { admin: 'on this page', phone: 'from a phone', cli: 'from the command line', startup: 'at startup', self: 'itself', lockdown: 'by lockdown' };
 const byText = (e) => (BY[e.by] ? ` ${BY[e.by]}` : '');
 const REVOKED_BY = {
   admin: 'on this page', phone: 'from another device', self: 'itself', 'qr-eviction': 'to make room for a QR login',
@@ -276,12 +279,13 @@ const EVENT_TEXT = {
   'device-unblocked': (e) => `${e.name} unblocked`,
   'device-approved': (e) => `${e.name} approved${e.by === 'qr' ? ' by scanning a QR code' : ''}`,
   'device-denied': (e) => `${e.name} denied`,
+  'device-removed': (e) => `${e.name} removed while blocked`,
   'device-renamed': (e) => `${e.from} renamed to ${e.name}${byText(e)}`,
   'pending-expired': (e) => `${e.name} stopped waiting: nobody approved it in time`,
   'password-changed': (e) => `Password changed${byText(e)}${e.loggedOut ? `, ${plural(e.loggedOut, 'device')} logged out` : ''}`,
   'limit-changed': (e) => `Device limit changed from ${e.from} to ${e.to}${byText(e)}`,
   'approval-changed': (e) => (e.on ? 'New devices now need approval' : 'New devices no longer need approval'),
-  'lockdown': (e) => `Lockdown: ${plural(e.devices, 'device')} logged out${closedText(e.closed) ? `, closed ${closedText(e.closed)}` : ''}`,
+  'lockdown': (e) => `Lockdown: phone access closed, ${plural(e.devices, 'device')} logged out${closedText(e.closed) ? `, closed ${closedText(e.closed)}` : ''}${e.passwordChanged ? ', password changed' : ''}`,
   'access-connected': (e) => `Phone access opened${byText(e)}`,
   'access-disconnected': (e) => (e.by === 'heartbeat' ? 'Phone access closed: the admin page was closed' : `Phone access closed${byText(e)}`),
   'keep-open-changed': (e) => `Keep connection open turned ${e.on ? 'on' : 'off'}`,
@@ -470,12 +474,20 @@ $('lockBtn').addEventListener('click', async () => {
   const pending = state.overview.pending;
   const forwards = state.sections.find((s) => s.id === 'ports')?.items.length ?? 0;
   const lines = [
-    `Logs out ${plural(state.overview.loggedIn + pending, 'device')}${pending ? ` (${pending} waiting)` : ''}.`,
-    `Stops ${plural(forwards, 'port forward')} and cancels every login QR code.`,
-    also.length ? `Also closes all ${also.join(' and ')}.` : 'Terminals keep running on the Mac.',
+    '• Disconnects phone access. Only Connect on this page opens it again.',
+    `• Logs out ${plural(state.overview.loggedIn + pending, 'device')}${pending ? ` (${pending} waiting for approval)` : ''}. Blocked devices stay blocked.`,
+    `• Stops ${plural(forwards, 'port forward')} and cancels every login QR code.`,
+    also.length ? `• Closes all ${also.join(' and ')}.` : '• Terminals keep running on the Mac.',
   ];
-  if (!(await ask({ title: 'Lock down Pocket Dev?', body: lines.join('\n'), confirm: 'Lock down', danger: true }))) return;
-  await act(() => api('POST', '/api/lockdown', { also }), (r) => `Locked down: ${plural(r.devices, 'device')} logged out`);
+  const password = h('input', { type: 'password', autocomplete: 'new-password', placeholder: 'New password (optional, 6+ characters)', 'aria-label': 'New password (optional)' });
+  const extra = h('label', { class: 'ask-field' }, h('span', {}, 'Also change the password now'), password);
+  for (;;) {
+    if (!(await ask({ title: 'Lock down Pocket Dev?', body: lines.join('\n'), confirm: 'Lock down', danger: true, extra }))) return;
+    if (!password.value || password.value.length >= 6) break;
+    toast('The new password needs at least 6 characters, or leave it empty.', true);
+  }
+  await act(() => api('POST', '/api/lockdown', { also, ...(password.value && { password: password.value }) }),
+    (r) => `Locked down: phone access closed, ${plural(r.devices, 'device')} logged out${r.passwordChanged ? ', password changed' : ''}`);
 });
 
 // ---- Refresh loop

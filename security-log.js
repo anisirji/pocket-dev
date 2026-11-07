@@ -12,6 +12,7 @@ export const EVENT_KINDS = {
   'device-unblocked': 'change',
   'device-approved': 'change',
   'device-denied': 'change',
+  'device-removed': 'change',
   'device-renamed': 'change',
   'pending-expired': 'change',
   'password-changed': 'change',

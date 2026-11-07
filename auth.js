@@ -464,7 +464,9 @@ export function createAuth({ config, port, lanIp }) {
 
   // Each action names the statuses it applies to; approve and unblock make a device active, so they respect the limit.
   const DEVICE_ACTIONS = {
-    revoke: { from: ['active', 'blocked'], event: 'device-revoked', apply: drop },
+    revoke: { from: ['active'], event: 'device-revoked', apply: drop },
+    // Forgetting a blocked device lets that browser try the password again, as a new device.
+    remove: { from: ['blocked'], event: 'device-removed', apply: drop },
     block: {
       from: ['active', 'pending'],
       event: 'device-blocked',
@@ -533,11 +535,14 @@ export function createAuth({ config, port, lanIp }) {
       const url = mintQrUrl();
       return { url, svg: await svgQr(url), expiresInMin: QR_TTL_MIN };
     },
-    // Logs out every device that is not blocked and cancels every login code. Returns how many devices it logged out.
-    lockdown() {
+    newPasswordError,
+    // Logs out every device that is not blocked, cancels every login code, and sets `next` as the password when given.
+    // Returns how many devices it logged out.
+    lockdown(next) {
       const out = [...devices.values()].filter((d) => d.status !== 'blocked');
       for (const d of out) revoke(d.id, 'lockdown');
       qrKeys.clear();
+      if (next !== undefined) changePassword(next, { logoutAll: false, by: 'lockdown' });
       return out.length;
     },
   };

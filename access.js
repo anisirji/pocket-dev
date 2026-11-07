@@ -1,10 +1,26 @@
 const HEARTBEAT_TIMEOUT_MS = Number(process.env.POCKET_DEV_HEARTBEAT_TIMEOUT_MS) || 30_000;
 const HEARTBEAT_EVERY_MS = Math.min(10_000, Math.round(HEARTBEAT_TIMEOUT_MS / 3));
 
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const run = promisify(execFile);
 const savedAccess = (a) => ({ connected: a?.connected !== false, keepOpen: a?.keepOpen !== false });
 
-function listenError(err, port) {
-  if (err.code === 'EADDRINUSE') return `Port ${port} is in use by another program. Quit it, then press Connect again.`;
+// `lsof -F pc` prints p<pid> and c<command> lines for each listener.
+async function portOwner(port) {
+  try {
+    const { stdout } = await run('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-F', 'pc']);
+    const pid = /^p(\d+)$/m.exec(stdout)?.[1];
+    const command = /^c(.+)$/m.exec(stdout)?.[1];
+    return pid ? ` by ${command ?? 'a process'} (pid ${pid})` : '';
+  } catch {
+    return '';
+  }
+}
+
+async function listenError(err, port) {
+  if (err.code === 'EADDRINUSE') return `Port ${port} is in use${await portOwner(port)}. Quit it, then press Connect to try again.`;
   if (err.code === 'EACCES') return `Not allowed to listen on port ${port}.`;
   return `Could not open port ${port}: ${err.message}`;
 }
@@ -45,7 +61,7 @@ export function createPhoneAccess({ server, wss, port, host = '0.0.0.0', config,
         server.listen(port, host, () => { server.off('error', reject); resolve(); });
       });
     } catch (err) {
-      lastError = listenError(err, port);
+      lastError = await listenError(err, port);
       return { error: lastError };
     }
     connected = true;

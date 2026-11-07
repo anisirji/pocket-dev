@@ -148,12 +148,13 @@
       <div class="lock">
         <div>
           <h2>Lockdown</h2>
-          <p>Logs out every device, including ones waiting for approval, stops every port forward, and cancels every login QR code. Blocked devices stay blocked. Terminals keep running on the Mac unless you tick the box. Afterwards, anyone with the password can log in again, so change it too if it leaked.</p>
+          <p>Disconnects phone access, logs out every device (including ones waiting for approval), stops every port forward, and cancels every login QR code. Blocked devices stay blocked. Terminals keep running on the Mac unless you tick the box. Phones get back in only after you press Connect; if the password leaked, change it in the same step.</p>
           <div id="lockOptions"></div>
         </div>
         <button type="button" class="btn btn-lock" id="lockBtn">Lock down now</button>
       </div>
     </section>
+    <footer class="foot">This page has no password on purpose: only this Mac can reach it, and anyone using this Mac account can open it. Lock the Mac when you step away.</footer>
   </main>
 </div>
 
@@ -161,6 +162,7 @@
   <form method="dialog">
     <h3 id="askTitle"></h3>
     <p id="askBody"></p>
+    <div id="askExtra"></div>
     <div class="dialog-actions">
       <button value="cancel" class="btn" id="askCancel">Cancel</button>
       <button value="ok" class="btn btn-primary" id="askOk"></button>

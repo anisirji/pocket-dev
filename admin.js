@@ -130,6 +130,8 @@ export async function startAdmin({ auth, access, config, mainPort, lanIp, sectio
 
   async function state() {
     const a = auth.admin.state();
+    // With the phone port closed nobody can be online, however recently they made a request.
+    if (!access.view().connected) a.devices = a.devices.map((d) => ({ ...d, online: false }));
     const active = a.devices.filter((d) => d.status === 'active');
     const failures = auth.admin.recentLog({ filter: 'failures', since: Date.now() - HOUR_MS, limit: 10_000 })
       .filter((e) => e.type === 'login-failed');
@@ -152,20 +154,27 @@ export async function startAdmin({ auth, access, config, mainPort, lanIp, sectio
     };
   }
 
-  function lockdown({ also = [] }) {
+  // Disconnects phone access, logs out every device that is not blocked, stops forwards, cancels login codes, and
+  // optionally sets a new password. Only Connect on this page lets phones back in.
+  async function lockdown({ also = [], password }) {
     const optional = Object.keys(sections).filter((id) => sections[id].lockdown === 'optional');
     if (!Array.isArray(also) || also.some((id) => !optional.includes(id))) {
       return reply(400, { error: `also must list sections from: ${optional.join(', ') || 'none'}.` });
     }
-    const devices = auth.admin.lockdown();
-    access.forgetForwards();
+    if (password !== undefined) {
+      const invalid = auth.admin.newPasswordError(password);
+      if (invalid) return reply(400, { error: invalid });
+    }
     const closed = {};
     for (const [id, s] of Object.entries(sections)) {
       if (s.lockdown !== 'always' && !also.includes(id)) continue;
       closed[id] = s.list().filter((item) => s.act(item.id)).length;
     }
-    auth.admin.log('lockdown', { devices, closed });
-    return ok({ devices, closed });
+    const devices = auth.admin.lockdown(password);
+    await access.close('lockdown');
+    access.forgetForwards();
+    auth.admin.log('lockdown', { devices, closed, passwordChanged: password !== undefined });
+    return ok({ devices, closed, passwordChanged: password !== undefined, access: access.view() });
   }
 
   async function setAccess({ connected, keepOpen }, by) {

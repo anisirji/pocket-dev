@@ -395,10 +395,8 @@ const admin = await startAdmin({ auth, access, config: configStore, mainPort: PO
 });
 const opened = await access.start();
 if (opened.error) {
-  console.error(opened.error);
-  process.exit(1);
-}
-if (access.view().connected) {
+  console.error(`${opened.error} Phone access stays off until then.`);
+} else if (access.view().connected) {
   console.log(await terminalQr(auth.mintQrUrl()));
   console.log(`Pocket Dev running at http://${lanIp()}:${PORT}`);
   console.log(auth.passwordLine);
