@@ -67,7 +67,6 @@ function numstat(added, deleted) {
   return el('span', { class: 'g-stat' }, el('span', { class: 'add' }, `+${added}`), ' ', el('span', { class: 'del' }, `−${deleted}`));
 }
 
-// --- diff viewer -------------------------------------------------------------------------------
 
 function diffView(text) {
   const lines = text.split('\n');
@@ -100,7 +99,6 @@ function unquotePath(p) {
   return new TextDecoder().decode(new Uint8Array(bytes));
 }
 
-// Splits a multi-file diff at its "diff --git" headers so one file's section can be shown on its own.
 function fileSection(text, path) {
   const sections = text.split(/^(?=diff --git )/m);
   return sections.find((s) => {
@@ -110,7 +108,6 @@ function fileSection(text, path) {
   }) ?? text;
 }
 
-// --- graph -------------------------------------------------------------------------------------
 
 function laneSvg(row, lanes) {
   const col = (lane) => Math.min(lane, lanes - 1);
@@ -210,7 +207,6 @@ async function renderDiff(screen) {
   return diffView(text);
 }
 
-// --- changes -----------------------------------------------------------------------------------
 
 const CHANGE_GROUPS = [
   { title: 'Staged', source: 'staged', pick: (f) => f.staged, code: (f) => f.staged },
@@ -235,7 +231,6 @@ async function renderChanges() {
   })];
 }
 
-// --- pull requests -----------------------------------------------------------------------------
 
 const REVIEW_LABELS = { APPROVED: ['Approved', 'ok'], CHANGES_REQUESTED: ['Changes requested', 'bad'], REVIEW_REQUIRED: ['Review required', 'warn'] };
 const CHECK_LABELS = { pass: 'Checks passed', fail: 'Checks failed', pending: 'Checks running' };
@@ -458,7 +453,6 @@ async function renderPrCreate(screen) {
     submit);
 }
 
-// --- navigation --------------------------------------------------------------------------------
 
 const SCREENS = {
   graph: renderGraph,

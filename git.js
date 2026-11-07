@@ -20,7 +20,7 @@ const ENV = {
   NO_COLOR: '1',
 };
 
-export class HttpError extends Error {
+class HttpError extends Error {
   constructor(status, message) {
     super(message);
     this.status = status;
@@ -123,11 +123,7 @@ async function graph({ repo, q }) {
   const out = await git(repo, [
     'log', '--exclude=refs/stash', '--all', '--date-order', '--decorate=full', `-n${limit}`, `--skip=${skip}`,
     '--format=%H%x1f%P%x1f%an%x1f%at%x1f%s%x1f%D%x1e',
-  ]).catch((err) => {
-    // A freshly initialised repo has no commits yet; that is an empty graph, not an error.
-    if (/does not have any commits|bad default revision/.test(err.message)) return '';
-    throw err;
-  });
+  ]);
   const commits = out.split('\x1e').map((r) => r.replace(/^\n/, '')).filter(Boolean).map((record) => {
     const [hash, parents, author, time, subject, refs] = record.split('\x1f');
     return {
@@ -281,7 +277,7 @@ const CHECK_STATES = {
 };
 
 // statusCheckRollup mixes CheckRun (status + conclusion) and StatusContext (state) entries.
-export function normalizeCheck(c) {
+function normalizeCheck(c) {
   const raw = c.__typename === 'StatusContext' ? c.state : c.status === 'COMPLETED' ? c.conclusion : c.status;
   return { name: c.name || c.context || 'check', state: CHECK_STATES[raw] ?? 'pending', url: c.detailsUrl || c.targetUrl || null };
 }
