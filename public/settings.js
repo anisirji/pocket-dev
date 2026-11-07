@@ -12,6 +12,7 @@
   };
 
   const { api } = window;
+  const { overlays } = window.pocketDev;
 
   function ago(ms) {
     const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
@@ -264,16 +265,15 @@
     $('[data-act="qr"]').textContent = 'Show login QR';
   }
 
-  // Android's back button should close the sheet, not leave the app.
-  window.addEventListener('popstate', () => { if (!sheet.hidden) hide(); });
-  $('.st-close').addEventListener('click', () => (history.state?.pdSettings ? history.back() : hide()));
+  $('.st-close').addEventListener('click', () => overlays.close('settings'));
 
   async function open() {
     document.activeElement?.blur();
+    if (!sheet.hidden) return;
+    overlays.open('settings', hide);
     settings = null;
     sheet.hidden = false;
     sheet.querySelector('.st-body').scrollTop = 0;
-    history.pushState({ pdSettings: true }, '');
     clearInterval(timer);
     timer = setInterval(refresh, REFRESH_MS);
     await refresh();

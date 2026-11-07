@@ -11,6 +11,7 @@
   };
 
   const { api } = window;
+  const { overlays } = window.pocketDev;
 
   function ago(iso) {
     const s = (Date.now() - Date.parse(iso)) / 1000;
@@ -162,12 +163,15 @@
     }
   }
 
-  // The sheet owns two history entries (list, detail) so Android's back gesture steps out of it
-  // instead of leaving Pocket Dev.
+  // The list and the detail are two overlay levels, so Android's back gesture steps from the detail to the list and
+  // then out of the sheet.
   function open() {
     document.activeElement?.blur();
     if (!sheet.hidden) return;
-    history.pushState({ pdResume: 'list' }, '');
+    overlays.open('resume', () => {
+      sheet.hidden = true;
+      detailSeq++;
+    });
     sheet.hidden = false;
     current = null;
     setMode('list');
@@ -177,25 +181,14 @@
 
   function openDetail(item) {
     current = item;
-    history.pushState({ pdResume: 'detail' }, '');
+    overlays.open('resume-detail', () => setMode('list'));
     ui.go.disabled = false;
     ui.go.textContent = 'Continue on phone';
     setMode('detail');
     loadDetail(item);
   }
 
-  const leave = () => history.go(ui.detail.hidden ? -1 : -2);
-
-  window.addEventListener('popstate', (e) => {
-    const mode = e.state?.pdResume;
-    if (!mode) {
-      sheet.hidden = true;
-      detailSeq++;
-      return;
-    }
-    if (mode === 'detail' && !current) return history.back();
-    setMode(mode);
-  });
+  const leave = () => overlays.close('resume');
 
   function toast(text) {
     const node = el('div', 'hist-toast', text);
@@ -220,7 +213,7 @@
     }
   };
 
-  ui.back.onclick = () => history.back();
+  ui.back.onclick = () => overlays.close('resume-detail');
   ui.close.onclick = leave;
   ui.refresh.onclick = loadList;
   document.getElementById('resumeBtn').addEventListener('click', open);

@@ -461,24 +461,52 @@ $('latest').addEventListener('click', () => {
 });
 keepFocus($('latest'));
 
-// One layer at a time; each pushes a history entry so Android's back gesture closes it instead of leaving the page.
+// Every overlay (the folder and shortcut sheets, the copy view, Resume and its detail, Settings) is one level of this
+// stack and owns one history entry, so Android's back gesture closes only the topmost one. history.back() lands later,
+// in a popstate; history calls run one at a time so an overlay opened before that popstate is not closed by it.
+const overlays = (() => {
+  const PAGE = Math.random().toString(36).slice(2);
+  const stack = [];
+  let queue = Promise.resolve();
+  let ownPop = null;
+  const run = (step) => { queue = queue.then(step); };
+  window.addEventListener('popstate', (e) => {
+    if (ownPop) return ownPop();
+    // Entries left by an earlier load of the page (a reload with an overlay open) count as depth 0.
+    const depth = e.state?.pdPage === PAGE ? e.state.pdOverlay : 0;
+    while (stack.length > depth) stack.pop().onClose();
+  });
+  return {
+    open(name, onClose) {
+      stack.push({ name, onClose });
+      const depth = stack.length;
+      run(() => history.pushState({ pdPage: PAGE, pdOverlay: depth }, ''));
+    },
+    // Closes `name` and every overlay opened above it.
+    close(name) {
+      const i = stack.findLastIndex((o) => o.name === name);
+      if (i === -1) return;
+      const closed = stack.splice(i);
+      for (const o of closed.reverse()) o.onClose();
+      run(() => new Promise((resolve) => {
+        const done = () => { clearTimeout(timer); ownPop = null; resolve(); };
+        const timer = setTimeout(done, 1000);
+        ownPop = done;
+        history.go(-closed.length);
+      }));
+    },
+  };
+})();
+
+// The folder sheet, the shortcut sheet and the copy view share one level; opening one replaces another.
 let layer = null;
 function showLayer(name) {
   closeKeyboard();
-  if (!layer) history.pushState({ layer: true }, '');
+  if (!layer) overlays.open('layer', () => { layer = null; renderLayer(); });
   layer = name;
   renderLayer();
 }
-function hideLayer() {
-  if (!layer) return;
-  layer = null;
-  renderLayer();
-  if (history.state?.layer) history.back();
-}
-window.addEventListener('popstate', () => {
-  layer = null;
-  renderLayer();
-});
+const hideLayer = () => overlays.close('layer');
 const SHEETS = { folders: renderFolders, shortcuts: renderShortcuts };
 function renderLayer() {
   $('sheet').hidden = !SHEETS[layer];
@@ -873,7 +901,14 @@ document.addEventListener('visibilitychange', () => {
   refreshForwards().catch(() => {});
 });
 
-window.pocketDev = { openSession: (s) => activate((views.get(s.id) ?? makeView(s)).id) };
+window.pocketDev = {
+  overlays,
+  // Resume continues a conversation from either view; the new terminal has to be on screen.
+  openSession(s) {
+    setView('terminal');
+    activate((views.get(s.id) ?? makeView(s)).id);
+  },
+};
 
 (async () => {
   const stored = store.get('pd.active');
