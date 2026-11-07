@@ -8,6 +8,16 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.css">
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10/lib/addon-fit.js"></script>
+<link rel="stylesheet" href="/git.css">
+<script type="module" src="/git.js"></script>
+<link rel="stylesheet" href="/history.css">
+<link rel="stylesheet" href="/settings.css">
+<link rel="stylesheet" href="/apps.css">
+<script src="/apps.js" defer></script>
+<link rel="stylesheet" href="/chat.css">
+<script src="/chat.js" defer></script>
+<link rel="stylesheet" href="/files.css">
+<script src="/files.js" defer></script>
 <style>
   :root {
     --bg: #0b0e14; --panel: #131823; --panel-2: #1b2130; --line: #252d3c;
@@ -21,18 +31,26 @@
 
   #app { position: fixed; top: 0; left: 0; right: 0; height: 100dvh; display: flex; flex-direction: column; }
 
-  header { display: flex; align-items: center; gap: 6px; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  /* Two rows at phone width: the views and the app-wide buttons, then the terminal tabs (Terminal view only). One row
+     left the tabs about 50px at 360px. */
+  header, #tabbar { display: flex; align-items: center; gap: 4px; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #tabbar { padding-top: 0; }
+  #headGap { flex: 1; }
+  #app:not([data-view="terminal"]) :is(#tabbar, #headGap) { display: none; }
   #tabs { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
   #tabs::-webkit-scrollbar { display: none; }
   .tab { flex: none; display: flex; align-items: center; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
   .tab.active { border-color: var(--accent); background: var(--panel-2); }
   .tab.exited .tab-label { color: var(--muted); }
   .tab-label { height: 34px; padding: 0 2px 0 10px; max-width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tab-x { width: 30px; height: 34px; color: var(--muted); font-size: 12px; }
+  .tab-x { width: 26px; height: 34px; color: var(--muted); font-size: 12px; }
   .icon-btn { flex: none; height: 36px; min-width: 36px; padding: 0 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
-  #new { font-size: 20px; line-height: 1; padding: 0; }
+  .icon-btn.glyph { width: 36px; padding: 0; display: grid; place-items: center; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #new { font-size: 20px; line-height: 1; }
+  #portsBtn, #settingsBtn { position: relative; }
   #portsBtn.open { border-color: var(--accent); }
-  #portsCount { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #08101e; font-size: 12px; font-weight: 600; }
+  #portsCount { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--accent); color: #08101e; font-size: 11px; font-weight: 600; line-height: 17px; text-align: center; }
   #portsCount:empty { display: none; }
 
   #ports { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
@@ -44,6 +62,8 @@
   .chip { display: flex; align-items: center; border-radius: 17px; background: var(--panel-2); border: 1px solid var(--line); }
   .chip a { padding: 0 4px 0 12px; line-height: 32px; color: var(--accent); text-decoration: none; font-family: var(--mono); }
   .chip button { width: 30px; height: 32px; color: var(--muted); font-size: 12px; }
+  .chip .chip-off { width: auto; height: auto; padding: 0 4px 0 12px; line-height: 32px; color: var(--muted); font-family: var(--mono); }
+  .chip .chip-off.error { color: var(--danger); }
   #portErr { flex-basis: 100%; margin: 0; color: var(--danger); font-size: 13px; }
   #portErr:empty { display: none; }
 
@@ -58,21 +78,67 @@
   #inputBar { display: flex; gap: 6px; padding: 6px; border-top: 1px solid var(--line); background: var(--panel); }
   #cmd { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 16px; outline: none; }
   #cmd:focus { border-color: var(--accent); }
+  #attach { flex: none; width: 42px; height: 42px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-size: 18px; }
+  #attach:active { background: var(--line); }
+  #uploadStatus { position: absolute; left: 10px; bottom: 12px; z-index: 5; max-width: calc(100% - 130px); padding: 8px 12px; border-radius: 17px; background: var(--panel-2); border: 1px solid var(--line); box-shadow: 0 2px 10px #0008; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #uploadStatus.error { color: var(--danger); white-space: normal; }
   #send { height: 42px; padding: 0 16px; border-radius: 10px; background: var(--accent); color: #08101e; font-weight: 600; }
 
   #keys { display: flex; gap: 6px; padding: 0 6px 6px; overflow-x: auto; background: var(--panel); scrollbar-width: none; }
   #keys::-webkit-scrollbar { display: none; }
   .key { flex: none; min-width: 52px; height: 42px; padding: 0 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-family: var(--mono); font-size: 13px; }
   .key:active, .icon-btn:active { background: var(--line); }
+
+  .layer { position: absolute; inset: 0; z-index: 20; }
+  #sheet { display: flex; flex-direction: column; justify-content: flex-end; background: #000a; }
+  #sheetPanel { display: flex; flex-direction: column; max-height: 80%; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; background: var(--panel); }
+  .layer-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 6px 8px 14px; }
+  .layer-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
+  #sheetBody { overflow-y: auto; overscroll-behavior: contain; padding: 0 6px; }
+  #sheetFoot { flex: none; padding: 0 6px 10px; }
+  .sheet-label { margin: 12px 10px 2px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .row { display: flex; align-items: center; gap: 2px; }
+  .row-main { flex: 1; min-width: 0; min-height: 48px; padding: 5px 10px; border-radius: 10px; text-align: left; }
+  .row-main:active, .row-btn:active { background: var(--panel-2); }
+  .row-name, .row-path { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-path { margin-top: 1px; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .row-btn { flex: none; width: 42px; height: 42px; border-radius: 10px; color: var(--muted); font-size: 18px; }
+  .row-btn.on { color: #f0c674; }
+  .row-btn:disabled { opacity: .3; }
+  .sheet-form { display: flex; gap: 6px; padding: 10px 4px 0; }
+  .sheet-form input { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 16px; outline: none; }
+  .sheet-form input:focus { border-color: var(--accent); }
+  .sheet-form .primary { height: 42px; border-radius: 10px; }
+  .sheet-note { margin: 10px 10px 0; color: var(--muted); font-size: 13px; }
+  .sheet-note:empty { display: none; }
+  .sheet-note.error { color: var(--danger); }
+  .sheet-act { height: 36px; padding: 0 14px; border-radius: 8px; color: var(--accent); font-weight: 600; }
+  .row-main.cmd, .row-text { font-family: var(--mono); font-size: 14px; }
+  .row-text { flex: 1; min-width: 0; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row.editing { min-height: 48px; }
+  #textView { display: flex; flex-direction: column; background: var(--bg); }
+  #textView .layer-head { border-bottom: 1px solid var(--line); background: var(--panel); }
+  #textTitle.ok { color: #7ee787; }
+  #textTitle.error { color: #f0c674; }
+  #textPre { flex: 1; min-height: 0; margin: 0; padding: 8px 10px 16px; overflow: auto; overscroll-behavior: contain; font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+  .key.icon { min-width: 44px; padding: 0; font-family: inherit; font-size: 17px; }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <div id="tabs"></div>
-    <button id="new" class="icon-btn" aria-label="New terminal">+</button>
-    <button id="portsBtn" class="icon-btn">Ports<span id="portsCount"></span></button>
+    <div id="viewSwitch" role="group" aria-label="View">
+      <button data-view="terminal" title="Terminal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg><span class="sr-only">Terminal</span></button><button data-view="git" title="Git"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7"/><path d="M18 10.5c0 4-6 3.5-11 6"/></svg><span class="sr-only">Git</span></button><button data-view="chat" title="Chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></svg><span class="sr-only">Chat</span></button><button data-view="files" title="Files"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="sr-only">Files</span></button>
+    </div>
+    <div id="headGap"></div>
+    <button id="resumeBtn" class="icon-btn glyph" aria-label="Resume a laptop conversation"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
+    <button id="portsBtn" class="icon-btn glyph" aria-label="Ports" title="Ports"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/></svg><span id="portsCount"></span></button>
+    <button id="settingsBtn" class="icon-btn glyph" aria-label="Settings">⚙︎<span id="gearBattery" hidden></span></button>
   </header>
+  <nav id="tabbar" aria-label="Terminals">
+    <div id="tabs"></div>
+    <button id="new" class="icon-btn glyph" aria-label="New terminal">+</button>
+  </nav>
   <div id="ports" hidden>
     <form id="portForm">
       <input id="portInput" type="number" inputmode="numeric" min="1" max="65535" placeholder="3000" enterkeyhint="go" aria-label="Port">
@@ -84,12 +150,26 @@
   <main id="terms">
     <div id="badge" hidden></div>
     <button id="latest" hidden>↓ latest</button>
+    <button id="uploadStatus" hidden></button>
   </main>
   <form id="inputBar">
+    <button id="attach" type="button" aria-label="Attach a file">📎</button>
+    <input id="file" type="file" accept="image/*,*/*" multiple hidden>
     <input id="cmd" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" placeholder="Type a command">
     <button id="send">Send</button>
   </form>
   <div id="keys"></div>
+  <div id="textView" class="layer" hidden>
+    <div class="layer-head"><h2 id="textTitle"></h2><button id="copyAll" class="primary">Copy all</button><button id="textClose" class="icon-btn">Close</button></div>
+    <pre id="textPre"></pre>
+  </div>
+  <div id="sheet" class="layer" hidden>
+    <section id="sheetPanel">
+      <div class="layer-head"><h2 id="sheetTitle"></h2><span id="sheetAction"></span><button id="sheetClose" class="icon-btn" aria-label="Close">✕</button></div>
+      <div id="sheetBody"></div>
+      <div id="sheetFoot"><div id="sheetFormSlot"></div><p id="sheetNote" class="sheet-note"></p></div>
+    </section>
+  </div>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -101,21 +181,23 @@ const h = (tag, cls, text) => {
 };
 
 const store = {
-  get() { try { return localStorage.getItem('pd.active'); } catch { return null; } },
-  set(id) { try { localStorage.setItem('pd.active', id); } catch {} },
+  get(key) { try { return localStorage.getItem(key); } catch { return null; } },
+  set(key, value) { try { localStorage.setItem(key, value); } catch {} },
 };
 
+// The one request helper for every page script: the server refuses changes without x-pocket-dev (see server.js).
 async function api(method, url, body) {
   const res = await fetch(url, {
     method,
-    headers: body ? { 'content-type': 'application/json' } : {},
+    headers: { 'x-pocket-dev': '1', ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (res.status === 401) {
+  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  // The login page explains a blocked or not-yet-approved device instead of showing the form.
+  if (res.status === 401 || data?.blocked || data?.pending) {
     location.replace('/login.html');
-    throw new Error('Not logged in');
+    throw new Error(data?.error || 'Not logged in');
   }
-  const data = res.status === 204 ? null : await res.json();
   if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
   return data;
 }
@@ -163,7 +245,7 @@ function connect(view) {
   ws.onopen = () => {
     view.online = view.everOnline = true;
     view.term.reset();
-    sendMsg(view, { t: 'resize', cols: view.term.cols, rows: view.term.rows });
+    if (terminalShown()) sendMsg(view, { t: 'resize', cols: view.term.cols, rows: view.term.rows });
     renderBadge();
   };
   ws.onmessage = (e) => {
@@ -175,12 +257,13 @@ function connect(view) {
       renderTabs();
     }
   };
-  ws.onclose = () => {
+  ws.onclose = (e) => {
     if (view.ws !== ws || view.closed) return;
     view.online = false;
     renderBadge();
     clearTimeout(view.retry);
-    view.retry = setTimeout(reconnect, 2000, view);
+    if (POWER_REASONS.has(e.reason)) return showPower(e.reason);
+    if (!powerPaused) view.retry = setTimeout(reconnect, 2000, view);
   };
 }
 
@@ -215,8 +298,8 @@ async function syncSessions() {
   renderTabs();
 }
 
-async function newSession() {
-  const s = await api('POST', '/api/sessions', {});
+async function newSession(cwd) {
+  const s = await api('POST', '/api/sessions', cwd ? { cwd } : {});
   activate(makeView(s).id);
 }
 
@@ -232,7 +315,7 @@ async function closeSession(view) {
 
 function activate(id) {
   activeId = id;
-  store.set(id);
+  store.set('pd.active', id);
   for (const v of views.values()) v.el.classList.toggle('active', v.id === id);
   renderTabs();
   renderBadge();
@@ -267,9 +350,11 @@ function renderLatest() {
   $('latest').hidden = !buf || buf.viewportY >= buf.baseY;
 }
 
+const terminalShown = () => $('app').dataset.view !== 'git';
+
 function fitView(view) {
-  // A hidden tab can be laid out at a bogus width and would push that size to the shared shell.
-  if (document.hidden) return;
+  // A hidden page or the Git view lays terminals out at a bogus size, which would be pushed to the shared shell.
+  if (document.hidden || !terminalShown()) return;
   try { view.fit.fit(); } catch {}
 }
 
@@ -343,6 +428,16 @@ function keepFocus(button) {
   button.addEventListener('mousedown', (e) => e.preventDefault());
 }
 
+function iconKey(label, ariaLabel, onClick) {
+  const key = h('button', 'key icon', label);
+  key.setAttribute('aria-label', ariaLabel);
+  keepFocus(key);
+  key.onclick = onClick;
+  $('keys').appendChild(key);
+}
+iconKey('⚡', 'Shortcuts', () => openShortcuts());
+iconKey('📋', 'Copy output', () => openText());
+
 for (const [label, seq] of KEYS) {
   const key = h('button', 'key', label);
   keepFocus(key);
@@ -357,13 +452,7 @@ for (const [label, seq] of KEYS) {
   $('keys').appendChild(key);
 }
 
-keepFocus($('send'));
-$('inputBar').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const view = active();
-  if (!view) return;
-  const text = $('cmd').value;
-  $('cmd').value = '';
+function runCommand(view, text) {
   if (text) {
     sendInput(view, text);
     // A TUI that detects pastes by chunk can read text+CR arriving together as a pasted newline, not a submit.
@@ -373,6 +462,16 @@ $('inputBar').addEventListener('submit', (e) => {
   }
   view.term.scrollToBottom();
   closeKeyboard();
+}
+
+keepFocus($('send'));
+$('inputBar').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const view = active();
+  if (!view) return;
+  const text = $('cmd').value;
+  $('cmd').value = '';
+  runCommand(view, text);
 });
 
 $('latest').addEventListener('click', () => {
@@ -381,17 +480,390 @@ $('latest').addEventListener('click', () => {
 });
 keepFocus($('latest'));
 
-$('new').addEventListener('click', () => newSession().catch((err) => alert(err.message)));
+// Every overlay (the folder and shortcut sheets, the copy view, Resume and its detail, Settings, Open apps and its
+// detail) is one level of this stack and owns one history entry, so Android's back gesture closes only the topmost
+// one. history.back() lands later, in a popstate; history calls run one at a time so an overlay opened before that
+// popstate is not closed by it.
+const overlays = (() => {
+  const PAGE = Math.random().toString(36).slice(2);
+  const stack = [];
+  let queue = Promise.resolve();
+  let ownPop = null;
+  const run = (step) => { queue = queue.then(step); };
+  window.addEventListener('popstate', (e) => {
+    if (ownPop) return ownPop();
+    // Entries left by an earlier load of the page (a reload with an overlay open) count as depth 0.
+    const depth = e.state?.pdPage === PAGE ? e.state.pdOverlay : 0;
+    while (stack.length > depth) stack.pop().onClose();
+  });
+  return {
+    open(name, onClose) {
+      stack.push({ name, onClose });
+      const depth = stack.length;
+      run(() => history.pushState({ pdPage: PAGE, pdOverlay: depth }, ''));
+    },
+    // Closes `name` and every overlay opened above it.
+    close(name) {
+      const i = stack.findLastIndex((o) => o.name === name);
+      if (i === -1) return;
+      const closed = stack.splice(i);
+      for (const o of closed.reverse()) o.onClose();
+      run(() => new Promise((resolve) => {
+        const done = () => { clearTimeout(timer); ownPop = null; resolve(); };
+        const timer = setTimeout(done, 1000);
+        ownPop = done;
+        history.go(-closed.length);
+      }));
+    },
+    closeAll() {
+      if (stack.length) this.close(stack[0].name);
+    },
+  };
+})();
+
+// The folder sheet, the shortcut sheet and the copy view share one level; opening one replaces another.
+let layer = null;
+function showLayer(name) {
+  closeKeyboard();
+  if (!layer) overlays.open('layer', () => { layer = null; renderLayer(); });
+  layer = name;
+  renderLayer();
+}
+const hideLayer = () => overlays.close('layer');
+const SHEETS = { folders: renderFolders, shortcuts: renderShortcuts };
+function renderLayer() {
+  $('sheet').hidden = !SHEETS[layer];
+  $('textView').hidden = layer !== 'text';
+  SHEETS[layer]?.();
+}
+function setSheet({ title, action, rows = [], form, note = '', error = false }) {
+  $('sheetTitle').textContent = title;
+  $('sheetAction').replaceChildren(...(action ? [action] : []));
+  $('sheetBody').replaceChildren(...rows);
+  // Re-inserting the form would blur its input and drop the phone keyboard after every add.
+  if ($('sheetFormSlot').firstChild !== form) $('sheetFormSlot').replaceChildren(...(form ? [form] : []));
+  $('sheetNote').textContent = note;
+  $('sheetNote').classList.toggle('error', error);
+}
+$('sheetClose').addEventListener('click', hideLayer);
+$('sheet').addEventListener('click', (e) => e.target === $('sheet') && hideLayer());
+
+function sheetForm(placeholder, buttonLabel, onSubmit) {
+  const form = h('form', 'sheet-form');
+  const input = h('input');
+  Object.assign(input, { type: 'text', placeholder, autocomplete: 'off', autocapitalize: 'off', spellcheck: false, enterKeyHint: 'go' });
+  input.setAttribute('autocorrect', 'off');
+  form.append(input, h('button', 'primary', buttonLabel));
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (input.value.trim()) onSubmit(input.value.trim(), input);
+  });
+  return form;
+}
+
+let folders = null;
+let folderNote = '';
+const otherPath = sheetForm('Other path, e.g. ~/app', 'Open', (value) => openFolder(value));
+
+async function openFolders() {
+  folderNote = '';
+  showLayer('folders');
+  try { folders = await api('GET', '/api/folders'); } catch (err) { folderNote = err.message; }
+  if (layer === 'folders') renderFolders();
+}
+
+// A double tap on a row must open one terminal, not two.
+let openingFolder = false;
+async function openFolder(dir) {
+  if (openingFolder) return;
+  openingFolder = true;
+  try {
+    await newSession(dir);
+    otherPath.querySelector('input').value = '';
+    hideLayer();
+  } catch (err) {
+    folderNote = err.message;
+    renderFolders();
+  } finally {
+    openingFolder = false;
+  }
+}
+
+async function togglePin(dir, pinned) {
+  try { folders = await api('PUT', '/api/folders/pinned', { path: dir, pinned }); } catch (err) { folderNote = err.message; }
+  renderFolders();
+}
+
+function renderFolders() {
+  if (!folders) return setSheet({ title: 'New terminal', note: folderNote || 'Loading…', error: !!folderNote });
+  const { home, pinned, recent, projects } = folders;
+  const tilde = (p) => (p === home ? '~' : p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p);
+  const pinnedPaths = new Set(pinned.map((f) => f.path));
+  const shown = new Set([home]);
+  const row = (name, dir, pinnable) => {
+    const main = h('button', 'row-main');
+    main.append(h('span', 'row-name', name), h('span', 'row-path', tilde(dir)));
+    main.onclick = () => openFolder(dir);
+    const wrap = h('div', 'row');
+    wrap.append(main);
+    if (!pinnable) return wrap;
+    const on = pinnedPaths.has(dir);
+    const star = h('button', `row-btn${on ? ' on' : ''}`, on ? '★' : '☆');
+    star.setAttribute('aria-label', `${on ? 'Unpin' : 'Pin'} ${name}`);
+    star.onclick = () => togglePin(dir, !on);
+    wrap.append(star);
+    return wrap;
+  };
+  // A folder can be pinned, recent and a project at once; list it once, in the first section it belongs to.
+  const section = (label, list) => {
+    const rows = list.filter((f) => !shown.has(f.path) && shown.add(f.path)).map((f) => row(f.name, f.path, true));
+    return rows.length ? [h('p', 'sheet-label', label), ...rows] : [];
+  };
+  setSheet({
+    title: 'New terminal',
+    rows: [row('Home', home, false), ...section('Pinned', pinned), ...section('Recent', recent), ...section('Projects', projects)],
+    form: otherPath,
+    note: folderNote,
+    error: true,
+  });
+}
+
+$('new').addEventListener('click', openFolders);
+
+const TEXT_LINES = 300;
+
+// Wrapped rows are one logical line; joining them keeps long commands and URLs copyable in one piece.
+function bufferText(term) {
+  const buf = term.buffer.active;
+  const lines = [];
+  for (let i = 0; i < buf.length; i++) {
+    const row = buf.getLine(i);
+    const text = row.translateToString(!buf.getLine(i + 1)?.isWrapped);
+    if (row.isWrapped && lines.length) lines[lines.length - 1] += text;
+    else lines.push(text);
+  }
+  while (lines.length && !lines.at(-1)) lines.pop();
+  return lines.slice(-TEXT_LINES).join('\n');
+}
+
+function openText() {
+  const view = active();
+  if (!view) return;
+  showLayer('text');
+  $('textTitle').textContent = `Last ${TEXT_LINES} lines`;
+  $('textTitle').className = '';
+  $('textPre').textContent = bufferText(view.term);
+  $('textPre').scrollTop = $('textPre').scrollHeight;
+}
+
+// Plain http on the LAN is not a secure context, so navigator.clipboard is missing there; execCommand still works.
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {}
+  }
+  const area = h('textarea');
+  area.value = text;
+  area.readOnly = true;
+  area.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(area);
+  area.select();
+  area.setSelectionRange(0, text.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch {}
+  area.remove();
+  return ok;
+}
+
+$('copyAll').addEventListener('click', async () => {
+  const ok = await copyText($('textPre').textContent);
+  $('textTitle').textContent = ok ? 'Copied' : 'Long-press to select';
+  $('textTitle').className = ok ? 'ok' : 'error';
+});
+$('textClose').addEventListener('click', hideLayer);
+
+let shortcuts = null;
+let shortcutNote = '';
+let editingShortcuts = false;
+const addShortcut = sheetForm('Command, e.g. npm test', 'Add', async (text, input) => {
+  if (await saveShortcuts((list) => [...list, text])) input.value = '';
+});
+addShortcut.querySelector('input').maxLength = 200;
+
+async function openShortcuts() {
+  shortcutNote = '';
+  editingShortcuts = false;
+  showLayer('shortcuts');
+  try { shortcuts = await api('GET', '/api/shortcuts'); } catch (err) { shortcutNote = err.message; }
+  if (layer === 'shortcuts') renderShortcuts();
+}
+
+// Edits run one at a time, each applied to the list the server returned last, so quick taps never undo each other.
+let shortcutSaves = Promise.resolve();
+function saveShortcuts(change) {
+  shortcutSaves = shortcutSaves.then(async () => {
+    shortcutNote = '';
+    try {
+      shortcuts = await api('PUT', '/api/shortcuts', change(shortcuts));
+      return true;
+    } catch (err) {
+      shortcutNote = err.message;
+      return false;
+    } finally {
+      if (layer === 'shortcuts') renderShortcuts();
+    }
+  });
+  return shortcutSaves;
+}
+// A row's index can shift while earlier edits are saving; find the command again in the current list.
+const findShortcut = (list, i, text) => (list[i] === text ? i : list.indexOf(text));
+
+function runShortcut(text) {
+  const view = active();
+  if (!view) return;
+  hideLayer();
+  runCommand(view, text);
+}
+
+function renderShortcuts() {
+  if (!shortcuts) return setSheet({ title: 'Shortcuts', note: shortcutNote || 'Loading…', error: !!shortcutNote });
+  const toggle = h('button', 'sheet-act', editingShortcuts ? 'Done' : 'Edit');
+  toggle.onclick = () => {
+    editingShortcuts = !editingShortcuts;
+    renderShortcuts();
+  };
+  const move = (i, text, by) => saveShortcuts((list) => {
+    const from = findShortcut(list, i, text);
+    const to = from + by;
+    if (from === -1 || to < 0 || to >= list.length) return list;
+    const next = [...list];
+    [next[from], next[to]] = [next[to], next[from]];
+    return next;
+  });
+  const remove = (i, text) => saveShortcuts((list) => list.filter((_, j) => j !== findShortcut(list, i, text)));
+  const iconButton = (label, aria, disabled, onClick) => {
+    const b = h('button', 'row-btn', label);
+    b.setAttribute('aria-label', aria);
+    b.disabled = disabled;
+    b.onclick = onClick;
+    return b;
+  };
+  const rows = shortcuts.map((text, i) => {
+    const row = h('div', `row${editingShortcuts ? ' editing' : ''}`);
+    if (!editingShortcuts) {
+      const run = h('button', 'row-main cmd', text);
+      run.onclick = () => runShortcut(text);
+      row.append(run);
+      return row;
+    }
+    row.append(
+      h('span', 'row-text', text),
+      iconButton('↑', `Move ${text} up`, i === 0, () => move(i, text, -1)),
+      iconButton('↓', `Move ${text} down`, i === shortcuts.length - 1, () => move(i, text, 1)),
+      iconButton('✕', `Delete ${text}`, false, () => remove(i, text)),
+    );
+    return row;
+  });
+  setSheet({
+    title: 'Shortcuts',
+    action: toggle,
+    rows,
+    form: editingShortcuts && addShortcut,
+    note: shortcutNote || (shortcuts.length ? '' : 'No shortcuts yet. Tap Edit to add one.'),
+    error: !!shortcutNote,
+  });
+}
+
+const UPLOAD_MAX = 25 * 1024 * 1024;
+
+const shellQuote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
+
+function insertAtCursor(text) {
+  const cmd = $('cmd');
+  const start = cmd.selectionStart ?? cmd.value.length;
+  const pad = start && !/\s/.test(cmd.value[start - 1]) ? ' ' : '';
+  cmd.setRangeText(`${pad}${text} `, start, cmd.selectionEnd ?? start, 'end');
+  cmd.scrollLeft = cmd.scrollWidth;
+}
+
+let statusTimer = 0;
+function showStatus(text, error = false) {
+  clearTimeout(statusTimer);
+  $('uploadStatus').hidden = !text;
+  $('uploadStatus').textContent = text;
+  $('uploadStatus').classList.toggle('error', error);
+  if (text && error) statusTimer = setTimeout(showStatus, 6000, '');
+}
+$('uploadStatus').addEventListener('click', () => showStatus(''));
+keepFocus($('uploadStatus'));
+
+function uploadFile(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload');
+    xhr.setRequestHeader('x-filename', encodeURIComponent(file.name));
+    xhr.setRequestHeader('x-pocket-dev', '1');
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () => {
+      if (xhr.status === 401) location.replace('/login.html');
+      let data = null;
+      try { data = JSON.parse(xhr.responseText); } catch {}
+      if (xhr.status === 201) resolve(data.path);
+      else reject(new Error(data?.error || `HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error('cannot reach the Mac'));
+    xhr.send(file);
+  });
+}
+
+async function uploadFiles(files) {
+  let failed = false;
+  for (const file of files) {
+    try {
+      if (file.size > UPLOAD_MAX) throw new Error('larger than 25 MB');
+      showStatus(`Uploading ${file.name}…`);
+      const path = await uploadFile(file, (p) => showStatus(`Uploading ${file.name} ${Math.round(p * 100)}%`));
+      insertAtCursor(shellQuote(path));
+    } catch (err) {
+      failed = true;
+      showStatus(`${file.name}: ${err.message}`, true);
+    }
+  }
+  if (!failed) showStatus('');
+}
+
+keepFocus($('attach'));
+$('attach').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', () => {
+  const files = [...$('file').files];
+  $('file').value = '';
+  uploadFiles(files);
+});
+$('cmd').addEventListener('paste', (e) => {
+  const files = [...(e.clipboardData?.files ?? [])];
+  if (!files.length) return;
+  e.preventDefault();
+  uploadFiles(files);
+});
 
 let forwards = [];
 function renderForwards() {
   $('portsCount').textContent = forwards.length || '';
-  $('chips').replaceChildren(...forwards.map(({ port, url }) => {
+  $('chips').replaceChildren(...forwards.map(({ port, url, state, error }) => {
     const chip = h('span', 'chip');
-    const link = h('a', null, `:${port}`);
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener';
+    let link;
+    if (state === 'open') {
+      link = h('a', null, `:${port}`);
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+    } else {
+      // The Mac changed networks: the forward waits for an address, or could not listen on the new one.
+      link = h('button', `chip-off${error ? ' error' : ''}`, `:${port} ${error ? 'failed' : 'no network'}`);
+      link.onclick = () => { $('portErr').textContent = error || 'The Mac has no network. The forward reopens when it gets one.'; };
+    }
     const stop = h('button', null, '✕');
     stop.setAttribute('aria-label', `Stop forwarding ${port}`);
     stop.onclick = async () => {
@@ -410,6 +882,7 @@ async function refreshForwards() {
 
 $('portsBtn').addEventListener('click', () => {
   $('ports').hidden = !$('ports').hidden;
+  if (!$('ports').hidden) refreshForwards().catch(() => {});
   $('portsBtn').classList.toggle('open', !$('ports').hidden);
   scheduleFit();
 });
@@ -427,6 +900,33 @@ $('portForm').addEventListener('submit', async (e) => {
   refreshForwards();
 });
 
+// git.js builds the Git view and listens for pd:view to load it the first time it is shown.
+function setView(view) {
+  $('app').dataset.view = view;
+  store.set('pd.view', view);
+  for (const b of $('viewSwitch').children) {
+    b.classList.toggle('on', b.dataset.view === view);
+    b.setAttribute('aria-pressed', String(b.dataset.view === view));
+  }
+  window.dispatchEvent(new CustomEvent('pd:view', { detail: view }));
+  if (view !== 'terminal') return;
+  // A socket that connected while the Git view was up never told the shell its size.
+  requestAnimationFrame(() => {
+    for (const v of views.values()) {
+      fitView(v);
+      sendMsg(v, { t: 'resize', cols: v.term.cols, rows: v.term.rows });
+    }
+    renderLatest();
+  });
+}
+// Chat and Files are full-screen screens over the current view, with their own back and close; Terminal and Git
+// switch in place.
+const SCREENS = { chat: () => window.pocketDevChat.open(), files: () => window.openFiles() };
+for (const b of $('viewSwitch').children) {
+  b.addEventListener('click', () => (SCREENS[b.dataset.view] ? SCREENS[b.dataset.view]() : setView(b.dataset.view)));
+}
+setView(store.get('pd.view') === 'git' ? 'git' : 'terminal');
+
 const vv = window.visualViewport;
 function onViewportChange() {
   if (vv) {
@@ -443,22 +943,74 @@ new ResizeObserver(scheduleFit).observe($('terms'));
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   scheduleFit();
+  if (!powerPaused) reconnectClosed();
+  refreshForwards().catch(() => {});
+});
+
+function reconnectClosed() {
   for (const view of views.values()) {
     if (view.ws?.readyState === WebSocket.CLOSED) {
       clearTimeout(view.retry);
       reconnect(view);
     }
   }
-  refreshForwards().catch(() => {});
-});
+}
+
+// Before the Mac sleeps or shuts down the server closes every socket with one of these reasons. The power screen
+// then polls slowly on its own, so the 2 s reconnects stop until it hands back (onBack).
+const POWER_REASONS = new Set(['mac-sleeping', 'mac-shutting-down']);
+const power = import('/power.js');
+let powerPaused = false;
+
+// Anything that needs sudo runs here, so macOS asks for the password in that terminal and the server never sees it.
+async function runInTerminal(command, cwd) {
+  const s = await api('POST', '/api/sessions', { cwd, command });
+  overlays.closeAll();
+  window.pocketDev.openSession(s);
+}
+
+const powerOptions = {
+  runInTerminal,
+  openApps: () => window.openAppsSheet(),
+  async onBack() {
+    powerPaused = false;
+    try { await syncSessions(); } catch {}
+    if (!views.size) await newSession().catch(() => {});
+    reconnectClosed();
+  },
+};
+
+async function showPower(reason) {
+  powerPaused = true;
+  (await power).showPowerScreen(reason, api, powerOptions);
+}
+
+power.then((m) => m.renderGearBattery($('gearBattery'), api));
+
+window.pocketDev = {
+  overlays,
+  power,
+  powerOptions,
+  // Resume continues a conversation from either view; the new terminal has to be on screen.
+  openSession(s) {
+    setView('terminal');
+    activate((views.get(s.id) ?? makeView(s)).id);
+  },
+  // Files' "Open terminal here".
+  async openTerminalAt(dir) {
+    window.pocketDev.openSession(await api('POST', '/api/sessions', { cwd: dir }));
+  },
+};
 
 (async () => {
-  const stored = store.get();
+  const stored = store.get('pd.active');
   await syncSessions();
   if (!views.size) await newSession();
   activate(views.has(stored) ? stored : activeId);
   refreshForwards().catch(() => {});
 })();
 </script>
+<script src="/history.js"></script>
+<script src="/settings.js"></script>
 </body>
 </html>

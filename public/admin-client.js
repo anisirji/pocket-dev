@@ -1,0 +1,541 @@
+'use strict';
+const REFRESH_MS = 5000;
+const MIN_DEVICES = 1;
+const MAX_DEVICES = 20;
+
+const $ = (id) => document.getElementById(id);
+
+// h('div', { class: 'x', onclick }, child, 'text') builds an element; null and false children are skipped.
+function h(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+    else if (k === 'class') node.className = v;
+    else node.setAttribute(k, v === true ? '' : v);
+  }
+  node.append(...children.flat().filter((c) => c != null && c !== false));
+  return node;
+}
+
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: method === 'GET' ? {} : { 'content-type': 'application/json', 'x-pocket-admin': '1' },
+    body: method === 'GET' ? undefined : JSON.stringify(body ?? {}),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  return data;
+}
+
+const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
+
+function ago(ms) {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 45) return 'just now';
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  if (s < 86400 * 30) return `${Math.floor(s / 86400)} d ago`;
+  return new Date(ms).toLocaleDateString();
+}
+
+function stamp(ms) {
+  const d = new Date(ms);
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const today = new Date().toDateString() === d.toDateString();
+  return today ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
+}
+
+let toastTimer = 0;
+function toast(text, bad = false) {
+  const t = $('toast');
+  t.textContent = text;
+  t.className = `toast${bad ? ' bad' : ''}`;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, bad ? 6000 : 3000);
+}
+
+// A styled confirm. Resolves true when the person presses the confirm button. `extra` is shown under the body.
+function ask({ title, body, confirm, danger = false, extra = null }) {
+  const dialog = $('ask');
+  $('askTitle').textContent = title;
+  $('askBody').textContent = body;
+  $('askExtra').replaceChildren(...(extra ? [extra] : []));
+  $('askOk').textContent = confirm;
+  dialog.classList.toggle('danger', danger);
+  dialog.returnValue = '';
+  dialog.showModal();
+  $('askCancel').focus();
+  return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'ok'), { once: true }));
+}
+
+// Runs a page action: shows its error as a toast and refreshes afterwards.
+async function act(fn, done) {
+  try {
+    const result = await fn();
+    if (done) toast(typeof done === 'function' ? done(result) : done);
+  } catch (err) {
+    toast(err.message, true);
+  }
+  await refresh(true);
+}
+
+let state = null;
+let logFilter = 'all';
+let editingId = null;
+let limitDraft = null;
+let lastOk = 0;
+
+// ---- Connection
+
+function renderConnection() {
+  const { access, overview, urls } = state;
+  const box = $('connection');
+  box.classList.toggle('off', !access.connected);
+  $('connTitle').textContent = access.connected ? 'Connected' : 'Disconnected';
+  const sub = $('connSub');
+  if (access.connected) {
+    sub.replaceChildren(plural(overview.online, 'device'), ' online · phones open ', h('b', {}, urls.lan));
+  } else {
+    sub.textContent = "Phones can't reach this Mac. Terminals keep running here.";
+  }
+  $('connErr').textContent = access.error ?? '';
+  const btn = $('connBtn');
+  btn.textContent = access.connected ? 'Disconnect' : 'Connect';
+  btn.className = `btn btn-big ${access.connected ? 'btn-danger-outline' : 'btn-primary'}`;
+  $('keepOpen').checked = access.keepOpen;
+  startHeartbeat(access.heartbeatEveryMs);
+}
+
+$('connBtn').addEventListener('click', async () => {
+  const connect = !state.access.connected;
+  if (!connect && !(await ask({
+    title: 'Disconnect phones?',
+    body: 'Closes the phone port: every phone disconnects and port forwards stop. Terminals keep running on the Mac. You can reconnect from this page.',
+    confirm: 'Disconnect',
+    danger: true,
+  }))) return;
+  await act(() => api('PUT', '/api/access', { connected: connect }), connect ? 'Connected' : 'Disconnected');
+});
+
+$('keepOpen').addEventListener('change', (e) => act(() => api('PUT', '/api/access', { keepOpen: e.target.checked })));
+
+// A worker keeps the beat when the tab is in the background, where browsers slow page timers to once a minute.
+let heartbeat = null;
+let heartbeatMs = 0;
+function startHeartbeat(ms) {
+  if (heartbeat && ms === heartbeatMs) return;
+  heartbeat?.terminate();
+  heartbeatMs = ms;
+  heartbeat = new Worker('/admin-heartbeat.js');
+  heartbeat.postMessage(ms);
+}
+
+// ---- Overview
+
+function renderOverview() {
+  const { overview, maxDevices, requireApproval } = state;
+  $('cLogged').textContent = overview.loggedIn;
+  $('cLoggedSub').textContent = `of ${maxDevices} allowed`;
+  $('cOnline').textContent = overview.online;
+  $('cPending').textContent = overview.pending;
+  $('cPendingSub').textContent = requireApproval ? 'approval is on' : 'approval is off';
+  $('cPendingCard').classList.toggle('warn', overview.pending > 0);
+  $('navPending').textContent = overview.pending || '';
+  const failed = overview.failedLogins;
+  $('cFailed').textContent = failed.count;
+  $('cFailedCard').classList.toggle('alarm', failed.guessing);
+
+  const banner = $('guessing');
+  banner.hidden = !failed.guessing;
+  if (failed.guessing) {
+    const from = failed.ips.slice(0, 3).map((x) => `${x.ip} (${x.count})`).join(', ') + (failed.ips.length > 3 ? ', …' : '');
+    banner.replaceChildren(...[
+      h('p', {}, h('b', {}, 'Someone may be guessing your password: '), `${failed.count} failed attempts in the last hour from ${failed.ips.length === 1 ? 'IP' : 'IPs'} ${from}.`),
+      requireApproval ? null : h('button', { class: 'btn btn-sm', type: 'button', onclick: () => setApproval(true) }, 'Turn on approval'),
+      h('a', { class: 'btn btn-sm link-btn', href: '#password' }, 'Change password'),
+    ].filter(Boolean));
+  }
+}
+
+// ---- Devices
+
+const via = (d) => (d.via === 'qr' ? 'QR code' : 'Password');
+
+function deviceCell(d) {
+  if (d.id === editingId) {
+    const input = h('input', { type: 'text', value: d.name, maxlength: 40, 'aria-label': 'Device name' });
+    const save = () => act(() => api('PATCH', `/api/devices/${d.id}`, { name: input.value }).then(() => { editingId = null; }));
+    const cancel = () => { editingId = null; renderDevices(); };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') save();
+      if (e.key === 'Escape') cancel();
+    });
+    requestAnimationFrame(() => { input.focus(); input.select(); });
+    return h('div', { class: 'cell rename' }, input,
+      h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: save }, 'Save'),
+      h('button', { class: 'btn btn-sm', type: 'button', onclick: cancel }, 'Cancel'));
+  }
+  return h('div', { class: 'cell' },
+    h('span', { class: 'dev-name' }, d.name),
+    d.status === 'blocked' ? h('span', { class: 'tag tag-blocked' }, 'Blocked') : null,
+    h('small', {}, d.kind && d.kind !== d.name ? d.kind : `id ${d.id}`));
+}
+
+function activity(d) {
+  if (d.status === 'blocked') return h('div', { class: 'cell' }, `Tried ${ago(d.lastSeen)}`, h('small', {}, 'every request refused'));
+  if (d.online) {
+    return h('div', { class: 'cell' }, h('span', { class: 'online' }, 'Online now'),
+      h('small', {}, d.connections ? `${plural(d.connections, 'terminal connection')}` : 'no terminal open'));
+  }
+  return h('div', { class: 'cell' }, `Last seen ${ago(d.lastSeen)}`);
+}
+
+const DEVICE_BUTTONS = {
+  active: [
+    ['Rename', null],
+    ['Block', 'block'],
+    ['Log out', 'revoke'],
+  ],
+  blocked: [
+    ['Rename', null],
+    ['Unblock', 'unblock'],
+    ['Remove', 'remove'],
+  ],
+};
+
+const CONFIRMS = {
+  revoke: (d) => ({ title: `Log out ${d.name}?`, body: 'Its terminals disconnect now. It can log in again with the password or a QR code.', confirm: 'Log out', danger: true }),
+  block: (d) => ({ title: `Block ${d.name}?`, body: 'It disconnects now and every request it sends is refused until you unblock it.\n\nIf that browser clears its cookies it becomes a new device. Turn on "Approve new devices" so a fresh login has to wait for you.', confirm: 'Block', danger: true }),
+  remove: (d) => ({ title: `Remove ${d.name}?`, body: 'Its record is deleted, so that browser is no longer blocked: it can try the password again as a new device, or wait for approval if that is on.', confirm: 'Remove', danger: true }),
+  deny: (d) => ({ title: `Deny ${d.name}?`, body: 'The request is removed and the phone goes back to the login form.', confirm: 'Deny', danger: true }),
+};
+
+async function deviceAction(d, action) {
+  if (CONFIRMS[action] && !(await ask(CONFIRMS[action](d)))) return;
+  const done = { remove: `${d.name} removed`, revoke: `${d.name} logged out`, block: `${d.name} blocked`, unblock: `${d.name} unblocked`, approve: `${d.name} approved`, deny: `${d.name} denied` }[action];
+  await act(() => api('POST', `/api/devices/${d.id}/${action}`), done);
+}
+
+function deviceRow(d) {
+  const buttons = (DEVICE_BUTTONS[d.status] ?? []).map(([label, action]) => h('button', {
+    class: `btn btn-sm${action === 'revoke' || action === 'remove' ? ' btn-danger' : ''}`,
+    type: 'button',
+    onclick: action ? () => deviceAction(d, action) : () => { editingId = d.id; renderDevices(); },
+  }, label));
+  return h('div', { class: `row ${d.status}` },
+    deviceCell(d),
+    h('div', { class: 'cell' }, d.ip, h('small', {}, 'IP address')),
+    h('div', { class: 'cell' }, via(d), h('small', {}, `added ${ago(d.createdAt)}`)),
+    activity(d),
+    h('div', { class: 'actions' }, d.id === editingId ? null : buttons));
+}
+
+function renderDevices() {
+  const list = state.devices.filter((d) => d.status !== 'pending');
+  const blocked = list.filter((d) => d.status === 'blocked').length;
+  $('devCount').textContent = `${state.overview.loggedIn} logged in${blocked ? ` · ${blocked} blocked` : ''}`;
+  const head = h('div', { class: 'row row-head' }, h('div', {}, 'Device'), h('div', {}, 'Address'), h('div', {}, 'Logged in with'), h('div', {}, 'Activity'), h('div', {}, ''));
+  $('deviceRows').replaceChildren(...(list.length
+    ? [head, ...list.map(deviceRow)]
+    : [h('p', { class: 'empty' }, 'No devices yet. Show a login QR code below, or open the address on a phone and type the password.')]));
+}
+
+function renderPending() {
+  const list = state.devices.filter((d) => d.status === 'pending');
+  $('pending').hidden = list.length === 0 && !state.requireApproval;
+  $('pendingTtl').textContent = state.pendingTtlMin;
+  $('pendingRows').replaceChildren(...(list.length ? list.map((d) => h('div', { class: 'row' },
+    h('div', { class: 'cell' }, h('span', { class: 'dev-name' }, d.name), h('span', { class: 'tag tag-code' }, d.code), h('small', {}, 'code shown on the phone')),
+    h('div', { class: 'cell' }, d.ip, h('small', {}, 'IP address')),
+    h('div', { class: 'cell' }, `Asked ${ago(d.createdAt)}`, h('small', {}, `expires in ${Math.max(1, Math.ceil((d.expiresAt - Date.now()) / 60000))} min`)),
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: () => deviceAction(d, 'approve') }, 'Approve'),
+      h('button', { class: 'btn btn-sm', type: 'button', onclick: () => deviceAction(d, 'deny') }, 'Deny'),
+      h('button', { class: 'btn btn-sm btn-danger', type: 'button', onclick: () => deviceAction(d, 'block') }, 'Block')),
+  )) : [h('p', { class: 'empty' }, 'Nobody is waiting. New password logins show up here.')]));
+}
+
+// ---- Security log
+
+const BY = { admin: 'on this page', phone: 'from a phone', cli: 'from the command line', startup: 'at startup', self: 'itself', lockdown: 'by lockdown' };
+const byText = (e) => (BY[e.by] ? ` ${BY[e.by]}` : '');
+const REVOKED_BY = {
+  admin: 'on this page', phone: 'from another device', self: 'itself', 'qr-eviction': 'to make room for a QR login',
+  'password-change': 'by the password change', lockdown: 'by lockdown',
+};
+const closedText = (closed = {}) => Object.entries(closed).map(([id, n]) => `${n} ${id}`).join(', ');
+
+const EVENT_TEXT = {
+  'login': (e) => `${e.name} logged in with ${e.via === 'qr' ? 'a QR code' : 'the password'}`,
+  'login-pending': (e) => `${e.name} typed the password and is waiting for approval (code ${e.deviceId?.slice(-4)})`,
+  'login-failed': (e) => `Wrong password${e.kind ? ` from ${e.kind}` : ''}`,
+  'login-locked': (e) => `Password logins from ${e.ip} locked for ${e.minutes} min after 10 wrong passwords`,
+  'qr-expired': (e) => `Used or expired QR code opened${e.kind ? ` on ${e.kind}` : ''}`,
+  'device-revoked': (e) => `${e.name} logged out ${REVOKED_BY[e.by] ?? ''}`.trim(),
+  'device-blocked': (e) => `${e.name} blocked`,
+  'device-unblocked': (e) => `${e.name} unblocked`,
+  'device-approved': (e) => `${e.name} approved${e.by === 'qr' ? ' by scanning a QR code' : ''}`,
+  'device-denied': (e) => `${e.name} denied`,
+  'device-removed': (e) => `${e.name} removed while blocked`,
+  'device-renamed': (e) => `${e.from} renamed to ${e.name}${byText(e)}`,
+  'pending-expired': (e) => `${e.name} stopped waiting: nobody approved it in time`,
+  'password-changed': (e) => `Password changed${byText(e)}${e.loggedOut ? `, ${plural(e.loggedOut, 'device')} logged out` : ''}`,
+  'limit-changed': (e) => `Device limit changed from ${e.from} to ${e.to}${byText(e)}`,
+  'approval-changed': (e) => (e.on ? 'New devices now need approval' : 'New devices no longer need approval'),
+  'lockdown': (e) => `Lockdown: phone access closed, ${plural(e.devices, 'device')} logged out${closedText(e.closed) ? `, closed ${closedText(e.closed)}` : ''}${e.passwordChanged ? ', password changed' : ''}`,
+  'access-connected': (e) => `Phone access opened${byText(e)}`,
+  'access-disconnected': (e) => (e.by === 'heartbeat' ? 'Phone access closed: the admin page was closed' : `Phone access closed${byText(e)}`),
+  'keep-open-changed': (e) => `Keep connection open turned ${e.on ? 'on' : 'off'}`,
+  'autostart-changed': (e) => `Start automatically turned ${e.on ? 'on' : 'off'}${byText(e)}`,
+  'service-installed': () => 'Installed as a launchd service',
+  'server-stopped': () => 'Pocket Dev stopped from this page',
+};
+
+function renderLog(entries) {
+  $('logRows').replaceChildren(...(entries.length ? entries.map((e) => h('div', { class: `log-row ${e.category}` },
+    h('time', { datetime: new Date(e.at).toISOString() }, stamp(e.at)),
+    h('span', { class: 'what' }, (EVENT_TEXT[e.type] ?? ((x) => x.type))(e)),
+    h('span', { class: 'where', title: e.ua ?? null }, e.ip ?? ''),
+  )) : [h('p', { class: 'empty' }, logFilter === 'all' ? 'Nothing logged yet.' : 'Nothing matches this filter.')]));
+}
+
+document.querySelector('.seg').addEventListener('click', (e) => {
+  const filter = e.target.closest('[data-filter]')?.dataset.filter;
+  if (!filter) return;
+  logFilter = filter;
+  for (const b of document.querySelectorAll('.seg button')) b.setAttribute('aria-pressed', String(b.dataset.filter === filter));
+  refresh(true);
+});
+
+// ---- Password
+
+function renderPassword() {
+  const form = $('pwForm');
+  const locked = state.passwordFromEnv;
+  for (const el of form.elements) el.disabled = locked;
+  $('pwNote').textContent = locked
+    ? 'The password comes from the POCKET_DEV_PASSWORD environment variable, which overrides any password set here. Remove it from where Pocket Dev starts, restart Pocket Dev, then change the password here.'
+    : "You're at the Mac, so the current password isn't needed.";
+}
+
+$('pwForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { next, confirm, logoutAll } = e.target.elements;
+  $('pwErr').textContent = '';
+  $('pwOk').textContent = '';
+  if (next.value.length < 6) return void ($('pwErr').textContent = 'The new password needs at least 6 characters.');
+  if (next.value !== confirm.value) return void ($('pwErr').textContent = 'The two passwords do not match.');
+  try {
+    const { loggedOut } = await api('POST', '/api/password', { next: next.value, logoutAll: logoutAll.checked });
+    e.target.reset();
+    next.blur();
+    $('pwOk').textContent = loggedOut ? `Password changed. ${plural(loggedOut, 'device')} logged out.` : 'Password changed.';
+  } catch (err) {
+    $('pwErr').textContent = err.message;
+  }
+  refresh(true);
+});
+
+// ---- Settings
+
+function renderSettings() {
+  const { maxDevices, overview, requireApproval, qrTtlMin, urls, access } = state;
+  const limit = limitDraft ?? maxDevices;
+  $('limitOut').textContent = limit;
+  document.querySelector('[data-step="-1"]').disabled = limit <= MIN_DEVICES;
+  document.querySelector('[data-step="1"]').disabled = limit >= MAX_DEVICES;
+  $('limitSave').disabled = limit === maxDevices;
+  $('limitNote').textContent = limit < overview.loggedIn
+    ? `${plural(overview.loggedIn, 'device is', 'devices are')} logged in, so new password logins stay refused until you log some out. Lowering the limit logs nobody out.`
+    : 'Password logins stop at this many devices. QR logins always work and replace the device used least recently.';
+  $('approval').checked = requireApproval;
+  $('qrTtl').textContent = qrTtlMin;
+  $('qrBtn').disabled = !access.connected;
+  $('qrBtn').title = access.connected ? '' : 'Connect first';
+  const copy = (text) => h('button', { class: 'btn btn-sm', type: 'button', onclick: () => navigator.clipboard.writeText(text).then(() => toast('Copied')) }, 'Copy');
+  $('urls').replaceChildren(
+    h('dt', {}, 'Wi-Fi IP'), ...(urls.lan ? [h('dd', {}, urls.lan), copy(urls.lan)] : [h('dd', {}, 'No network'), h('span')]),
+    h('dt', {}, 'Name'), h('dd', {}, urls.mdns), copy(urls.mdns),
+  );
+}
+
+document.querySelector('.stepper').addEventListener('click', (e) => {
+  const step = Number(e.target.closest('[data-step]')?.dataset.step);
+  if (!step) return;
+  limitDraft = Math.min(MAX_DEVICES, Math.max(MIN_DEVICES, (limitDraft ?? state.maxDevices) + step));
+  renderSettings();
+});
+
+$('limitSave').addEventListener('click', () => act(async () => {
+  await api('PUT', '/api/settings', { maxDevices: limitDraft });
+  limitDraft = null;
+}, 'Device limit saved'));
+
+async function setApproval(on) {
+  await act(() => api('PUT', '/api/settings', { requireApproval: on }), on ? 'New password logins now wait for approval' : 'Approval turned off');
+}
+$('approval').addEventListener('change', (e) => setApproval(e.target.checked));
+
+$('qrBtn').addEventListener('click', async () => {
+  $('qrErr').textContent = '';
+  try {
+    const { svg, url } = await api('POST', '/api/qr');
+    $('qrCode').innerHTML = svg;
+    $('qrUrl').textContent = url;
+    $('qr').hidden = false;
+    $('qrBtn').textContent = 'New code';
+  } catch (err) {
+    $('qrErr').textContent = err.message;
+  }
+});
+
+// ---- Live overview
+
+function renderLive() {
+  $('liveSections').replaceChildren(...state.sections.map((s) => h('div', { class: 'live-section' },
+    h('h3', {}, s.title, s.action && h('span', {}, String(s.items.length))),
+    s.items.length ? s.items.map((item) => h('div', { class: 'live-item' },
+      h('div', { class: 'cell' }, h('b', {}, item.label),
+        h('small', {}, [...item.details, ...(item.startedAt ? [`started ${ago(item.startedAt)}`] : [])].join(' · '))),
+      s.action && h('button', {
+        class: 'btn btn-sm',
+        type: 'button',
+        onclick: async () => {
+          if (!(await ask({ title: `${s.action} ${item.label}?`, body: s.warning ?? '', confirm: s.action, danger: true }))) return;
+          await act(() => api('POST', `/api/sections/${s.id}/${encodeURIComponent(item.id)}`));
+        },
+      }, s.action))) : h('p', { class: 'empty' }, s.empty))));
+
+  const optional = state.sections.filter((s) => s.lockdown === 'optional');
+  const box = $('lockOptions');
+  if (box.dataset.ids !== optional.map((s) => s.id).join()) {
+    box.dataset.ids = optional.map((s) => s.id).join();
+    box.replaceChildren(...optional.map((s) => h('label', { class: 'check' },
+      h('input', { type: 'checkbox', 'data-also': s.id }), h('span', {}, `Also close all ${s.title.toLowerCase()}`))));
+  }
+}
+
+// ---- Service
+
+function renderService() {
+  const svc = state.service;
+  $('svcLabel').textContent = svc.label;
+  const status = svc.running
+    ? `Running as a launchd service (pid ${svc.pid})${svc.isThisServer ? ', which is this copy' : ''}.`
+    : svc.installed ? 'Installed, not running right now.' : 'Not installed. This copy runs only until it stops or the Mac restarts.';
+  const body = svc.installed
+    ? h('div', { class: 'setting' },
+      h('label', { class: 'setting-text switch-label', for: 'autostart' }, h('b', {}, 'Start automatically when the Mac starts'),
+        h('small', {}, "Starts when you log in. Turning this off doesn't stop Pocket Dev now; it only stays off after the next restart.")),
+      h('input', { type: 'checkbox', role: 'switch', class: 'switch', id: 'autostart', checked: svc.autostart, onchange: (e) => act(() => api('PUT', '/api/service/autostart', { enabled: e.target.checked }), e.target.checked ? 'Starts automatically' : 'Stays off after the next restart') }))
+    : h('div', { class: 'setting' },
+      h('div', { class: 'setting-text' }, h('b', {}, 'Start automatically when the Mac starts'),
+        h('small', {}, 'Installs Pocket Dev as a launchd service: it starts when you log in and restarts if it crashes.')),
+      h('button', { class: 'btn btn-primary', type: 'button', onclick: () => install(false) }, 'Install service'));
+  $('svcBody').replaceChildren(h('p', { class: 'status-line' }, status), body);
+}
+
+async function install(force) {
+  $('svcErr').textContent = '';
+  const out = $('svcOutput');
+  out.hidden = false;
+  out.textContent = 'Installing…';
+  try {
+    const r = await api('POST', '/api/service/install', { force });
+    out.textContent = r.output;
+    toast('Installed');
+  } catch (err) {
+    out.textContent = err.message;
+    if (!force && /in use by a process/.test(err.message)) {
+      $('svcErr').replaceChildren("This copy of Pocket Dev holds the port. Install anyway: the service waits and starts once this copy stops. ",
+        h('button', { class: 'btn btn-sm', type: 'button', onclick: () => install(true) }, 'Install anyway'));
+    }
+  }
+  refresh(true);
+}
+
+$('stopBtn').addEventListener('click', async () => {
+  if (!(await ask({ title: 'Stop Pocket Dev now?', body: 'Your phone disconnects and every terminal ends. Start again with npm start or npm run service:install.', confirm: 'Stop Pocket Dev', danger: true }))) return;
+  try {
+    await api('POST', '/api/stop');
+    toast('Pocket Dev is stopping');
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
+// ---- Lockdown
+
+$('lockBtn').addEventListener('click', async () => {
+  const also = [...document.querySelectorAll('[data-also]:checked')].map((c) => c.dataset.also);
+  const pending = state.overview.pending;
+  const forwards = state.sections.find((s) => s.id === 'ports')?.items.length ?? 0;
+  const lines = [
+    '• Disconnects phone access. Only Connect on this page opens it again.',
+    `• Logs out ${plural(state.overview.loggedIn + pending, 'device')}${pending ? ` (${pending} waiting for approval)` : ''}. Blocked devices stay blocked.`,
+    `• Stops ${plural(forwards, 'port forward')} and cancels every login QR code.`,
+    also.length ? `• Closes all ${also.join(' and ')}.` : '• Terminals keep running on the Mac.',
+  ];
+  const password = h('input', { type: 'password', autocomplete: 'new-password', placeholder: 'New password (optional, 6+ characters)', 'aria-label': 'New password (optional)' });
+  const extra = h('label', { class: 'ask-field' }, h('span', {}, 'Also change the password now'), password);
+  for (;;) {
+    if (!(await ask({ title: 'Lock down Pocket Dev?', body: lines.join('\n'), confirm: 'Lock down', danger: true, extra }))) return;
+    if (!password.value || password.value.length >= 6) break;
+    toast('The new password needs at least 6 characters, or leave it empty.', true);
+  }
+  await act(() => api('POST', '/api/lockdown', { also, ...(password.value && { password: password.value }) }),
+    (r) => `Locked down: phone access closed, ${plural(r.devices, 'device')} logged out${r.passwordChanged ? ', password changed' : ''}`);
+});
+
+// ---- Refresh loop
+
+// Typing, renaming, or an open dialog would lose input to a re-render.
+const busy = () => editingId !== null || $('ask').open
+  || (document.activeElement?.matches('input[type="text"], input[type="password"]') ?? false);
+
+// A refresh asked for during another one runs right after it, so an action never shows stale data.
+let refreshing = false;
+let again = false;
+async function refresh(force = false) {
+  if (!force && busy()) return;
+  if (refreshing) {
+    again = true;
+    return;
+  }
+  refreshing = true;
+  try {
+    const [fresh, log] = await Promise.all([api('GET', '/api/state'), api('GET', `/api/log?filter=${logFilter}`)]);
+    state = fresh;
+    lastOk = Date.now();
+    $('offline').hidden = true;
+    renderConnection();
+    renderOverview();
+    renderPending();
+    renderDevices();
+    renderLog(log);
+    renderPassword();
+    renderSettings();
+    renderLive();
+    renderService();
+  } catch {
+    $('offline').hidden = false;
+  } finally {
+    refreshing = false;
+    renderUpdated();
+  }
+  if (again) {
+    again = false;
+    await refresh(true);
+  }
+}
+
+function renderUpdated() {
+  $('updated').textContent = lastOk ? `Updated ${ago(lastOk)} · refreshes every 5 s` : '';
+}
+
+setInterval(refresh, REFRESH_MS);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+refresh(true);

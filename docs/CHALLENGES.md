@@ -1,0 +1,68 @@
+# Pocket Dev: challenges we hit
+
+Every real problem we met while building Pocket Dev, and what we did about it.
+
+## Reaching the Mac
+
+| Challenge                         | What happened                                                                                                                                                    | How we solved it                                                                                                                                         |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remote access options             | vscode.dev worked but was hard to use on a phone. Tailscale needs an app on the phone.                                                                           | Built our own small server that the phone opens in a normal browser.                                                                                     |
+| Internet access without a service | Some networks use a shared public IPv4 address (CGNAT), so router port forwarding may be unavailable. IPv6 might work but would expose a terminal over plain `http`. | Same Wi-Fi only for now. Internet access comes later through Cloudflare Tunnel and a domain.                                                             |
+| Wi-Fi address changes             | A changed LAN address invalidated a saved link. Opened ports stayed on the old address.                       | QR code and links always use the current address. Opened ports move to the new address by themselves. The Mac’s `.local` hostname is shown as a backup. |
+| `localhost:3000` from the phone   | On the phone, "localhost" means the phone. Dev servers listen on `127.0.0.1` or `::1` depending on the tool.                                                     | The Open port feature passes the port through the Mac's Wi-Fi address and tries both `127.0.0.1` and `::1`.                                              |
+| Features that need `https`        | Chrome turns off copy-to-clipboard, fingerprint login and the Android Share menu on plain `http`.                                                                | Copy uses an older browser method plus a selectable text view. Fingerprint and Share wait for the domain.                                                |
+
+## Terminal on a phone
+
+| Challenge                | What happened                                                                                                                                        | How we solved it                                                                                        |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Terminal would not start | The terminal library (node-pty 1.1.0) ships a helper file without permission to run, so every terminal failed with `posix_spawnp failed`.            | An install step fixes the permission every time `npm install` runs.                                     |
+| Scrambled output         | `ls` printed for about 125 columns on a 43-column screen. Another page attached to the same terminal, likely a background tab, had set its own size. | The page you are typing on owns the size. Hidden pages never resize the terminal.                       |
+| `???` in filenames       | Pocket Dev started without a language setting, so special characters, like the space in macOS screenshot names, printed as `???`.                    | Terminals always start with UTF-8.                                                                      |
+| Tab numbers kept growing | Closing tabs never freed their numbers (Terminal 5, 6, 7…).                                                                                          | New tabs take the lowest free number, and tabs are named after their folder.                            |
+| Android keyboard         | Typing straight into the terminal is unreliable with Android keyboards. Send kept the keyboard open, and the key buttons stole focus.                | A normal input box plus a key bar (Ctrl+C, Enter, Esc, arrows). Send and Enter close the keyboard.      |
+| Scrolling                | The terminal's built-in touch scrolling is weak on Android, and new output pulled you back down while reading.                                       | Custom touch scrolling with fling. Your position stays put, with a "↓ latest" button.                   |
+| Interactive prompts      | Claude stops and asks questions, which a fire-and-forget command runner can't answer.                                                                | Real terminals that stay alive across phone locks, plus a separate chat screen with Allow/Deny buttons. |
+
+## Security and login
+
+| Challenge                         | What happened                                                                                                                           | How we solved it                                                                                                  |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| QR login lost its cookie          | When a scanner app opens the link, Chrome does not send the strict login cookie on the redirect, so the phone landed on the login page. | The QR link lands on a tiny page that reloads Pocket Dev from the same site.                                      |
+| Telling "local" from "remote"     | A future Cloudflare Tunnel connects from the Mac itself, so "comes from localhost" can't prove someone is at the Mac.                   | Mac-only actions need a secret file that only your Mac user can read. The Admin page listens on `localhost` only. |
+| Attacks from your own dev servers | A web page on an opened port (like `:3000`) counts as the same site and could send requests to Pocket Dev.                              | Every change needs a special header and JSON content type, which such pages can't send.                           |
+| Settings being wiped              | One bad entry in a list could replace your saved shortcuts with the defaults, permanently. Hand edits were overwritten.                 | Settings are read fresh, and only the setting you changed is written back.                                        |
+| Password storage                  | The first version kept the password as plain text in `config.json`.                                                                     | Stored as a scrambled hash (scrypt). Device logins are saved as hashes too.                                       |
+
+## Power and Mac safety
+
+| Challenge                                | What happened                                                                                                                     | How we solved it                                                                                                |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Staying awake                            | `caffeinate` keeps the Mac awake only while plugged in, and closing the lid still sleeps the Mac.                                 | Awake modes you control (Off / Plugged in / Always). A separate lid-closed switch that needs your Mac password. |
+| Admin password                           | Changing the lid setting needs `sudo`. Saving the password or a no-password rule would weaken the Mac.                            | You type the password in a Pocket Dev terminal each time. Pocket Dev never sees it.                             |
+| Turning lid mode off with the lid closed | That would put the Mac to sleep instantly and cut the phone off.                                                                  | The switch only works while the lid is open.                                                                    |
+| Testing sleep and shutdown               | Running them for real would kill the session being tested.                                                                        | All tests use fake versions of `pmset`, `sudo`, `osascript` and `shutdown`.                                     |
+| Shutdown blocked                         | Apps with unsaved work ask "Save changes?" and nobody is at the Mac to answer.                                                    | Pocket Dev detects the block and offers Try again, See open apps, and Force shut down.                          |
+| macOS updates                            | Shutting down during an update install can cause trouble.                                                                         | Sleep and shutdown refuse while an update seems to be installing. When unsure, they refuse.                     |
+| macOS permission popups                  | Quitting apps and reading window names need Automation and Accessibility permission. The popups appear on the Mac, not the phone. | Clear messages telling you which setting to allow. The app list itself needs no permission.                     |
+| Quitting the right app                   | Telling an app to quit by name can hit the wrong copy and triggers a permission popup for every app.                              | Apps are asked to quit by process ID, which needs no popups.                                                    |
+
+## Claude, Codex and Git
+
+| Challenge                             | What happened                                                                                                      | How we solved it                                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Finding past conversations            | Claude and Codex keep history in files up to 230 MB, with titles in different places and sub-agent files mixed in. | Pocket Dev reads only the parts it needs, caches them, and skips sub-agent files. The list loads in about 0.06 s. |
+| Same conversation on laptop and phone | Two copies writing to one conversation can overwrite each other.                                                   | Resume warns "may still be open on your laptop" before continuing.                                                |
+| Memory on an 8 GB Mac                 | Each open Claude chat runs a 150–300 MB process.                                                                   | Chat engines stop after 10 idle minutes and restart with full memory on your next message.                        |
+| Old model forced                      | A startup environment can set `ANTHROPIC_MODEL` to an older Claude model.                                                        | Chat passes the model explicitly. Terminal startup files remain under the user’s control.                           |
+| Deleting a merged branch              | GitHub CLI's delete-branch option also switches your local branch, which could disturb your work.                  | Only the branch on GitHub is deleted. Your local copy is untouched.                                               |
+| Approving your own PR                 | GitHub doesn't allow it.                                                                                           | GitHub's own message is shown as is.                                                                              |
+
+## Building it with several agents at once
+
+| Challenge                          | What happened                                                                                   | How we solved it                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Tests passing for the wrong reason | An old test server kept holding a port, so later tests talked to it and failed.                 | Test servers are stopped by port, and every suite starts fresh. |
+| Not killing the live server        | A broad stop command would also have killed the Pocket Dev you were using.                      | Processes are only stopped by their exact ID or port.           |
+| Crowded top bar                    | The 360px phone bar had to fit tabs and buttons for Git, Resume, Ports, Settings and battery.   | Laid out again and checked with screenshots at phone width.     |
+| Back gesture                       | Each screen handled the back gesture on its own, so one back press could close the wrong thing. | One shared stack, so back always closes only the top screen.    |

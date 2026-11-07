@@ -3,9 +3,22 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test test/*.test.mjs",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper",
-    "start": "node server.js"
+    "start": "node server.js",
+    "qr": "node scripts/qr.js",
+    "admin": "node scripts/admin.js open",
+    "connect": "node scripts/admin.js connect",
+    "disconnect": "node scripts/admin.js disconnect",
+    "autostart": "scripts/autostart.sh",
+    "service:install": "scripts/install-service.sh",
+    "service:uninstall": "scripts/uninstall-service.sh",
+    "service:status": "scripts/status.sh",
+    "service:logs": "tail -n 50 -f \"${LOG:-$HOME/Library/Logs/pocket-dev.log}\"",
+    "awake": "node scripts/awake.js",
+    "lid": "scripts/lid.sh",
+    "sleep": "scripts/sleep.sh",
+    "shutdown": "scripts/shutdown.sh"
   },
   "keywords": [],
   "author": "",
@@ -14,7 +27,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.139",
     "node-pty": "^1.1.0",
+    "qrcode": "^1.5.4",
     "ws": "^8.22.1"
   }
 }

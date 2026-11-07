@@ -1,3 +1,12 @@
 node_modules
 config.json
 server.log
+
+# Owner-specific notes and runtime data stay local.
+docs/GUIDE.md
+docs/PRIVATE*
+docs/local/
+ACCESS.private.md
+.env
+.env.*
+.pocket-dev/
