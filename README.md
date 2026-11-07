@@ -1,327 +1,211 @@
 # Pocket Dev
 
-Real terminals on your Mac, from your phone's browser on the same Wi-Fi.
+Control your Mac from your phone's browser on the same Wi-Fi: terminals, Claude Code and Codex chats, Git and GitHub pull requests, files, open apps, and power.
 
-## Install
+Pocket Dev is one Node.js server that runs on the Mac as your user. The phone opens `http://<mac-lan-ip>:7777`, logs in with a password or a one-time QR code, and gets a mobile web app. Nothing is installed on the phone.
+
+- The owner's full guide, with every feature, permission, file, and limit: [docs/GUIDE.md](docs/GUIDE.md).
+- A one-page summary of what Pocket Dev can access on the Mac: [ACCESS.md](ACCESS.md).
+
+## Features
+
+### Terminal
+
+| Feature | What it does | Does not |
+| --- | --- | --- |
+| Real terminals | Each tab is a login shell (`$SHELL -l`, zsh) in a pty on the Mac. Output streams over a WebSocket. | Survive a server restart. Run as root. |
+| Folder picker | **+** lists Home, pinned folders, the last 5 folders, and every folder in `~/Desktop` and `~/Desktop/Projects` with `.git` or `package.json`. Type any other path. | Scan deeper than one level for the project list. |
+| Tab names | Named after the folder (`app`, `app 2`). Resumed tabs are `claude · app` or `codex · app`. | |
+| Input and key bar | **Send** types the input and then Enter 30 ms later. Empty **Send** sends Enter. Keys: ⚡, 📋, Ctrl+C, Enter, Esc, Tab, arrows (application cursor mode aware), Ctrl+D. | |
+| Scrolling | Touch scroll with fling, 5,000 lines on the phone. **↓ latest** jumps to the bottom. | |
+| Reconnect | Terminals keep running when the phone sleeps. On reconnect, the server replays up to about 500 KB per terminal. Dead sockets are pinged out every 30 s. | |
+| Shared terminals | Several pages can attach to one terminal. The page that types last sets the size. | Keep two different sizes at once. |
+| Copy | **📋** shows the last 300 lines as selectable text with **Copy all**. Works on plain http. | |
+| Upload | **📎** or paste an image. Saves to `~/.pocket-dev/uploads` (25 MB per file) and inserts the quoted path into the input. | Press Enter. Delete old uploads. |
+| Shortcuts | **⚡** runs saved commands. Up to 30, each 1 to 200 characters, stored in `config.json`. | |
+
+### Ports
+
+Forward `localhost:<port>` on the Mac to `<mac-lan-ip>:<port>`, so the phone can open a dev server. It is a raw TCP pipe (127.0.0.1 first, then ::1), so HMR WebSockets work. When the Mac's LAN IP changes, every forward moves to the new IP within about 10 s.
+
+It does not protect forwarded ports with a password, persist forwards across restarts, forward ports below 1024, or forward Pocket Dev's own port.
+
+### Git
+
+| Feature | What it does | Does not |
+| --- | --- | --- |
+| Repo picker | Finds repositories up to two levels below `~/Desktop`, `~/Desktop/Projects`, and `~`, or below `repoRoots`. Only scanned repositories are accepted. | Open a repository outside the roots. |
+| Graph | Last 300 commits on all branches with lanes, **Load more**, branch and tag chips. | |
+| Commit detail | Message, author, files with line counts, per-file diffs. Merge commits diff against the first parent. Diffs are cut at 3,000 lines. | |
+| Changes | Branch, ahead and behind, staged, unstaged, and untracked files with diffs. | Stage, commit, pull, or switch branches. |
+| Pull requests | Up to 50 open PRs with review state and checks. Detail shows description, checks, files, diffs, reviews, and comments. | Show issues. |
+| Review | Approve, request changes, or comment through `gh pr review`. | Approve your own PR (GitHub refuses). |
+| Merge | Squash, merge commit, or rebase, with `--match-head-commit` so a newer push makes the merge fail. Optional **Delete branch** removes the branch on GitHub only. | Delete the local branch or a fork's branch. |
+| Close and reopen | `gh pr close` and `gh pr reopen`. | Delete the branch. |
+| Create PR | Head, base (default branch first), title, description, draft. Pushes first with `git push -u origin <branch>` when the branch is not on GitHub or has unpushed commits. | |
+
+### Resume
+
+Lists the 30 most recent Claude Code and Codex conversations from `~/.claude/projects` and `~/.codex`, filtered by **All**, **Claude**, or **Codex**. Shows the latest 20 messages. **Continue in terminal** opens a terminal in the conversation's folder and types `claude --resume <id>` or `codex resume <id>`. A conversation is marked **open on laptop?** when a running process has its id on the command line or its file changed in the last 2 minutes.
+
+Choose **Continue in terminal** or **Continue in chat**. Resume reads the history files; the selected engine writes its normal history when you continue. Close the conversation on the laptop before resuming elsewhere.
+
+### Chat
+
+| Feature | What it does | Does not |
+| --- | --- | --- |
+| Engines | Claude through `@anthropic-ai/claude-agent-sdk` 0.2.139, which runs your installed `claude`. Codex through one shared `codex app-server`. Both use your existing logins. | Store any Claude or Codex credentials. |
+| Chat screens | Chat list, new chat (engine, folder, model, mode), and a conversation view with markdown, tool folds, and diffs. | |
+| Allow and Deny | Cards for commands, file edits, tools, and plans: **Allow once**, **Always allow in this chat**, **Always allow in this project** when Claude offers it, and **Deny** with an optional reason. The Permissions screen lists and removes remembered rules. | Time out a waiting card. |
+| Questions | Answers `AskUserQuestion` (Claude) and `requestUserInput` (Codex), with **Other…**. | Multi-select on Codex. |
+| Stop | Interrupts the turn. The server ends it after 5 s if the engine does not stop. | |
+| Models and modes | Model lists come from each engine, with custom model names supported. Claude has Ask every time, Accept edits, Plan, Auto, Don’t ask, and Bypass. Codex has independent Approval (Ask first, On request, Never ask), Sandbox (Read only, Workspace, Full access), and Effort controls. Bypass and Full access need confirmation. Chips report whether a change applies now or next turn; replies show their model. | |
+| Sessions | Pocket Dev keeps `~/.pocket-dev/chats/<id>.json`. Claude Code and Codex keep their own transcripts in `~/.claude` and `~/.codex`, shared with VS Code and the CLI. | Delete the engine's own transcripts. |
+| Idle sleep | Stops an idle engine after `chatIdleMinutes` (default 10). The next message wakes and resumes it. | Sleep a chat with a running turn or a waiting card. |
+
+### Files
+
+Browse `fileRoots` (by default your home folder), with every path checked again after symlinks resolve. Sort by name, date, or size, show hidden files, and pin folders. Upload several files in a queue with progress (2 GB each, never overwrites), download files (byte ranges), zip a selection or a folder (`/usr/bin/zip`, 4 GB before compression, 200,000 files), new folder, rename files and folders, move to the macOS Trash, name search (4 levels, 500 results, 2 s), copy path, and preview (images, video, audio, PDF, and the first 200 KB of text; HTML shows as text; previews are sandboxed).
+
+Trash uses macOS’s native Trash operation. Restore items in Finder on the Mac. Files does not permanently delete, restore from its own interface, move or copy between folders, or search file contents.
+
+### Open apps
+
+Lists regular apps (the same set as the Force Quit window) with memory and CPU summed over each app's process tree, frontmost first, refreshed every 10 s. Shows each app's windows and document paths. **Quit** sends a normal quit and waits 8 s. **Force quit** sends SIGTERM, then SIGKILL after 3 s.
+
+It does not quit protected apps (Finder, Dock, SystemUIServer, loginwindow, WindowServer, ControlCenter, NotificationCenter, Spotlight, and the app Pocket Dev runs inside), list windows on other Spaces, open apps, or move windows.
+
+### Power
+
+| Feature | What it does | Does not |
+| --- | --- | --- |
+| Keep Mac awake | `off`, `plugged` (default, `caffeinate -s`), or `always` (`caffeinate -i -s`). caffeinate runs with `-w <server pid>`, so it ends with the server. | Change system settings. Keep the display on. |
+| Battery badge | `pmset -g batt` every 60 s. Red at 20% or less on battery. | |
+| Lid closed | `sudo pmset -a disablesleep 1` or `0`, run by `npm run lid` in a new terminal where you type your password. Refused while the lid is closed. | Store or send your password anywhere. Turn itself off. |
+| Sleep | `pmset sleepnow` after 2 s. With Lid closed on, `npm run sleep` turns lid sleep back on first (password). | Wake the Mac. |
+| Shut down | Ends Pocket Dev terminals, then `osascript` tells System Events to shut down. After 45 s the phone shows a blocked screen with **Try shut down again**, **See open apps**, **Force shut down…** (`sudo shutdown -h now` in a terminal), and **Keep the Mac on**. | Force without your password. |
+| Update guard | Refuses sleep and shutdown while a macOS update installs, or when the check fails. | Guard the lid switch. |
+
+### Login and security
+
+| Feature | What it does |
+| --- | --- |
+| Password | scrypt hash (N=16384, r=8, p=1) in `config.json` as `passwordHash`. A random 12-character password is printed on the first start only. A plaintext `password` key is converted at start. Wrong passwords wait 1 s. New passwords need 6 to 200 characters. |
+| QR login | One-time key, 10 minutes, kept in memory. Printed at start, by `npm run qr`, or by **Show login QR** on a logged-in phone. Only the Mac can mint keys (loopback, no proxy headers, secret from `~/.pocket-dev/local-secret`). |
+| Devices | Each login is a device in `~/.pocket-dev/devices.json` (sha256 of the cookie, never the cookie). Rename, log out, online now (open terminal or a request in the last 60 s). |
+| Device limit | `maxDevices`, default 2, 1 to 20. Password logins stop at the limit. A QR login evicts the least recently used device. |
+| Rate limit | 10 wrong passwords per IP in 15 minutes locks that IP for 15 minutes. The Admin page warns at 5 failures in an hour. |
+| Cookie | `pd_token`, HttpOnly, SameSite=Strict, 1 year. No `Secure` flag, because the transport is http. |
+| CSRF | Every POST, PUT, PATCH, and DELETE needs `x-pocket-dev: 1`. JSON bodies need `content-type: application/json`. WebSocket upgrades check `Origin`. |
+| Approve, block, lockdown, security log | `requireApproval` makes password logins wait up to 10 minutes for approval on the Mac, with a 4-character code to compare. Blocked devices are refused on every route, across restarts. Lockdown logs out every non-blocked device, stops forwards, voids QR keys, disconnects phone access, and optionally closes terminals or sets a new password. Only the Mac can reconnect phone access. Events go to `~/.pocket-dev/security.log` (JSONL, mode 0600, rotated at 1 MB to `security.log.1`). |
+| Admin page | `http://localhost:7778` (`adminPort`, default phone port + 1), bound to 127.0.0.1 and ::1, with a Host allowlist, Origin and proxy-header refusal, and an `x-pocket-admin: 1` header on writes. It has no password, because only a process on the Mac can reach it. Sections: Connection, Waiting, Devices (rename, log out, block, unblock), Security log (latest 200, filters), Password (no old password needed), Settings (device limit, approval, login QR, addresses), Live (close terminals, stop forwards and active chats, read-only Power and Open apps status), Service (install, Start automatically, stop), Lockdown. |
+| Connect and Disconnect | Disconnect closes port 7777 and all forwards. Terminals keep running and devices stay logged in. A phone can disconnect, only the Mac can connect. With **Keep connection open** off, access closes about 30 s after the last Admin page closes (10 s heartbeat) and a restart starts disconnected. Saved as `access` in `config.json`. |
+| Start automatically | `launchctl enable` or `disable` for `dev.pocket.server`, from the Admin page, the phone, or `npm run autostart`. Does not stop the running server. |
+
+## Requirements
+
+- macOS. Developed on macOS 14.5 on an 8 GB MacBook Air.
+- Node.js 22.
+- Xcode Command Line Tools (`xcode-select --install`), to build `node-pty`.
+- Optional: `claude` (Claude Code), `codex`, and `gh` (GitHub CLI, logged in with `gh auth login`). Features that need a missing tool show an error.
+- The phone needs internet access, because it loads xterm.js from `cdn.jsdelivr.net`.
+
+## Install and run
 
 ```sh
 npm install
-```
-
-The `postinstall` script marks node-pty's `spawn-helper` as executable. node-pty 1.1.0 ships it without the execute bit.
-
-## Start
-
-```sh
 npm start
 ```
 
-The server prints a QR code, the URL, and a password line:
+`postinstall` marks node-pty's `spawn-helper` as executable, because node-pty 1.1.0 ships it without the execute bit.
 
-```
-<QR code>
-Pocket Dev running at http://192.168.1.17:7777
-Also at http://your-mac.local:7777 (same Wi-Fi only; some Android phones cannot open .local names)
-Password: (set; change it in Settings)
-Scan the QR code to log in without the password. It works once and expires in 10 minutes. New code: npm run qr
-Admin (this Mac only): http://localhost:7778
-```
+The first start writes `config.json` (mode 0600) and prints the password once, a login QR code, and the URL.
 
-Scan the QR code with your phone's camera and open the link in Chrome. You are logged in. You can also open the URL and type the password.
-
-- On first start, the server writes `config.json` with port 7777 and prints a random password. Only the first start prints it.
-- `config.json` stores a scrypt hash of the password (`passwordHash`), never the password. If it still has a plaintext `password`, the server converts it at start.
-- To change the password, use **Settings** or the admin page. A new password needs at least 6 characters. `POCKET_DEV_PASSWORD` overrides the stored password, and the server then prints it at start.
-- To use a different port, set `PORT`.
-- Logged-in devices stay logged in across restarts. The terminals do not survive a restart.
-
-## Log in with a QR code
-
-- `npm run qr` prints a new QR code and URL from the running server. Run it on the Mac.
-- On a phone that is already logged in, tap **⚙** and then **Show login QR**. Scan that code with the other phone.
-- Each code works once and expires after 10 minutes. A used or expired code opens the login page with a message.
-- `npm run qr` and `npm run awake` read the server's port and a secret from `~/.pocket-dev/local-secret`, which the server writes at each start with mode 0600. The server accepts these script requests only from 127.0.0.1, with this secret and no proxy headers, so a tunnel on the Mac cannot make them.
-
-## Devices
-
-Each login is a device. Tap **⚙** to see them.
-
-- The list shows each device's name, how it logged in, its IP address, and whether it is online now. A device is online when it has a terminal open or made a request in the last minute.
-- **Rename** changes the name. **Log out** removes the device and disconnects its terminals at once.
-- The server stores devices in `~/.pocket-dev/devices.json` with mode 0600. The file holds a hash of each login cookie, not the cookie.
-
-### Device limit
-
-`maxDevices` in `config.json` sets the limit. The default is 2, and you can set 1 to 20 in **Settings**.
-
-- A password login fails when the limit is reached. Log out a device first, or scan a QR code.
-- A QR login always works. When the limit is reached, it logs out the device used least recently.
-- Lowering the limit logs nobody out. It only blocks new password logins.
-
-## Admin page (this Mac only)
-
-`npm run admin` opens `http://localhost:7778` in the default browser. The page shows who is logged in and lets you control phone access.
-
-The page has no password. Only this Mac can reach it, and anyone using this Mac account can open it. Lock the Mac when you step away.
-
-- It listens on 127.0.0.1 and ::1 only. The port is `adminPort` in `config.json`, or `POCKET_DEV_ADMIN_PORT`. The default is the main port plus 1.
-- It refuses requests with a foreign `Host` or `Origin` header, requests with proxy headers, and changes without the `x-pocket-admin: 1` header and a JSON body. Other web pages and tunnels on the Mac cannot use it.
-
-### Connect and disconnect
-
-The top card opens or closes phone access. **Disconnect** closes the phone port: every phone disconnects and port forwards stop. Terminals keep running on the Mac. **Connect** opens the port again and reopens the forwards.
-
-- **Keep connection open** on (the default): the state survives closing the page and restarting.
-- **Keep connection open** off: phone access closes about 30 seconds after the admin page closes, and Pocket Dev starts disconnected. `npm start` then opens the admin page so that **Connect** is one click away.
-- `npm run connect` and `npm run disconnect` do the same from a terminal on the Mac.
-- A phone can disconnect from **Settings**, but only the Mac can connect again.
-- If another program holds the phone port, Pocket Dev stays up, the admin page names that program, and **Connect** tries again.
-
-### Devices, approval, and blocking
-
-- **Log out** removes a device and closes its terminals at once.
-- **Block** keeps the device listed and refuses everything it sends. Its phone shows "This device is blocked". **Unblock** restores it, and **Remove** deletes the record.
-- A blocked browser that clears its cookies becomes a new device and can log in again with the password. To prevent that, turn on **Approve new devices**: a password login then waits on the phone ("Waiting for approval on the Mac…") until you press **Approve** on the admin page. The phone and the admin page show the same 4-character code. Requests expire after 10 minutes. QR logins skip approval, because scanning a code from the Mac proves you are there.
-- After 10 wrong passwords in 15 minutes from one IP address, that address cannot log in for 15 minutes.
-
-### Security log
-
-Pocket Dev appends logins, failed logins, QR use, device changes, password and setting changes, connects, disconnects, and lockdowns to `~/.pocket-dev/security.log` (JSON lines, mode 0600). At 1 MB the file moves to `security.log.1`, which replaces the older copy. The admin page shows the latest 200 entries and warns when 5 or more logins failed in the last hour.
-
-### Lockdown
-
-**Lock down now** disconnects phone access, logs out every device (including ones waiting for approval), stops every port forward, and cancels every login QR code. Blocked devices stay blocked. Terminals keep running unless you tick **Also close all terminals**. You can set a new password in the same step.
-
-## Run it always
-
-Pocket Dev can run as a launchd agent. launchd starts it when you log in and restarts it within about 10 seconds if it crashes.
-
-1. Stop a server that you started by hand: `pkill -f "node server.js"`. The service runs `node /full/path/server.js`, so this command does not match it.
-2. Install and start the service:
-
-   ```sh
-   npm run service:install
-   ```
-
-   The script writes `~/Library/LaunchAgents/dev.pocket.server.plist` and loads it. It uses the `node` on your PATH at install time and the port from `config.json` (set `PORT` to override). If another process already listens on the port, the script stops and tells you how to stop that process. `--force` installs anyway, and the service starts when the port is free.
-
-| Task | Command |
+| Command | What it does |
 | --- | --- |
-| Show state, URL, sleep assertions, and recent log | `npm run service:status` |
-| Print the plist without installing it | `scripts/install-service.sh --print` |
-| Follow the log (`~/Library/Logs/pocket-dev.log`) | `npm run service:logs` |
-| Restart, for example after `git pull` | `npm run service:install` |
-| Stop and remove the service | `npm run service:uninstall` |
-| Turn starting at login on or off, or show it | `npm run autostart -- on`, `off`, or `status` |
+| `npm start` | Run the server in the foreground. |
+| `npm run qr` | Print a fresh login QR code and URL from the running server. |
+| `npm run admin` | Open the Mac-only Admin page. |
+| `npm run connect`, `npm run disconnect` | Turn phone access on or off. |
+| `npm run autostart -- on\|off\|status` | Turn the launchd agent's start at login on or off, or show it. |
+| `npm run service:install` | Install or restart the launchd agent `dev.pocket.server` (`--force` if the port is busy). |
+| `npm run service:uninstall` | Stop and remove the launchd agent. |
+| `npm run service:status` | Show job state, URL, caffeinate assertions, and the last 20 log lines. |
+| `npm run service:logs` | Follow `~/Library/Logs/pocket-dev.log`. |
+| `npm run awake -- on\|plugged\|off\|status` | Set or show the Keep awake mode (`on` is `always`). |
+| `npm run lid -- on\|off\|status` | Set or show lid-closed sleep with `sudo pmset -a disablesleep`. Refused while the lid is closed. |
+| `npm run sleep` | Turn lid sleep back on (sudo) and sleep the Mac. |
+| `npm run shutdown [-- --force]` | Shut down through System Events, or with `--force` through `sudo shutdown -h now`. |
 
-- Each restart closes all terminals. Devices stay logged in.
-- `npm run autostart -- off`, or the switch in **Settings** or on the admin page, keeps the service from starting at the next login. It does not stop the running server. **Stop Pocket Dev now** on the admin page stops it, including when it runs as the service.
-- The log contains a login QR code and URL from each start. Each works once and expires after 10 minutes. The log contains the password only when the server generated it or it comes from `POCKET_DEV_PASSWORD`.
-- The service is a per-user agent. After a reboot it starts when you log in, not before.
-- The service runs `node server.js` directly. The server itself keeps the Mac awake, as the mode in [Power](#power) says.
-- Each terminal is a login zsh (`/bin/zsh -l`), so `~/.zprofile` and `~/.zshrc` apply. The service PATH also includes `/usr/local/bin`, `/opt/homebrew/bin`, and `~/.local/bin`, so `claude`, `codex`, `gh`, `git`, and `brew` work.
+The launchd agent writes `~/Library/LaunchAgents/dev.pocket.server.plist`, starts at login (not at boot), restarts within about 10 s after a crash, and logs to `~/Library/Logs/pocket-dev.log`. Each restart closes all terminals. Devices stay logged in.
 
-## Power
+## Configuration
 
-Pocket Dev decides whether your Mac stays awake. It does not change your system settings. It runs `/usr/bin/caffeinate` as a child process. The child exits when the server stops, so it never keeps the Mac awake after Pocket Dev quits.
-
-| Mode | What it does |
-| --- | --- |
-| Off | The Mac sleeps on its normal schedule. |
-| When plugged in (default) | The Mac does not sleep while on the charger. On battery, it sleeps as usual. Runs `caffeinate -s`. |
-| Always | The Mac does not idle-sleep, on battery too. Runs `caffeinate -i -s`. This drains the battery. |
-
-The server saves the mode in `config.json` as `awake` and applies it at every start. The display can still turn off in every mode.
-
-The **⚙** button shows the Mac's battery percentage, in red at 20% or less on battery. **Settings** shows the battery and power source at the top.
-
-Change the mode in **Settings → Power → Keep Mac awake** on your phone, or from a terminal on the Mac, including a Pocket Dev terminal:
-
-```sh
-npm run awake -- status    # mode, power source, battery, lid state
-npm run awake -- plugged   # When plugged in
-npm run awake -- on        # Always
-npm run awake -- off       # Off
-```
-
-`npm run awake` talks to the server that started last, on the port it wrote to `~/.pocket-dev/local-secret`.
-
-### Lid closed
-
-Closing the lid puts a MacBook to sleep, whatever the mode, unless an external display and power are connected. To keep a closed MacBook awake:
-
-```sh
-npm run lid -- on       # runs sudo pmset -a disablesleep 1
-npm run lid -- off      # runs sudo pmset -a disablesleep 0
-npm run lid -- status
-```
-
-`on` and `off` ask for your Mac password. You can type it in a Pocket Dev terminal. While lid sleep is off, the Mac never sleeps, even in a bag. Keep it on a desk and plugged in. Amphetamine's Closed-Display Mode is another way to do this.
-
-On the phone, the **Lid closed** switch in Settings opens a new terminal and runs the same command, so you type your password there. Pocket Dev never receives or stores your password.
-
-`on` and `off` refuse while the lid is closed. Turning lid sleep back on with the lid shut would put the Mac to sleep at once and disconnect you. Open the lid first.
-
-### Sleep and shut down
-
-Settings has **Put Mac to sleep** and **Shut down Mac**. From a terminal on the Mac:
-
-```sh
-npm run sleep                  # turns lid sleep back on (sudo), then sleeps
-npm run shutdown               # asks macOS to shut down, like the Apple menu
-npm run shutdown -- --force    # sudo shutdown -h now: unsaved work in every app is lost
-```
-
-- Sleep pauses `caffeinate` first, so the mode cannot block it. The mode comes back the next time the phone talks to Pocket Dev after the Mac wakes. If lid sleep is off, the phone opens a terminal for `npm run sleep`, because turning lid sleep back on needs your password.
-- Shut down closes every Pocket Dev terminal and asks macOS to shut down. An app with unsaved changes can stop it. If the Mac is still on 45 seconds later, the phone shows which apps are open. You can open **See open apps** to quit them, try again, or force the shutdown. A forced shutdown asks for your password in a new terminal.
-- Sleep and both kinds of shutdown refuse while a macOS update is being prepared or installed. `scripts/update-check.sh` looks for an update process that holds a sleep assertion, or a running `softwareupdate --install`. If the check itself fails, they also refuse.
-
-### macOS settings you set yourself
-
-Pocket Dev does not change these settings. Set them in System Settings:
-
-1. **Battery → Options → Wake for network access**: on. The phone can then reach the Mac after the display sleeps.
-2. **Battery → Options → Prevent automatic sleeping on power adapter when the display is off**: optional. The When plugged in mode does the same thing while Pocket Dev runs.
-3. **Battery → Optimized Battery Charging**: on. This protects the battery when the Mac stays plugged in all the time.
-4. **Users & Groups → Automatically log in as**: your user. The service starts only after someone logs in. This option is not available when FileVault is on.
-5. **Network → Firewall**: if macOS asks whether `node` can accept incoming connections, allow it.
-6. **Privacy & Security → Automation**: allow `node` to control **System Events**. Shut down from the phone needs it. macOS asks once, on the Mac, the first time you shut down from the phone. If you denied it, the phone says so.
-7. **Lid closed**: `npm run lid -- on`, or Amphetamine's Closed-Display Mode.
-
-## Use
-
-- Tap **+** and pick a folder to open a terminal there. Each terminal is a login shell (`$SHELL -l`). The tab is named after the folder.
-- Type in the bottom input and tap **Send**. Send with an empty input sends Enter.
-- The key bar sends Ctrl+C, Enter, Esc, Tab, the arrow keys, and Ctrl+D.
-- You can also tap the terminal and type into it directly.
-- Terminals keep running when the phone locks or disconnects. When the phone reconnects, the page replays the recent output.
-
-## Folders, shortcuts, copy and upload
-
-- **Folders.** The **+** sheet lists Home, your pinned folders, the last five folders you opened, and every folder in `~/Desktop` and `~/Desktop/Projects` that has `.git` or `package.json`. Tap ☆ to pin a folder. To open any other folder, type its path, for example `~/code/app`.
-- **Shortcuts.** Tap **⚡** in the key bar and tap a saved command to run it in the current terminal. Tap **Edit** to add, delete, or reorder commands.
-- **Copy.** Tap **📋** to see the last 300 lines of the terminal as plain text. Tap **Copy all**, or long-press to select part of it.
-- **Upload.** Tap **📎** to pick screenshots or files, or paste an image into the input. Pocket Dev saves each file in `~/.pocket-dev/uploads` and adds its path to the input. It does not send the command. Files can be up to 25 MB.
-
-Pinned folders, recent folders, and shortcuts are saved in `config.json` as `folders`, `recentFolders`, and `shortcuts`. Set `POCKET_DEV_CONFIG` to use a config file somewhere else.
-
-You can edit `config.json` while the server runs. Pocket Dev reads it again for each request and writes back only the setting you change in the app, so your other edits stay. If a list is malformed, Pocket Dev ignores the part it cannot use, logs a warning, and leaves the file as it is. While the file is not valid JSON, changes from the app fail with a message until you fix it.
-
-## Resume a laptop conversation
-
-Tap the clock icon (**Resume**) to list your recent Claude Code and Codex conversations from `~/.claude` and `~/.codex` on the Mac. Tap one to read its last messages, then tap **Continue on phone**. Pocket Dev opens a terminal in the conversation's folder, runs `claude --resume <id>` or `codex resume <id>`, and names the tab `claude · <folder>`. A second terminal for the same folder gets a number, as folder tabs do.
-
-- A conversation marked **open on laptop?** may still be running on the Mac. Close it there first, or both will write to it.
-- Android's back gesture closes the topmost sheet only: Settings, then the conversation, then the list.
-
-## Chat
-
-Chat runs Claude Code and Codex as phone chat screens instead of terminals. Open it from the Chat view, or add `#chat` to the URL.
-
-1. Tap **New chat**, pick Claude or Codex, a folder, and the engine settings.
-2. Type a prompt and tap **Send**. Enter adds a new line.
-3. When the engine wants to edit a file or run a command, a card appears above the composer. Pick **Allow once**, **Always allow in this chat**, **Always allow in this project** (Claude only), or **Deny** with an optional reason. For a Claude file edit the card offers **Allow all edits in this chat** instead, which switches the chat to Accept edits, as Claude Code does.
-
-- Claude chats use the Claude Agent SDK with the `claude` CLI on your PATH, so they use your Claude Code login. No API key is needed. Sessions are the usual `~/.claude/projects` files, so they also appear in VS Code and in the Resume sheet.
-- Codex chats use `codex app-server` with your Codex login. All Codex chats share one app-server process.
-- The chips under the chat title change the model, the permission mode (Claude) or approval policy and sandbox (Codex), and the reasoning effort. A toast says whether the change applied now or applies from the next turn.
-- **Always allow in this project** writes the rule that Claude Code suggests, such as `Bash(npm test:*)`, to `<folder>/.claude/settings.local.json`. The Permissions screen in chat settings lists and removes these rules and the chat's own rules.
-- A run keeps going when the phone locks or disconnects. A card waits until you answer it. The chat list shows **waiting for you**.
-- After 10 idle minutes the engine process stops and the chat shows **sleeping**. The next message resumes the same session. Set `chatIdleMinutes` in `config.json` to change the delay. An engine never stops while a turn runs or a card waits.
-- Chat logs are in `~/.pocket-dev/chats/` with mode 0600. Deleting a chat removes its log, not the engine's session files.
-- New chats start with the tool, folder, and settings you used last (`chatDefaults` in `config.json`). A bypass or full-access setting is never remembered.
-
-## Open a port
-
-1. Start your dev server on the Mac, for example `npm run dev` on port 3000.
-2. Tap the globe icon (**Ports**), enter `3000`, and tap **Open**. The icon shows how many ports are open.
-3. Tap the `:3000` chip. It opens `http://<mac-ip>:3000` in a new tab.
-
-The forward is a raw TCP pipe from `<mac-ip>:3000` to `localhost:3000`. It tries 127.0.0.1 first and then ::1. HMR websockets work without changes.
-
-If the dev server already listens on all interfaces (0.0.0.0), you can open `http://<mac-ip>:3000` directly. You do not need a forward.
-
-## Git
-
-Tap the branch icon (**Git**) at the top left. The terminal icon next to it switches back. The terminals keep running while the Git view is open.
-
-- Pick a repository from the list at the top. Pocket Dev finds repositories up to two levels below `~/Desktop`, `~/Desktop/Projects`, and `~`. To scan other folders, add `"repoRoots": ["~/code", "~/work"]` to `config.json`, or set `POCKET_DEV_REPO_ROOTS` to a colon-separated list.
-- **Graph** shows the last 300 commits on all branches. Tap a commit to see its files, and tap a file to see its diff. A merge commit shows its changes against its first parent, which is what the merge brought in.
-- **Changes** shows staged, changed, and untracked files. Tap a file to see its diff.
-- **Pull requests** lists the open pull requests on GitHub. You can review, merge, close, reopen, and create pull requests. This uses the GitHub CLI (`gh`), so run `gh auth login` on the Mac first.
-- **Delete branch** after a merge deletes the branch on GitHub only. Your local branch and working tree do not change.
-- To create a pull request from a branch that is not on GitHub yet, Pocket Dev runs `git push -u origin <branch>` first.
-- GitHub does not let you approve your own pull request. The error from GitHub shows in red.
-
-## Open apps
-
-Tap **⚙** and then **Open apps** to see the apps that are open on the Mac. The row shows how many are running. The list shows the same apps as the Mac's Force Quit window, with the memory and CPU of each app's whole process tree. The app in front comes first. The list refreshes every 10 seconds while it is open.
-
-Tap an app to see its windows and, for document apps, the file each window shows. Then:
-
-- **Quit** asks the app to quit, like Cmd+Q. If the app is still running after about 8 seconds, it is probably waiting at a "Save changes?" prompt on the Mac, or it refused.
-- **Force quit** sends SIGTERM, then SIGKILL after 3 seconds. Unsaved work in the app is lost.
-
-Pocket Dev never quits these apps:
-
-- Finder, Dock, SystemUIServer, loginwindow, WindowServer, ControlCenter, NotificationCenter, and Spotlight.
-- The app that Pocket Dev runs inside. If you started the server from Terminal or VS Code, quitting that app would stop the server. The launchd service runs inside no app, so this rule protects nothing extra there. The server itself is never in the list.
-
-### Permissions
-
-The app list and Quit need no permissions. The window list needs two one-time grants on the Mac. The page shows which one is missing.
-
-| Permission | Where to turn it on |
-| --- | --- |
-| Automation for System Events | System Settings → Privacy & Security → Automation → the app that runs Pocket Dev → System Events |
-| Accessibility | System Settings → Privacy & Security → Accessibility → the app that runs Pocket Dev |
-
-The app that runs Pocket Dev is `node` for the launchd service. For a server that you started by hand, it is your terminal app, for example Terminal or VS Code. The two need separate grants. If `node` is not in the Accessibility list, click **+** and add the `node` binary that `which node` prints.
-
-Windows on another Space may not appear in the list.
-
-## Files
-
-Files moves files between the phone and the Mac. It shows your home folder and nothing outside it.
-
-1. Open **Files**. For now the button is in the **Ports** panel.
-2. Tap a folder to open it. Tap a file to preview it. Images, video, audio, PDF and text show in the sheet. Text shows the first 200 KB.
-3. In the preview, tap **Download**, **Rename**, **Trash** or **Copy path**.
-4. To send files to the Mac, tap **Upload** and pick one or more files. On Android the picker also offers the camera. Each file shows its progress, and **✕** cancels it. Files go into the folder you are in. A name that is already taken becomes `name (1).ext`, so Files never overwrites a file.
-5. To act on several items, long-press one, then tap others. **Zip** downloads them as one zip file, and **Trash** moves them to the Trash. With one item selected, the pencil renames it, folders included.
-
-- The back gesture goes back one level: the preview, select mode, then the previous folder.
-- **⋯** has **New folder**, **Select**, **Show hidden files**, and **Pin folder**. Pinned folders appear as chips at the top of Home, next to Desktop, Downloads and Documents. They are the same pins as the terminal folder picker (`folders` in `config.json`).
-- Search finds names that contain the text, in the current folder and 4 levels below. It skips `node_modules` and `.git`. It stops after 500 results or 2 seconds and then says the results are partial.
-- **Trash** moves items to the macOS Trash. To get an item back, open the Trash in Finder on the Mac. Files never deletes anything.
-- A folder downloads as a zip that the Mac builds while it streams. Files asks first when the folder is larger than 500 MB.
-
-### Settings
-
-You can add these keys to `config.json`:
+`config.json` lives in the repository folder (or at `POCKET_DEV_CONFIG`). Pocket Dev rereads it at use, and app changes write back only the changed key, so you can edit it while the server runs.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `fileRoots` | `["~"]` | Folders Files may show. Every path, after symlinks are followed, must stay inside one of them. |
-| `fileUploadMax` | 2 GB | Largest upload, in bytes. |
-| `fileZipMax` | 4 GB | Largest folder that Files zips, in bytes. |
+| `port` | `7777` | Phone port. `PORT` overrides it. |
+| `passwordHash` | generated | scrypt hash of the password. |
+| `password` | none | Plaintext password to migrate. Converted to `passwordHash` at start. |
+| `maxDevices` | `2` | Device limit, 1 to 20. |
+| `folders` | `[]` | Pinned folders (terminal picker and Files). |
+| `recentFolders` | `[]` | Last 5 terminal folders. |
+| `shortcuts` | `claude`, `codex`, `npm run dev`, `git status`, `git pull` | ⚡ commands. |
+| `repoRoots` | `~/Desktop`, `~/Desktop/Projects`, `~` | Git scan roots. `POCKET_DEV_REPO_ROOTS` (colon-separated) overrides it. |
+| `awake` | `plugged` | Keep awake mode: `off`, `plugged`, or `always`. |
+| `allowedHosts` | `[]` | Additional hostnames accepted by the phone listener. |
+| `chatDefaults` | saved by Chat | Last safe tool, folder, model, mode, and effort choices. Bypass and Full access are never silently remembered. |
+| `chatIdleMinutes` | `10` | Idle minutes before a chat engine stops. |
+| `requireApproval` | `false` | New devices wait for approval on the Mac. |
+| `fileRoots` | home folder | Folders Files may show. |
+| `fileUploadMax` | 2 GiB | Files upload limit in bytes. |
+| `fileZipMax` | 4 GiB | Zip limit in bytes, before compression. |
+| `adminPort` | phone port + 1 (`7778`) | Admin page port. `POCKET_DEV_ADMIN_PORT` overrides it. |
+| `access` | `{"connected": true, "keepOpen": true}` | Phone access and Keep connection open. |
 
-### Notes
+Environment variables: `PORT`, `POCKET_DEV_CONFIG`, `POCKET_DEV_PASSWORD` (overrides the stored password and is printed at start), `POCKET_DEV_REPO_ROOTS`, `POCKET_DEV_STATE_DIR` (instead of `~/.pocket-dev` for authentication, security logs, Admin metadata, and chats), `POCKET_DEV_CHAT_DIR` (an explicit chat-storage override), `POCKET_DEV_ADMIN_PORT`, and `POCKET_DEV_NO_OPEN` (do not open the Admin page at start).
 
-- macOS protects Desktop, Documents and Downloads. When the server runs as a launchd agent, those folders can show "macOS blocked access". To fix it, give `node` Full Disk Access in System Settings > Privacy & Security.
-- A symlink that points outside the shared folders is listed but cannot be opened. A zip leaves such links out. A link to a file inside the shared folders goes into the zip as a copy of that file. Zips do not include links to folders.
-- Zip stores file names as UTF-8 bytes without the UTF-8 flag, because the macOS `zip` has no Unicode support. macOS unzips such names correctly. Tools that rely on the flag, such as Windows Explorer, can show non-ASCII names garbled.
-- Previews do not run code. HTML and other markup show as text, and every preview is served with a CSP sandbox.
-- If a PDF does not show in the preview, tap **Open PDF in a new tab**.
+## Permissions it needs
 
-## Limits
+Pocket Dev runs as your user, never as root, and never runs `sudo` itself.
 
-- Forwarded ports have no password. Anyone on your Wi-Fi can reach them while they are open. Stop a forward with the ✕ on its chip.
-- A forwarded dev server shares the Mac's IP with Pocket Dev, so the browser sends it the Pocket Dev cookie too. To keep its pages from changing anything, Pocket Dev accepts a POST, PUT, PATCH or DELETE only with the header `x-pocket-dev: 1`, and JSON bodies only as `application/json`. Scripts that call the API must send both.
-- Pocket Dev uses plain HTTP. Use it only on a network you trust.
-- Pocket Dev answers only requests addressed to the Mac: its LAN IP or `.local` name with the port, or `localhost`, `127.0.0.1` and `[::1]` with the port. Any other `Host` gets `421 Misdirected Request`, so a web page that points its own domain at the Mac (DNS rebinding) cannot reach Pocket Dev. To reach Pocket Dev through a tunnel or proxy domain, add the domain to `config.json`, for example `"allowedHosts": ["dev.example.com"]`. Port forwards are not checked.
-- Forwards listen on the Mac's LAN IP. When the IP changes, Pocket Dev moves every forward to the new IP within about 10 seconds and logs the change. Without a network, a chip shows **no network** and the forward reopens when the Mac gets an IP. If the forward cannot listen on the new IP, the chip shows **failed**. Tap it to see why.
-- The QR codes and **Settings** always use the current IP. **Settings** also shows the `.local` address, which keeps working when the IP changes but only on the same Wi-Fi, and not on every Android phone.
-- The server keeps about 500 KB of output per terminal for replay.
-- Pocket Dev does not delete old uploads. Clear `~/.pocket-dev/uploads` yourself.
-- The phone loads xterm.js from cdn.jsdelivr.net, so the phone needs internet access.
+| Permission | Needed for |
+| --- | --- |
+| Firewall: incoming connections for `node` | The phone can connect (only when the firewall is on). |
+| Automation: control **System Events** | Normal shutdown, window names in Open apps. |
+| Accessibility | Window names in Open apps. |
+| Full Disk Access (maybe) | Files, for TCC-protected folders. |
+| Your `claude`, `codex`, and `gh` logins | Chat, terminals, Git. |
+| Your Mac password, typed by you in a terminal | Lid closed, sleep with Lid closed on, force shutdown. |
+
+macOS grants TCC permissions to the app that started `node`: Terminal or VS Code for `npm start`, `node` for the launchd agent.
+
+## Security model
+
+- Same Wi-Fi only, plain http. Anyone who can read the Wi-Fi traffic can see the cookie and terminal contents. Use a trusted network.
+- Port 7777 listens on all interfaces (`0.0.0.0`). Forwarded ports listen on the LAN IP and have no password.
+- A logged-in device has the full rights of your user: shell, files, and your Claude, Codex, and GitHub logins (`gh` scopes on the owner's Mac: `repo`, `workflow`, `delete_repo`, `gist`, `read:org`).
+- Protections: hashed password and cookies, one-time QR keys only from the Mac, device limit, SameSite=Strict HttpOnly cookie, the `x-pocket-dev` header and JSON content-type for every change, WebSocket `Origin` check, a Git repository allowlist, path checks after symlink resolution in Files, and sandboxed previews.
+- The Admin page on 127.0.0.1:7778 has a Host allowlist, so it resists DNS rebinding. It has no password, so any local process can use it.
+- Not protected: traffic sniffing on the LAN, forwarded ports, an unlocked logged-in phone, local processes on the Mac, or a malicious program on the Mac. Both the phone and Admin listeners check Host headers; `allowedHosts` can add a tunnel hostname.
+
+## Limitations
+
+- No internet access, no https, no passkeys yet.
+- Terminals and port forwards do not survive a restart.
+- Old uploads in `~/.pocket-dev/uploads` are never deleted.
+- The Git view does not stage, commit, pull, or switch branches.
+- The phone needs internet for xterm.js from cdn.jsdelivr.net.
+- Pocket Dev cannot wake or power on the Mac.
+
+## Tests
+
+Run `npm test` on macOS. The suite starts disposable phone and Admin listeners, uses fixture folders and stubbed power commands, and exercises authentication, Host/Origin/CSRF checks, Unicode terminals, chat persistence, Files, blocked and pending devices, and lockdown. It makes no model calls and does not install a service or quit user apps.
+
+## Roadmap
+
+- A domain and Cloudflare Tunnel for access from anywhere.
+- https through the tunnel.
+- Passkeys and fingerprint login on the phone.
+- An Android share target to send screenshots and files into Pocket Dev.
