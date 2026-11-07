@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
+import { createAppsApi } from './apps.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(ROOT, 'config.json');
@@ -229,6 +230,8 @@ function readJson(req) {
   });
 }
 
+const handleApps = createAppsApi({ sendJson });
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function login(req, res) {
@@ -256,6 +259,7 @@ async function handleApi(req, res, pathname) {
 
   if (route === 'POST login') return login(req, res);
   if (!isAuthed(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  if (resource === 'apps') return handleApps(req, res, new URL(req.url, 'http://localhost'));
 
   switch (route) {
     case 'GET sessions':
@@ -293,16 +297,17 @@ async function handleApi(req, res, pathname) {
   }
 }
 
-const PAGES = { '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html' };
+const PAGES = { '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html', '/apps.js': 'apps.js', '/apps.css': 'apps.css' };
+const CONTENT_TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function servePage(req, res, pathname) {
   const file = PAGES[pathname];
   if (!file || req.method !== 'GET') return sendJson(res, 404, { error: 'Not found' });
-  if (file === 'index.html' && !isAuthed(req)) {
+  if (file !== 'login.html' && !isAuthed(req)) {
     res.writeHead(302, { location: '/login.html' });
     return res.end();
   }
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+  res.writeHead(200, { 'content-type': CONTENT_TYPES[path.extname(file)], 'cache-control': 'no-store' });
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
