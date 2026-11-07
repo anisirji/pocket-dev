@@ -396,8 +396,8 @@ export function createHistoryApi({ createSession, sessionView, sendJson }) {
     }
 
     const cwdExists = s.cwd && fs.statSync(s.cwd, { throwIfNoEntry: false })?.isDirectory();
-    const session = createSession(cwdExists ? s.cwd : os.homedir());
-    session.title = `${tool} · ${s.cwd ? path.basename(s.cwd) : id.slice(0, 8)}`;
+    const project = !s.cwd ? id.slice(0, 8) : s.cwd === os.homedir() ? '~' : path.basename(s.cwd);
+    const session = createSession(cwdExists ? s.cwd : os.homedir(), `${tool} · ${project}`);
     // The id passed ID_RE and names a file in the store, so it is safe to put on the shell line.
     typeWhenIdle(session.pty, `${TOOLS[tool].resumeCommand(s.id)}\r`);
     const note = cwdExists ? undefined : `${s.cwd || 'The original folder'} no longer exists, so this terminal starts in your home folder.`;

@@ -188,8 +188,9 @@ async function upload(req, res) {
 
 const sessions = new Map();
 
-function nextTitle(cwd) {
-  const base = folderName(cwd);
+// Tabs are named after their folder (or "claude · app" for a resumed conversation); a taken name gets the lowest free
+// number, so closing "app 2" makes the next one "app 2" again.
+function nextTitle(base) {
   const taken = new Set([...sessions.values()].map((s) => s.title));
   if (!taken.has(base)) return base;
   let n = 2;
@@ -213,7 +214,7 @@ function appendScrollback(session, chunk) {
   session.scrollback = buf;
 }
 
-function createSession(cwd) {
+function createSession(cwd, base = folderName(cwd)) {
   const shell = process.env.SHELL || '/bin/zsh';
   const proc = pty.spawn(shell, ['-l'], {
     name: 'xterm-256color',
@@ -225,7 +226,7 @@ function createSession(cwd) {
   });
   const session = {
     id: crypto.randomBytes(6).toString('hex'),
-    title: nextTitle(cwd),
+    title: nextTitle(base),
     cwd,
     pty: proc,
     scrollback: '',
