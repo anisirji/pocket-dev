@@ -92,6 +92,24 @@ npm run lid -- status
 
 `on` and `off` ask for your Mac password. You can type it in a Pocket Dev terminal. While lid sleep is off, the Mac never sleeps, even in a bag. Keep it on a desk and plugged in. Amphetamine's Closed-Display Mode is another way to do this.
 
+On the phone, the **Lid closed** switch in Settings opens a new terminal and runs the same command, so you type your password there. Pocket Dev never receives or stores your password.
+
+`on` and `off` refuse while the lid is closed. Turning lid sleep back on with the lid shut would put the Mac to sleep at once and disconnect you. Open the lid first.
+
+### Sleep and shut down
+
+Settings has **Put Mac to sleep** and **Shut down Mac**. From a terminal on the Mac:
+
+```sh
+npm run sleep                  # turns lid sleep back on (sudo), then sleeps
+npm run shutdown               # asks macOS to shut down, like the Apple menu
+npm run shutdown -- --force    # sudo shutdown -h now: unsaved work in every app is lost
+```
+
+- Sleep pauses `caffeinate` first, so the mode cannot block it. The mode comes back the next time the phone talks to Pocket Dev after the Mac wakes. If lid sleep is off, the phone opens a terminal for `npm run sleep`, because turning lid sleep back on needs your password.
+- Shut down closes every Pocket Dev terminal and asks macOS to shut down. An app with unsaved changes can stop it. If the Mac is still on 45 seconds later, the phone shows which apps are open, and you can try again or force the shutdown. A forced shutdown asks for your password in a new terminal.
+- Sleep and both kinds of shutdown refuse while a macOS update is being prepared or installed. `scripts/update-check.sh` looks for an update process that holds a sleep assertion, or a running `softwareupdate --install`. If the check itself fails, they also refuse.
+
 ### macOS settings you set yourself
 
 Pocket Dev does not change these settings. Set them in System Settings:
@@ -101,7 +119,8 @@ Pocket Dev does not change these settings. Set them in System Settings:
 3. **Battery → Optimized Battery Charging**: on. This protects the battery when the Mac stays plugged in all the time.
 4. **Users & Groups → Automatically log in as**: your user. The service starts only after someone logs in. This option is not available when FileVault is on.
 5. **Network → Firewall**: if macOS asks whether `node` can accept incoming connections, allow it.
-6. **Lid closed**: `npm run lid -- on`, or Amphetamine's Closed-Display Mode.
+6. **Privacy & Security → Automation**: allow `node` to control **System Events**. Shut down from the phone needs it. macOS asks once, on the Mac, the first time you shut down from the phone. If you denied it, the phone says so.
+7. **Lid closed**: `npm run lid -- on`, or Amphetamine's Closed-Display Mode.
 
 ## Use
 
