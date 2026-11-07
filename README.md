@@ -96,7 +96,9 @@ Pocket Dev decides whether your Mac stays awake. It does not change your system 
 
 The server saves the mode in `config.json` as `awake` and applies it at every start. The display can still turn off in every mode.
 
-Change the mode in **Settings → Keep Mac awake** on your phone, or from a terminal on the Mac, including a Pocket Dev terminal:
+The **⚙** button shows the Mac's battery percentage, in red at 20% or less on battery. **Settings** shows the battery and power source at the top.
+
+Change the mode in **Settings → Power → Keep Mac awake** on your phone, or from a terminal on the Mac, including a Pocket Dev terminal:
 
 ```sh
 npm run awake -- status    # mode, power source, battery, lid state
@@ -134,7 +136,7 @@ npm run shutdown -- --force    # sudo shutdown -h now: unsaved work in every app
 ```
 
 - Sleep pauses `caffeinate` first, so the mode cannot block it. The mode comes back the next time the phone talks to Pocket Dev after the Mac wakes. If lid sleep is off, the phone opens a terminal for `npm run sleep`, because turning lid sleep back on needs your password.
-- Shut down closes every Pocket Dev terminal and asks macOS to shut down. An app with unsaved changes can stop it. If the Mac is still on 45 seconds later, the phone shows which apps are open, and you can try again or force the shutdown. A forced shutdown asks for your password in a new terminal.
+- Shut down closes every Pocket Dev terminal and asks macOS to shut down. An app with unsaved changes can stop it. If the Mac is still on 45 seconds later, the phone shows which apps are open. You can open **See open apps** to quit them, try again, or force the shutdown. A forced shutdown asks for your password in a new terminal.
 - Sleep and both kinds of shutdown refuse while a macOS update is being prepared or installed. `scripts/update-check.sh` looks for an update process that holds a sleep assertion, or a running `softwareupdate --install`. If the check itself fails, they also refuse.
 
 ### macOS settings you set yourself
@@ -199,7 +201,7 @@ Tap the branch icon (**Git**) at the top left. The terminal icon next to it swit
 
 ## Open apps
 
-Tap **Apps** to see the apps that are open on the Mac. The list shows the same apps as the Mac's Force Quit window, with the memory and CPU of each app's whole process tree. The app in front comes first. The list refreshes every 10 seconds while it is open.
+Tap **⚙** and then **Open apps** to see the apps that are open on the Mac. The row shows how many are running. The list shows the same apps as the Mac's Force Quit window, with the memory and CPU of each app's whole process tree. The app in front comes first. The list refreshes every 10 seconds while it is open.
 
 Tap an app to see its windows and, for document apps, the file each window shows. Then:
 
@@ -209,7 +211,7 @@ Tap an app to see its windows and, for document apps, the file each window shows
 Pocket Dev never quits these apps:
 
 - Finder, Dock, SystemUIServer, loginwindow, WindowServer, ControlCenter, NotificationCenter, and Spotlight.
-- The app that Pocket Dev runs inside. If you started the server from Terminal or VS Code, quitting that app would stop the server.
+- The app that Pocket Dev runs inside. If you started the server from Terminal or VS Code, quitting that app would stop the server. The launchd service runs inside no app, so this rule protects nothing extra there. The server itself is never in the list.
 
 ### Permissions
 
