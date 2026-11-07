@@ -12,7 +12,7 @@
   };
 
   const { api } = window;
-  const { overlays } = window.pocketDev;
+  const { overlays, power, powerOptions } = window.pocketDev;
 
   function ago(ms) {
     const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
@@ -33,6 +33,7 @@
   sheet.innerHTML = `
     <header class="st-head">
       <h2>Settings</h2>
+      <span class="st-batt"></span>
       <button class="st-close" aria-label="Close settings">✕</button>
     </header>
     <div class="st-body">
@@ -41,6 +42,14 @@
         <p class="st-summary"></p>
         <ul class="st-devices"></ul>
         <p class="st-err" data-for="devices"></p>
+      </section>
+      <section>
+        <h3>Power</h3>
+        <div class="st-power"></div>
+      </section>
+      <section>
+        <button class="st-link" data-act="apps"><span>Open apps</span><span class="st-apps-count"></span><span class="st-chev" aria-hidden="true">›</span></button>
+        <p class="st-err" data-for="apps"></p>
       </section>
       <section>
         <h3>Log in another phone</h3>
@@ -180,7 +189,29 @@
       : `The Mac has no network right now. ${local} works once it is back on Wi-Fi (${localNote}).`;
   }
 
+  async function refreshApps() {
+    try {
+      const { apps } = await api('GET', '/api/apps');
+      $('.st-apps-count').textContent = ` · ${apps.length} running`;
+      msg('err', 'apps', '');
+    } catch (err) {
+      $('.st-apps-count').textContent = '';
+      msg('err', 'apps', err.message);
+    }
+  }
+
+  // Mounted while the sheet is open: both poll /api/power until they leave the page.
+  async function mountPower() {
+    const { renderPowerSection, renderBatteryBadge } = await power;
+    if (sheet.hidden) return;
+    renderPowerSection($('.st-power'), api, powerOptions);
+    renderBatteryBadge($('.st-batt'), api);
+  }
+
+  $('[data-act="apps"]').addEventListener('click', () => window.openAppsSheet());
+
   async function refresh() {
+    refreshApps();
     try {
       const fresh = await api('GET', '/api/settings');
       const stepperUntouched = !settings || settings.maxDevices === limit;
@@ -258,6 +289,8 @@
 
   function hide() {
     sheet.hidden = true;
+    $('.st-power').replaceChildren();
+    $('.st-batt').replaceChildren();
     clearInterval(timer);
     editingId = null;
     $('.st-qr').hidden = true;
@@ -276,6 +309,7 @@
     sheet.querySelector('.st-body').scrollTop = 0;
     clearInterval(timer);
     timer = setInterval(refresh, REFRESH_MS);
+    mountPower();
     await refresh();
   }
 

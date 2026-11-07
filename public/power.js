@@ -1,4 +1,4 @@
-// Power settings section, top-bar battery pill, and the full-screen sleep / shutdown state.
+// Power settings section, the battery badges (Settings header, Settings button), and the full-screen sleep / shutdown state.
 // `api(method, url, body)` is index.html's fetch helper: resolves to parsed JSON, throws Error(message).
 // `runInTerminal(command, cwd)` opens a new terminal tab in cwd and runs command (text + Enter). Anything
 // that needs sudo goes through it, so macOS asks for the password in that terminal; the server never sees it.
@@ -80,8 +80,11 @@ const CSS = `
   .pw-screen > p { margin: 0; color: var(--muted, #7d8799); }
   .pw-screen > p.pw-warn { color: #f0c674; }
   .pw-screen-actions { display: grid; gap: 8px; margin-top: 8px; }
-  .pw-badge { flex: none; height: 36px; max-width: 64px; padding: 0 8px; border-radius: 8px; background: var(--bg, #0b0e14); border: 1px solid var(--line, #252d3c); color: var(--text, #d7dce5); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pw-badge { display: inline-flex; align-items: center; height: 26px; padding: 0 8px; border-radius: 8px; background: var(--bg, #0b0e14); border: 1px solid var(--line, #252d3c); color: var(--text, #d7dce5); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pw-badge[hidden], .pw-gear[hidden] { display: none; }
   .pw-badge.low { border-color: var(--danger, #ff7b72); color: var(--danger, #ff7b72); }
+  .pw-gear { position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); height: 14px; padding: 0 3px; border-radius: 7px; background: var(--panel-2, #1b2130); border: 1px solid var(--line, #252d3c); color: var(--muted, #7d8799); font-size: 9px; font-weight: 600; line-height: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+  .pw-gear.low { background: var(--danger, #ff7b72); border-color: var(--danger, #ff7b72); color: #1e0806; }
 `;
 
 function injectCss() {
@@ -411,29 +414,56 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
   return root;
 }
 
+// null when the Mac has no battery.
+function batteryView(s) {
+  if (s.battery === null) return null;
+  const plugged = s.onAC || s.charging;
+  const left = s.timeRemaining === null ? '' : `, ${Math.floor(s.timeRemaining / 60)}:${String(s.timeRemaining % 60).padStart(2, '0')} ${s.charging ? 'to full' : 'left'}`;
+  return {
+    percent: s.battery,
+    plugged,
+    low: !plugged && s.battery <= LOW_BATTERY,
+    title: `Mac battery ${s.battery}%, ${s.charging ? 'charging' : plugged ? 'plugged in' : 'on battery'}${left}`,
+  };
+}
+
+// Calls show(batteryView or null) now, every BADGE_POLL_MS, and when the page comes back, until node leaves the page.
+function watchBattery(node, api, show) {
+  const refresh = async () => {
+    if (!node.isConnected) return document.removeEventListener('visibilitychange', onVisible);
+    try { show(batteryView(await api('GET', '/api/power'))); } catch {}
+  };
+  const onVisible = () => document.visibilityState === 'visible' && refresh();
+  document.addEventListener('visibilitychange', onVisible);
+  pollWhileMounted(node, BADGE_POLL_MS, refresh);
+}
+
 export function renderBatteryBadge(container, api) {
   injectCss();
-  const badge = el('button', 'pw-badge');
-  badge.type = 'button';
+  const badge = el('span', 'pw-badge');
   badge.hidden = true;
   container.append(badge);
-
-  async function refresh() {
-    let s;
-    try { s = await api('GET', '/api/power'); } catch { return; }
-    badge.hidden = s.battery === null;
-    if (badge.hidden) return;
-    const plugged = s.onAC || s.charging;
-    badge.textContent = `${plugged ? '🔌' : '🔋'} ${s.battery}%`;
-    badge.classList.toggle('low', !plugged && s.battery <= LOW_BATTERY);
-    const left = s.timeRemaining === null ? '' : `, ${Math.floor(s.timeRemaining / 60)}:${String(s.timeRemaining % 60).padStart(2, '0')} ${s.charging ? 'to full' : 'left'}`;
-    badge.title = `Mac battery ${s.battery}%, ${s.charging ? 'charging' : plugged ? 'plugged in' : 'on battery'}${left}`;
-    badge.setAttribute('aria-label', badge.title);
-  }
-
-  pollWhileMounted(badge, BADGE_POLL_MS, refresh);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && badge.isConnected) refresh();
+  watchBattery(badge, api, (b) => {
+    badge.hidden = !b;
+    if (!b) return;
+    badge.textContent = `${b.plugged ? '🔌' : '🔋'} ${b.percent}%`;
+    badge.classList.toggle('low', b.low);
+    badge.title = b.title;
+    badge.setAttribute('aria-label', b.title);
   });
   return badge;
+}
+
+// The percentage on the Settings button: the top bar has no room for the full badge.
+export function renderGearBattery(node, api) {
+  injectCss();
+  node.classList.add('pw-gear');
+  node.hidden = true;
+  watchBattery(node, api, (b) => {
+    node.hidden = !b;
+    if (!b) return;
+    node.textContent = `${b.percent}%`;
+    node.classList.toggle('low', b.low);
+    node.closest('button')?.setAttribute('aria-label', `Settings. ${b.title}`);
+  });
 }

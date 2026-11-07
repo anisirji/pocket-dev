@@ -6,7 +6,8 @@
 }
 .st-sheet[hidden] { display: none; }
 .st-head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 6px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
-.st-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.st-head h2 { margin: 0 10px 0 0; font-size: 17px; font-weight: 600; }
+.st-batt { margin-right: auto; }
 .st-close { width: 44px; height: 44px; border-radius: 8px; color: var(--muted); font-size: 16px; }
 .st-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px 32px; }
 .st-body section { padding: 18px 0; border-bottom: 1px solid var(--line); }
@@ -61,3 +62,10 @@ section > .st-danger { width: 100%; }
 #settingsBtn { font-size: 19px; line-height: 1; }
 .st-note + .st-btn { margin-top: 12px; }
 .st-addr { overflow-wrap: anywhere; }
+
+.st-body .st-power > .pw { padding: 0; border: 0; }
+.st-link { display: flex; align-items: center; gap: 4px; width: 100%; min-height: 48px; padding: 0 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-size: 15px; font-weight: 600; text-align: left; }
+.st-link:active { background: var(--panel-2); }
+.st-apps-count { flex: 1; color: var(--muted); font-weight: 400; }
+.st-chev { color: var(--muted); font-size: 20px; }
+.st-body .st-power .pw-title { margin: 0; color: var(--text); font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; }

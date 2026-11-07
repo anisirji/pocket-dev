@@ -535,7 +535,7 @@ const PAGES = {
   '/git.js': 'git.js', '/graph.js': 'graph.js', '/git.css': 'git.css',
   '/history.js': 'history.js', '/history.css': 'history.css',
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
-  '/apps.js': 'apps.js', '/apps.css': 'apps.css',
+  '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/power.js': 'power.js',
 };
 const PUBLIC_PAGES = new Set(['login.html']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
