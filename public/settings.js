@@ -203,7 +203,7 @@
   // Mounted while the sheet is open: both poll /api/power until they leave the page.
   async function mountPower() {
     const { renderPowerSection, renderBatteryBadge } = await power;
-    if (sheet.hidden) return;
+    if (sheet.hidden || $('.st-power').childElementCount) return;
     renderPowerSection($('.st-power'), api, powerOptions);
     renderBatteryBadge($('.st-batt'), api);
   }
