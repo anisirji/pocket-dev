@@ -1298,10 +1298,12 @@
       return;
     }
     statusText.textContent = text;
-    const mode = cls ? 'wait' : c?.waking ? 'wake' : 'busy';
+    // Stop shows whenever a turn is in progress, including while it waits for you, so it is never missing.
+    const stoppable = !!c && isBusy(c);
+    const mode = `${cls ? 'wait' : c?.waking ? 'wake' : 'busy'}${stoppable ? '+stop' : ''}`;
     if (mode === statusMode) return;
     statusMode = mode;
-    ui.statusline.replaceChildren(...(mode === 'wait' ? [statusText] : [spinner(), statusText]), ...(mode === 'busy' ? [statusStop] : []));
+    ui.statusline.replaceChildren(...(cls ? [statusText] : [spinner(), statusText]), ...(stoppable ? [statusStop] : []));
   }
 
   setInterval(() => {
@@ -1520,10 +1522,10 @@
     const busy = convo.chat && isBusy(convo.chat);
     const uploading = convo.files.some((f) => !f.path);
     const hasInput = !!ui.input.value.trim() || convo.files.length > 0;
-    // While Claude works, text in the box is queued; an empty box stops the turn.
-    ui.send.textContent = busy ? (hasInput ? 'Queue' : 'Stop') : 'Send';
-    ui.send.classList.toggle('chat-stop', !!busy && !hasInput);
-    ui.send.disabled = busy ? hasInput && (convo.sending || uploading) : convo.sending || uploading || !hasInput;
+    // While Claude works, text in the box is queued. Stop lives in the status line, so there is never a second one here.
+    ui.send.textContent = busy ? 'Queue' : 'Send';
+    ui.send.classList.remove('chat-stop');
+    ui.send.disabled = convo.sending || uploading || !hasInput;
     ui.attach.disabled = convo.uploadsOff;
     ui.attach.title = convo.uploadsOff ? 'Attachments are not available on this server' : 'Attach a file';
   }
@@ -1555,7 +1557,6 @@
     if (!convo.id) return;
     const text = ui.input.value.trim();
     const attachments = convo.files.filter((f) => f.path).map((f) => f.path);
-    if (c && isBusy(c) && !text && !attachments.length) return stopTurn();
     if (!text && !attachments.length) return;
     convo.sending = true;
     renderComposer();

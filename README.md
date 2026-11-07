@@ -12,7 +12,7 @@ Pocket Dev is one Node.js server that runs on the Mac as your user. The phone op
 
 | Feature | What it does | Does not |
 | --- | --- | --- |
-| Real terminals | Each tab is a login shell (`$SHELL -l`, zsh) in a pty on the Mac. Output streams over a WebSocket. | Survive a server restart. Run as root. |
+| Real terminals | Each tab is a login shell (`$SHELL -l`, zsh) in a pty on the Mac. A separate terminal host keeps shells and recent output through server updates and reconnects the same tabs afterwards. If the host is unavailable, the restart confirmation identifies terminals that will end. On phones, type in the command field and swipe the output to scroll. | Survive a Mac restart. Run as root. |
 | Folder picker | **+** lists Home, pinned folders, the last 5 folders, and every folder in `~/Desktop` and `~/Desktop/Projects` with `.git` or `package.json`. Type any other path. | Scan deeper than one level for the project list. |
 | Tab names | Named after the folder (`app`, `app 2`). Resumed tabs are `claude · app` or `codex · app`. | |
 | All terminals | **☰** next to **+** lists every terminal with its folder, running or exited, and when it last printed. Tap a row to jump to it, **✕** to close it. | |
@@ -56,7 +56,7 @@ Choose **Continue in terminal** or **Continue in chat**. Resume reads the histor
 | --- | --- | --- |
 | Engines | Claude through `@anthropic-ai/claude-agent-sdk` 0.2.139, which runs your installed `claude`. Codex through one shared `codex app-server`. Both use your existing logins. | Store any Claude or Codex credentials. |
 | Chat screens | Chat list, new chat (engine, folder, model, mode), and a conversation view with markdown, tool folds, and diffs. | |
-| Queue | Type while the agent is working and the button says **Queue**. The message shows as a dashed **Queued** bubble (with **Remove**) and goes out by itself, one per turn and in order, when the turn ends. An empty box shows **Stop**; a **Stop** button also stays in the status line while you type. Up to 20 messages can wait. After a failed turn the rest are kept as **Not sent** instead of running. Waiting messages are held in memory, so a server restart marks them **Not sent**. | Survive a restart. |
+| Queue | Type while the agent is working and the button says **Queue**. The message shows as a dashed **Queued** bubble (with **Remove**) and goes out by itself, one per turn and in order, when the turn ends. There is one **Stop**, in the status line next to "working…"; the bottom button is **Queue** and stays greyed out until you type. Up to 20 messages can wait. After a failed turn the rest are kept as **Not sent** instead of running. Waiting messages are held in memory, so a server restart marks them **Not sent**. | Survive a restart. |
 | Attached images | A picture you attach with 📎 shows as a small preview in your own message, not just a file name. Tap it for the original. Other files stay as `📎 name`. The preview is a 480 px JPEG made once with `sips` and kept in the chat's `.images` folder. The route serves only a file listed on that message and only if it is an image, never an arbitrary path. | Preview files that are gone (they fall back to the name). |
 | Tool images | A picture a tool returns (for example `Read` on a PNG) shows in the tool's fold instead of `[image]`. Tap it for the full size. Files up to 8 MB are saved in `~/.pocket-dev/chats/<id>.images/` (mode 0600), only their names go in the chat, and deleting the chat deletes them. | Show images over 8 MB or in other formats (those stay `[image]`). |
 | Allow and Deny | Cards for commands, file edits, tools, and plans: **Allow once**, **Always allow in this chat**, **Always allow in this project** when Claude offers it, and **Deny** with an optional reason. The Permissions screen lists and removes remembered rules. | Time out a waiting card. |
@@ -198,7 +198,7 @@ The first start writes `~/.pocket-dev/config.json` (mode 0600) and prints the pa
 | `npm run sleep` | Turn lid sleep back on (sudo) and sleep the Mac. |
 | `npm run shutdown [-- --force]` | Shut down through System Events, or with `--force` through `sudo shutdown -h now`. |
 
-The launchd agent writes `~/Library/LaunchAgents/dev.pocket.server.plist`, starts at login (not at boot), restarts within about 10 s after a crash, and logs to `~/Library/Logs/pocket-dev.log`. Each restart closes all terminals. Devices stay logged in.
+The launchd agent writes `~/Library/LaunchAgents/dev.pocket.server.plist`, starts at login (not at boot), restarts within about 10 s after a crash, and logs to `~/Library/Logs/pocket-dev.log`. Terminals in the separate terminal host keep running across server restarts; terminals created by an older server or while the host is unavailable end on restart. Working chat turns are interrupted, and devices stay logged in. **Stop Pocket Dev** ends terminals as well as the server.
 
 ## Configuration
 

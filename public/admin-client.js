@@ -449,8 +449,23 @@ function renderService() {
   $('svcBody').replaceChildren(h('p', { class: 'status-line' }, status), restartRow, body);
 }
 
+// What an update will and will not interrupt, from the live sections already on this page.
+function restartWarning() {
+  const items = (id) => state.sections.find((s) => s.id === id)?.items ?? [];
+  const running = items('terminals').filter((t) => t.running);
+  const kept = running.filter((t) => t.persistent).length;
+  const ending = running.length - kept;
+  const working = items('chats').length;
+  const lines = [];
+  if (kept) lines.push(`${plural(kept, 'terminal')} keep${kept === 1 ? 's' : ''} running.`);
+  if (ending) lines.push(`${plural(ending, 'terminal')} will end.`);
+  if (working) lines.push(`${plural(working, 'chat')} ${working === 1 ? 'is' : 'are'} working and will be cut off. They can be continued afterwards.`);
+  if (!lines.length) lines.push('Nothing is running.');
+  return `${lines.join(' ')} Your phone reconnects by itself and stays logged in. Back in about 15 seconds.`;
+}
+
 async function restartServer() {
-  if (!(await ask({ title: 'Restart Pocket Dev now?', body: 'Your phone reconnects by itself and stays logged in. Open terminals end. Back in about 15 seconds.', confirm: 'Restart' }))) return;
+  if (!(await ask({ title: 'Restart Pocket Dev now?', body: restartWarning(), confirm: 'Restart' }))) return;
   try {
     await api('POST', '/api/service/restart');
   } catch (err) {

@@ -94,8 +94,25 @@ export async function renderServiceSection(container, api = window.api) {
     restartBtn.disabled = false;
     restartText.lastChild.textContent = 'Pocket Dev has not come back yet. Check the Mac (pocket-dev service status), then try again.';
   }
+  // Says what an update will and will not interrupt, so nothing is lost by surprise.
+  async function restartWarning() {
+    const [terminals, chats] = await Promise.all([api('GET', '/api/sessions').catch(() => null), api('GET', '/api/chat').catch(() => null)]);
+    const lines = [];
+    const running = (terminals ?? []).filter((t) => t.exitCode === null);
+    const kept = running.filter((t) => t.persistent).length;
+    const ending = running.length - kept;
+    if (kept) lines.push(`${kept} terminal${kept === 1 ? '' : 's'} keep${kept === 1 ? 's' : ''} running.`);
+    if (ending) lines.push(`${ending} terminal${ending === 1 ? '' : 's'} will end.`);
+    const working = (chats ?? []).filter((c) => c.status === 'running' || c.pending).length;
+    if (working) lines.push(`${working} chat${working === 1 ? ' is' : 's are'} working and will be cut off. You can continue ${working === 1 ? 'it' : 'them'} afterwards.`);
+    if (!lines.length) lines.push('Nothing is running.');
+    return `Restart Pocket Dev now?\n\n${lines.join('\n')}\n\nYou stay logged in. Back in about 15 seconds.`;
+  }
   restartBtn.onclick = async () => {
-    if (!confirm('Restart Pocket Dev now? Open terminals end. You stay logged in.')) return;
+    restartBtn.disabled = true;
+    const ok = confirm(await restartWarning());
+    restartBtn.disabled = false;
+    if (!ok) return;
     err.textContent = '';
     const verb = restartBtn.textContent === 'Update' ? 'Updating' : 'Restarting';
     restartBtn.disabled = true;

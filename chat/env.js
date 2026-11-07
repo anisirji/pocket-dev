@@ -6,7 +6,10 @@ import path from 'node:path';
 const EXTRA_BIN_DIRS = ['/usr/local/bin', '/opt/homebrew/bin', path.join(os.homedir(), '.local/bin'), path.join(os.homedir(), '.claude/local')];
 
 export function findBin(name) {
-  for (const dir of [...(process.env.PATH ?? '').split(':'), ...EXTRA_BIN_DIRS]) {
+  // The standalone Codex installer uses ~/.local/bin. launchd puts /usr/local/bin first,
+  // where an older npm installation may start the terminal UI instead of app-server.
+  const preferred = name === 'codex' ? [path.join(os.homedir(), '.local/bin')] : [];
+  for (const dir of [...preferred, ...(process.env.PATH ?? '').split(':'), ...EXTRA_BIN_DIRS]) {
     const file = path.join(dir, name);
     try {
       fs.accessSync(file, fs.constants.X_OK);

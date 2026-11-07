@@ -13,7 +13,8 @@ import { createHistoryApi } from './history.js';
 import { createAuth, QR_TTL_MIN } from './auth.js';
 import { terminalQr, qrNote } from './qr.js';
 import { openConfig } from './config.js';
-import { resolveConfigPath } from './paths.js';
+import { resolveConfigPath, STATE_DIR } from './paths.js';
+import { openTerminalHost } from './terminals.js';
 import { startPower, handlePowerApi, powerStatus } from './power.js';
 import { createAppsApi, snapshot as appsSnapshot } from './apps.js';
 import { startAdmin } from './admin.js';
@@ -254,53 +255,102 @@ function typeWhenIdle(proc, text) {
   const cap = setTimeout(done, 5000);
 }
 
-// `command`, when given, is typed into the new shell once its prompt is up.
-function createSession(cwd, base = folderName(cwd), command) {
-  const shell = process.env.SHELL || '/bin/zsh';
-  const proc = pty.spawn(shell, ['-l'], {
-    name: 'xterm-256color',
-    cols: 80,
-    rows: 24,
-    cwd,
-    // launchd and nohup start node without LANG, which makes ls print non-ASCII filenames as ???.
-    env: { ...process.env, LANG: 'en_US.UTF-8', LC_CTYPE: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', TERM: 'xterm-256color' },
-  });
-  const session = {
-    id: crypto.randomBytes(6).toString('hex'),
-    title: nextTitle(base),
-    cwd,
-    pty: proc,
-    scrollback: '',
-    clients: new Set(),
-    exitCode: null,
-    startedAt: Date.now(),
-    activeAt: Date.now(),
-  };
-  proc.onData((d) => {
+// Shells live in the terminal host, a small process of their own, so they keep running while Pocket Dev restarts for an
+// update. If the host cannot start, terminals are plain child processes of this server and end with it.
+let terminalHost = null;
+
+function wireSession(session) {
+  session.pty.onData((d) => {
     session.activeAt = Date.now();
     appendScrollback(session, d);
     broadcast(session, { t: 'out', d });
   });
-  proc.onExit(({ exitCode }) => {
+  session.pty.onExit(({ exitCode }) => {
     session.exitCode = exitCode;
     broadcast(session, { t: 'exit', code: exitCode });
   });
+}
+
+async function connectTerminalHost() {
+  if (process.env.POCKET_DEV_TERMINAL_HOST === 'off') return null;
+  try {
+    const host = await openTerminalHost(STATE_DIR);
+    // A host that stops answering took its shells with it; their tabs show as exited instead of hanging.
+    host.onClose(() => {
+      for (const session of sessions.values()) {
+        if (!session.remote || session.exitCode !== null) continue;
+        session.exitCode = 1;
+        broadcast(session, { t: 'exit', code: 1 });
+      }
+    });
+    return host;
+  } catch (err) {
+    console.warn(`Terminals will end when Pocket Dev restarts: ${err.message}`);
+    return null;
+  }
+}
+
+// Shells that were already running when this server started (an update, a crash) come back as the same tabs, with
+// their recent output.
+async function adoptTerminals() {
+  terminalHost = await connectTerminalHost();
+  if (!terminalHost) return;
+  for (const meta of await terminalHost.list()) {
+    const { pty: proc, scrollback } = await terminalHost.adopt(meta);
+    const session = {
+      id: meta.id, title: meta.title, cwd: meta.cwd, pty: proc, remote: true, scrollback, clients: new Set(),
+      exitCode: meta.exitCode, startedAt: meta.startedAt, activeAt: meta.activeAt,
+    };
+    wireSession(session);
+    sessions.set(session.id, session);
+  }
+  if (sessions.size) console.log(`Reconnected ${sessions.size} terminal${sessions.size === 1 ? '' : 's'} that kept running.`);
+}
+
+// `command`, when given, is typed into the new shell once its prompt is up.
+async function createSession(cwd, base = folderName(cwd), command) {
+  const shell = process.env.SHELL || '/bin/zsh';
+  // launchd and nohup start node without LANG, which makes ls print non-ASCII filenames as ???.
+  const env = { ...process.env, LANG: 'en_US.UTF-8', LC_CTYPE: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', TERM: 'xterm-256color' };
+  const id = crypto.randomBytes(6).toString('hex');
+  const title = nextTitle(base);
+  if (terminalHost?.closed) terminalHost = await connectTerminalHost();
+  let proc = null;
+  if (terminalHost) {
+    try {
+      proc = await terminalHost.create({ id, title, cwd, shell, env, cols: 80, rows: 24 });
+    } catch (err) {
+      console.warn(`Could not start the terminal in the host, starting it here instead: ${err.message}`);
+    }
+  }
+  const remote = proc !== null;
+  proc ??= pty.spawn(shell, ['-l'], { name: 'xterm-256color', cols: 80, rows: 24, cwd, env });
+  const session = {
+    id, title, cwd, pty: proc, remote, scrollback: '', clients: new Set(), exitCode: null, startedAt: Date.now(), activeAt: Date.now(),
+  };
+  wireSession(session);
   sessions.set(session.id, session);
   if (command) typeWhenIdle(proc, `${command}\r`);
   return session;
 }
 
 function destroySession(session) {
-  try {
-    process.kill(-session.pty.pid, 'SIGHUP');
-  } catch {
-    try { session.pty.kill(); } catch {}
+  if (session.remote) {
+    session.pty.kill();
+    terminalHost?.forget(session.id);
+  } else {
+    try {
+      process.kill(-session.pty.pid, 'SIGHUP');
+    } catch {
+      try { session.pty.kill(); } catch {}
+    }
   }
   for (const ws of session.clients) ws.close(1000, 'session closed');
   sessions.delete(session.id);
 }
 
-const sessionView = ({ id, title, exitCode, cwd, startedAt, activeAt }) => ({ id, title, exitCode, cwd, startedAt, activeAt });
+// `persistent` tells the phone whether this terminal keeps running through an update.
+const sessionView = ({ id, title, exitCode, cwd, startedAt, activeAt, remote }) => ({ id, title, exitCode, cwd, startedAt, activeAt, persistent: remote === true });
 
 const isDim = (n) => Number.isInteger(n) && n >= 10 && n <= 500;
 
@@ -513,7 +563,7 @@ async function handleApi(req, res, url) {
       const dir = resolveDir(cwd);
       if (!dir) return sendJson(res, 400, { error: `Not a folder: ${cwd}` });
       if (command !== undefined && !isShortcut(command)) return sendJson(res, 400, { error: 'command must be one line of 1 to 200 characters.' });
-      const session = createSession(dir, undefined, command);
+      const session = await createSession(dir, undefined, command);
       rememberRecent(dir);
       return sendJson(res, 201, sessionView(session));
     }
@@ -560,7 +610,7 @@ async function handleApi(req, res, url) {
     case 'DELETE forwards/:key':
       return closeForward(Number(key)) ? sendJson(res, 204) : sendJson(res, 404, { error: 'Not forwarded' });
     case 'GET info':
-      return sendJson(res, 200, { lanIp: lanIp(), forwards: listForwards() });
+      return sendJson(res, 200, { lanIp: lanIp(), forwards: listForwards(), persistentTerminals: Boolean(terminalHost && !terminalHost.closed) });
     default:
       return sendJson(res, 404, { error: 'Not found' });
   }
@@ -648,6 +698,7 @@ setInterval(() => {
   }
 }, 30_000).unref();
 
+await adoptTerminals();
 startPower(config);
 watchLanIp();
 
@@ -676,6 +727,8 @@ const adminSections = {
       label: s.title,
       details: [s.cwd, plural(s.clients.size, 'client'), ...(s.exitCode !== null ? [`exited ${s.exitCode}`] : [])],
       startedAt: s.startedAt,
+      running: s.exitCode === null,
+      persistent: s.remote === true,
     })),
     act: (id) => {
       const session = sessions.get(id);

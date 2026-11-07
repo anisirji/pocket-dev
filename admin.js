@@ -268,6 +268,7 @@ export async function startAdmin({ auth, access, config, mainPort, urls, section
     },
     'POST /api/service/restart': () => restart('admin'),
     'POST /api/stop': () => {
+      for (const item of sections.terminals?.list() ?? []) sections.terminals.act(item.id);
       auth.admin.log('server-stopped', { by: 'admin' });
       setTimeout(stopThisServer, 200);
       return ok({ ok: true });

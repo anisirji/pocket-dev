@@ -228,6 +228,10 @@ function sendMsg(view, msg) {
   if (view.ws?.readyState === WebSocket.OPEN) view.ws.send(JSON.stringify(msg));
 }
 const sendInput = (view, d) => sendMsg(view, { t: 'in', d });
+const phoneInput = matchMedia('(pointer: coarse)').matches;
+// The HTML is read from disk on every request, but a running server may predate
+// newly added asset routes. Give both health entry points a useful failure state.
+window.openHealthSheet = () => alert('Mac health has not loaded. Open Settings → This Mac → Update to load the latest server, then reload this page.');
 
 function makeView(session) {
   const el = h('div', 'term');
@@ -239,6 +243,14 @@ function makeView(session) {
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(el);
+  // Android keyboards edit composed words, which a terminal cannot reliably apply
+  // one character at a time. Keep phone typing in the visible command field.
+  if (phoneInput && term.textarea) {
+    term.textarea.readOnly = true;
+    term.textarea.inputMode = 'none';
+    term.textarea.tabIndex = -1;
+    term.textarea.addEventListener('focus', () => $('cmd').focus({ preventScroll: true }));
+  }
   const view = { id: session.id, title: session.title, exitCode: session.exitCode, cwd: session.cwd, startedAt: session.startedAt, activeAt: session.activeAt, term, fit, el, ws: null, online: false, everOnline: false, retry: 0, closed: false };
   term.onData((d) => sendInput(view, d));
   term.onResize(({ cols, rows }) => sendMsg(view, { t: 'resize', cols, rows }));
@@ -257,7 +269,7 @@ function connect(view) {
   ws.onopen = () => {
     view.online = view.everOnline = true;
     view.term.reset();
-    if (terminalShown()) sendMsg(view, { t: 'resize', cols: view.term.cols, rows: view.term.rows });
+    if (terminalShown() && view.id === activeId) sendMsg(view, { t: 'resize', cols: view.term.cols, rows: view.term.rows });
     renderBadge();
   };
   ws.onmessage = (e) => {
@@ -405,11 +417,11 @@ function renderLatest() {
   $('latest').hidden = !buf || buf.viewportY >= buf.baseY;
 }
 
-const terminalShown = () => $('app').dataset.view !== 'git';
+const terminalShown = () => $('app').dataset.view === 'terminal';
 
 function fitView(view) {
   // A hidden page or the Git view lays terminals out at a bogus size, which would be pushed to the shared shell.
-  if (document.hidden || !terminalShown()) return;
+  if (document.hidden || !terminalShown() || view.id !== activeId) return;
   try { view.fit.fit(); } catch {}
 }
 
@@ -437,11 +449,14 @@ function attachTouchScroll(view) {
   view.el.addEventListener('touchstart', (e) => {
     cancelAnimationFrame(frame);
     if (e.touches.length !== 1) return;
+    // Run before xterm's touch handlers, which can otherwise consume this event
+    // and leave our first scroll delta measured from a previous gesture.
+    e.stopPropagation();
     lastY = e.touches[0].clientY;
     lastT = e.timeStamp;
     velocity = carry = 0;
     dragging = false;
-  }, { passive: true });
+  }, { passive: true, capture: true });
   view.el.addEventListener('touchmove', (e) => {
     if (e.touches.length !== 1) return;
     const y = e.touches[0].clientY;
@@ -456,6 +471,11 @@ function attachTouchScroll(view) {
     scrollPx(dy);
   }, { passive: false, capture: true });
   view.el.addEventListener('touchend', (e) => {
+    if (dragging || phoneInput) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!dragging && phoneInput) $('cmd').focus({ preventScroll: true });
     if (!dragging || e.timeStamp - lastT > 100) return;
     let perFrame = velocity * 16;
     const step = () => {
@@ -465,7 +485,12 @@ function attachTouchScroll(view) {
       frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
-  }, { passive: true });
+  }, { passive: false, capture: true });
+  view.el.addEventListener('touchcancel', () => {
+    cancelAnimationFrame(frame);
+    dragging = false;
+    velocity = carry = 0;
+  }, { passive: true, capture: true });
 }
 
 const KEYS = [
@@ -508,6 +533,10 @@ for (const [label, seq] of KEYS) {
 }
 
 function runCommand(view, text) {
+  if (!view.online || view.ws?.readyState !== WebSocket.OPEN) {
+    showStatus('Terminal is reconnecting. Your command has not been sent.', true);
+    return false;
+  }
   if (text) {
     sendInput(view, text);
     // A TUI that detects pastes by chunk can read text+CR arriving together as a pasted newline, not a submit.
@@ -517,6 +546,7 @@ function runCommand(view, text) {
   }
   view.term.scrollToBottom();
   closeKeyboard();
+  return true;
 }
 
 keepFocus($('send'));
@@ -525,8 +555,7 @@ $('inputBar').addEventListener('submit', (e) => {
   const view = active();
   if (!view) return;
   const text = $('cmd').value;
-  $('cmd').value = '';
-  runCommand(view, text);
+  if (runCommand(view, text)) $('cmd').value = '';
 });
 
 $('latest').addEventListener('click', () => {
