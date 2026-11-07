@@ -104,6 +104,10 @@ function rememberRecent(dir) {
   saveConfig();
 }
 
+const DEFAULT_SHORTCUTS = ['claude', 'codex', 'npm run dev', 'git status', 'git pull'];
+const isShortcut = (s) => typeof s === 'string' && s.trim() !== '' && s.length <= 200 && !/[\x00-\x1f\x7f]/.test(s);
+const isShortcutList = (v) => Array.isArray(v) && v.length <= 30 && v.every(isShortcut);
+
 const sessions = new Map();
 
 function nextTitle(cwd) {
@@ -337,6 +341,17 @@ async function handleApi(req, res, pathname) {
       if (!dir) return sendJson(res, 400, { error: `Not a folder: ${given}` });
       setPinned(dir, pinned);
       return sendJson(res, 200, listFolders());
+    }
+    case 'GET shortcuts':
+      return sendJson(res, 200, config.shortcuts ?? DEFAULT_SHORTCUTS);
+    case 'PUT shortcuts': {
+      const list = await readJson(req);
+      if (!isShortcutList(list)) {
+        return sendJson(res, 400, { error: 'Shortcuts must be a list of up to 30 one-line commands, each 1 to 200 characters.' });
+      }
+      config.shortcuts = list;
+      saveConfig();
+      return sendJson(res, 200, list);
     }
     case 'GET forwards':
       return sendJson(res, 200, listForwards());

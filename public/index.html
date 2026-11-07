@@ -70,7 +70,8 @@
   #sheetPanel { display: flex; flex-direction: column; max-height: 80%; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; background: var(--panel); }
   .layer-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 6px 8px 14px; }
   .layer-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
-  #sheetBody { overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 10px; }
+  #sheetBody { overflow-y: auto; overscroll-behavior: contain; padding: 0 6px; }
+  #sheetFoot { flex: none; padding: 0 6px 10px; }
   .sheet-label { margin: 12px 10px 2px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
   .row { display: flex; align-items: center; gap: 2px; }
   .row-main { flex: 1; min-width: 0; min-height: 48px; padding: 5px 10px; border-radius: 10px; text-align: left; }
@@ -85,7 +86,13 @@
   .sheet-form input:focus { border-color: var(--accent); }
   .sheet-form .primary { height: 42px; border-radius: 10px; }
   .sheet-note { margin: 10px 10px 0; color: var(--muted); font-size: 13px; }
+  .sheet-note:empty { display: none; }
   .sheet-note.error { color: var(--danger); }
+  .sheet-act { height: 36px; padding: 0 14px; border-radius: 8px; color: var(--accent); font-weight: 600; }
+  .row-main.cmd, .row-text { font-family: var(--mono); font-size: 14px; }
+  .row-text { flex: 1; min-width: 0; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row.editing { min-height: 48px; }
+  .key.icon { min-width: 44px; padding: 0; font-family: inherit; font-size: 17px; }
 </style>
 </head>
 <body>
@@ -116,6 +123,7 @@
     <section id="sheetPanel">
       <div class="layer-head"><h2 id="sheetTitle"></h2><span id="sheetAction"></span><button id="sheetClose" class="icon-btn" aria-label="Close">✕</button></div>
       <div id="sheetBody"></div>
+      <div id="sheetFoot"><div id="sheetFormSlot"></div><p id="sheetNote" class="sheet-note"></p></div>
     </section>
   </div>
 </div>
@@ -371,6 +379,15 @@ function keepFocus(button) {
   button.addEventListener('mousedown', (e) => e.preventDefault());
 }
 
+function iconKey(label, ariaLabel, onClick) {
+  const key = h('button', 'key icon', label);
+  key.setAttribute('aria-label', ariaLabel);
+  keepFocus(key);
+  key.onclick = onClick;
+  $('keys').appendChild(key);
+}
+iconKey('⚡', 'Shortcuts', () => openShortcuts());
+
 for (const [label, seq] of KEYS) {
   const key = h('button', 'key', label);
   keepFocus(key);
@@ -385,13 +402,7 @@ for (const [label, seq] of KEYS) {
   $('keys').appendChild(key);
 }
 
-keepFocus($('send'));
-$('inputBar').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const view = active();
-  if (!view) return;
-  const text = $('cmd').value;
-  $('cmd').value = '';
+function runCommand(view, text) {
   if (text) {
     sendInput(view, text);
     // A TUI that detects pastes by chunk can read text+CR arriving together as a pasted newline, not a submit.
@@ -401,6 +412,16 @@ $('inputBar').addEventListener('submit', (e) => {
   }
   view.term.scrollToBottom();
   closeKeyboard();
+}
+
+keepFocus($('send'));
+$('inputBar').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const view = active();
+  if (!view) return;
+  const text = $('cmd').value;
+  $('cmd').value = '';
+  runCommand(view, text);
 });
 
 $('latest').addEventListener('click', () => {
@@ -427,20 +448,22 @@ window.addEventListener('popstate', () => {
   layer = null;
   renderLayer();
 });
-const SHEETS = { folders: renderFolders };
+const SHEETS = { folders: renderFolders, shortcuts: renderShortcuts };
 function renderLayer() {
   $('sheet').hidden = !SHEETS[layer];
   SHEETS[layer]?.();
 }
-function setSheet(title, action, children) {
+function setSheet({ title, action, rows = [], form, note = '', error = false }) {
   $('sheetTitle').textContent = title;
   $('sheetAction').replaceChildren(...(action ? [action] : []));
-  $('sheetBody').replaceChildren(...children.filter(Boolean));
+  $('sheetBody').replaceChildren(...rows);
+  // Re-inserting the form would blur its input and drop the phone keyboard after every add.
+  if ($('sheetFormSlot').firstChild !== form) $('sheetFormSlot').replaceChildren(...(form ? [form] : []));
+  $('sheetNote').textContent = note;
+  $('sheetNote').classList.toggle('error', error);
 }
 $('sheetClose').addEventListener('click', hideLayer);
 $('sheet').addEventListener('click', (e) => e.target === $('sheet') && hideLayer());
-
-const note = (text, error) => text && h('p', `sheet-note${error ? ' error' : ''}`, text);
 
 function sheetForm(placeholder, buttonLabel, onSubmit) {
   const form = h('form', 'sheet-form');
@@ -483,7 +506,7 @@ async function togglePin(dir, pinned) {
 }
 
 function renderFolders() {
-  if (!folders) return setSheet('New terminal', null, [note(folderNote || 'Loading…', folderNote)]);
+  if (!folders) return setSheet({ title: 'New terminal', note: folderNote || 'Loading…', error: !!folderNote });
   const { home, pinned, recent, projects } = folders;
   const tilde = (p) => (p === home ? '~' : p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p);
   const pinnedPaths = new Set(pinned.map((f) => f.path));
@@ -507,17 +530,91 @@ function renderFolders() {
     const rows = list.filter((f) => !shown.has(f.path) && shown.add(f.path)).map((f) => row(f.name, f.path, true));
     return rows.length ? [h('p', 'sheet-label', label), ...rows] : [];
   };
-  setSheet('New terminal', null, [
-    row('Home', home, false),
-    ...section('Pinned', pinned),
-    ...section('Recent', recent),
-    ...section('Projects', projects),
-    otherPath,
-    note(folderNote, true),
-  ]);
+  setSheet({
+    title: 'New terminal',
+    rows: [row('Home', home, false), ...section('Pinned', pinned), ...section('Recent', recent), ...section('Projects', projects)],
+    form: otherPath,
+    note: folderNote,
+    error: true,
+  });
 }
 
 $('new').addEventListener('click', openFolders);
+
+let shortcuts = null;
+let shortcutNote = '';
+let editingShortcuts = false;
+const addShortcut = sheetForm('Command, e.g. npm test', 'Add', (text, input) => {
+  input.value = '';
+  saveShortcuts([...shortcuts, text]);
+});
+addShortcut.querySelector('input').maxLength = 200;
+
+async function openShortcuts() {
+  shortcutNote = '';
+  editingShortcuts = false;
+  showLayer('shortcuts');
+  try { shortcuts = await api('GET', '/api/shortcuts'); } catch (err) { shortcutNote = err.message; }
+  if (layer === 'shortcuts') renderShortcuts();
+}
+
+async function saveShortcuts(next) {
+  shortcutNote = '';
+  try { shortcuts = await api('PUT', '/api/shortcuts', next); } catch (err) { shortcutNote = err.message; }
+  renderShortcuts();
+}
+
+function runShortcut(text) {
+  const view = active();
+  if (!view) return;
+  hideLayer();
+  runCommand(view, text);
+}
+
+function renderShortcuts() {
+  if (!shortcuts) return setSheet({ title: 'Shortcuts', note: shortcutNote || 'Loading…', error: !!shortcutNote });
+  const toggle = h('button', 'sheet-act', editingShortcuts ? 'Done' : 'Edit');
+  toggle.onclick = () => {
+    editingShortcuts = !editingShortcuts;
+    renderShortcuts();
+  };
+  const move = (i, by) => {
+    const next = [...shortcuts];
+    [next[i], next[i + by]] = [next[i + by], next[i]];
+    saveShortcuts(next);
+  };
+  const iconButton = (label, aria, disabled, onClick) => {
+    const b = h('button', 'row-btn', label);
+    b.setAttribute('aria-label', aria);
+    b.disabled = disabled;
+    b.onclick = onClick;
+    return b;
+  };
+  const rows = shortcuts.map((text, i) => {
+    const row = h('div', `row${editingShortcuts ? ' editing' : ''}`);
+    if (!editingShortcuts) {
+      const run = h('button', 'row-main cmd', text);
+      run.onclick = () => runShortcut(text);
+      row.append(run);
+      return row;
+    }
+    row.append(
+      h('span', 'row-text', text),
+      iconButton('↑', `Move ${text} up`, i === 0, () => move(i, -1)),
+      iconButton('↓', `Move ${text} down`, i === shortcuts.length - 1, () => move(i, 1)),
+      iconButton('✕', `Delete ${text}`, false, () => saveShortcuts(shortcuts.filter((_, j) => j !== i))),
+    );
+    return row;
+  });
+  setSheet({
+    title: 'Shortcuts',
+    action: toggle,
+    rows,
+    form: editingShortcuts && addShortcut,
+    note: shortcutNote || (shortcuts.length ? '' : 'No shortcuts yet. Tap Edit to add one.'),
+    error: !!shortcutNote,
+  });
+}
 
 let forwards = [];
 function renderForwards() {
