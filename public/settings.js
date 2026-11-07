@@ -17,11 +17,11 @@
       headers: body ? { 'content-type': 'application/json' } : {},
       body: body ? JSON.stringify(body) : undefined,
     });
-    if (res.status === 401) {
+    const data = res.status === 204 ? null : await res.json().catch(() => null);
+    if (res.status === 401 || data?.blocked || data?.pending) {
       location.replace('/login.html');
-      throw new Error('Not logged in');
+      throw new Error(data?.error || 'Not logged in');
     }
-    const data = res.status === 204 ? null : await res.json();
     if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
     return data;
   }
@@ -79,7 +79,7 @@
         <h3>Password</h3>
         <form class="st-form" data-form="password">
           <input type="password" name="current" autocomplete="current-password" placeholder="Current password" required>
-          <input type="password" name="next" autocomplete="new-password" placeholder="New password (4+ characters)" minlength="4" required>
+          <input type="password" name="next" autocomplete="new-password" placeholder="New password (6+ characters)" minlength="6" required>
           <input type="password" name="confirm" autocomplete="new-password" placeholder="Repeat new password" required>
           <label class="st-check"><input type="checkbox" name="logoutOthers"> Log out all other devices</label>
           <button class="st-primary">Change password</button>
@@ -237,7 +237,7 @@
     const { current, next, confirm: again, logoutOthers } = form.elements;
     msg('ok', 'password', '');
     msg('err', 'password', '');
-    if (next.value.length < 4) return msg('err', 'password', 'The new password needs at least 4 characters.');
+    if (next.value.length < 6) return msg('err', 'password', 'The new password needs at least 6 characters.');
     if (next.value !== again.value) return msg('err', 'password', 'The new passwords do not match.');
     const button = form.querySelector('button');
     button.disabled = true;

@@ -113,11 +113,12 @@ async function api(method, url, body) {
     headers: body ? { 'content-type': 'application/json' } : {},
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (res.status === 401) {
+  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  // The login page explains a blocked or not-yet-approved device instead of showing the form.
+  if (res.status === 401 || data?.blocked || data?.pending) {
     location.replace('/login.html');
-    throw new Error('Not logged in');
+    throw new Error(data?.error || 'Not logged in');
   }
-  const data = res.status === 204 ? null : await res.json();
   if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
   return data;
 }
