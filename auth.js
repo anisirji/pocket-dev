@@ -154,31 +154,34 @@ function createLoginLimiter() {
 const minutes = (ms) => Math.max(1, Math.ceil(ms / 60_000));
 const lockedMessage = (ip, ms) => `Too many wrong passwords from ${ip}. Try again in ${minutes(ms)} min.`;
 
-// `config` is the server's live config object; mutating it and calling saveConfig keeps one writer for config.json.
-export function createAuth({ config, saveConfig, port, lanIp }) {
+// `config` is { read(), update(changes) }: read() returns the current values, update() writes only the keys it is given
+// (undefined removes a key).
+export function createAuth({ config, port, lanIp }) {
   const envPassword = process.env.POCKET_DEV_PASSWORD;
   let passwordLine = envPassword ? `Password: ${envPassword} (from POCKET_DEV_PASSWORD)` : 'Password: (set; change it in Settings)';
-  if (typeof config.password === 'string') {
-    config.passwordHash = hashPassword(config.password);
-    delete config.password;
-    saveConfig();
-  } else if (!config.passwordHash && !envPassword) {
+  const boot = config.read();
+  if (typeof boot.password === 'string') {
+    config.update({ passwordHash: hashPassword(boot.password), password: undefined });
+  } else if (!boot.passwordHash && !envPassword) {
     const generated = crypto.randomBytes(9).toString('base64url');
-    config.passwordHash = hashPassword(generated);
-    saveConfig();
+    config.update({ passwordHash: hashPassword(generated) });
     passwordLine = `Password: ${generated}`;
   }
-  if (config.passwordHash !== undefined && !isPasswordHash(config.passwordHash)) {
+  const { passwordHash, maxDevices: bootMax, requireApproval: bootApproval } = config.read();
+  if (passwordHash !== undefined && !isPasswordHash(passwordHash)) {
     throw new Error('config.json: passwordHash is malformed. Delete it and set "password" to migrate a new one.');
   }
-  if (config.maxDevices !== undefined && !isMaxDevices(config.maxDevices)) {
+  if (bootMax !== undefined && !isMaxDevices(bootMax)) {
     console.warn(`config.json: maxDevices must be a whole number from 1 to 20; using ${DEFAULT_MAX_DEVICES}.`);
   }
-  if (config.requireApproval !== undefined && typeof config.requireApproval !== 'boolean') {
+  if (bootApproval !== undefined && typeof bootApproval !== 'boolean') {
     console.warn('config.json: requireApproval must be true or false; using false.');
   }
-  const maxDevices = () => (isMaxDevices(config.maxDevices) ? config.maxDevices : DEFAULT_MAX_DEVICES);
-  const requireApproval = () => config.requireApproval === true;
+  const maxDevices = () => {
+    const n = config.read().maxDevices;
+    return isMaxDevices(n) ? n : DEFAULT_MAX_DEVICES;
+  };
+  const requireApproval = () => config.read().requireApproval === true;
 
   const devices = loadDevices();
   const sockets = new Map();
@@ -336,7 +339,7 @@ export function createAuth({ config, saveConfig, port, lanIp }) {
     return bounceHome(cookie);
   }
 
-  const passwordMatches = (given) => (envPassword ? sameSecret(given, envPassword) : verifyPassword(given, config.passwordHash));
+  const passwordMatches = (given) => (envPassword ? sameSecret(given, envPassword) : verifyPassword(given, config.read().passwordHash));
 
   const isLocalRequest = (req) => LOOPBACK.has(req.socket.remoteAddress)
     && !PROXY_HEADERS.some((h) => h in req.headers)
@@ -344,15 +347,13 @@ export function createAuth({ config, saveConfig, port, lanIp }) {
 
   function setMaxDevices(n, by) {
     const from = maxDevices();
-    config.maxDevices = n;
-    saveConfig();
+    config.update({ maxDevices: n });
     if (from !== n) log('limit-changed', { from, to: n, by });
   }
 
   // Blocked devices stay blocked: logging them out would let them try the password again.
   function changePassword(next, { logoutAll, keep, by }) {
-    config.passwordHash = hashPassword(next);
-    saveConfig();
+    config.update({ passwordHash: hashPassword(next) });
     const out = logoutAll ? [...devices.values()].filter((d) => d.status !== 'blocked' && d.id !== keep) : [];
     for (const d of out) revoke(d.id, 'password-change');
     log('password-changed', { by, loggedOut: out.length });
@@ -523,8 +524,7 @@ export function createAuth({ config, saveConfig, port, lanIp }) {
       if (on !== undefined && typeof on !== 'boolean') return reply(400, { error: 'requireApproval must be true or false.' });
       if (n !== undefined) setMaxDevices(n, 'admin');
       if (on !== undefined && on !== requireApproval()) {
-        config.requireApproval = on;
-        saveConfig();
+        config.update({ requireApproval: on });
         log('approval-changed', { on, by: 'admin' });
       }
       return reply(200, { maxDevices: maxDevices(), requireApproval: requireApproval() });

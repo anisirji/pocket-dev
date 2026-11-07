@@ -9,6 +9,8 @@ import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
 import { createAuth, QR_TTL_MIN } from './auth.js';
 import { terminalQr, qrNote } from './qr.js';
+import { startAdmin } from './admin.js';
+import { createPhoneAccess } from './access.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json');
@@ -44,7 +46,19 @@ function lanIp() {
   return '127.0.0.1';
 }
 
-const auth = createAuth({ config, saveConfig, port: PORT, lanIp });
+// The shape the auth, access and admin modules use. update() writes only the given keys; undefined removes one.
+const configStore = {
+  read: () => config,
+  update(changes) {
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === undefined) delete config[key];
+      else config[key] = value;
+    }
+    saveConfig();
+  },
+};
+
+const auth = createAuth({ config: configStore, port: PORT, lanIp });
 
 const sessions = new Map();
 
@@ -89,6 +103,7 @@ function createSession(cwd) {
     scrollback: '',
     clients: new Set(),
     exitCode: null,
+    startedAt: Date.now(),
   };
   proc.onData((d) => {
     appendScrollback(session, d);
@@ -236,6 +251,8 @@ async function handleApi(req, res, pathname) {
   const authReply = await auth.handleApi(req, pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  const adminReply = await admin.phoneApi(req, pathname, () => readJson(req));
+  if (adminReply) return sendJson(res, adminReply.status, adminReply.body);
 
   switch (route) {
     case 'GET sessions':
@@ -275,7 +292,7 @@ async function handleApi(req, res, pathname) {
 
 const PAGES = {
   '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html',
-  '/settings.js': 'settings.js', '/settings.css': 'settings.css',
+  '/settings.js': 'settings.js', '/settings.css': 'settings.css', '/service.js': 'service.js',
 };
 const PUBLIC_PAGES = new Set(['login.html']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
@@ -337,9 +354,57 @@ setInterval(() => {
   }
 }, 30_000).unref();
 
-server.listen(PORT, '0.0.0.0', async () => {
+// The admin page's live overview. A feature adds an entry here to show up there; see startAdmin in admin.js.
+const adminSections = {
+  terminals: {
+    title: 'Terminals',
+    empty: 'No terminals open.',
+    action: 'Close',
+    warning: 'Anything running in it is killed.',
+    lockdown: 'optional',
+    list: () => [...sessions.values()].map((s) => ({
+      id: s.id,
+      label: s.title,
+      details: [s.cwd, `${s.clients.size} ${s.clients.size === 1 ? 'client' : 'clients'}`, ...(s.exitCode !== null ? [`exited ${s.exitCode}`] : [])],
+      startedAt: s.startedAt,
+    })),
+    act: (id) => {
+      const session = sessions.get(id);
+      if (session) destroySession(session);
+      return Boolean(session);
+    },
+  },
+  ports: {
+    title: 'Port forwards',
+    empty: 'No ports forwarded.',
+    action: 'Stop',
+    warning: 'Phones lose access to it until you open the port again.',
+    lockdown: 'always',
+    list: () => listForwards().map((f) => ({ id: String(f.port), label: `:${f.port}`, details: [f.url] })),
+    act: (id) => closeForward(Number(id)),
+  },
+};
+
+const access = createPhoneAccess({
+  server, wss, port: PORT, config: configStore, log: auth.admin.log,
+  forwards: { ports: () => [...forwards.keys()], open: openForward, close: closeForward },
+});
+const admin = await startAdmin({ auth, access, config: configStore, mainPort: PORT, lanIp, sections: adminSections }).catch((err) => {
+  console.error(err.message);
+  process.exit(1);
+});
+const opened = await access.start();
+if (opened.error) {
+  console.error(opened.error);
+  process.exit(1);
+}
+if (access.view().connected) {
   console.log(await terminalQr(auth.mintQrUrl()));
   console.log(`Pocket Dev running at http://${lanIp()}:${PORT}`);
   console.log(auth.passwordLine);
   console.log(qrNote(QR_TTL_MIN));
-});
+} else {
+  console.log('Phone access is off. Press Connect on the admin page to let your phone in.');
+}
+console.log(admin.line);
+if (!access.view().connected || !access.view().keepOpen) admin.openPage();

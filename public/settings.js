@@ -87,6 +87,7 @@
           <p class="st-err" data-for="password"></p>
         </form>
       </section>
+      <section data-mount="service"></section>
       <section>
         <button class="st-btn st-danger" data-act="logout">Log out this device</button>
       </section>
@@ -280,6 +281,7 @@
     history.pushState({ pdSettings: true }, '');
     clearInterval(timer);
     timer = setInterval(refresh, REFRESH_MS);
+    import('/service.js').then((m) => m.renderServiceSection($('[data-mount="service"]'), call)).catch(() => {});
     await refresh();
   }
 

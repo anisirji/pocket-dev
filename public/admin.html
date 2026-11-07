@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Pocket Dev Admin</title>
+<link rel="stylesheet" href="/admin.css">
+<script src="/admin-client.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo" aria-hidden="true"></span>
+    <h1>Pocket Dev <span>Admin</span></h1>
+    <span class="pill">This Mac only</span>
+  </div>
+  <p class="updated" id="updated" aria-live="polite"></p>
+</header>
+
+<div class="layout">
+  <nav class="side" aria-label="Sections">
+    <a href="#connection">Connection</a>
+    <a href="#pending" data-nav="pending">Waiting <b id="navPending"></b></a>
+    <a href="#devices">Devices</a>
+    <a href="#log">Security log</a>
+    <a href="#password">Password</a>
+    <a href="#settings">Settings</a>
+    <a href="#live">Live</a>
+    <a href="#service">Service</a>
+    <a href="#lockdown" class="nav-danger">Lockdown</a>
+  </nav>
+
+  <main>
+    <p class="offline" id="offline" hidden>Can't reach Pocket Dev on this Mac. It may have stopped. Start it again with <code>npm start</code>; this page reconnects by itself.</p>
+
+    <section id="connection" class="conn" aria-labelledby="connTitle">
+      <div class="conn-main">
+        <span class="conn-dot" aria-hidden="true"></span>
+        <div class="conn-text">
+          <h2 id="connTitle">…</h2>
+          <p id="connSub"></p>
+          <p class="err" id="connErr"></p>
+        </div>
+        <button class="btn btn-big" id="connBtn" type="button"></button>
+      </div>
+      <label class="check conn-keep">
+        <input type="checkbox" id="keepOpen">
+        <span><b>Keep connection open</b><small>On: stays open after you close this page and after a restart. Off: closes about 30 s after this page is closed.</small></span>
+      </label>
+    </section>
+
+    <div class="banner" id="guessing" hidden role="alert"></div>
+
+    <section class="cards" aria-label="Overview">
+      <div class="card"><span class="card-label">Logged in</span><b id="cLogged">–</b><small id="cLoggedSub"></small></div>
+      <div class="card"><span class="card-label">Online now</span><b id="cOnline">–</b><small id="cOnlineSub">with a terminal open or active in the last minute</small></div>
+      <div class="card" id="cPendingCard"><span class="card-label">Waiting for approval</span><b id="cPending">–</b><small id="cPendingSub"></small></div>
+      <div class="card" id="cFailedCard"><span class="card-label">Failed logins</span><b id="cFailed">–</b><small>in the last hour</small></div>
+    </section>
+
+    <section id="pending" class="panel" hidden>
+      <div class="panel-head"><h2>Waiting for approval</h2></div>
+      <p class="note">These browsers typed the right password. Check the code on the phone matches before you approve it. Requests expire after <span id="pendingTtl">10</span> minutes.</p>
+      <div class="rows" id="pendingRows"></div>
+    </section>
+
+    <section id="devices" class="panel">
+      <div class="panel-head"><h2>Devices</h2><span class="count" id="devCount"></span></div>
+      <div class="rows table" id="deviceRows"></div>
+      <p class="note">Block keeps the device listed and refuses everything it sends, now and after restarts. A blocked browser that clears its cookies looks like a new device, so it could log in again with the password. To stop that, turn on <a href="#settings">Approve new devices</a> or change the password.</p>
+    </section>
+
+    <section id="log" class="panel">
+      <div class="panel-head">
+        <h2>Security log</h2>
+        <div class="seg" role="group" aria-label="Filter the log">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="failures" aria-pressed="false">Failures</button>
+          <button type="button" data-filter="changes" aria-pressed="false">Changes</button>
+        </div>
+      </div>
+      <div class="log" id="logRows"></div>
+      <p class="note">Latest 200 events. The full log is <code id="logPath">security.log</code> in Pocket Dev's state folder.</p>
+    </section>
+
+    <div class="split">
+      <section id="password" class="panel">
+        <div class="panel-head"><h2>Password</h2></div>
+        <form id="pwForm" class="form" autocomplete="off">
+          <p class="note" id="pwNote">You're at the Mac, so the current password isn't needed.</p>
+          <input type="password" name="next" autocomplete="new-password" placeholder="New password (6+ characters)" minlength="6" required aria-label="New password">
+          <input type="password" name="confirm" autocomplete="new-password" placeholder="Repeat new password" required aria-label="Repeat new password">
+          <label class="check"><input type="checkbox" name="logoutAll" checked> <span>Log out all devices</span></label>
+          <div class="form-row"><button class="btn btn-primary">Change password</button><span class="ok" id="pwOk"></span></div>
+          <p class="err" id="pwErr"></p>
+        </form>
+      </section>
+
+      <section id="settings" class="panel">
+        <div class="panel-head"><h2>Settings</h2></div>
+        <div class="setting">
+          <div class="setting-text"><b>Device limit</b><small id="limitNote"></small></div>
+          <div class="form-row">
+            <div class="stepper">
+              <button type="button" data-step="-1" aria-label="Fewer devices">−</button>
+              <output id="limitOut" aria-live="polite">–</output>
+              <button type="button" data-step="1" aria-label="More devices">+</button>
+            </div>
+            <button type="button" class="btn" id="limitSave" disabled>Save</button>
+          </div>
+        </div>
+        <div class="setting">
+          <label class="setting-text switch-label" for="approval"><b>Approve new devices</b><small>A password login waits here until you approve it. QR logins skip this: scanning a code from this Mac proves you're here.</small></label>
+          <input type="checkbox" role="switch" class="switch" id="approval">
+        </div>
+        <div class="setting setting-col">
+          <div class="setting-text"><b>Log in a phone with a QR code</b><small>Works once, expires in <span id="qrTtl">10</span> minutes, and skips approval.</small></div>
+          <div class="form-row"><button type="button" class="btn" id="qrBtn">Show login QR</button></div>
+          <div class="qr" id="qr" hidden><div class="qr-code" id="qrCode"></div><code id="qrUrl"></code></div>
+          <p class="err" id="qrErr"></p>
+        </div>
+        <div class="setting setting-col">
+          <div class="setting-text"><b>Addresses</b><small>Phones on the same Wi-Fi can use either. Each address logs in separately.</small></div>
+          <dl class="urls" id="urls"></dl>
+        </div>
+        <p class="err" id="settingsErr"></p>
+      </section>
+    </div>
+
+    <section id="live" class="panel">
+      <div class="panel-head"><h2>Live</h2></div>
+      <div class="live" id="liveSections"></div>
+    </section>
+
+    <section id="service" class="panel">
+      <div class="panel-head"><h2>Service</h2><span class="count" id="svcLabel"></span></div>
+      <div id="svcBody"></div>
+      <pre class="output" id="svcOutput" hidden></pre>
+      <p class="err" id="svcErr"></p>
+      <div class="setting">
+        <div class="setting-text"><b>Stop Pocket Dev now</b><small>Every phone disconnects and every terminal ends. Start again with <code>npm start</code> or <code>npm run service:install</code>.</small></div>
+        <button type="button" class="btn btn-danger-outline" id="stopBtn">Stop Pocket Dev now</button>
+      </div>
+    </section>
+
+    <section id="lockdown" class="panel panel-danger">
+      <div class="lock">
+        <div>
+          <h2>Lockdown</h2>
+          <p>Logs out every device, including ones waiting for approval, stops every port forward, and cancels every login QR code. Blocked devices stay blocked. Terminals keep running on the Mac unless you tick the box. Afterwards, anyone with the password can log in again, so change it too if it leaked.</p>
+          <div id="lockOptions"></div>
+        </div>
+        <button type="button" class="btn btn-lock" id="lockBtn">Lock down now</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="ask">
+  <form method="dialog">
+    <h3 id="askTitle"></h3>
+    <p id="askBody"></p>
+    <div class="dialog-actions">
+      <button value="cancel" class="btn" id="askCancel">Cancel</button>
+      <button value="ok" class="btn btn-primary" id="askOk"></button>
+    </div>
+  </form>
+</dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
