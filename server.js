@@ -9,7 +9,7 @@ import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = path.join(ROOT, 'config.json');
+const CONFIG_PATH = process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json');
 const SCROLLBACK_MAX = 500_000;
 const BODY_MAX = 64_000;
 
@@ -23,6 +23,12 @@ function loadConfig() {
 }
 
 const config = loadConfig();
+
+function saveConfig() {
+  const tmp = `${CONFIG_PATH}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+  fs.renameSync(tmp, CONFIG_PATH);
+}
 const PASSWORD = process.env.POCKET_DEV_PASSWORD || config.password;
 const PORT = Number(process.env.PORT) || config.port || 7777;
 
@@ -53,13 +59,60 @@ function cookieToken(req) {
 
 const isAuthed = (req) => tokens.has(cookieToken(req));
 
+const HOME = os.homedir();
+const RECENT_MAX = 5;
+const PROJECT_ROOTS = [path.join(HOME, 'Desktop'), path.join(HOME, 'Desktop', 'Projects')];
+
+const expandHome = (p) => (p === '~' || p.startsWith('~/') ? HOME + p.slice(1) : p);
+const absDir = (p) => path.resolve(HOME, expandHome(p.trim()));
+const isDir = (p) => fs.statSync(p, { throwIfNoEntry: false })?.isDirectory() ?? false;
+const resolveDir = (p) => (typeof p === 'string' && p.trim() && isDir(absDir(p)) ? absDir(p) : null);
+
+const folderName = (dir) => (dir === HOME ? '~' : path.basename(dir) || dir);
+const folderView = (dir) => ({ name: folderName(dir), path: dir });
+
+function listProjects() {
+  const found = [];
+  for (const root of PROJECT_ROOTS) {
+    let entries;
+    try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name.startsWith('.') || e.name === 'node_modules') continue;
+      const dir = path.join(root, e.name);
+      if (fs.existsSync(path.join(dir, '.git')) || fs.existsSync(path.join(dir, 'package.json'))) found.push(dir);
+    }
+  }
+  return found.sort((a, b) => path.basename(a).localeCompare(path.basename(b), undefined, { sensitivity: 'base' }));
+}
+
+function listFolders() {
+  const existing = (list = []) => list.map(resolveDir).filter(Boolean).map(folderView);
+  return { home: HOME, pinned: existing(config.folders), recent: existing(config.recentFolders), projects: listProjects().map(folderView) };
+}
+
+function setPinned(dir, pinned) {
+  const list = config.folders ?? [];
+  if (list.includes(dir) === pinned) return;
+  config.folders = pinned ? [...list, dir] : list.filter((p) => p !== dir);
+  saveConfig();
+}
+
+// Home is always the sheet's first row, so keeping it out of recent leaves all five slots for real projects.
+function rememberRecent(dir) {
+  if (dir === HOME) return;
+  config.recentFolders = [dir, ...(config.recentFolders ?? []).filter((p) => p !== dir)].slice(0, RECENT_MAX);
+  saveConfig();
+}
+
 const sessions = new Map();
 
-function nextTitle() {
+function nextTitle(cwd) {
+  const base = folderName(cwd);
   const taken = new Set([...sessions.values()].map((s) => s.title));
-  let n = 1;
-  while (taken.has(`Terminal ${n}`)) n++;
-  return `Terminal ${n}`;
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base} ${n}`)) n++;
+  return `${base} ${n}`;
 }
 
 const broadcast = (session, msg) => {
@@ -90,7 +143,7 @@ function createSession(cwd) {
   });
   const session = {
     id: crypto.randomBytes(6).toString('hex'),
-    title: nextTitle(),
+    title: nextTitle(cwd),
     cwd,
     pty: proc,
     scrollback: '',
@@ -261,17 +314,29 @@ async function handleApi(req, res, pathname) {
     case 'GET sessions':
       return sendJson(res, 200, [...sessions.values()].map(sessionView));
     case 'POST sessions': {
-      const { cwd = os.homedir() } = await readJson(req);
-      if (typeof cwd !== 'string' || !fs.statSync(cwd, { throwIfNoEntry: false })?.isDirectory()) {
-        return sendJson(res, 400, { error: `Not a directory: ${cwd}` });
-      }
-      return sendJson(res, 201, sessionView(createSession(cwd)));
+      const { cwd = HOME } = await readJson(req);
+      const dir = resolveDir(cwd);
+      if (!dir) return sendJson(res, 400, { error: `Not a folder: ${cwd}` });
+      const session = createSession(dir);
+      rememberRecent(dir);
+      return sendJson(res, 201, sessionView(session));
     }
     case 'DELETE sessions/:key': {
       const session = sessions.get(key);
       if (!session) return sendJson(res, 404, { error: 'No such session' });
       destroySession(session);
       return sendJson(res, 204);
+    }
+    case 'GET folders':
+      return sendJson(res, 200, listFolders());
+    case 'PUT folders/:key': {
+      if (key !== 'pinned') return sendJson(res, 404, { error: 'Not found' });
+      const { path: given, pinned } = await readJson(req);
+      if (typeof pinned !== 'boolean') return sendJson(res, 400, { error: 'Expected { path, pinned }' });
+      const dir = resolveDir(given);
+      if (!dir) return sendJson(res, 400, { error: `Not a folder: ${given}` });
+      setPinned(dir, pinned);
+      return sendJson(res, 200, listFolders());
     }
     case 'GET forwards':
       return sendJson(res, 200, listForwards());
