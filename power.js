@@ -1,5 +1,4 @@
 import { spawn, execFile } from 'node:child_process';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -27,7 +26,7 @@ const MODE_FLAGS = { off: null, plugged: ['-s'], always: ['-i', '-s'] };
 const AWAKE_MODES = Object.keys(MODE_FLAGS);
 const DEFAULT_MODE = 'plugged';
 
-let configPath;
+let config;
 let mode = DEFAULT_MODE;
 let child = null;
 let sleepRequestedAt = null;
@@ -66,24 +65,17 @@ function converge() {
   spawnChild(target);
 }
 
-function saveMode() {
-  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  if (config.awake === mode) return;
-  config.awake = mode;
-  const tmp = `${configPath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
-  fs.renameSync(tmp, configPath);
-}
-
-export function startPower(file, savedMode) {
-  configPath = file;
-  mode = AWAKE_MODES.includes(savedMode) ? savedMode : DEFAULT_MODE;
+export function startPower(openedConfig) {
+  config = openedConfig;
+  const saved = config.read().awake;
+  mode = AWAKE_MODES.includes(saved) ? saved : DEFAULT_MODE;
   converge();
 }
 
+// update() throws when config.json is malformed; the mode then stays as it was.
 function setAwake(next) {
+  if (config.read().awake !== next) config.update({ awake: next });
   mode = next;
-  saveMode();
   converge();
 }
 

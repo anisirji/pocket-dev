@@ -575,7 +575,7 @@ setInterval(() => {
 }, 30_000).unref();
 
 ensureLocalSecret();
-startPower(config.file, config.read().awake);
+startPower(config);
 
 watchLanIp();
 server.listen(PORT, '0.0.0.0', async () => {
