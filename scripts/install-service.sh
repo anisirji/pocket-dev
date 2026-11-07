@@ -1,22 +1,62 @@
 #!/bin/bash
 # Installs Pocket Dev as a launchd agent that starts at login and restarts after a crash.
 # Rerunning rewrites the plist and restarts the server. Env overrides: LABEL, PORT, LOG.
+# --print writes the plist to stdout and changes nothing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO="$PWD"
 source scripts/service-common.sh
 
 FORCE=0
+PRINT=0
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
-    *) echo "usage: $0 [--force]" >&2; exit 2 ;;
+    --print) PRINT=1 ;;
+    *) echo "usage: $0 [--force] [--print]" >&2; exit 2 ;;
   esac
 done
 
 NODE="$(command -v node)" || { echo "node is not on PATH" >&2; exit 1; }
 PORT="${PORT:-$("$NODE" -e 'try { console.log(JSON.parse(require("fs").readFileSync("config.json")).port || 7777) } catch { console.log(7777) }')}"
 LOG="${LOG:-$HOME/Library/Logs/pocket-dev.log}"
+
+render_plist() {
+cat <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$NODE</string>
+    <string>$REPO/server.js</string>
+  </array>
+  <key>WorkingDirectory</key><string>$REPO</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>$LOG</string>
+  <key>StandardErrorPath</key><string>$LOG</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>LANG</key><string>en_US.UTF-8</string>
+    <key>HOME</key><string>$HOME</string>
+    <key>SHELL</key><string>/bin/zsh</string>
+    <key>USER</key><string>$(id -un)</string>
+    <key>PORT</key><string>$PORT</string>
+  </dict>
+</dict>
+</plist>
+PLIST
+}
+
+if [ "$PRINT" = 1 ]; then
+  render_plist
+  exit 0
+fi
 
 our_pid="$(job_field pid)"
 foreign=""
@@ -44,38 +84,7 @@ npm run --silent postinstall
 
 mkdir -p "$(dirname "$PLIST")" "$(dirname "$LOG")"
 tmp="$PLIST.tmp"
-cat >"$tmp" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/usr/bin/caffeinate</string>
-    <string>-i</string>
-    <string>-s</string>
-    <string>$NODE</string>
-    <string>$REPO/server.js</string>
-  </array>
-  <key>WorkingDirectory</key><string>$REPO</string>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>ThrottleInterval</key><integer>10</integer>
-  <key>StandardOutPath</key><string>$LOG</string>
-  <key>StandardErrorPath</key><string>$LOG</string>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-    <key>LANG</key><string>en_US.UTF-8</string>
-    <key>HOME</key><string>$HOME</string>
-    <key>SHELL</key><string>/bin/zsh</string>
-    <key>USER</key><string>$(id -un)</string>
-    <key>PORT</key><string>$PORT</string>
-  </dict>
-</dict>
-</plist>
-PLIST
+render_plist >"$tmp"
 plutil -lint -s "$tmp"
 
 if job_loaded && cmp -s "$tmp" "$PLIST"; then
