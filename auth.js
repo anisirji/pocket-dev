@@ -108,27 +108,29 @@ function parseDeviceName(v) {
   return name.length >= 1 && name.length <= 40 && !/[\x00-\x1f\x7f]/.test(name) ? name : null;
 }
 
-// `config` is the server's live config object; mutating it and calling saveConfig keeps one writer for config.json.
-export function createAuth({ config, saveConfig, port, lanIp }) {
+// `config` is the server's config store (config.js): read() at use time, update() writes only the keys auth owns.
+export function createAuth({ config, port, lanIp }) {
   const envPassword = process.env.POCKET_DEV_PASSWORD;
   let passwordLine = envPassword ? `Password: ${envPassword} (from POCKET_DEV_PASSWORD)` : 'Password: (set; change it in Settings)';
-  if (typeof config.password === 'string') {
-    config.passwordHash = hashPassword(config.password);
-    delete config.password;
-    saveConfig();
-  } else if (!config.passwordHash && !envPassword) {
+  const startup = config.read();
+  if (typeof startup.password === 'string') {
+    config.update({ password: undefined, passwordHash: hashPassword(startup.password) });
+  } else if (!startup.passwordHash && !envPassword) {
     const generated = crypto.randomBytes(9).toString('base64url');
-    config.passwordHash = hashPassword(generated);
-    saveConfig();
+    config.update({ passwordHash: hashPassword(generated) });
     passwordLine = `Password: ${generated}`;
   }
-  if (config.passwordHash !== undefined && !isPasswordHash(config.passwordHash)) {
+  const { passwordHash, maxDevices: startMax } = config.read();
+  if (passwordHash !== undefined && !isPasswordHash(passwordHash)) {
     throw new Error('config.json: passwordHash is malformed. Delete it and set "password" to migrate a new one.');
   }
-  if (config.maxDevices !== undefined && !isMaxDevices(config.maxDevices)) {
+  if (startMax !== undefined && !isMaxDevices(startMax)) {
     console.warn(`config.json: maxDevices must be a whole number from 1 to 20; using ${DEFAULT_MAX_DEVICES}.`);
   }
-  const maxDevices = () => (isMaxDevices(config.maxDevices) ? config.maxDevices : DEFAULT_MAX_DEVICES);
+  const maxDevices = () => {
+    const n = config.read().maxDevices;
+    return isMaxDevices(n) ? n : DEFAULT_MAX_DEVICES;
+  };
 
   const devices = loadDevices();
   const sockets = new Map();
@@ -228,7 +230,7 @@ export function createAuth({ config, saveConfig, port, lanIp }) {
     return bounceHome(addDevice(req, 'qr'));
   }
 
-  const passwordMatches = (given) => (envPassword ? sameSecret(given, envPassword) : verifyPassword(given, config.passwordHash));
+  const passwordMatches = (given) => (envPassword ? sameSecret(given, envPassword) : verifyPassword(given, config.read().passwordHash));
 
   const isLocalRequest = (req) => LOOPBACK.has(req.socket.remoteAddress)
     && !PROXY_HEADERS.some((h) => h in req.headers)
@@ -262,8 +264,7 @@ export function createAuth({ config, saveConfig, port, lanIp }) {
     async 'PUT /api/settings/max-devices'({ body }) {
       const { maxDevices: n } = await body();
       if (!isMaxDevices(n)) return reply(400, { error: 'The device limit must be a whole number from 1 to 20.' });
-      config.maxDevices = n;
-      saveConfig();
+      config.update({ maxDevices: n });
       return reply(200, { maxDevices: n });
     },
     async 'PATCH /api/devices/:id'({ id, body }) {
@@ -290,8 +291,7 @@ export function createAuth({ config, saveConfig, port, lanIp }) {
         await sleep(1000);
         return reply(403, { error: 'The current password is wrong.' });
       }
-      config.passwordHash = hashPassword(next);
-      saveConfig();
+      config.update({ passwordHash: hashPassword(next) });
       const others = logoutOthers ? [...devices.values()].filter((d) => d.id !== device.id) : [];
       for (const d of others) revoke(d.id);
       return reply(200, { ok: true, loggedOut: others.length });

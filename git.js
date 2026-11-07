@@ -44,12 +44,11 @@ const git = (repo, args, opts = {}) => run('git', ['-c', 'core.quotePath=false',
 const gh = (repo, args, opts = {}) => run('gh', args, repo, { status: 502, ...opts });
 const ghJson = async (repo, args, opts) => JSON.parse(await gh(repo, args, opts));
 
-function configuredRoots() {
+function configuredRoots(repoRoots) {
   if (process.env.POCKET_DEV_REPO_ROOTS) return process.env.POCKET_DEV_REPO_ROOTS.split(':').filter(Boolean);
-  try {
-    const { repoRoots } = JSON.parse(fs.readFileSync(new URL('./config.json', import.meta.url), 'utf8'));
-    if (Array.isArray(repoRoots)) return repoRoots.map((r) => r.replace(/^~(?=$|\/)/, os.homedir()));
-  } catch {}
+  if (Array.isArray(repoRoots) && repoRoots.every((r) => typeof r === 'string')) {
+    return repoRoots.map((r) => r.replace(/^~(?=$|\/)/, os.homedir()));
+  }
   const home = os.homedir();
   return [path.join(home, 'Desktop'), path.join(home, 'Desktop', 'Projects'), home];
 }
@@ -68,18 +67,18 @@ function scanDir(dir, depth, found) {
 }
 
 let scanCache = { at: 0, repos: [] };
-function scanRepos({ fresh = false } = {}) {
+function scanRepos(roots, { fresh = false } = {}) {
   if (!fresh && Date.now() - scanCache.at < SCAN_TTL_MS) return scanCache.repos;
   const found = new Map();
-  for (const root of configuredRoots()) scanDir(path.resolve(root), 0, found);
+  for (const root of roots) scanDir(path.resolve(root), 0, found);
   const repos = [...found.values()].sort((a, b) => a.name.localeCompare(b.name) || a.path.localeCompare(b.path));
   scanCache = { at: Date.now(), repos };
   return repos;
 }
 
-function resolveRepo(value) {
+function resolveRepo(roots, value) {
   if (typeof value !== 'string' || !value) throw new HttpError(400, 'repo is required');
-  const repo = scanRepos().find((r) => r.path === value) ?? scanRepos({ fresh: true }).find((r) => r.path === value);
+  const repo = scanRepos(roots).find((r) => r.path === value) ?? scanRepos(roots, { fresh: true }).find((r) => r.path === value);
   if (!repo) throw new HttpError(403, `Not a known repository: ${value}`);
   return repo.path;
 }
@@ -397,17 +396,21 @@ const ROUTES = {
   'POST pr/reopen': prState('reopen'),
 };
 
-// Returns { status, body } so server.js keeps owning HTTP and auth; readBody parses the JSON request body.
-export async function handleGitApi(method, url, readBody) {
-  const key = `${method} ${url.pathname.replace(/^\/api\/git\//, '')}`;
-  try {
-    if (key === 'GET repos') return { status: 200, body: scanRepos({ fresh: true }) };
-    const route = ROUTES[key];
-    if (!route) return { status: 404, body: { error: 'Not found' } };
-    const repo = resolveRepo(url.searchParams.get('repo'));
-    const body = method === 'POST' ? await readBody() : {};
-    return { status: 200, body: await route({ repo, q: url.searchParams, body }) };
-  } catch (err) {
-    return { status: err.status ?? 400, body: { error: err.message } };
-  }
+// handleGitApi returns { status, body } so server.js keeps owning HTTP and auth; readBody parses the JSON request body.
+// `config` is the server's config store; repoRoots is read from it on every scan, so hand edits apply without a restart.
+export function createGitApi({ config }) {
+  return async function handleGitApi(method, url, readBody) {
+    const key = `${method} ${url.pathname.replace(/^\/api\/git\//, '')}`;
+    const roots = configuredRoots(config.read().repoRoots);
+    try {
+      if (key === 'GET repos') return { status: 200, body: scanRepos(roots, { fresh: true }) };
+      const route = ROUTES[key];
+      if (!route) return { status: 404, body: { error: 'Not found' } };
+      const repo = resolveRepo(roots, url.searchParams.get('repo'));
+      const body = method === 'POST' ? await readBody() : {};
+      return { status: 200, body: await route({ repo, q: url.searchParams, body }) };
+    } catch (err) {
+      return { status: err.status ?? 400, body: { error: err.message } };
+    }
+  };
 }

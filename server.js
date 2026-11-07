@@ -8,35 +8,19 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
-import { handleGitApi } from './git.js';
+import { createGitApi } from './git.js';
 import { createHistoryApi } from './history.js';
 import { createAuth, QR_TTL_MIN } from './auth.js';
 import { terminalQr, qrNote } from './qr.js';
+import { openConfig } from './config.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json');
 const SCROLLBACK_MAX = 500_000;
 const BODY_MAX = 64_000;
 const UPLOAD_MAX = 25 * 1024 * 1024;
 
-function loadConfig() {
-  if (!fs.existsSync(CONFIG_PATH)) {
-    const fresh = { port: 7777 };
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(fresh, null, 2) + '\n', { mode: 0o600 });
-    console.log(`Created ${CONFIG_PATH}`);
-  }
-  return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-}
-
-const config = loadConfig();
-
-function saveConfig() {
-  const tmp = `${CONFIG_PATH}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
-  fs.renameSync(tmp, CONFIG_PATH);
-}
-const PORT = Number(process.env.PORT) || config.port || 7777;
-
+const config = openConfig(process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json'));
+const PORT = Number(process.env.PORT) || config.read().port || 7777;
 
 function lanIp() {
   const ifaces = os.networkInterfaces();
@@ -49,7 +33,7 @@ function lanIp() {
   return '127.0.0.1';
 }
 
-const auth = createAuth({ config, saveConfig, port: PORT, lanIp });
+const auth = createAuth({ config, port: PORT, lanIp });
 
 const HOME = os.homedir();
 const RECENT_MAX = 5;
@@ -77,33 +61,52 @@ function listProjects() {
   return found.sort((a, b) => path.basename(a).localeCompare(path.basename(b), undefined, { sensitivity: 'base' }));
 }
 
-function listFolders() {
-  const existing = (list) => list.map(resolveDir).filter(Boolean).map(folderView);
-  return { home: HOME, pinned: existing(config.folders), recent: existing(config.recentFolders), projects: listProjects().map(folderView) };
+const DEFAULT_SHORTCUTS = ['claude', 'codex', 'npm run dev', 'git status', 'git pull'];
+const isShortcut = (s) => typeof s === 'string' && s.trim() !== '' && s.length <= 200 && !/[\x00-\x1f\x7f]/.test(s);
+const isShortcutList = (v) => Array.isArray(v) && v.length <= 30 && v.every(isShortcut);
+const stringsIn = (v) => (Array.isArray(v) ? v.filter((p) => typeof p === 'string') : undefined);
+// Each parser returns what it can use from a hand-edited value, or undefined when nothing is usable.
+const LISTS = {
+  folders: { parse: stringsIn, fallback: [] },
+  recentFolders: { parse: stringsIn, fallback: [] },
+  shortcuts: { parse: (v) => (isShortcutList(v) ? v : undefined), fallback: DEFAULT_SHORTCUTS },
+};
+// The fallback is for this read only; the malformed value stays in config.json until the user fixes it or edits that list.
+function readList(key) {
+  const value = config.read()[key];
+  return (value === undefined ? undefined : LISTS[key].parse(value)) ?? LISTS[key].fallback;
+}
+for (const [key, { parse }] of Object.entries(LISTS)) {
+  const value = config.read()[key];
+  if (value !== undefined && parse(value)?.length !== value.length) {
+    console.warn(`config.json: ${key} is malformed. Pocket Dev ignores what it cannot use and leaves the file as it is.`);
+  }
 }
 
+function listFolders() {
+  const existing = (list) => [...new Set(list.map(resolveDir).filter(Boolean))].map(folderView);
+  return { home: HOME, pinned: existing(readList('folders')), recent: existing(readList('recentFolders')), projects: listProjects().map(folderView) };
+}
+
+// Hand-written entries such as "~/app" name the same folder as the resolved path the page sends back. Edits start
+// from the raw list so entries Pocket Dev cannot read stay in the file.
+const isEntryFor = (dir) => (p) => typeof p === 'string' && absDir(p) === dir;
+const rawList = (key) => {
+  const value = config.read()[key];
+  return Array.isArray(value) ? value : [];
+};
+
 function setPinned(dir, pinned) {
-  if (config.folders.includes(dir) === pinned) return;
-  config.folders = pinned ? [...config.folders, dir] : config.folders.filter((p) => p !== dir);
-  saveConfig();
+  const list = rawList('folders');
+  if (list.some(isEntryFor(dir)) === pinned) return;
+  config.update({ folders: pinned ? [...list, dir] : list.filter((p) => !isEntryFor(dir)(p)) });
 }
 
 // Home is always the sheet's first row, so keeping it out of recent leaves all five slots for real projects.
 function rememberRecent(dir) {
   if (dir === HOME) return;
-  config.recentFolders = [dir, ...config.recentFolders.filter((p) => p !== dir)].slice(0, RECENT_MAX);
-  saveConfig();
+  config.update({ recentFolders: [dir, ...rawList('recentFolders').filter((p) => !isEntryFor(dir)(p))].slice(0, RECENT_MAX) });
 }
-
-const DEFAULT_SHORTCUTS = ['claude', 'codex', 'npm run dev', 'git status', 'git pull'];
-const isShortcut = (s) => typeof s === 'string' && s.trim() !== '' && s.length <= 200 && !/[\x00-\x1f\x7f]/.test(s);
-const isShortcutList = (v) => Array.isArray(v) && v.length <= 30 && v.every(isShortcut);
-const isPathList = (v) => Array.isArray(v) && v.every((p) => typeof p === 'string');
-
-// config.json is edited by hand too; malformed lists fall back here once so the handlers can trust them.
-if (!isPathList(config.folders)) config.folders = [];
-if (!isPathList(config.recentFolders)) config.recentFolders = [];
-if (!isShortcutList(config.shortcuts)) config.shortcuts = DEFAULT_SHORTCUTS;
 
 const UPLOAD_DIR = path.join(HOME, '.pocket-dev', 'uploads');
 
@@ -354,7 +357,7 @@ async function handleApi(req, res, url) {
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
   if (resource === 'git') {
-    const { status, body } = await handleGitApi(req.method, url, () => readJson(req));
+    const { status, body } = await handleGit(req.method, url, () => readJson(req));
     return sendJson(res, status, body);
   }
   if (resource === 'history') return handleHistory(req, res, url.pathname);
@@ -390,14 +393,13 @@ async function handleApi(req, res, url) {
     case 'POST upload':
       return upload(req, res);
     case 'GET shortcuts':
-      return sendJson(res, 200, config.shortcuts);
+      return sendJson(res, 200, readList('shortcuts'));
     case 'PUT shortcuts': {
       const list = await readJson(req);
       if (!isShortcutList(list)) {
         return sendJson(res, 400, { error: 'Shortcuts must be a list of up to 30 one-line commands, each 1 to 200 characters.' });
       }
-      config.shortcuts = list;
-      saveConfig();
+      config.update({ shortcuts: list });
       return sendJson(res, 200, list);
     }
     case 'GET forwards':
@@ -420,6 +422,7 @@ async function handleApi(req, res, url) {
   }
 }
 
+const handleGit = createGitApi({ config });
 const handleHistory = createHistoryApi({ createSession, sessionView, sendJson });
 
 const PAGES = {
