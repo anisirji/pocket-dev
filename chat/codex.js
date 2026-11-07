@@ -161,6 +161,7 @@ export function createCodexEngine(chat) {
   let threadModel = null;
   const model = () => (chat.settings.model === 'default' ? null : chat.settings.model);
 
+  const withCwd = (command, cwd) => (cwd && cwd !== chat.cwd ? `${command}\n\nin ${cwd}` : command);
   const reply = (id, result) => server.write({ id, result });
 
   function ensureThinking(id) {
@@ -184,7 +185,7 @@ export function createCodexEngine(chat) {
     commandExecution: {
       started: (item) => chat.emit({
         id: item.id, type: 'tool-run', name: 'Shell', summary: unwrapShell(item.command),
-        input: `${unwrapShell(item.command)}\n\nin ${item.cwd}`, output: '', status: 'running',
+        input: withCwd(unwrapShell(item.command), item.cwd), output: '', status: 'running',
       }),
       completed: (item) => chat.update(item.id, {
         status: item.status === 'completed' && item.exitCode ? 'error' : ITEM_STATUS[item.status],
@@ -286,7 +287,7 @@ export function createCodexEngine(chat) {
   const REQUESTS = {
     'item/commandExecution/requestApproval': (id, p) => approve(id, p, {
       grantKey: `command:${unwrapShell(p.command ?? '')}`, kind: 'command',
-      title: p.reason || 'Run command', detail: `${unwrapShell(p.command ?? '')}\n\nin ${p.cwd ?? chat.cwd}`,
+      title: `Run ${unwrapShell(p.command ?? '')}`, detail: [p.reason, withCwd(unwrapShell(p.command ?? ''), p.cwd)].filter(Boolean).join('\n\n'),
       fallback: ['accept', 'acceptForSession', 'decline', 'cancel'],
     }),
     'item/fileChange/requestApproval': (id, p) => {

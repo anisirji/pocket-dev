@@ -94,19 +94,20 @@ export function removeProjectRule(cwd, file, rule) {
   fs.renameSync(tmp, full);
 }
 
-const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const ruleString = (r) => (r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName);
 
-// "Always allow" remembers the rule the CLI suggests (such as Bash(npm test:*)). For file edits the CLI suggests
-// switching to acceptEdits instead, which would change the mode chip, so remember an Edit rule, which covers every
-// file-editing tool.
-function rememberRules(toolName, suggestions) {
+// "Always allow" offers what Claude Code's own prompt offers. Usually that is a rule such as Bash(npm test:*), kept for
+// this chat or written to the project. For file edits the CLI suggests only switching this session to acceptEdits (a
+// bare Edit rule does not cover Write), so those cards have no project option and the chat switches mode.
+function remembering(toolName, suggestions) {
   const rules = suggestions.filter((u) => u.type === 'addRules' && u.behavior === 'allow').flatMap((u) => u.rules);
-  return rules.length ? rules : [{ toolName: EDIT_TOOLS.has(toolName) ? 'Edit' : toolName }];
+  const modeSwitch = suggestions.find((u) => u.type === 'setMode');
+  if (!rules.length && modeSwitch) return { mode: modeSwitch.mode };
+  return { rules: rules.length ? rules : [{ toolName }] };
 }
 
-const rememberUpdates = (toolName, suggestions, destination) => [
-  { type: 'addRules', rules: rememberRules(toolName, suggestions), behavior: 'allow', destination },
+const rememberUpdates = ({ rules, mode }, suggestions, destination) => [
+  rules ? { type: 'addRules', rules, behavior: 'allow', destination } : { type: 'setMode', mode, destination },
   ...suggestions.filter((u) => u.type === 'addDirectories').map((u) => ({ ...u, destination })),
 ];
 
@@ -132,7 +133,7 @@ const DIFF = {
   Write: (i) => lineDiff('', i.content),
 };
 
-const describeInput = (name, input) => (name === 'Bash' ? input.command : cap(input, INPUT_MAX));
+const describeInput = (name, input) => (name === 'Bash' ? input.command : DIFF[name] ? input.file_path ?? input.notebook_path : cap(input, INPUT_MAX));
 
 function resultText(content) {
   if (typeof content === 'string') return content;
@@ -191,24 +192,28 @@ export function createClaudeEngine(chat) {
     return { behavior: 'allow', updatedInput: { ...toolInput, answers } };
   }
 
+  // Paths inside the chat folder read better on a phone relative to it.
+  const inFolder = (text) => text.split(`${chat.cwd}/`).join('');
+
   async function canUseTool(toolName, toolInput, { signal, suggestions = [], toolUseID, title, description }) {
     if (toolName === 'AskUserQuestion') return askQuestion(toolInput, signal);
     const plan = toolName === 'ExitPlanMode';
+    const remember = remembering(toolName, suggestions);
     const options = plan
       ? [{ id: 'allow', label: 'Start working' }, { id: 'deny', label: 'Keep planning' }]
       : [
         { id: 'allow', label: 'Allow once' },
-        { id: 'allow-chat', label: 'Always allow in this chat' },
-        { id: 'allow-project', label: 'Always allow in this project' },
+        { id: 'allow-chat', label: remember.mode ? 'Allow all edits in this chat' : 'Always allow in this chat' },
+        ...(remember.rules ? [{ id: 'allow-project', label: 'Always allow in this project' }] : []),
         { id: 'deny', label: 'Deny' },
       ];
     const res = await chat.ask({
       type: 'permission-request',
       kind: plan ? 'plan' : toolName === 'Bash' ? 'command' : DIFF[toolName] ? 'file' : 'tool',
-      title: plan ? 'Claude is ready to start' : title || `${toolName} ${summarize(toolName, toolInput)}`,
-      detail: plan ? toolInput.plan ?? '' : [description, describeInput(toolName, toolInput)].filter(Boolean).join('\n\n'),
+      title: plan ? 'Claude is ready to start' : inFolder(title || `${toolName} ${summarize(toolName, toolInput)}`),
+      detail: plan ? toolInput.plan ?? '' : [DIFF[toolName] ? '' : description, describeInput(toolName, toolInput)].filter(Boolean).join('\n\n'),
       diff: DIFF[toolName] && cap(DIFF[toolName](toolInput)),
-      rule: plan ? undefined : rememberRules(toolName, suggestions).map(ruleString).join(', '),
+      rule: plan ? undefined : remember.rules?.map(ruleString).join(', ') ?? `${remember.mode} mode`,
       options,
     }, signal);
     if (res.cancelled) return { behavior: 'deny', message: 'The request was cancelled.', interrupt: true };
@@ -223,8 +228,9 @@ export function createClaudeEngine(chat) {
       return { behavior: 'allow', updatedInput: toolInput, updatedPermissions: suggestions };
     }
     if (res.decision === 'allow-chat' || res.decision === 'allow-project') {
-      const updates = rememberUpdates(toolName, suggestions, res.decision === 'allow-chat' ? 'session' : 'localSettings');
-      if (res.decision === 'allow-chat') for (const r of updates[0].rules) chat.addGrant(ruleString(r));
+      const updates = rememberUpdates(remember, suggestions, res.decision === 'allow-chat' ? 'session' : 'localSettings');
+      if (remember.mode) chat.settings = { ...chat.settings, mode: remember.mode };
+      else if (res.decision === 'allow-chat') for (const r of remember.rules) chat.addGrant(ruleString(r));
       chat.changed();
       return { behavior: 'allow', updatedInput: toolInput, updatedPermissions: updates };
     }
