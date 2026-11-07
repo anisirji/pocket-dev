@@ -30,8 +30,8 @@ const MIME = {
 };
 const mimeOf = (name) => MIME[path.extname(name).slice(1).toLowerCase()] ?? 'application/octet-stream';
 
-// Inline responses come from the Pocket Dev origin, so a previewed HTML or SVG file must not run script there:
-// markup is served as text, and everything but PDF (whose viewer the sandbox blocks) gets a CSP sandbox.
+// Inline responses come from the Pocket Dev origin, so a previewed file must not run script there: markup is served
+// as text, and every response gets a CSP sandbox (Chrome's PDF viewer still renders under it).
 const INLINE_AS_IS = /^(image\/(?!svg)|video\/|audio\/|application\/pdf$)/;
 function inlineType(mime) {
   if (INLINE_AS_IS.test(mime) || mime === 'image/svg+xml') return mime;
@@ -278,8 +278,8 @@ export function createFilesApi({ sendJson, readJson, config }) {
       'cache-control': 'no-store',
       'last-modified': st.mtime.toUTCString(),
       'x-content-type-options': 'nosniff',
+      'content-security-policy': 'sandbox',
     };
-    if (mime !== 'application/pdf') headers['content-security-policy'] = 'sandbox';
     const range = rangeOf(req.headers.range, st.size);
     if (range.status === 416) {
       res.writeHead(416, { ...headers, 'content-range': `bytes */${st.size}` });

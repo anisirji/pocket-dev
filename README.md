@@ -112,7 +112,7 @@ You can add these keys to `config.json`:
 - macOS protects Desktop, Documents and Downloads. When the server runs as a launchd agent, those folders can show "macOS blocked access". To fix it, give `node` Full Disk Access in System Settings > Privacy & Security.
 - A symlink that points outside the shared folders is listed but cannot be opened. A zip leaves such links out. A link to a file inside the shared folders goes into the zip as a copy of that file. Zips do not include links to folders.
 - Zip stores file names as UTF-8 bytes without the UTF-8 flag, because the macOS `zip` has no Unicode support. macOS unzips such names correctly. Tools that rely on the flag, such as Windows Explorer, can show non-ASCII names garbled.
-- Previews do not run code. HTML and other markup show as text, and every preview except PDF is served with a CSP sandbox.
+- Previews do not run code. HTML and other markup show as text, and every preview is served with a CSP sandbox.
 - If a PDF does not show in the preview, tap **Open PDF in a new tab**.
 
 ## Limits
