@@ -1,4 +1,5 @@
-.apps-sheet { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; height: 100dvh; background: var(--bg); color: var(--text); }
+/* Above the sleep and shutdown screen (z-index 1000), whose "See open apps" opens this sheet. */
+.apps-sheet { position: fixed; inset: 0; z-index: 1100; display: flex; flex-direction: column; height: 100dvh; background: var(--bg); color: var(--text); }
 .apps-sheet [hidden] { display: none !important; }
 .apps-bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .apps-bar h2 { flex: 1; min-width: 0; margin: 0 4px; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

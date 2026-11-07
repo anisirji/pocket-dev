@@ -8,16 +8,8 @@
     return node;
   };
 
-  async function request(method, url) {
-    const res = await fetch(url, { method });
-    if (res.status === 401) {
-      location.replace('/login.html');
-      throw new Error('Not logged in');
-    }
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    return data;
-  }
+  const { api } = window;
+  const { overlays } = window.pocketDev;
 
   const formatMem = (mb) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`);
   const usageLine = (app) => `${formatMem(app.memMB)} · ${app.cpu}% CPU`;
@@ -56,9 +48,9 @@
     const title = el('h2', null, 'Open apps');
     const refresh = el('button', 'apps-btn', 'Refresh');
     const close = el('button', 'apps-btn', 'Close');
-    back.onclick = () => history.back();
+    back.onclick = () => overlays.close('apps-detail');
     refresh.onclick = () => (state.view === 'detail' ? loadWindows() : loadList());
-    close.onclick = () => history.go(state.view === 'detail' ? -2 : -1);
+    close.onclick = () => overlays.close('apps');
     bar.append(back, title, refresh, close);
     const scroll = el('div', 'apps-scroll');
     const actions = el('div', 'apps-actions');
@@ -147,7 +139,7 @@
 
   async function loadList() {
     try {
-      const { apps } = await request('GET', '/api/apps');
+      const { apps } = await api('GET', '/api/apps');
       state.apps = apps;
       state.listError = null;
     } catch (err) {
@@ -160,7 +152,7 @@
     const { pid } = state.app;
     let windows;
     try {
-      windows = await request('GET', `/api/apps/${pid}/windows`);
+      windows = await api('GET', `/api/apps/${pid}/windows`);
     } catch (err) {
       windows = { error: err.message };
     }
@@ -188,7 +180,7 @@
     render();
     let notice;
     try {
-      const { result } = await request('POST', `/api/apps/${app.pid}/${action}`);
+      const { result } = await api('POST', `/api/apps/${app.pid}/${action}`);
       notice = OUTCOMES[action][result](app.name);
     } catch (err) {
       notice = { kind: 'error', text: err.message };
@@ -197,7 +189,7 @@
     if (state.view === 'closed') return;
     state.notice = notice;
     if (notice.kind === 'ok') state.apps = state.apps.filter((a) => a.pid !== app.pid);
-    if (notice.kind === 'ok' && state.view === 'detail' && state.app.pid === app.pid) history.back();
+    if (notice.kind === 'ok' && state.view === 'detail' && state.app.pid === app.pid) overlays.close('apps-detail');
     else render();
     loadList();
   }
@@ -209,29 +201,26 @@
     if (view === 'detail') loadWindows();
   }
 
+  // The list and the detail are two levels of the shared overlay stack, so back leaves the detail first.
   function openDetail(app) {
     state.notice = null;
-    history.pushState({ pdApps: 'detail', app }, '');
+    overlays.open('apps-detail', () => {
+      if (state.notice?.kind !== 'ok') state.notice = null;
+      show('list');
+    });
     show('detail', app);
   }
 
-  window.addEventListener('popstate', (e) => {
-    if (state.view === 'closed') return;
-    const view = e.state?.pdApps;
-    if (view === 'detail') return show('detail', e.state.app);
-    if (view === 'list') {
-      if (state.view === 'detail' && state.notice?.kind !== 'ok') state.notice = null;
-      return show('list');
-    }
+  function closeSheet() {
     clearInterval(state.timer);
     Object.assign(state, { view: 'closed', apps: [], listError: null, notice: null, app: null, windows: null, busy: null });
     render();
-  });
+  }
 
   window.openAppsSheet = () => {
     if (state.view !== 'closed') return;
     document.activeElement?.blur();
-    history.pushState({ pdApps: 'list' }, '');
+    overlays.open('apps', closeSheet);
     show('list');
     loadList();
     state.timer = setInterval(() => {
