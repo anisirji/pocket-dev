@@ -468,9 +468,10 @@ $('latest').addEventListener('click', () => {
 });
 keepFocus($('latest'));
 
-// Every overlay (the folder and shortcut sheets, the copy view, Resume and its detail, Settings) is one level of this
-// stack and owns one history entry, so Android's back gesture closes only the topmost one. history.back() lands later,
-// in a popstate; history calls run one at a time so an overlay opened before that popstate is not closed by it.
+// Every overlay (the folder and shortcut sheets, the copy view, Resume and its detail, Settings, Open apps and its
+// detail) is one level of this stack and owns one history entry, so Android's back gesture closes only the topmost
+// one. history.back() lands later, in a popstate; history calls run one at a time so an overlay opened before that
+// popstate is not closed by it.
 const overlays = (() => {
   const PAGE = Math.random().toString(36).slice(2);
   const stack = [];
