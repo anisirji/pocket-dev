@@ -14,6 +14,7 @@ import { createAuth, QR_TTL_MIN } from './auth.js';
 import { terminalQr, qrNote } from './qr.js';
 import { openConfig } from './config.js';
 import { startPower, handlePowerApi } from './power.js';
+import { createAppsApi } from './apps.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SCROLLBACK_MAX = 500_000;
@@ -442,6 +443,7 @@ async function handleApi(req, res, url) {
     return sendJson(res, status, body);
   }
   if (resource === 'history') return handleHistory(req, res, url.pathname);
+  if (resource === 'apps') return handleApps(req, res, url);
   if (resource === 'power') return handlePowerApi(req, res, key, { readJson, sendJson, wss, sessions });
 
   switch (route) {
@@ -506,12 +508,14 @@ async function handleApi(req, res, url) {
 
 const handleGit = createGitApi({ config });
 const handleHistory = createHistoryApi({ createSession, sessionView, sendJson });
+const handleApps = createAppsApi({ sendJson });
 
 const PAGES = {
   '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html',
   '/git.js': 'git.js', '/graph.js': 'graph.js', '/git.css': 'git.css',
   '/history.js': 'history.js', '/history.css': 'history.css',
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
+  '/apps.js': 'apps.js', '/apps.css': 'apps.css',
 };
 const PUBLIC_PAGES = new Set(['login.html']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };

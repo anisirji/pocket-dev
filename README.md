@@ -197,6 +197,33 @@ Tap the branch icon (**Git**) at the top left. The terminal icon next to it swit
 - To create a pull request from a branch that is not on GitHub yet, Pocket Dev runs `git push -u origin <branch>` first.
 - GitHub does not let you approve your own pull request. The error from GitHub shows in red.
 
+## Open apps
+
+Tap **Apps** to see the apps that are open on the Mac. The list shows the same apps as the Mac's Force Quit window, with the memory and CPU of each app's whole process tree. The app in front comes first. The list refreshes every 10 seconds while it is open.
+
+Tap an app to see its windows and, for document apps, the file each window shows. Then:
+
+- **Quit** asks the app to quit, like Cmd+Q. If the app is still running after about 8 seconds, it is probably waiting at a "Save changes?" prompt on the Mac, or it refused.
+- **Force quit** sends SIGTERM, then SIGKILL after 3 seconds. Unsaved work in the app is lost.
+
+Pocket Dev never quits these apps:
+
+- Finder, Dock, SystemUIServer, loginwindow, WindowServer, ControlCenter, NotificationCenter, and Spotlight.
+- The app that Pocket Dev runs inside. If you started the server from Terminal or VS Code, quitting that app would stop the server.
+
+### Permissions
+
+The app list and Quit need no permissions. The window list needs two one-time grants on the Mac. The page shows which one is missing.
+
+| Permission | Where to turn it on |
+| --- | --- |
+| Automation for System Events | System Settings → Privacy & Security → Automation → the app that runs Pocket Dev → System Events |
+| Accessibility | System Settings → Privacy & Security → Accessibility → the app that runs Pocket Dev |
+
+The app that runs Pocket Dev is `node` for the launchd service. For a server that you started by hand, it is your terminal app, for example Terminal or VS Code. The two need separate grants. If `node` is not in the Accessibility list, click **+** and add the `node` binary that `which node` prints.
+
+Windows on another Space may not appear in the list.
+
 ## Limits
 
 - Forwarded ports have no password. Anyone on your Wi-Fi can reach them while they are open. Stop a forward with the ✕ on its chip.
