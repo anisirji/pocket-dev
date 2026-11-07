@@ -59,7 +59,8 @@ const jxa = async (script, ...args) => JSON.parse(await run(OSASCRIPT, ['-l', 'J
 function permissionNeeded(err) {
   const text = `${err.stderr ?? ''} ${err.message}`;
   if (/-1743|Not authorized to send Apple events/i.test(text)) return 'needs-automation';
-  if (/-1719|-25211|assistive access/i.test(text)) return 'needs-accessibility';
+  // -1719 alone is also "invalid index", so only the assistive-access wording counts.
+  if (/-25211|assistive access/i.test(text)) return 'needs-accessibility';
   return null;
 }
 
@@ -182,7 +183,7 @@ async function forceQuit(app) {
 // AXDocument is a file:// URL for document apps; anything else (a web URL, say) passes through as is.
 function windowView({ title, document }) {
   const path = document?.startsWith('file://') ? decodeURIComponent(new URL(document).pathname) : document;
-  return path ? { title: title ?? '', document: path } : { title: title ?? '' };
+  return { title: title ?? '', ...(path && { document: path }) };
 }
 
 const ACTIONS = { quit, 'force-quit': forceQuit };
