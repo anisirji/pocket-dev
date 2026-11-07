@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
+import { handleGitApi } from './git.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(ROOT, 'config.json');
@@ -250,12 +251,16 @@ function parsePort(value) {
   return { port };
 }
 
-async function handleApi(req, res, pathname) {
-  const [, , resource, key] = pathname.split('/');
+async function handleApi(req, res, url) {
+  const [, , resource, key] = url.pathname.split('/');
   const route = `${req.method} ${resource}${key ? '/:key' : ''}`;
 
   if (route === 'POST login') return login(req, res);
   if (!isAuthed(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  if (resource === 'git') {
+    const { status, body } = await handleGitApi(req.method, url, () => readJson(req));
+    return sendJson(res, status, body);
+  }
 
   switch (route) {
     case 'GET sessions':
@@ -293,24 +298,30 @@ async function handleApi(req, res, pathname) {
   }
 }
 
-const PAGES = { '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html' };
+const PAGES = {
+  '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html',
+  '/git.js': 'git.js', '/graph.js': 'graph.js', '/git.css': 'git.css',
+};
+const PUBLIC_PAGES = new Set(['login.html']);
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function servePage(req, res, pathname) {
   const file = PAGES[pathname];
   if (!file || req.method !== 'GET') return sendJson(res, 404, { error: 'Not found' });
-  if (file === 'index.html' && !isAuthed(req)) {
+  if (!PUBLIC_PAGES.has(file) && !isAuthed(req)) {
+    if (!file.endsWith('.html')) return sendJson(res, 401, { error: 'Not logged in' });
     res.writeHead(302, { location: '/login.html' });
     return res.end();
   }
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store' });
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
 const server = http.createServer(async (req, res) => {
-  const { pathname } = new URL(req.url, 'http://localhost');
+  const url = new URL(req.url, 'http://localhost');
   try {
-    if (pathname.startsWith('/api/')) await handleApi(req, res, pathname);
-    else servePage(req, res, pathname);
+    if (url.pathname.startsWith('/api/')) await handleApi(req, res, url);
+    else servePage(req, res, url.pathname);
   } catch (err) {
     if (!res.headersSent) sendJson(res, 400, { error: err.message });
   }

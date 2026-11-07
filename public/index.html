@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.css">
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10/lib/addon-fit.js"></script>
+<link rel="stylesheet" href="/git.css">
+<script type="module" src="/git.js"></script>
 <style>
   :root {
     --bg: #0b0e14; --panel: #131823; --panel-2: #1b2130; --line: #252d3c;
@@ -69,6 +71,9 @@
 <body>
 <div id="app">
   <header>
+    <div id="viewSwitch" role="group" aria-label="View">
+      <button data-view="terminal">Terminal</button><button data-view="git">Git</button>
+    </div>
     <div id="tabs"></div>
     <button id="new" class="icon-btn" aria-label="New terminal">+</button>
     <button id="portsBtn" class="icon-btn">Ports<span id="portsCount"></span></button>
@@ -101,8 +106,8 @@ const h = (tag, cls, text) => {
 };
 
 const store = {
-  get() { try { return localStorage.getItem('pd.active'); } catch { return null; } },
-  set(id) { try { localStorage.setItem('pd.active', id); } catch {} },
+  get(key) { try { return localStorage.getItem(key); } catch { return null; } },
+  set(key, value) { try { localStorage.setItem(key, value); } catch {} },
 };
 
 async function api(method, url, body) {
@@ -163,7 +168,7 @@ function connect(view) {
   ws.onopen = () => {
     view.online = view.everOnline = true;
     view.term.reset();
-    sendMsg(view, { t: 'resize', cols: view.term.cols, rows: view.term.rows });
+    if (terminalShown()) sendMsg(view, { t: 'resize', cols: view.term.cols, rows: view.term.rows });
     renderBadge();
   };
   ws.onmessage = (e) => {
@@ -232,7 +237,7 @@ async function closeSession(view) {
 
 function activate(id) {
   activeId = id;
-  store.set(id);
+  store.set('pd.active', id);
   for (const v of views.values()) v.el.classList.toggle('active', v.id === id);
   renderTabs();
   renderBadge();
@@ -267,9 +272,11 @@ function renderLatest() {
   $('latest').hidden = !buf || buf.viewportY >= buf.baseY;
 }
 
+const terminalShown = () => $('app').dataset.view !== 'git';
+
 function fitView(view) {
-  // A hidden tab can be laid out at a bogus width and would push that size to the shared shell.
-  if (document.hidden) return;
+  // A hidden page or the Git view lays terminals out at a bogus size, which would be pushed to the shared shell.
+  if (document.hidden || !terminalShown()) return;
   try { view.fit.fit(); } catch {}
 }
 
@@ -427,6 +434,28 @@ $('portForm').addEventListener('submit', async (e) => {
   refreshForwards();
 });
 
+// git.js builds the Git view and listens for pd:view to load it the first time it is shown.
+function setView(view) {
+  $('app').dataset.view = view;
+  store.set('pd.view', view);
+  for (const b of $('viewSwitch').children) {
+    b.classList.toggle('on', b.dataset.view === view);
+    b.setAttribute('aria-pressed', String(b.dataset.view === view));
+  }
+  window.dispatchEvent(new CustomEvent('pd:view', { detail: view }));
+  if (view !== 'terminal') return;
+  // A socket that connected while the Git view was up never told the shell its size.
+  requestAnimationFrame(() => {
+    for (const v of views.values()) {
+      fitView(v);
+      sendMsg(v, { t: 'resize', cols: v.term.cols, rows: v.term.rows });
+    }
+    renderLatest();
+  });
+}
+for (const b of $('viewSwitch').children) b.addEventListener('click', () => setView(b.dataset.view));
+setView(store.get('pd.view') === 'git' ? 'git' : 'terminal');
+
 const vv = window.visualViewport;
 function onViewportChange() {
   if (vv) {
@@ -453,7 +482,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 (async () => {
-  const stored = store.get();
+  const stored = store.get('pd.active');
   await syncSessions();
   if (!views.size) await newSession();
   activate(views.has(stored) ? stored : activeId);

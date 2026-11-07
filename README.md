@@ -81,6 +81,18 @@ The forward is a raw TCP pipe from `<mac-ip>:3000` to `localhost:3000`. It tries
 
 If the dev server already listens on all interfaces (0.0.0.0), you can open `http://<mac-ip>:3000` directly. You do not need a forward.
 
+## Git
+
+Tap **Git** in the top bar. The terminals keep running while the Git view is open.
+
+- Pick a repository from the list at the top. Pocket Dev finds repositories up to two levels below `~/Desktop`, `~/Desktop/Projects`, and `~`. To scan other folders, add `"repoRoots": ["~/code", "~/work"]` to `config.json`, or set `POCKET_DEV_REPO_ROOTS` to a colon-separated list.
+- **Graph** shows the last 300 commits on all branches. Tap a commit to see its files, and tap a file to see its diff. A merge commit shows its changes against its first parent, which is what the merge brought in.
+- **Changes** shows staged, changed, and untracked files. Tap a file to see its diff.
+- **Pull requests** lists the open pull requests on GitHub. You can review, merge, close, reopen, and create pull requests. This uses the GitHub CLI (`gh`), so run `gh auth login` on the Mac first.
+- **Delete branch** after a merge deletes the branch on GitHub only. Your local branch and working tree do not change.
+- To create a pull request from a branch that is not on GitHub yet, Pocket Dev runs `git push -u origin <branch>` first.
+- GitHub does not let you approve your own pull request. The error from GitHub shows in red.
+
 ## Limits
 
 - Forwarded ports have no password. Anyone on your Wi-Fi can reach them while they are open. Stop a forward with the ✕ on its chip.
