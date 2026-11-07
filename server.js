@@ -24,20 +24,19 @@ const UPLOAD_MAX = 25 * 1024 * 1024;
 const config = openConfig(process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json'));
 const PORT = Number(process.env.PORT) || config.read().port || 7777;
 
-// POCKET_DEV_LAN_IP_FILE replaces the interface lookup in tests: the file holds the address, empty means no network.
-function lanIp() {
+// Every IPv4 address the Mac has on a network, en0 first. POCKET_DEV_LAN_IP_FILE replaces the interface lookup in
+// tests: the file holds one address, empty means no network.
+function lanIps() {
   if (process.env.POCKET_DEV_LAN_IP_FILE) {
-    try { return fs.readFileSync(process.env.POCKET_DEV_LAN_IP_FILE, 'utf8').trim() || null; } catch { return null; }
+    let ip = '';
+    try { ip = fs.readFileSync(process.env.POCKET_DEV_LAN_IP_FILE, 'utf8').trim(); } catch {}
+    return ip ? [ip] : [];
   }
   const ifaces = os.networkInterfaces();
   const names = ['en0', ...Object.keys(ifaces).filter((n) => n !== 'en0')];
-  for (const name of names) {
-    for (const addr of ifaces[name] ?? []) {
-      if (addr.family === 'IPv4' && !addr.internal) return addr.address;
-    }
-  }
-  return null;
+  return names.flatMap((name) => (ifaces[name] ?? []).filter((a) => a.family === 'IPv4' && !a.internal).map((a) => a.address));
 }
+const lanIp = () => lanIps()[0] ?? null;
 
 const localName = () => {
   const name = os.hostname().toLowerCase();
@@ -45,6 +44,21 @@ const localName = () => {
 };
 const urls = () => ({ lan: lanIp() && `http://${lanIp()}:${PORT}`, local: `http://${localName()}:${PORT}` });
 const LOCAL_NOTE = 'same Wi-Fi only; some Android phones cannot open .local names';
+
+// A DNS-rebinding page reaches this port under its own name, so only names that mean this Mac are served: its
+// addresses and .local name on PORT, loopback, and config.json "allowedHosts" (a tunnel's domain, any port). The
+// addresses are read per request because the network can change.
+const LOOPBACK_NAMES = ['localhost', '127.0.0.1', '[::1]'];
+function hostAllowed(host) {
+  const m = /^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/.exec((host ?? '').toLowerCase());
+  if (!m) return false;
+  const name = m[1].replace(/\.$/, '');
+  const extra = config.read().allowedHosts;
+  if (Array.isArray(extra) && extra.some((h) => typeof h === 'string' && h.toLowerCase() === name)) return true;
+  const port = m[2] === undefined ? 80 : Number(m[2]);
+  return port === PORT && [...LOOPBACK_NAMES, localName(), ...lanIps()].includes(name);
+}
+const MISDIRECTED = 'Misdirected Request: this server answers only to its own addresses.';
 
 const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE });
 
@@ -553,6 +567,10 @@ function servePage(req, res, pathname) {
 }
 
 const server = http.createServer(async (req, res) => {
+  if (!hostAllowed(req.headers.host)) {
+    res.writeHead(421, { 'content-type': 'text/plain; charset=utf-8', connection: 'close' });
+    return res.end(MISDIRECTED);
+  }
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname === '/' && url.searchParams.has('k')) {
@@ -573,6 +591,7 @@ const rejectUpgrade = (socket, status, text) => {
 };
 
 server.on('upgrade', (req, socket, head) => {
+  if (!hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
   const { pathname } = new URL(req.url, 'http://localhost');
   const match = /^\/ws\/([0-9a-f]+)$/.exec(pathname);
   const device = auth.deviceFor(req);
