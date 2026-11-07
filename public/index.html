@@ -64,6 +64,28 @@
   #keys::-webkit-scrollbar { display: none; }
   .key { flex: none; min-width: 52px; height: 42px; padding: 0 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-family: var(--mono); font-size: 13px; }
   .key:active, .icon-btn:active { background: var(--line); }
+
+  .layer { position: absolute; inset: 0; z-index: 20; }
+  #sheet { display: flex; flex-direction: column; justify-content: flex-end; background: #000a; }
+  #sheetPanel { display: flex; flex-direction: column; max-height: 80%; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; background: var(--panel); }
+  .layer-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 6px 8px 14px; }
+  .layer-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
+  #sheetBody { overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 10px; }
+  .sheet-label { margin: 12px 10px 2px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .row { display: flex; align-items: center; gap: 2px; }
+  .row-main { flex: 1; min-width: 0; min-height: 48px; padding: 5px 10px; border-radius: 10px; text-align: left; }
+  .row-main:active, .row-btn:active { background: var(--panel-2); }
+  .row-name, .row-path { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-path { margin-top: 1px; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .row-btn { flex: none; width: 42px; height: 42px; border-radius: 10px; color: var(--muted); font-size: 18px; }
+  .row-btn.on { color: #f0c674; }
+  .row-btn:disabled { opacity: .3; }
+  .sheet-form { display: flex; gap: 6px; padding: 10px 4px 0; }
+  .sheet-form input { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 16px; outline: none; }
+  .sheet-form input:focus { border-color: var(--accent); }
+  .sheet-form .primary { height: 42px; border-radius: 10px; }
+  .sheet-note { margin: 10px 10px 0; color: var(--muted); font-size: 13px; }
+  .sheet-note.error { color: var(--danger); }
 </style>
 </head>
 <body>
@@ -90,6 +112,12 @@
     <button id="send">Send</button>
   </form>
   <div id="keys"></div>
+  <div id="sheet" class="layer" hidden>
+    <section id="sheetPanel">
+      <div class="layer-head"><h2 id="sheetTitle"></h2><span id="sheetAction"></span><button id="sheetClose" class="icon-btn" aria-label="Close">✕</button></div>
+      <div id="sheetBody"></div>
+    </section>
+  </div>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -215,8 +243,8 @@ async function syncSessions() {
   renderTabs();
 }
 
-async function newSession() {
-  const s = await api('POST', '/api/sessions', {});
+async function newSession(cwd) {
+  const s = await api('POST', '/api/sessions', cwd ? { cwd } : {});
   activate(makeView(s).id);
 }
 
@@ -381,7 +409,115 @@ $('latest').addEventListener('click', () => {
 });
 keepFocus($('latest'));
 
-$('new').addEventListener('click', () => newSession().catch((err) => alert(err.message)));
+// One layer at a time; each pushes a history entry so Android's back gesture closes it instead of leaving the page.
+let layer = null;
+function showLayer(name) {
+  closeKeyboard();
+  if (!layer) history.pushState({ layer: true }, '');
+  layer = name;
+  renderLayer();
+}
+function hideLayer() {
+  if (!layer) return;
+  layer = null;
+  renderLayer();
+  if (history.state?.layer) history.back();
+}
+window.addEventListener('popstate', () => {
+  layer = null;
+  renderLayer();
+});
+const SHEETS = { folders: renderFolders };
+function renderLayer() {
+  $('sheet').hidden = !SHEETS[layer];
+  SHEETS[layer]?.();
+}
+function setSheet(title, action, children) {
+  $('sheetTitle').textContent = title;
+  $('sheetAction').replaceChildren(...(action ? [action] : []));
+  $('sheetBody').replaceChildren(...children.filter(Boolean));
+}
+$('sheetClose').addEventListener('click', hideLayer);
+$('sheet').addEventListener('click', (e) => e.target === $('sheet') && hideLayer());
+
+const note = (text, error) => text && h('p', `sheet-note${error ? ' error' : ''}`, text);
+
+function sheetForm(placeholder, buttonLabel, onSubmit) {
+  const form = h('form', 'sheet-form');
+  const input = h('input');
+  Object.assign(input, { type: 'text', placeholder, autocomplete: 'off', autocapitalize: 'off', spellcheck: false, enterKeyHint: 'go' });
+  input.setAttribute('autocorrect', 'off');
+  form.append(input, h('button', 'primary', buttonLabel));
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (input.value.trim()) onSubmit(input.value.trim(), input);
+  });
+  return form;
+}
+
+let folders = null;
+let folderNote = '';
+const otherPath = sheetForm('Other path, e.g. ~/app', 'Open', (value) => openFolder(value));
+
+async function openFolders() {
+  folderNote = '';
+  showLayer('folders');
+  try { folders = await api('GET', '/api/folders'); } catch (err) { folderNote = err.message; }
+  if (layer === 'folders') renderFolders();
+}
+
+async function openFolder(dir) {
+  try {
+    await newSession(dir);
+    otherPath.querySelector('input').value = '';
+    hideLayer();
+  } catch (err) {
+    folderNote = err.message;
+    renderFolders();
+  }
+}
+
+async function togglePin(dir, pinned) {
+  try { folders = await api('PUT', '/api/folders/pinned', { path: dir, pinned }); } catch (err) { folderNote = err.message; }
+  renderFolders();
+}
+
+function renderFolders() {
+  if (!folders) return setSheet('New terminal', null, [note(folderNote || 'Loading…', folderNote)]);
+  const { home, pinned, recent, projects } = folders;
+  const tilde = (p) => (p === home ? '~' : p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p);
+  const pinnedPaths = new Set(pinned.map((f) => f.path));
+  const shown = new Set([home]);
+  const row = (name, dir, pinnable) => {
+    const main = h('button', 'row-main');
+    main.append(h('span', 'row-name', name), h('span', 'row-path', tilde(dir)));
+    main.onclick = () => openFolder(dir);
+    const wrap = h('div', 'row');
+    wrap.append(main);
+    if (!pinnable) return wrap;
+    const on = pinnedPaths.has(dir);
+    const star = h('button', `row-btn${on ? ' on' : ''}`, on ? '★' : '☆');
+    star.setAttribute('aria-label', `${on ? 'Unpin' : 'Pin'} ${name}`);
+    star.onclick = () => togglePin(dir, !on);
+    wrap.append(star);
+    return wrap;
+  };
+  // A folder can be pinned, recent and a project at once; list it once, in the first section it belongs to.
+  const section = (label, list) => {
+    const rows = list.filter((f) => !shown.has(f.path) && shown.add(f.path)).map((f) => row(f.name, f.path, true));
+    return rows.length ? [h('p', 'sheet-label', label), ...rows] : [];
+  };
+  setSheet('New terminal', null, [
+    row('Home', home, false),
+    ...section('Pinned', pinned),
+    ...section('Recent', recent),
+    ...section('Projects', projects),
+    otherPath,
+    note(folderNote, true),
+  ]);
+}
+
+$('new').addEventListener('click', openFolders);
 
 let forwards = [];
 function renderForwards() {
