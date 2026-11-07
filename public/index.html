@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.css">
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10/lib/addon-fit.js"></script>
+<link rel="stylesheet" href="/files.css">
+<script src="/files.js" defer></script>
 <style>
   :root {
     --bg: #0b0e14; --panel: #131823; --panel-2: #1b2130; --line: #252d3c;
@@ -79,6 +81,7 @@
       <button class="primary">Open</button>
     </form>
     <div id="chips" style="display:contents"></div>
+    <button id="filesBtn" class="icon-btn" onclick="openFiles()">Files</button>
     <p id="portErr"></p>
   </div>
   <main id="terms">
@@ -108,7 +111,7 @@ const store = {
 async function api(method, url, body) {
   const res = await fetch(url, {
     method,
-    headers: body ? { 'content-type': 'application/json' } : {},
+    headers: { 'x-pocket-dev': '1', ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401) {
