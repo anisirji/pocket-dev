@@ -16,19 +16,45 @@ The `postinstall` script marks node-pty's `spawn-helper` as executable. node-pty
 npm start
 ```
 
-The server prints the URL and the password:
+The server prints a QR code, the URL, and a password line:
 
 ```
+<QR code>
 Pocket Dev running at http://192.168.1.17:7777
-Password: xxxxxxxxxxxx
+Password: (set; change it in Settings)
+Scan the QR code to log in without the password. It works once and expires in 10 minutes. New code: npm run qr
 ```
 
-Open that URL in Chrome on your phone and log in.
+Scan the QR code with your phone's camera and open the link in Chrome. You are logged in. You can also open the URL and type the password.
 
-- On first start, the server writes `config.json` with a random password and port 7777. It writes the file with mode 0600.
-- To change the password, edit `config.json` or set `POCKET_DEV_PASSWORD`.
+- On first start, the server writes `config.json` with port 7777 and prints a random password. Only the first start prints it.
+- `config.json` stores a scrypt hash of the password (`passwordHash`), never the password. If it still has a plaintext `password`, the server converts it at start.
+- To change the password, use **Settings**. `POCKET_DEV_PASSWORD` overrides the stored password, and the server then prints it at start.
 - To use a different port, set `PORT`.
-- A server restart logs every device out. The terminals do not survive a restart.
+- Logged-in devices stay logged in across restarts. The terminals do not survive a restart.
+
+## Log in with a QR code
+
+- `npm run qr` prints a new QR code and URL from the running server. Run it on the Mac.
+- On a phone that is already logged in, tap **⚙** and then **Show login QR**. Scan that code with the other phone.
+- Each code works once and expires after 10 minutes. A used or expired code opens the login page with a message.
+- `npm run qr` reads a secret from `~/.pocket-dev/local-secret`, which the server writes at each start with mode 0600. The server creates codes only for requests from 127.0.0.1 that carry this secret and no proxy headers, so a tunnel on the Mac cannot create them.
+
+## Devices
+
+Each login is a device. Tap **⚙** to see them.
+
+- The list shows each device's name, how it logged in, its IP address, and whether it is online now. A device is online when it has a terminal open or made a request in the last minute.
+- **Rename** changes the name. **Log out** removes the device and disconnects its terminals at once.
+- The server stores devices in `~/.pocket-dev/devices.json` with mode 0600. The file holds a hash of each login cookie, not the cookie.
+
+### Device limit
+
+`maxDevices` in `config.json` sets the limit. The default is 2, and you can set 1 to 20 in **Settings**.
+
+- A password login fails when the limit is reached. Log out a device first, or scan a QR code.
+- A QR login always works. When the limit is reached, it logs out the device used least recently.
+- Lowering the limit logs nobody out. It only blocks new password logins.
 
 ## Run it always
 
@@ -50,8 +76,8 @@ Pocket Dev can run as a launchd agent. launchd starts it when you log in and res
 | Restart, for example after `git pull` | `npm run service:install` |
 | Stop and remove the service | `npm run service:uninstall` |
 
-- Each restart closes all terminals and logs every device out.
-- The log contains the password, because the server prints it at start.
+- Each restart closes all terminals. Devices stay logged in.
+- The log contains a login QR code and URL from each start. Each works once and expires after 10 minutes. The log contains the password only when the server generated it or it comes from `POCKET_DEV_PASSWORD`.
 - The service is a per-user agent. After a reboot it starts when you log in, not before.
 - Each terminal is a login zsh (`/bin/zsh -l`), so `~/.zprofile` and `~/.zshrc` apply. The service PATH also includes `/usr/local/bin`, `/opt/homebrew/bin`, and `~/.local/bin`, so `claude`, `codex`, `gh`, `git`, and `brew` work.
 

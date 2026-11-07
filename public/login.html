@@ -32,6 +32,9 @@
   const f = document.getElementById('f');
   const go = document.getElementById('go');
   const err = document.getElementById('err');
+  if (new URLSearchParams(location.search).get('e') === 'qr') {
+    err.textContent = 'QR code expired, scan a new one (npm run qr) or enter the password';
+  }
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
     go.disabled = true;
@@ -43,7 +46,8 @@
         body: JSON.stringify({ password: document.getElementById('pw').value }),
       });
       if (r.ok) return location.replace('/');
-      err.textContent = r.status === 401 ? 'Wrong password' : `Login failed (${r.status})`;
+      const data = await r.json().catch(() => ({}));
+      err.textContent = data.error || `Login failed (${r.status})`;
     } catch {
       err.textContent = 'Cannot reach the Mac';
     } finally {
