@@ -10,7 +10,11 @@
     "service:install": "scripts/install-service.sh",
     "service:uninstall": "scripts/uninstall-service.sh",
     "service:status": "scripts/status.sh",
-    "service:logs": "tail -n 50 -f \"${LOG:-$HOME/Library/Logs/pocket-dev.log}\""
+    "service:logs": "tail -n 50 -f \"${LOG:-$HOME/Library/Logs/pocket-dev.log}\"",
+    "awake": "node scripts/awake.js",
+    "lid": "scripts/lid.sh",
+    "sleep": "scripts/sleep.sh",
+    "shutdown": "scripts/shutdown.sh"
   },
   "keywords": [],
   "author": "",

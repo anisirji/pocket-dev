@@ -13,6 +13,8 @@ import { createHistoryApi } from './history.js';
 import { createAuth, QR_TTL_MIN } from './auth.js';
 import { terminalQr, qrNote } from './qr.js';
 import { openConfig } from './config.js';
+import { startPower, handlePowerApi } from './power.js';
+import { ensureLocalSecret, isLocalRequest } from './local-secret.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SCROLLBACK_MAX = 500_000;
@@ -431,12 +433,17 @@ async function handleApi(req, res, url) {
 
   const authReply = await auth.handleApi(req, url.pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
+  if (resource === 'local' && key === 'power') {
+    if (!isLocalRequest(req)) return sendJson(res, 403, { error: 'Local CLI only' });
+    return handlePowerApi(req, res, url.pathname.split('/')[4], { readJson, sendJson, wss, sessions });
+  }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
   if (resource === 'git') {
     const { status, body } = await handleGit(req.method, url, () => readJson(req));
     return sendJson(res, status, body);
   }
   if (resource === 'history') return handleHistory(req, res, url.pathname);
+  if (resource === 'power') return handlePowerApi(req, res, key, { readJson, sendJson, wss, sessions });
 
   switch (route) {
     case 'GET sessions':
@@ -566,6 +573,9 @@ setInterval(() => {
     ws.ping();
   }
 }, 30_000).unref();
+
+ensureLocalSecret();
+startPower(config.file, config.read().awake);
 
 watchLanIp();
 server.listen(PORT, '0.0.0.0', async () => {
