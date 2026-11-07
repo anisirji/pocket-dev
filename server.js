@@ -25,14 +25,14 @@ function loadConfig() {
 }
 
 const config = loadConfig();
+const PASSWORD = process.env.POCKET_DEV_PASSWORD || config.password;
+const PORT = Number(process.env.PORT) || config.port || 7777;
 
 function saveConfig() {
   const tmp = `${CONFIG_PATH}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
   fs.renameSync(tmp, CONFIG_PATH);
 }
-const PASSWORD = process.env.POCKET_DEV_PASSWORD || config.password;
-const PORT = Number(process.env.PORT) || config.port || 7777;
 
 function lanIp() {
   const ifaces = os.networkInterfaces();
@@ -88,27 +88,32 @@ function listProjects() {
 }
 
 function listFolders() {
-  const existing = (list = []) => list.map(resolveDir).filter(Boolean).map(folderView);
+  const existing = (list) => list.map(resolveDir).filter(Boolean).map(folderView);
   return { home: HOME, pinned: existing(config.folders), recent: existing(config.recentFolders), projects: listProjects().map(folderView) };
 }
 
 function setPinned(dir, pinned) {
-  const list = config.folders ?? [];
-  if (list.includes(dir) === pinned) return;
-  config.folders = pinned ? [...list, dir] : list.filter((p) => p !== dir);
+  if (config.folders.includes(dir) === pinned) return;
+  config.folders = pinned ? [...config.folders, dir] : config.folders.filter((p) => p !== dir);
   saveConfig();
 }
 
 // Home is always the sheet's first row, so keeping it out of recent leaves all five slots for real projects.
 function rememberRecent(dir) {
   if (dir === HOME) return;
-  config.recentFolders = [dir, ...(config.recentFolders ?? []).filter((p) => p !== dir)].slice(0, RECENT_MAX);
+  config.recentFolders = [dir, ...config.recentFolders.filter((p) => p !== dir)].slice(0, RECENT_MAX);
   saveConfig();
 }
 
 const DEFAULT_SHORTCUTS = ['claude', 'codex', 'npm run dev', 'git status', 'git pull'];
 const isShortcut = (s) => typeof s === 'string' && s.trim() !== '' && s.length <= 200 && !/[\x00-\x1f\x7f]/.test(s);
 const isShortcutList = (v) => Array.isArray(v) && v.length <= 30 && v.every(isShortcut);
+const isPathList = (v) => Array.isArray(v) && v.every((p) => typeof p === 'string');
+
+// config.json is edited by hand too; malformed lists fall back here once so the handlers can trust them.
+if (!isPathList(config.folders)) config.folders = [];
+if (!isPathList(config.recentFolders)) config.recentFolders = [];
+if (!isShortcutList(config.shortcuts)) config.shortcuts = DEFAULT_SHORTCUTS;
 
 const UPLOAD_DIR = path.join(HOME, '.pocket-dev', 'uploads');
 
@@ -403,7 +408,7 @@ async function handleApi(req, res, pathname) {
     case 'POST upload':
       return upload(req, res);
     case 'GET shortcuts':
-      return sendJson(res, 200, config.shortcuts ?? DEFAULT_SHORTCUTS);
+      return sendJson(res, 200, config.shortcuts);
     case 'PUT shortcuts': {
       const list = await readJson(req);
       if (!isShortcutList(list)) {
