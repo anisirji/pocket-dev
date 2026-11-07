@@ -122,7 +122,6 @@ input:disabled { opacity: .5; }
 .log-row { display: grid; grid-template-columns: 132px minmax(0, 1fr) minmax(0, 220px); gap: 14px; padding: 8px 0; border-bottom: 1px solid #1d2331; font-size: 13px; }
 .log-row time { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .log-row .where { color: var(--muted); text-align: right; overflow-wrap: anywhere; }
-.log-row::before { content: ""; display: none; }
 .log-row.failure .what { color: #ffb3ad; }
 .log-row.change .what::before, .log-row.failure .what::before, .log-row.access .what::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 8px; border-radius: 50%; vertical-align: 2px; }
 .log-row.access .what::before { background: var(--ok); }
