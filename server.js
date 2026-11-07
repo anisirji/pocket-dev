@@ -230,7 +230,12 @@ function readJson(req) {
   });
 }
 
-const chatApi = createChatApi({ sendJson, readJson, idleMinutes: config.chatIdleMinutes });
+// Stand-in for the merged branch's config module ({ read(), update(changes) }).
+const chatConfig = {
+  read: () => JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')),
+  update: (changes) => fs.writeFileSync(CONFIG_PATH, JSON.stringify({ ...chatConfig.read(), ...changes }, null, 2) + '\n', { mode: 0o600 }),
+};
+const chatApi = createChatApi({ sendJson, readJson, config: chatConfig });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

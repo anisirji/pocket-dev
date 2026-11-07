@@ -10,15 +10,40 @@ const SANDBOX_POLICY = {
   'danger-full-access': { type: 'dangerFullAccess' },
 };
 
-export const MODES = {
-  untrusted: { label: 'Ask first', description: 'Asks before commands that change anything', approvalPolicy: 'untrusted', sandbox: 'workspace-write' },
-  'on-request': { label: 'Auto in folder', description: 'Works inside the folder, asks to go outside it', approvalPolicy: 'on-request', sandbox: 'workspace-write' },
-  'read-only': { label: 'Read only', description: 'Reads files, asks before any change', approvalPolicy: 'on-request', sandbox: 'read-only' },
-  'full-access': {
-    label: 'Full access', description: 'No sandbox, never asks', approvalPolicy: 'never', sandbox: 'danger-full-access',
-    confirm: 'Codex will run any command and change any file without asking. Continue?',
+// The approval policies codex app-server 0.166 accepts (AskForApproval); it has no on-failure.
+const APPROVAL_POLICIES = [
+  { value: 'untrusted', label: 'Ask first', description: 'Asks before any command that is not a known safe read' },
+  { value: 'on-request', label: 'On request', description: 'Codex decides when to ask, such as to leave the sandbox' },
+  { value: 'never', label: 'Never ask', description: 'Never asks; failures go back to Codex' },
+];
+
+const SANDBOXES = [
+  { value: 'read-only', label: 'Read only', description: 'Can read files, cannot change anything' },
+  { value: 'workspace-write', label: 'Workspace', description: 'Can change files inside the chat folder' },
+  {
+    value: 'danger-full-access', label: 'Full access', description: 'No sandbox: any file, any command, network',
+    confirm: 'Codex will be able to change any file and run any command outside the sandbox. Continue?',
   },
-};
+];
+
+const EFFORTS = [
+  { value: 'default', label: 'Default', description: 'From ~/.codex/config.toml' },
+  { value: 'low', label: 'Low', description: 'Fastest' },
+  { value: 'medium', label: 'Medium', description: '' },
+  { value: 'high', label: 'High', description: '' },
+  { value: 'xhigh', label: 'Extra high', description: 'Slowest, most thorough' },
+];
+
+export async function settingsSchema() {
+  return [
+    { key: 'model', label: 'Model', default: 'default', custom: true, choices: await listModels() },
+    { key: 'approvalPolicy', label: 'Approval', default: 'untrusted', choices: APPROVAL_POLICIES },
+    { key: 'sandbox', label: 'Sandbox', default: 'workspace-write', choices: SANDBOXES },
+    { key: 'effort', label: 'Effort', default: 'default', choices: EFFORTS },
+  ];
+}
+
+export const grantLabel = (grant) => (grant === 'files' ? 'All file changes' : grant.replace(/^command:/, 'Command: '));
 
 // All Codex chats share one app-server process: it multiplexes threads, and each extra process costs memory on the
 // Mac. It starts with the first awake chat and exits with the last one.
@@ -133,8 +158,8 @@ export function createCodexEngine(chat) {
   let turnBase = null;
   const fileChanges = new Map();
   const outputLen = new Map();
-  const policy = () => MODES[chat.mode];
-  const model = () => (chat.model === 'default' ? null : chat.model);
+  let threadModel = null;
+  const model = () => (chat.settings.model === 'default' ? null : chat.settings.model);
 
   const reply = (id, result) => server.write({ id, result });
 
@@ -144,10 +169,10 @@ export function createCodexEngine(chat) {
 
   const ITEMS = {
     agentMessage: {
-      started: (item) => chat.emit({ id: item.id, type: 'assistant-text', text: item.text ?? '', streaming: true }),
+      started: (item) => chat.emit({ id: item.id, type: 'assistant-text', text: item.text ?? '', streaming: true, model: model() ?? threadModel }),
       completed: (item) => chat.find(item.id)
         ? chat.update(item.id, { text: item.text, streaming: false })
-        : chat.emit({ id: item.id, type: 'assistant-text', text: item.text, streaming: false }),
+        : chat.emit({ id: item.id, type: 'assistant-text', text: item.text, streaming: false, model: model() ?? threadModel }),
     },
     reasoning: {
       completed: (item) => {
@@ -228,7 +253,8 @@ export function createCodexEngine(chat) {
     if (chat.grants.includes(grantKey)) return reply(id, { decision: 'accept' });
     const res = await chat.ask({
       type: 'permission-request', kind, title, detail, diff,
-      options: [{ id: 'allow', label: 'Allow' }, { id: 'allow-chat', label: 'Allow for this chat' }, { id: 'deny', label: 'Deny' }],
+      rule: grantLabel(grantKey),
+      options: [{ id: 'allow', label: 'Approve' }, { id: 'allow-chat', label: 'Approve for this chat' }, { id: 'deny', label: 'Deny' }],
     });
     const deny = offered.includes('decline') ? 'decline' : 'cancel';
     if (res.cancelled) return reply(id, { decision: 'cancel' });
@@ -279,19 +305,20 @@ export function createCodexEngine(chat) {
   const engine = {
     async start() {
       await server.start();
-      const { approvalPolicy, sandbox } = policy();
+      const { approvalPolicy, sandbox } = chat.settings;
       const params = { cwd: chat.cwd, model: model(), approvalPolicy, sandbox };
       const res = chat.sessionId
         ? await server.call('thread/resume', { threadId: chat.sessionId, ...params, excludeTurns: true })
         : await server.call('thread/start', params);
       threadId = res.thread.id;
+      threadModel = res.model;
       if (!chat.sessionId) total = { inputTokens: 0, outputTokens: 0 };
       server.threads.set(threadId, engine);
       chat.setSession(threadId);
     },
 
     async send({ text, images }) {
-      const { approvalPolicy, sandbox } = policy();
+      const { approvalPolicy, sandbox, effort } = chat.settings;
       turnBase = total;
       const res = await server.call('turn/start', {
         threadId,
@@ -299,6 +326,7 @@ export function createCodexEngine(chat) {
         model: model(),
         approvalPolicy,
         sandboxPolicy: SANDBOX_POLICY[sandbox],
+        effort: effort === 'default' ? null : effort,
       });
       turnId ??= res.turn.id;
     },
@@ -307,9 +335,9 @@ export function createCodexEngine(chat) {
       if (turnId) await server.call('turn/interrupt', { threadId, turnId });
     },
 
-    // turn/start carries model and policy, so a change takes effect from the next turn.
-    async configure() {
-      return 'next-turn';
+    // turn/start carries every setting, so a change takes effect from the next turn.
+    async configure(changes) {
+      return Object.fromEntries(Object.keys(changes).map((k) => [k, 'next-turn']));
     },
 
     async stop() {

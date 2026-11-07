@@ -1,17 +1,31 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { findBin, engineEnv, cap, lineDiff, INPUT_MAX } from './env.js';
 
 const CLAUDE_BIN = process.env.POCKET_DEV_CLAUDE || findBin('claude') || '/usr/local/bin/claude';
 
-export const MODES = {
-  default: { label: 'Ask first', description: 'Asks before edits and commands' },
-  acceptEdits: { label: 'Accept edits', description: 'Edits files without asking, asks before commands' },
-  plan: { label: 'Plan', description: 'Reads and plans, changes nothing until you approve the plan' },
-  bypassPermissions: {
-    label: 'Skip permissions', description: 'Runs everything without asking',
+// The permission modes `claude --help` lists for --permission-mode in 2.1.139.
+const MODES = [
+  { value: 'default', label: 'Ask every time', description: 'Asks before edits and commands' },
+  { value: 'acceptEdits', label: 'Accept edits', description: 'Edits files without asking, asks before commands' },
+  { value: 'plan', label: 'Plan', description: 'Reads and plans, changes nothing until you approve the plan' },
+  { value: 'auto', label: 'Auto', description: 'Claude decides, asks only for risky actions' },
+  { value: 'dontAsk', label: "Don't ask", description: 'Never asks: anything not already allowed is denied' },
+  {
+    value: 'bypassPermissions', label: 'Bypass', description: 'Runs everything without asking',
     confirm: 'Claude will edit files and run any command without asking. Continue?',
   },
-};
+];
+
+const EFFORTS = [
+  { value: 'default', label: 'Default', description: "The model's own default" },
+  { value: 'low', label: 'Low', description: 'Minimal thinking, fastest' },
+  { value: 'medium', label: 'Medium', description: 'Moderate thinking' },
+  { value: 'high', label: 'High', description: 'Deep reasoning' },
+  { value: 'xhigh', label: 'Extra high', description: 'Deeper than high (Opus 4.7)' },
+  { value: 'max', label: 'Max', description: 'Maximum effort' },
+];
 
 // "default" means the model Claude Code itself picks (settings, then its built-in default); every other value is
 // passed as --model.
@@ -42,6 +56,59 @@ export async function listModels() {
   });
   return modelsCache;
 }
+
+export async function settingsSchema() {
+  return [
+    { key: 'model', label: 'Model', default: 'default', custom: true, choices: await listModels() },
+    { key: 'mode', label: 'Mode', default: 'default', choices: MODES },
+    { key: 'effort', label: 'Effort', default: 'default', choices: EFFORTS },
+  ];
+}
+
+// Project rules live where Claude Code's own "don't ask again" puts them.
+const RULE_FILES = ['.claude/settings.local.json', '.claude/settings.json'];
+
+function readRuleFile(cwd, file) {
+  try {
+    const data = JSON.parse(fs.readFileSync(path.join(cwd, file), 'utf8'));
+    return { data, rules: Array.isArray(data?.permissions?.allow) ? data.permissions.allow.filter((r) => typeof r === 'string') : [] };
+  } catch {
+    return { data: null, rules: [] };
+  }
+}
+
+export function projectRules(cwd) {
+  return RULE_FILES.map((file) => ({ file, path: path.join(cwd, file), rules: readRuleFile(cwd, file).rules })).filter((f) => f.rules.length);
+}
+
+export function removeProjectRule(cwd, file, rule) {
+  if (!RULE_FILES.includes(file)) throw new Error(`file must be one of: ${RULE_FILES.join(', ')}`);
+  const full = path.join(cwd, file);
+  // A symlinked .claude folder could point the rewrite outside the chat's folder.
+  if (!fs.realpathSync(full).startsWith(fs.realpathSync(cwd) + path.sep)) throw new Error(`${file} is outside ${cwd}`);
+  const { data, rules } = readRuleFile(cwd, file);
+  if (!rules.includes(rule)) throw new Error(`${file} has no allow rule ${rule}`);
+  data.permissions.allow = data.permissions.allow.filter((r) => r !== rule);
+  const tmp = `${full}.pocket-dev.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, { mode: fs.statSync(full).mode & 0o777 });
+  fs.renameSync(tmp, full);
+}
+
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+const ruleString = (r) => (r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName);
+
+// "Always allow" remembers the rule the CLI suggests (such as Bash(npm test:*)). For file edits the CLI suggests
+// switching to acceptEdits instead, which would change the mode chip, so remember an Edit rule, which covers every
+// file-editing tool.
+function rememberRules(toolName, suggestions) {
+  const rules = suggestions.filter((u) => u.type === 'addRules' && u.behavior === 'allow').flatMap((u) => u.rules);
+  return rules.length ? rules : [{ toolName: EDIT_TOOLS.has(toolName) ? 'Edit' : toolName }];
+}
+
+const rememberUpdates = (toolName, suggestions, destination) => [
+  { type: 'addRules', rules: rememberRules(toolName, suggestions), behavior: 'allow', destination },
+  ...suggestions.filter((u) => u.type === 'addDirectories').map((u) => ({ ...u, destination })),
+];
 
 const firstLine = (s) => String(s ?? '').split('\n')[0];
 
@@ -108,18 +175,8 @@ export function createClaudeEngine(chat) {
   // queued per message so the whole block can replace the streamed text in the same event.
   const streamed = new Map();
   let streamMsg = null;
+  let streamModel = null;
   const blockIds = new Map();
-
-  function grant(updates) {
-    for (const u of updates) {
-      if (u.type === 'addRules' && u.behavior === 'allow') {
-        for (const r of u.rules) chat.addGrant(r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName);
-      } else if (u.type === 'setMode' && MODES[u.mode]) {
-        chat.mode = u.mode;
-      }
-    }
-    chat.changed();
-  }
 
   async function askQuestion(toolInput, signal) {
     const questions = (toolInput.questions ?? []).map((qn, i) => ({
@@ -139,13 +196,19 @@ export function createClaudeEngine(chat) {
     const plan = toolName === 'ExitPlanMode';
     const options = plan
       ? [{ id: 'allow', label: 'Start working' }, { id: 'deny', label: 'Keep planning' }]
-      : [{ id: 'allow', label: 'Allow' }, { id: 'allow-chat', label: 'Allow for this chat' }, { id: 'deny', label: 'Deny' }];
+      : [
+        { id: 'allow', label: 'Allow once' },
+        { id: 'allow-chat', label: 'Always allow in this chat' },
+        { id: 'allow-project', label: 'Always allow in this project' },
+        { id: 'deny', label: 'Deny' },
+      ];
     const res = await chat.ask({
       type: 'permission-request',
       kind: plan ? 'plan' : toolName === 'Bash' ? 'command' : DIFF[toolName] ? 'file' : 'tool',
       title: plan ? 'Claude is ready to start' : title || `${toolName} ${summarize(toolName, toolInput)}`,
       detail: plan ? toolInput.plan ?? '' : [description, describeInput(toolName, toolInput)].filter(Boolean).join('\n\n'),
       diff: DIFF[toolName]?.(toolInput),
+      rule: plan ? undefined : rememberRules(toolName, suggestions).map(ruleString).join(', '),
       options,
     }, signal);
     if (res.cancelled) return { behavior: 'deny', message: 'The request was cancelled.', interrupt: true };
@@ -153,11 +216,16 @@ export function createClaudeEngine(chat) {
       denied.add(toolUseID);
       return { behavior: 'deny', message: res.message || 'The user denied this.' };
     }
-    if (res.decision === 'allow-chat' || plan) {
-      const updates = suggestions.length || plan
-        ? suggestions
-        : [{ type: 'addRules', rules: [{ toolName }], behavior: 'allow', destination: 'session' }];
-      grant(updates);
+    if (plan) {
+      const next = suggestions.find((u) => u.type === 'setMode')?.mode;
+      if (MODES.some((m) => m.value === next)) chat.settings = { ...chat.settings, mode: next };
+      chat.changed();
+      return { behavior: 'allow', updatedInput: toolInput, updatedPermissions: suggestions };
+    }
+    if (res.decision === 'allow-chat' || res.decision === 'allow-project') {
+      const updates = rememberUpdates(toolName, suggestions, res.decision === 'allow-chat' ? 'session' : 'localSettings');
+      if (res.decision === 'allow-chat') for (const r of updates[0].rules) chat.addGrant(ruleString(r));
+      chat.changed();
       return { behavior: 'allow', updatedInput: toolInput, updatedPermissions: updates };
     }
     return { behavior: 'allow', updatedInput: toolInput };
@@ -183,6 +251,7 @@ export function createClaudeEngine(chat) {
   function onStreamEvent({ event }) {
     if (event.type === 'message_start') {
       streamMsg = event.message.id;
+      streamModel = event.message.model;
       blockIds.clear();
       return;
     }
@@ -194,7 +263,7 @@ export function createClaudeEngine(chat) {
       const list = streamed.get(streamMsg) ?? [];
       list.push({ kind, id });
       streamed.set(streamMsg, list);
-      chat.emit({ id, type: kind === 'text' ? 'assistant-text' : 'thinking', text: '', streaming: true });
+      chat.emit({ id, type: kind === 'text' ? 'assistant-text' : 'thinking', text: '', streaming: true, model: streamModel });
     } else if (event.type === 'content_block_delta') {
       const id = blockIds.get(event.index);
       if (event.delta.type === 'text_delta') chat.delta(id, 'text', event.delta.text);
@@ -202,15 +271,15 @@ export function createClaudeEngine(chat) {
     }
   }
 
-  function settleBlock(msgId, kind, text) {
+  function settleBlock({ id: msgId, model }, kind, text) {
     const list = streamed.get(msgId) ?? [];
     const i = list.findIndex((b) => b.kind === kind);
     if (i === -1) {
-      chat.emit({ type: kind === 'text' ? 'assistant-text' : 'thinking', text, streaming: false });
+      chat.emit({ type: kind === 'text' ? 'assistant-text' : 'thinking', text, streaming: false, model });
       return;
     }
     const [{ id }] = list.splice(i, 1);
-    chat.update(id, { text, streaming: false });
+    chat.update(id, { text, streaming: false, model });
   }
 
   function onMessage(m) {
@@ -225,8 +294,8 @@ export function createClaudeEngine(chat) {
       case 'assistant':
         if (m.error) chat.emit({ type: 'error', message: `Claude error: ${m.error}` });
         for (const block of m.message.content) {
-          if (block.type === 'text') settleBlock(m.message.id, 'text', block.text);
-          else if (block.type === 'thinking') settleBlock(m.message.id, 'thinking', block.thinking);
+          if (block.type === 'text') settleBlock(m.message, 'text', block.text);
+          else if (block.type === 'thinking') settleBlock(m.message, 'thinking', block.thinking);
           else if (block.type === 'tool_use') onToolUse(block);
         }
         return;
@@ -263,13 +332,15 @@ export function createClaudeEngine(chat) {
 
   const engine = {
     async start() {
-      const bypass = chat.mode === 'bypassPermissions';
+      const { model, mode, effort } = chat.settings;
+      const bypass = mode === 'bypassPermissions';
       q = query({
         prompt: input,
         options: {
           cwd: chat.cwd,
-          model: chat.model === 'default' ? undefined : chat.model,
-          permissionMode: chat.mode,
+          model: model === 'default' ? undefined : model,
+          effort: effort === 'default' ? undefined : effort,
+          permissionMode: mode,
           allowDangerouslySkipPermissions: bypass,
           resume: chat.sessionId ?? undefined,
           allowedTools: chat.grants,
@@ -296,15 +367,22 @@ export function createClaudeEngine(chat) {
       await q.interrupt();
     },
 
-    // Model and mode switch live. Bypass needs a start-up flag, so entering or leaving it restarts the engine on the
-    // next turn instead.
-    async configure({ model, mode }) {
-      if (model !== undefined) await q.setModel(model === 'default' ? undefined : model);
-      if (mode !== undefined) {
-        if ((mode === 'bypassPermissions') !== engine.bypass) return 'restart';
-        await q.setPermissionMode(mode);
+    // Model and mode switch on the live process. Effort and entering or leaving bypass are start-up flags, so those
+    // restart the engine (resuming the session) before the next turn.
+    async configure(changes) {
+      const applied = {};
+      for (const [key, value] of Object.entries(changes)) {
+        if (key === 'model') {
+          await q.setModel(value === 'default' ? undefined : value);
+          applied.model = 'now';
+        } else if (key === 'mode' && (value === 'bypassPermissions') === engine.bypass) {
+          await q.setPermissionMode(value);
+          applied.mode = 'now';
+        } else {
+          applied[key] = 'restart';
+        }
       }
-      return 'live';
+      return applied;
     },
 
     async stop() {

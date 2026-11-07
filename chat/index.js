@@ -7,8 +7,14 @@ import * as claude from './claude.js';
 import * as codex from './codex.js';
 
 const ENGINES = {
-  claude: { label: 'Claude', create: claude.createClaudeEngine, listModels: claude.listModels, modes: claude.MODES, defaultMode: 'default' },
-  codex: { label: 'Codex', create: codex.createCodexEngine, listModels: codex.listModels, modes: codex.MODES, defaultMode: 'untrusted' },
+  claude: {
+    label: 'Claude', create: claude.createClaudeEngine, settingsSchema: claude.settingsSchema, grantLabel: (g) => g,
+    projectRules: claude.projectRules, removeProjectRule: claude.removeProjectRule,
+  },
+  codex: {
+    label: 'Codex', create: codex.createCodexEngine, settingsSchema: codex.settingsSchema, grantLabel: codex.grantLabel,
+    projectRules: () => [], removeProjectRule: () => { throw new BadRequest('Codex has no project rules here'); },
+  },
 };
 
 const HOME = os.homedir();
@@ -39,16 +45,31 @@ function parseCwd(cwd) {
   return dir;
 }
 
-function parseModel(model) {
-  if (typeof model !== 'string' || !MODEL_RE.test(model)) throw new BadRequest('model must be a model name such as "default" or "haiku"');
-  return model;
+// Returns only the given keys, each checked against the tool's schema. A model may also be any model name.
+function parseSettings(schema, given, confirmBypass) {
+  if (given === undefined) return {};
+  if (!given || typeof given !== 'object' || Array.isArray(given)) throw new BadRequest('settings must be an object');
+  const parsed = {};
+  for (const [key, value] of Object.entries(given)) {
+    const setting = schema.find((s) => s.key === key);
+    if (!setting) throw new BadRequest(`Unknown setting ${key}; expected ${schema.map((s) => s.key).join(', ')}`);
+    const choice = setting.choices.find((c) => c.value === value);
+    if (!choice && !(setting.custom && typeof value === 'string' && MODEL_RE.test(value))) {
+      throw new BadRequest(`${key} must be one of: ${setting.choices.map((c) => c.value).join(', ')}`);
+    }
+    if (choice?.confirm && confirmBypass !== true) throw new BadRequest(`${key} ${value} needs confirmBypass: true`);
+    parsed[key] = value;
+  }
+  return parsed;
 }
 
-function parseMode(tool, mode, confirmBypass) {
-  const spec = ENGINES[tool].modes[mode];
-  if (typeof mode !== 'string' || !spec) throw new BadRequest(`mode must be one of: ${Object.keys(ENGINES[tool].modes).join(', ')}`);
-  if (spec.confirm && confirmBypass !== true) throw new BadRequest(`Mode ${mode} needs confirmBypass: true`);
-  return mode;
+// Remembered defaults never include a choice that needs confirming, so a new chat cannot silently start in bypass.
+function safeDefaults(schema, settings = {}) {
+  return Object.fromEntries(schema.map((s) => {
+    const choice = s.choices.find((c) => c.value === settings[s.key]);
+    const custom = s.custom && typeof settings[s.key] === 'string' && MODEL_RE.test(settings[s.key]);
+    return [s.key, (choice && !choice.confirm) || custom ? settings[s.key] : s.default];
+  }));
 }
 
 function parseAttachments(list = []) {
@@ -84,13 +105,19 @@ function parseAnswer(event, body) {
   return { answers: parsed };
 }
 
-const modeList = (modes) => Object.entries(modes).map(([value, { label, description, confirm }]) => ({ value, label, description, ...(confirm ? { confirm } : {}) }));
-
-// Mount after the auth check: every route here assumes a logged-in caller.
-export function createChatApi({ sendJson, readJson, idleMinutes }) {
+// Mount after the auth check: every route here assumes a logged-in caller. config is { read(), update(changes) };
+// chat uses its chatIdleMinutes and chatDefaults keys.
+export function createChatApi({ sendJson, readJson, config }) {
   const dir = process.env.POCKET_DEV_CHAT_DIR || path.join(HOME, '.pocket-dev', 'chats');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const idleMs = Number(process.env.POCKET_DEV_CHAT_IDLE_SECONDS) * 1000 || (Number(idleMinutes) || 10) * 60_000;
+  const idleMs = () => Number(process.env.POCKET_DEV_CHAT_IDLE_SECONDS) * 1000 || (Number(config.read().chatIdleMinutes) || 10) * 60_000;
+  const schemaOf = (tool) => ENGINES[tool].settingsSchema();
+  const chatDefaults = () => config.read().chatDefaults ?? {};
+
+  async function rememberDefaults(chat) {
+    const prev = chatDefaults();
+    config.update({ chatDefaults: { ...prev, tool: chat.tool, cwd: chat.cwd, [chat.tool]: safeDefaults(await schemaOf(chat.tool), chat.settings) } });
+  }
 
   const chats = new Map();
   for (const file of fs.readdirSync(dir).filter((f) => /^[0-9a-f]{12}\.json$/.test(f))) {
@@ -169,43 +196,58 @@ export function createChatApi({ sendJson, readJson, idleMinutes }) {
     }, INTERRUPT_GRACE_MS).unref();
   }
 
+  // Returns how each change applies: 'now' when the live engine switched, 'next-turn' otherwise.
   async function configure(chat, changes) {
-    const labels = [];
-    if (changes.model !== undefined) labels.push(`model ${changes.model}`);
-    if (changes.mode !== undefined) labels.push(`mode ${ENGINES[chat.tool].modes[changes.mode].label}`);
-    Object.assign(chat, changes);
-    if (!labels.length) return;
-    chat.emit({ type: 'status', text: `Changed ${labels.join(' and ')}` });
+    if (!Object.keys(changes).length) return {};
+    const schema = await schemaOf(chat.tool);
+    const label = (key, value) => {
+      const setting = schema.find((s) => s.key === key);
+      return `${setting.label.toLowerCase()} ${setting.choices.find((c) => c.value === value)?.label ?? value}`;
+    };
+    chat.settings = { ...chat.settings, ...changes };
+    chat.emit({ type: 'status', text: `Changed ${Object.entries(changes).map(([k, v]) => label(k, v)).join(', ')}` });
+    let applied = Object.fromEntries(Object.keys(changes).map((k) => [k, 'next-turn']));
     if (chat.engine && !chat.waking) {
-      const how = await chat.engine.configure(changes).catch(() => 'restart');
-      if (how === 'restart') chat.engine.stale = true;
+      const how = await chat.engine.configure(changes).catch(() => applied);
+      if (Object.values(how).includes('restart')) chat.engine.stale = true;
+      applied = Object.fromEntries(Object.entries(how).map(([k, v]) => [k, v === 'now' ? 'now' : 'next-turn']));
     }
     chat.changed();
+    await rememberDefaults(chat);
+    return applied;
   }
 
+  // The interval stays short so a lowered chatIdleMinutes takes effect without a restart.
   setInterval(() => {
     const now = Date.now();
+    const limit = idleMs();
     for (const chat of chats.values()) {
-      if (chat.engine && !chat.turn && !chat.waking && !chat.requests.size && now - chat.lastActive >= idleMs) sleep(chat);
+      if (chat.engine && !chat.turn && !chat.waking && !chat.requests.size && now - chat.lastActive >= limit) sleep(chat);
     }
-  }, Math.min(30_000, Math.max(1000, idleMs / 4))).unref();
+  }, Math.min(30_000, Math.max(1000, idleMs() / 4))).unref();
 
   async function options() {
-    const tools = Object.fromEntries(await Promise.all(Object.entries(ENGINES).map(async ([tool, e]) => [tool, {
-      label: e.label, models: await e.listModels(), defaultModel: 'default', modes: modeList(e.modes), defaultMode: e.defaultMode,
-    }])));
+    const remembered = chatDefaults();
+    const tools = Object.fromEntries(await Promise.all(Object.entries(ENGINES).map(async ([tool, e]) => {
+      const settings = await e.settingsSchema();
+      return [tool, { label: e.label, settings, defaults: safeDefaults(settings, remembered[tool]) }];
+    })));
     const recent = [...new Set(list().map((c) => c.cwd))].filter(isDir).slice(0, RECENT_MAX);
-    return { home: HOME, recent, tools };
+    return {
+      home: HOME, recent, tools,
+      defaultTool: ENGINES[remembered.tool] ? remembered.tool : 'claude',
+      defaultCwd: typeof remembered.cwd === 'string' && isDir(remembered.cwd) ? remembered.cwd : null,
+    };
   }
 
-  function create(body) {
-    const { tool, cwd, model = 'default', mode, confirmBypass, resume, title } = body;
+  async function create(body) {
+    const { tool, cwd, settings, confirmBypass, resume, title } = body;
     if (!ENGINES[tool]) throw new BadRequest(`tool must be one of: ${Object.keys(ENGINES).join(', ')}`);
+    const schema = await schemaOf(tool);
     const fields = {
       tool,
       cwd: parseCwd(cwd),
-      model: parseModel(model),
-      mode: parseMode(tool, mode ?? ENGINES[tool].defaultMode, confirmBypass),
+      settings: { ...safeDefaults(schema, chatDefaults()[tool]), ...parseSettings(schema, settings, confirmBypass) },
     };
     if (resume !== undefined) {
       if (typeof resume?.sessionId !== 'string' || !SESSION_RE.test(resume.sessionId)) throw new BadRequest('resume.sessionId must be a session id');
@@ -219,24 +261,53 @@ export function createChatApi({ sendJson, readJson, idleMinutes }) {
     if (fields.sessionId) chat.emit({ type: 'status', text: `Continuing ${ENGINES[tool].label} session ${fields.sessionId.slice(0, 8)}` });
     chats.set(chat.id, chat);
     chat.persist();
+    await rememberDefaults(chat);
     return { status: 201, chat };
+  }
+
+  function permissions(chat) {
+    const engine = ENGINES[chat.tool];
+    return {
+      chat: chat.grants.map((rule) => ({ rule, label: engine.grantLabel(rule) })),
+      project: engine.projectRules(chat.cwd),
+    };
+  }
+
+  // A removed rule may still be held by the live engine, so the next turn restarts it from the files and grants.
+  function removePermission(chat, { scope, rule, file }) {
+    if (typeof rule !== 'string') throw new BadRequest('rule must be text');
+    if (scope === 'chat') {
+      if (!chat.grants.includes(rule)) throw new BadRequest(`This chat has no rule ${rule}`);
+      chat.removeGrant(rule);
+    } else if (scope === 'project') {
+      ENGINES[chat.tool].removeProjectRule(chat.cwd, file, rule);
+    } else {
+      throw new BadRequest("scope must be 'chat' or 'project'");
+    }
+    if (chat.engine) chat.engine.stale = true;
+    chat.emit({ type: 'status', text: `Removed rule ${rule}` });
+    chat.changed();
   }
 
   const routes = {
     'GET ': async () => [200, list()],
     'POST ': async (req) => {
-      const { status, chat } = create(await readJson(req));
+      const { status, chat } = await create(await readJson(req));
       return [status, chat.view()];
     },
     'GET options': async () => [200, await options()],
     'GET :id': async (req, chat) => [200, { ...chat.view(), events: chat.events }],
     'PATCH :id': async (req, chat) => {
-      const { model, mode, confirmBypass } = await readJson(req);
-      const changes = {};
-      if (model !== undefined && model !== chat.model) changes.model = parseModel(model);
-      if (mode !== undefined && mode !== chat.mode) changes.mode = parseMode(chat.tool, mode, confirmBypass);
-      await configure(chat, changes);
-      return [200, chat.view()];
+      const { settings, confirmBypass } = await readJson(req);
+      const parsed = parseSettings(await schemaOf(chat.tool), settings, confirmBypass);
+      const changes = Object.fromEntries(Object.entries(parsed).filter(([k, v]) => chat.settings[k] !== v));
+      const applied = await configure(chat, changes);
+      return [200, { ...chat.view(), applied }];
+    },
+    'GET :id/permissions': async (req, chat) => [200, permissions(chat)],
+    'DELETE :id/permissions': async (req, chat) => {
+      removePermission(chat, await readJson(req));
+      return [200, permissions(chat)];
     },
     'DELETE :id': async (req, chat) => {
       await sleep(chat);

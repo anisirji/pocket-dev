@@ -6,7 +6,7 @@ const EVENTS_MAX = 1500;
 const TITLE_MAX = 80;
 const PERSIST_DELAY_MS = 1000;
 
-const PERSISTED = ['id', 'tool', 'cwd', 'model', 'mode', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt'];
+const PERSISTED = ['id', 'tool', 'cwd', 'settings', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt'];
 
 // One conversation. Status is derived from three independent facts (engine awake, turn running, open requests)
 // so it can never disagree with them.
@@ -59,10 +59,10 @@ export class Chat {
   }
 
   view() {
-    const { id, tool, title, cwd, model, mode, sessionId, createdAt, updatedAt, waking } = this;
+    const { id, tool, title, cwd, settings, sessionId, createdAt, updatedAt, waking } = this;
     const pendingId = this.requests.keys().next().value ?? null;
     return {
-      id, tool, title, cwd, model, mode, sessionId, createdAt, updatedAt, waking,
+      id, tool, title, cwd, settings, sessionId, createdAt, updatedAt, waking,
       status: this.status, runningSince: this.turn?.startedAt ?? null, pending: pendingId !== null, pendingId,
     };
   }
@@ -182,6 +182,10 @@ export class Chat {
 
   addGrant(grant) {
     if (!this.grants.includes(grant)) this.grants.push(grant);
+  }
+
+  removeGrant(grant) {
+    this.grants = this.grants.filter((g) => g !== grant);
   }
 
   schedulePersist() {
