@@ -139,27 +139,38 @@ function openUploadFile(name) {
   }
 }
 
+// Past the limit the body is read and dropped instead of cut off: a server that answers and closes mid-upload makes the
+// client's next write fail with EPIPE/ECONNRESET, and browsers then report a network error instead of the 413.
+// DRAIN_MAX caps how much a client can make the Mac read for nothing.
+const DRAIN_MAX = 2 * UPLOAD_MAX;
+
 function tooLarge(res) {
   res.setHeader('connection', 'close');
   sendJson(res, 413, { error: 'File is larger than 25 MB' });
 }
 
 async function upload(req, res) {
-  if (Number(req.headers['content-length']) > UPLOAD_MAX) return tooLarge(res);
+  const declared = Number(req.headers['content-length']);
+  if (declared > DRAIN_MAX) return tooLarge(res);
   const { file, fd } = openUploadFile(uploadName(req.headers['x-filename']));
   let size = 0;
+  const over = () => size > UPLOAD_MAX || declared > UPLOAD_MAX;
   try {
     await pipeline(req, async function* (chunks) {
       for await (const chunk of chunks) {
         size += chunk.length;
-        if (size > UPLOAD_MAX) throw new Error('File is larger than 25 MB');
-        yield chunk;
+        if (size > DRAIN_MAX) throw new Error('File is larger than 25 MB');
+        if (!over()) yield chunk;
       }
     }, fs.createWriteStream(null, { fd }));
   } catch (err) {
     fs.rmSync(file, { force: true });
-    if (size > UPLOAD_MAX) return tooLarge(res);
+    if (over()) return tooLarge(res);
     throw err;
+  }
+  if (over()) {
+    fs.rmSync(file, { force: true });
+    return tooLarge(res);
   }
   sendJson(res, 201, { path: file });
 }
