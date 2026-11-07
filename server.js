@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
 import { handleGitApi } from './git.js';
+import { createHistoryApi } from './history.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json');
@@ -381,6 +382,7 @@ async function handleApi(req, res, url) {
     const { status, body } = await handleGitApi(req.method, url, () => readJson(req));
     return sendJson(res, status, body);
   }
+  if (resource === 'history') return handleHistory(req, res, url.pathname);
 
   switch (route) {
     case 'GET sessions':
@@ -443,9 +445,12 @@ async function handleApi(req, res, url) {
   }
 }
 
+const handleHistory = createHistoryApi({ createSession, sessionView, sendJson });
+
 const PAGES = {
   '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html',
   '/git.js': 'git.js', '/graph.js': 'graph.js', '/git.css': 'git.css',
+  '/history.js': 'history.js', '/history.css': 'history.css',
 };
 const PUBLIC_PAGES = new Set(['login.html']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
