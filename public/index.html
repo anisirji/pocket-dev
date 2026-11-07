@@ -92,6 +92,11 @@
   .row-main.cmd, .row-text { font-family: var(--mono); font-size: 14px; }
   .row-text { flex: 1; min-width: 0; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row.editing { min-height: 48px; }
+  #textView { display: flex; flex-direction: column; background: var(--bg); }
+  #textView .layer-head { border-bottom: 1px solid var(--line); background: var(--panel); }
+  #textTitle.ok { color: #7ee787; }
+  #textTitle.error { color: #f0c674; }
+  #textPre { flex: 1; min-height: 0; margin: 0; padding: 8px 10px 16px; overflow: auto; overscroll-behavior: contain; font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
   .key.icon { min-width: 44px; padding: 0; font-family: inherit; font-size: 17px; }
 </style>
 </head>
@@ -119,6 +124,10 @@
     <button id="send">Send</button>
   </form>
   <div id="keys"></div>
+  <div id="textView" class="layer" hidden>
+    <div class="layer-head"><h2 id="textTitle"></h2><button id="copyAll" class="primary">Copy all</button><button id="textClose" class="icon-btn">Close</button></div>
+    <pre id="textPre"></pre>
+  </div>
   <div id="sheet" class="layer" hidden>
     <section id="sheetPanel">
       <div class="layer-head"><h2 id="sheetTitle"></h2><span id="sheetAction"></span><button id="sheetClose" class="icon-btn" aria-label="Close">✕</button></div>
@@ -387,6 +396,7 @@ function iconKey(label, ariaLabel, onClick) {
   $('keys').appendChild(key);
 }
 iconKey('⚡', 'Shortcuts', () => openShortcuts());
+iconKey('📋', 'Copy output', () => openText());
 
 for (const [label, seq] of KEYS) {
   const key = h('button', 'key', label);
@@ -451,6 +461,7 @@ window.addEventListener('popstate', () => {
 const SHEETS = { folders: renderFolders, shortcuts: renderShortcuts };
 function renderLayer() {
   $('sheet').hidden = !SHEETS[layer];
+  $('textView').hidden = layer !== 'text';
   SHEETS[layer]?.();
 }
 function setSheet({ title, action, rows = [], form, note = '', error = false }) {
@@ -540,6 +551,60 @@ function renderFolders() {
 }
 
 $('new').addEventListener('click', openFolders);
+
+const TEXT_LINES = 300;
+
+// Wrapped rows are one logical line; joining them keeps long commands and URLs copyable in one piece.
+function bufferText(term) {
+  const buf = term.buffer.active;
+  const lines = [];
+  for (let i = 0; i < buf.length; i++) {
+    const row = buf.getLine(i);
+    const text = row.translateToString(!buf.getLine(i + 1)?.isWrapped);
+    if (row.isWrapped && lines.length) lines[lines.length - 1] += text;
+    else lines.push(text);
+  }
+  while (lines.length && !lines.at(-1)) lines.pop();
+  return lines.slice(-TEXT_LINES).join('\n');
+}
+
+function openText() {
+  const view = active();
+  if (!view) return;
+  showLayer('text');
+  $('textTitle').textContent = `Last ${TEXT_LINES} lines`;
+  $('textTitle').className = '';
+  $('textPre').textContent = bufferText(view.term);
+  $('textPre').scrollTop = $('textPre').scrollHeight;
+}
+
+// Plain http on the LAN is not a secure context, so navigator.clipboard is missing there; execCommand still works.
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {}
+  }
+  const area = h('textarea');
+  area.value = text;
+  area.readOnly = true;
+  area.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(area);
+  area.select();
+  area.setSelectionRange(0, text.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch {}
+  area.remove();
+  return ok;
+}
+
+$('copyAll').addEventListener('click', async () => {
+  const ok = await copyText($('textPre').textContent);
+  $('textTitle').textContent = ok ? 'Copied' : 'Long-press to select';
+  $('textTitle').className = ok ? 'ok' : 'error';
+});
+$('textClose').addEventListener('click', hideLayer);
 
 let shortcuts = null;
 let shortcutNote = '';
