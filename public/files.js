@@ -730,7 +730,7 @@
       const frame = h('iframe');
       frame.title = e.name;
       frame.src = fileUrl(e.path, true);
-      // Android Chrome does not render PDFs inside a frame, so offer the viewer in a tab as well.
+      // A browser without an inline PDF viewer leaves the frame blank, so the PDF is also offered in a tab.
       const open = h('a', null, 'Open PDF in a new tab');
       Object.assign(open, { href: fileUrl(e.path, true), target: '_blank', rel: 'noopener' });
       const note = h('div', 'fx-pinfo');
@@ -930,7 +930,7 @@
   window.openFiles = async (path) => {
     overlays ??= window.pocketDev?.overlays ?? localOverlays();
     if (!state.root) build();
-    if (state.open) return navigate(path || state.places.home);
+    if (state.open) return navigate(path || state.places?.home || '');
     state.open = true;
     state.root.hidden = false;
     overlays.open('files', onFilesClosed);

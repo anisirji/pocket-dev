@@ -508,7 +508,7 @@ export function createFilesApi({ sendJson, readJson, config }) {
       if (route.body) guardWrite(req, route.body);
       const body = route.body === 'json' ? await readJson(req).catch((err) => fail(400, err.message)) : undefined;
       const result = await route.run({ req, res, q: url.searchParams, body });
-      if (result !== undefined) sendJson(res, res.statusCode === 201 ? 201 : 200, result);
+      if (result !== undefined) sendJson(res, res.statusCode, result);
     } catch (err) {
       if (res.headersSent) return res.destroy();
       const [status, message] = describe(err);
