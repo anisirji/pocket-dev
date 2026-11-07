@@ -37,6 +37,7 @@
       <button class="st-close" aria-label="Close settings">✕</button>
     </header>
     <div class="st-body">
+      <section data-mount="service"></section>
       <section>
         <h3>Devices</h3>
         <p class="st-summary"></p>
@@ -50,14 +51,6 @@
       <section>
         <button class="st-link" data-act="apps"><span>Open apps</span><span class="st-apps-count"></span><span class="st-chev" aria-hidden="true">›</span></button>
         <p class="st-err" data-for="apps"></p>
-      </section>
-      <section>
-        <h3>Log in another phone</h3>
-        <p class="st-note">Scan the code with the other phone's camera. It logs in without the password, works once, and expires in 10 minutes.</p>
-        <p class="st-note st-addr"></p>
-        <button class="st-btn" data-act="qr">Show login QR</button>
-        <div class="st-qr" hidden></div>
-        <p class="st-err" data-for="qr"></p>
       </section>
       <section>
         <h3>Device limit</h3>
@@ -85,7 +78,14 @@
           <p class="st-err" data-for="password"></p>
         </form>
       </section>
-      <section data-mount="service"></section>
+      <section>
+        <h3>Log in another phone</h3>
+        <p class="st-note">Scan the code with the other phone's camera. It logs in without the password, works once, and expires in 10 minutes.</p>
+        <p class="st-note st-addr"></p>
+        <button class="st-btn" data-act="qr">Show login QR</button>
+        <div class="st-qr" hidden></div>
+        <p class="st-err" data-for="qr"></p>
+      </section>
       <section>
         <button class="st-btn st-danger" data-act="logout">Log out this device</button>
       </section>
@@ -310,7 +310,7 @@
     sheet.querySelector('.st-body').scrollTop = 0;
     clearInterval(timer);
     timer = setInterval(refresh, REFRESH_MS);
-    import('/service.js').then((m) => m.renderServiceSection($('[data-mount=\"service\"]'), api)).catch(() => {});
+    import('/service.js').then((m) => m.renderServiceSection($('[data-mount="service"]'), api)).catch(() => {});
     mountPower();
     await refresh();
   }
