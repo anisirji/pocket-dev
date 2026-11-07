@@ -207,7 +207,7 @@ export function createClaudeEngine(chat) {
       kind: plan ? 'plan' : toolName === 'Bash' ? 'command' : DIFF[toolName] ? 'file' : 'tool',
       title: plan ? 'Claude is ready to start' : title || `${toolName} ${summarize(toolName, toolInput)}`,
       detail: plan ? toolInput.plan ?? '' : [description, describeInput(toolName, toolInput)].filter(Boolean).join('\n\n'),
-      diff: DIFF[toolName]?.(toolInput),
+      diff: DIFF[toolName] && cap(DIFF[toolName](toolInput)),
       rule: plan ? undefined : rememberRules(toolName, suggestions).map(ruleString).join(', '),
       options,
     }, signal);
