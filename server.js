@@ -7,15 +7,17 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
+import { createAuth, QR_TTL_MIN } from './auth.js';
+import { terminalQr, qrNote } from './qr.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = path.join(ROOT, 'config.json');
+const CONFIG_PATH = process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json');
 const SCROLLBACK_MAX = 500_000;
 const BODY_MAX = 64_000;
 
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
-    const fresh = { password: crypto.randomBytes(9).toString('base64url'), port: 7777 };
+    const fresh = { port: 7777 };
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(fresh, null, 2) + '\n', { mode: 0o600 });
     console.log(`Created ${CONFIG_PATH}`);
   }
@@ -23,7 +25,12 @@ function loadConfig() {
 }
 
 const config = loadConfig();
-const PASSWORD = process.env.POCKET_DEV_PASSWORD || config.password;
+
+function saveConfig() {
+  const tmp = `${CONFIG_PATH}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+  fs.renameSync(tmp, CONFIG_PATH);
+}
 const PORT = Number(process.env.PORT) || config.port || 7777;
 
 function lanIp() {
@@ -37,21 +44,7 @@ function lanIp() {
   return '127.0.0.1';
 }
 
-const tokens = new Set();
-
-const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest();
-// Hashing first gives equal-length buffers, so timingSafeEqual never leaks the password length.
-const passwordMatches = (given) => crypto.timingSafeEqual(sha256(given), sha256(PASSWORD));
-
-function cookieToken(req) {
-  for (const part of (req.headers.cookie ?? '').split(';')) {
-    const [k, v] = part.trim().split('=');
-    if (k === 'pd_token') return v;
-  }
-  return undefined;
-}
-
-const isAuthed = (req) => tokens.has(cookieToken(req));
+const auth = createAuth({ config, saveConfig, port: PORT, lanIp });
 
 const sessions = new Map();
 
@@ -207,8 +200,8 @@ function forwardError(err, port) {
   return `Could not open port ${port}: ${err.message}`;
 }
 
-const sendJson = (res, status, body) => {
-  res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+const sendJson = (res, status, body, headers = {}) => {
+  res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers });
   res.end(body === undefined ? '' : JSON.stringify(body));
 };
 
@@ -229,20 +222,6 @@ function readJson(req) {
   });
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function login(req, res) {
-  const { password } = await readJson(req);
-  if (typeof password !== 'string' || !passwordMatches(password)) {
-    await sleep(1000);
-    return sendJson(res, 401, { error: 'Wrong password' });
-  }
-  const token = crypto.randomBytes(32).toString('hex');
-  tokens.add(token);
-  res.setHeader('set-cookie', `pd_token=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000`);
-  sendJson(res, 200, { ok: true });
-}
-
 function parsePort(value) {
   const port = Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65535) return { error: 'Port must be a whole number from 1 to 65535.' };
@@ -254,8 +233,9 @@ async function handleApi(req, res, pathname) {
   const [, , resource, key] = pathname.split('/');
   const route = `${req.method} ${resource}${key ? '/:key' : ''}`;
 
-  if (route === 'POST login') return login(req, res);
-  if (!isAuthed(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  const authReply = await auth.handleApi(req, pathname, () => readJson(req));
+  if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
+  if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
 
   switch (route) {
     case 'GET sessions':
@@ -293,23 +273,33 @@ async function handleApi(req, res, pathname) {
   }
 }
 
-const PAGES = { '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html' };
+const PAGES = {
+  '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html',
+  '/settings.js': 'settings.js', '/settings.css': 'settings.css',
+};
+const PUBLIC_PAGES = new Set(['login.html']);
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function servePage(req, res, pathname) {
   const file = PAGES[pathname];
   if (!file || req.method !== 'GET') return sendJson(res, 404, { error: 'Not found' });
-  if (file === 'index.html' && !isAuthed(req)) {
+  if (!PUBLIC_PAGES.has(file) && !auth.deviceFor(req)) {
+    if (!file.endsWith('.html')) return sendJson(res, 401, { error: 'Not logged in' });
     res.writeHead(302, { location: '/login.html' });
     return res.end();
   }
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store' });
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
 const server = http.createServer(async (req, res) => {
-  const { pathname } = new URL(req.url, 'http://localhost');
+  const { pathname, searchParams } = new URL(req.url, 'http://localhost');
   try {
-    if (pathname.startsWith('/api/')) await handleApi(req, res, pathname);
+    if (pathname === '/' && searchParams.has('k')) {
+      const { status, headers } = auth.redeemQrKey(req, searchParams.get('k'));
+      res.writeHead(status, { 'cache-control': 'no-store', ...headers });
+      res.end();
+    } else if (pathname.startsWith('/api/')) await handleApi(req, res, pathname);
     else servePage(req, res, pathname);
   } catch (err) {
     if (!res.headersSent) sendJson(res, 400, { error: err.message });
@@ -325,13 +315,17 @@ const rejectUpgrade = (socket, status, text) => {
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url, 'http://localhost');
   const match = /^\/ws\/([0-9a-f]+)$/.exec(pathname);
-  if (!isAuthed(req)) return rejectUpgrade(socket, 401, 'Unauthorized');
+  const device = auth.deviceFor(req);
+  if (!device) return rejectUpgrade(socket, 401, 'Unauthorized');
   // SameSite=Strict should already block cross-site upgrades; the Origin check is the backstop.
   const origin = req.headers.origin;
   if (origin && origin !== `http://${req.headers.host}`) return rejectUpgrade(socket, 403, 'Forbidden');
   const session = match && sessions.get(match[1]);
   if (!session) return rejectUpgrade(socket, 404, 'Not Found');
-  wss.handleUpgrade(req, socket, head, (ws) => attachClient(session, ws));
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    auth.trackSocket(device, ws);
+    attachClient(session, ws);
+  });
 });
 
 // A phone that sleeps can leave a dead socket behind; without pings it would buffer output forever.
@@ -343,7 +337,9 @@ setInterval(() => {
   }
 }, 30_000).unref();
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', async () => {
+  console.log(await terminalQr(auth.mintQrUrl()));
   console.log(`Pocket Dev running at http://${lanIp()}:${PORT}`);
-  console.log(`Password: ${PASSWORD}`);
+  console.log(auth.passwordLine);
+  console.log(qrNote(QR_TTL_MIN));
 });
