@@ -121,7 +121,7 @@
     if (!windows) items.push(el('p', 'apps-note', 'Loading…'));
     else if (windows.error) items.push(banner({ kind: 'error', text: windows.error }));
     else if (windows.windowAccess !== 'ok') items.push(banner({ kind: 'warn', text: windows.help }));
-    else if (!windows.windows.length) items.push(el('p', 'apps-note', 'No open windows.'));
+    else if (!windows.windows.length) items.push(el('p', 'apps-note', 'No windows found. Windows on another Space may not be listed.'));
     else {
       const list = el('div', 'apps-windows');
       for (const w of windows.windows) {
