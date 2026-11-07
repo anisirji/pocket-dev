@@ -1,6 +1,7 @@
 #!/bin/bash
 # Installs Pocket Dev as a launchd agent that starts at login and restarts after a crash.
 # Rerunning rewrites the plist and restarts the server. Env overrides: LABEL, PORT, LOG.
+# POCKET_DEV_CONFIG, POCKET_DEV_STATE_DIR and POCKET_DEV_ADMIN_PORT pass through to the service when set.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO="$PWD"
@@ -43,6 +44,11 @@ fi
 npm run --silent postinstall
 
 mkdir -p "$(dirname "$PLIST")" "$(dirname "$LOG")"
+extra_env=""
+for var in POCKET_DEV_CONFIG POCKET_DEV_STATE_DIR POCKET_DEV_ADMIN_PORT; do
+  [ -n "${!var:-}" ] && extra_env="$extra_env    <key>$var</key><string>${!var}</string>
+"
+done
 tmp="$PLIST.tmp"
 cat >"$tmp" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -72,7 +78,8 @@ cat >"$tmp" <<PLIST
     <key>SHELL</key><string>/bin/zsh</string>
     <key>USER</key><string>$(id -un)</string>
     <key>PORT</key><string>$PORT</string>
-  </dict>
+    <key>LABEL</key><string>$LABEL</string>
+$extra_env  </dict>
 </dict>
 </plist>
 PLIST
@@ -84,7 +91,12 @@ if job_loaded && cmp -s "$tmp" "$PLIST"; then
 else
   bootout_and_wait
   mv "$tmp" "$PLIST"
+  # A disabled job refuses to load. Enable it to load it now, then restore the choice for the next login.
+  was_disabled=0
+  job_disabled && was_disabled=1
+  launchctl enable "$DOMAIN/$LABEL"
   launchctl bootstrap "$DOMAIN" "$PLIST"
+  [ "$was_disabled" = 0 ] || launchctl disable "$DOMAIN/$LABEL"
 fi
 
 if [ -n "$foreign" ]; then
