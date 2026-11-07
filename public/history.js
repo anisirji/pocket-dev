@@ -51,14 +51,17 @@
     <div class="hist-detail hist-scroll" hidden></div>
     <div class="hist-foot" hidden>
       <p class="hist-warn" hidden></p>
-      <button class="hist-continue">Continue on phone</button>
+      <div class="hist-actions">
+        <button class="hist-continue hist-in-terminal">Continue in terminal</button>
+        <button class="hist-continue hist-in-chat">Continue in chat</button>
+      </div>
     </div>`;
   document.body.appendChild(sheet);
   const q = (sel) => sheet.querySelector(sel);
   const ui = {
     back: q('.hist-back'), heading: q('.hist-heading'), refresh: q('.hist-refresh'), close: q('.hist-close'),
     chips: q('.hist-chips'), list: q('.hist-list'), detail: q('.hist-detail'), foot: q('.hist-foot'),
-    warn: q('.hist-warn'), go: q('.hist-continue'),
+    warn: q('.hist-warn'), go: q('.hist-in-terminal'), chat: q('.hist-in-chat'),
   };
 
   let filter = 'all';
@@ -182,8 +185,9 @@
   function openDetail(item) {
     current = item;
     overlays.open('resume-detail', () => setMode('list'));
-    ui.go.disabled = false;
-    ui.go.textContent = 'Continue on phone';
+    ui.go.disabled = ui.chat.disabled = false;
+    ui.go.textContent = 'Continue in terminal';
+    ui.chat.textContent = 'Continue in chat';
     setMode('detail');
     loadDetail(item);
   }
@@ -196,22 +200,36 @@
     setTimeout(() => node.remove(), 6000);
   }
 
-  ui.go.onclick = async () => {
+  // Both buttons leave the sheet for the new terminal or chat; `start` resolves to a toast note or nothing.
+  // `leaveFirst` closes the sheet before `start`, for a start that opens its own overlays: closing the sheet later
+  // would close them too.
+  async function continueWith(button, start, leaveFirst = false) {
     if (!current) return;
-    ui.go.disabled = true;
-    ui.go.textContent = 'Starting…';
+    const label = button.textContent;
+    ui.go.disabled = ui.chat.disabled = true;
+    button.textContent = 'Starting…';
+    if (leaveFirst) leave();
     try {
-      const view = await api('POST', `/api/history/${current.tool}/${encodeURIComponent(current.id)}/resume`);
-      leave();
-      window.pocketDev.openSession(view);
+      const note = await start(current);
+      if (!leaveFirst) leave();
       document.activeElement?.blur();
-      if (view.note) toast(view.note);
+      if (note) toast(note);
     } catch (err) {
-      ui.go.disabled = false;
-      ui.go.textContent = 'Continue on phone';
+      ui.go.disabled = ui.chat.disabled = false;
+      button.textContent = label;
       toast(`Could not resume: ${err.message}`);
     }
-  };
+  }
+
+  ui.go.onclick = () => continueWith(ui.go, async (item) => {
+    const view = await api('POST', `/api/history/${item.tool}/${encodeURIComponent(item.id)}/resume`);
+    window.pocketDev.openSession(view);
+    return view.note;
+  });
+  ui.chat.onclick = () => continueWith(ui.chat, async (item) => {
+    if (!item.cwd) throw new Error('this conversation has no folder on record');
+    await window.pocketDevChat.startFromSession({ tool: item.tool, id: item.id, cwd: item.cwd, title: item.title });
+  }, true);
 
   ui.back.onclick = () => overlays.close('resume-detail');
   ui.close.onclick = leave;

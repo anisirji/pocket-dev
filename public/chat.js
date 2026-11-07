@@ -1487,8 +1487,8 @@
       if (chatId) return showChat({ id: chatId });
       if (!stack.length) push({ layer: 'list' });
     },
-    async startFromSession({ tool, id, cwd }) {
-      const chat = await api('POST', '/api/chat', { tool, cwd, resume: { sessionId: id } });
+    async startFromSession({ tool, id, cwd, title }) {
+      const chat = await api('POST', '/api/chat', { tool, cwd, resume: { sessionId: id }, ...(title && { title: title.slice(0, 200) }) });
       showChat(chat);
       return chat;
     },
