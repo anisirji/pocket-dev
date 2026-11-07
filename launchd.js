@@ -33,7 +33,7 @@ export async function serviceStatus() {
     autostart: installed && override !== 'disabled' && override !== 'true',
     running: pid !== null,
     pid,
-    // The job runs caffeinate, which runs node, so this server is the service when the job's pid is its parent.
+    // The job runs node directly; a plist from before the power feature ran it under caffeinate, so accept the parent too.
     isThisServer: pid !== null && (pid === process.pid || pid === process.ppid),
   };
 }
