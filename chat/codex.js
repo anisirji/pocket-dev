@@ -247,7 +247,7 @@ export function createCodexEngine(chat) {
   const decisions = (params, fallback) => params.availableDecisions?.filter((d) => typeof d === 'string') ?? fallback;
 
   // Codex only offers acceptForSession for some requests. Pocket Dev keeps its own per-chat list too, so
-  // "Allow for this chat" holds across engine restarts and for requests without that option.
+  // "Approve for this chat" holds across engine restarts and for requests without that option.
   async function approve(id, params, { grantKey, kind, title, detail, diff, fallback }) {
     const offered = decisions(params, fallback);
     if (chat.grants.includes(grantKey)) return reply(id, { decision: 'accept' });

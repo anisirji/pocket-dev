@@ -208,7 +208,7 @@ export function createChatApi({ sendJson, readJson, config }) {
     chat.emit({ type: 'status', text: `Changed ${Object.entries(changes).map(([k, v]) => label(k, v)).join(', ')}` });
     let applied = Object.fromEntries(Object.keys(changes).map((k) => [k, 'next-turn']));
     if (chat.engine && !chat.waking) {
-      const how = await chat.engine.configure(changes).catch(() => applied);
+      const how = await chat.engine.configure(changes).catch(() => Object.fromEntries(Object.keys(changes).map((k) => [k, 'restart'])));
       if (Object.values(how).includes('restart')) chat.engine.stale = true;
       applied = Object.fromEntries(Object.entries(how).map(([k, v]) => [k, v === 'now' ? 'now' : 'next-turn']));
     }
