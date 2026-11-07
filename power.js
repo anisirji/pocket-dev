@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 const REPO_DIR = path.dirname(fileURLToPath(import.meta.url));
-// Overridable so tests can stub the lid and lid-sleep readings; production uses the system tools.
+// Overridable so tests can stub the system tools; the defaults are the real ones.
 const PMSET = process.env.POCKET_DEV_PMSET || '/usr/bin/pmset';
 const IOREG = process.env.POCKET_DEV_IOREG || '/usr/sbin/ioreg';
 const OSASCRIPT = process.env.POCKET_DEV_OSASCRIPT || '/usr/bin/osascript';
@@ -24,7 +24,7 @@ const WAKE_GRACE_MS = 10_000;
 // -s holds the system awake only while on AC power; -i also blocks idle sleep on battery.
 // -w <pid> (added at spawn) makes caffeinate exit with the server, so it can never outlive Pocket Dev.
 const MODE_FLAGS = { off: null, plugged: ['-s'], always: ['-i', '-s'] };
-export const AWAKE_MODES = Object.keys(MODE_FLAGS);
+const AWAKE_MODES = Object.keys(MODE_FLAGS);
 const DEFAULT_MODE = 'plugged';
 
 let configPath;
@@ -88,7 +88,6 @@ function setAwake(next) {
 }
 
 const pmset = async (...args) => (await run(PMSET, args, { timeout: 5000 })).stdout;
-// Macs without a lid have no AppleClamshellState key, which reads as open.
 // Only an explicit "idle" from update-check.sh counts as no update; a broken check refuses sleep and shutdown.
 async function updateInProgress() {
   try {
@@ -99,10 +98,11 @@ async function updateInProgress() {
 }
 const updateRefusal = (doing) => `A macOS update is being installed. ${doing} now could interrupt it. Try again after it finishes.`;
 
+// Macs without a lid have no AppleClamshellState key, which reads as open.
 const lidClosed = async () => /"AppleClamshellState" = Yes/.test((await run(IOREG, ['-r', '-k', 'AppleClamshellState', '-d', '4'], { timeout: 5000 })).stdout);
 
 // "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1)\t82%; charging; 0:45 remaining present: true"
-export function parseBatt(text) {
+function parseBatt(text) {
   const onAC = text.includes("'AC Power'");
   const m = /InternalBattery[^\t]*\t(\d+)%; ([^;]+);(?: (\d+):(\d+) remaining)?/.exec(text);
   if (!m) return { onAC, battery: null, charging: false, timeRemaining: null };
@@ -166,7 +166,10 @@ const osascript = (script) => run(OSASCRIPT, ['-e', script], { timeout: 60_000 }
 
 function osascriptError(err) {
   const text = `${err.stderr ?? ''}${err.message}`;
-  return /-1743|Not authorized to send Apple events/.test(text) ? AUTOMATION_HELP : `osascript failed: ${text.trim()}`;
+  if (/-1743|Not authorized to send Apple events/.test(text)) return AUTOMATION_HELP;
+  // The first shutdown makes macOS ask on the Mac; nobody answers it from the phone, so osascript times out.
+  if (err.killed) return `macOS may be asking on the Mac for permission. ${AUTOMATION_HELP}`;
+  return `osascript failed: ${text.trim()}`;
 }
 
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
