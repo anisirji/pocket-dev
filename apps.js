@@ -106,7 +106,7 @@ function protectedReason(app, ancestors) {
   return null;
 }
 
-async function snapshot() {
+export async function snapshot() {
   const [raw, table] = await Promise.all([jxa(LIST_APPS), processTable()]);
   const ancestors = ancestry(table);
   const children = new Map();

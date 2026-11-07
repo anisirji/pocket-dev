@@ -13,8 +13,10 @@ import { createHistoryApi } from './history.js';
 import { createAuth, QR_TTL_MIN } from './auth.js';
 import { terminalQr, qrNote } from './qr.js';
 import { openConfig } from './config.js';
-import { startPower, handlePowerApi } from './power.js';
-import { createAppsApi } from './apps.js';
+import { startPower, handlePowerApi, powerStatus } from './power.js';
+import { createAppsApi, snapshot as appsSnapshot } from './apps.js';
+import { startAdmin } from './admin.js';
+import { createPhoneAccess } from './access.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SCROLLBACK_MAX = 500_000;
@@ -266,6 +268,7 @@ function createSession(cwd, base = folderName(cwd), command) {
     scrollback: '',
     clients: new Set(),
     exitCode: null,
+    startedAt: Date.now(),
   };
   proc.onData((d) => {
     appendScrollback(session, d);
@@ -471,6 +474,8 @@ async function handleApi(req, res, url) {
     return handlePowerApi(req, res, url.pathname.split('/')[4], { readJson, sendJson, wss, sessions });
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  const adminReply = await admin.phoneApi(req, url.pathname, () => readJson(req));
+  if (adminReply) return sendJson(res, adminReply.status, adminReply.body);
   if (resource === 'git') {
     const { status, body } = await handleGit(req.method, url, () => readJson(req));
     return sendJson(res, status, body);
@@ -549,7 +554,7 @@ const PAGES = {
   '/git.js': 'git.js', '/graph.js': 'graph.js', '/git.css': 'git.css',
   '/history.js': 'history.js', '/history.css': 'history.css',
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
-  '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/power.js': 'power.js',
+  '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/power.js': 'power.js', '/service.js': 'service.js',
 };
 const PUBLIC_PAGES = new Set(['login.html']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
@@ -617,13 +622,91 @@ setInterval(() => {
 }, 30_000).unref();
 
 startPower(config);
-
 watchLanIp();
-server.listen(PORT, '0.0.0.0', async () => {
+
+const AWAKE_LABELS = { off: 'Off', plugged: 'While plugged in', always: 'Always' };
+const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
+// Listing apps runs osascript; the admin page polls, so one listing serves every poll for a few seconds.
+const APPS_CACHE_MS = 10_000;
+let appsCache = { at: 0, value: null };
+async function cachedApps() {
+  if (!appsCache.value || Date.now() - appsCache.at > APPS_CACHE_MS) appsCache = { at: Date.now(), value: appsSnapshot() };
+  return appsCache.value;
+}
+
+// The admin page's live overview. A feature adds an entry here to show up there; see startAdmin in admin.js.
+// A section without act() is read-only: it shows what is happening and points to the phone for changes.
+const adminSections = {
+  terminals: {
+    title: 'Terminals',
+    empty: 'No terminals open.',
+    action: 'Close',
+    warning: 'Anything running in it is killed.',
+    lockdown: 'optional',
+    list: () => [...sessions.values()].map((s) => ({
+      id: s.id,
+      label: s.title,
+      details: [s.cwd, plural(s.clients.size, 'client'), ...(s.exitCode !== null ? [`exited ${s.exitCode}`] : [])],
+      startedAt: s.startedAt,
+    })),
+    act: (id) => {
+      const session = sessions.get(id);
+      if (session) destroySession(session);
+      return Boolean(session);
+    },
+  },
+  ports: {
+    title: 'Port forwards',
+    empty: 'No ports forwarded.',
+    action: 'Stop',
+    warning: 'Phones lose access to it until you open the port again.',
+    lockdown: 'always',
+    list: () => listForwards().map((f) => ({ id: String(f.port), label: `:${f.port}`, details: [f.url ?? f.error ?? 'waiting for a network'] })),
+    act: (id) => closeForward(Number(id)),
+  },
+  power: {
+    title: 'Power',
+    empty: 'No power information.',
+    async list() {
+      const p = await powerStatus();
+      const battery = p.battery === null ? (p.onAC ? 'On power adapter' : 'No battery') : `Battery ${p.battery}%${p.charging ? ', charging' : p.onAC ? ', plugged in' : ''}`;
+      return [{
+        id: 'awake',
+        label: `Keep awake: ${AWAKE_LABELS[p.awake]}${p.stayingAwake ? ' (holding the Mac awake)' : ''}`,
+        details: [battery, p.lidClosed ? 'Lid closed' : 'Lid open', `Lid sleep ${p.lidSleepDisabled ? 'off' : 'on'}`],
+      }];
+    },
+  },
+  apps: {
+    title: 'Open apps',
+    empty: 'No open apps.',
+    async list() {
+      const { apps } = await cachedApps();
+      return [{ id: 'count', label: plural(apps.length, 'app') + ' open', details: ['Quit or force quit them from the phone: Settings, Open apps'] }];
+    },
+  },
+};
+
+const access = createPhoneAccess({
+  server, wss, port: PORT, config, log: auth.admin.log,
+  forwards: { ports: () => [...forwards.keys()], open: openForward, close: closeForward },
+});
+const admin = await startAdmin({ auth, access, config, mainPort: PORT, urls, sections: adminSections }).catch((err) => {
+  console.error(err.message);
+  process.exit(1);
+});
+const opened = await access.start();
+if (opened.error) {
+  console.error(`${opened.error} Phone access stays off until then.`);
+} else if (access.view().connected) {
   console.log(await terminalQr(auth.mintQrUrl()));
   const { lan, local } = urls();
   console.log(`Pocket Dev running at ${lan ?? local}`);
   if (lan) console.log(`Also at ${local} (${LOCAL_NOTE})`);
-  console.log(auth.passwordLine);
-  console.log(qrNote(QR_TTL_MIN));
-});
+} else {
+  console.log('Phone access is off. Press Connect on the admin page to let your phone in.');
+}
+console.log(auth.passwordLine);
+if (access.view().connected) console.log(qrNote(QR_TTL_MIN));
+console.log(admin.line);
+if (!access.view().connected || !access.view().keepOpen) admin.openPage();

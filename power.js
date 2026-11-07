@@ -118,7 +118,7 @@ function parseAssertions(text, caffeinatePid) {
   };
 }
 
-async function powerStatus() {
+export async function powerStatus() {
   const caffeinatePid = child?.proc.pid ?? null;
   const [batt, settings, assertions, closed, updating] = await Promise.all([
     pmset('-g', 'batt'), pmset('-g'), pmset('-g', 'assertions'), lidClosed(), updateInProgress(),

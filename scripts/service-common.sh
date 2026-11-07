@@ -3,6 +3,9 @@ LABEL="${LABEL:-dev.pocket.server}"
 DOMAIN="gui/$(id -u)"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
+# npm run autostart -- off writes this override; macOS before 13 prints it as `=> true`.
+job_disabled() { launchctl print-disabled "$DOMAIN" | grep -E "\"$LABEL\" => (disabled|true)" >/dev/null; }
+
 job_loaded() { launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; }
 
 job_field() { launchctl print "$DOMAIN/$LABEL" 2>/dev/null | sed -n "s/^	$1 = //p" || true; }

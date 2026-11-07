@@ -19,22 +19,92 @@
   button { background: var(--accent); color: #08101e; font-weight: 600; border: 0; }
   button:disabled { opacity: .6; }
   #err { color: var(--danger); min-height: 1.4em; margin: 0; font-size: 14px; }
+  [hidden] { display: none !important; }
+  #notice { width: 100%; max-width: 340px; text-align: center; }
+  #notice h1 { font-size: 21px; margin: 18px 0 8px; }
+  #notice p { margin: 0 0 10px; color: var(--muted); font-size: 15px; }
+  #notice .who { display: inline-block; margin-top: 8px; padding: 6px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); color: var(--text); font-size: 14px; }
+  .mark { width: 56px; height: 56px; margin: 0 auto; border-radius: 50%; }
+  .pending .mark { border: 4px solid var(--line); border-top-color: var(--accent); animation: spin 1s linear infinite; }
+  .blocked .mark { position: relative; border: 4px solid var(--danger); }
+  .blocked .mark::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 56px; margin: -28px 0 0 -2px; background: var(--danger); transform: rotate(45deg); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .pending .mark { animation-duration: 3s; } }
 </style>
 </head>
 <body>
-<form id="f">
+<form id="f" hidden>
   <h1>Pocket Dev <span>login</span></h1>
   <input id="pw" type="password" autocomplete="current-password" placeholder="Password" autofocus required>
   <button id="go">Log in</button>
   <p id="err"></p>
 </form>
+<section id="notice" hidden aria-live="polite">
+  <div class="mark" aria-hidden="true"></div>
+  <h1 id="nTitle"></h1>
+  <p id="nBody"></p>
+  <span class="who" id="nWho" hidden></span>
+</section>
 <script>
+  const POLL_MS = 2000;
   const f = document.getElementById('f');
   const go = document.getElementById('go');
   const err = document.getElementById('err');
-  if (new URLSearchParams(location.search).get('e') === 'qr') {
-    err.textContent = 'QR code expired, scan a new one (npm run qr) or enter the password';
+  const notice = document.getElementById('notice');
+  let pollTimer = 0;
+
+  const NOTICES = {
+    blocked: {
+      title: 'This device is blocked',
+      body: 'Ask the Mac owner to unblock it. Until then, Pocket Dev refuses every request from this browser.',
+    },
+    pending: {
+      title: 'Waiting for approval on the Mac…',
+      body: 'On the Mac, open the Pocket Dev admin page (npm run admin) and approve this device. This page continues by itself.',
+    },
+  };
+
+  function showForm(message = '') {
+    clearTimeout(pollTimer);
+    notice.hidden = true;
+    f.hidden = false;
+    err.textContent = message;
+    document.getElementById('pw').focus();
   }
+
+  function render(s, wasPending) {
+    clearTimeout(pollTimer);
+    if (s.status === 'active') return location.replace('/');
+    const n = NOTICES[s.status];
+    if (!n) {
+      return showForm(wasPending ? 'The Mac did not approve this device in time, or denied it. Log in again to ask again.' : '');
+    }
+    f.hidden = true;
+    notice.hidden = false;
+    notice.className = s.status;
+    document.getElementById('nTitle').textContent = n.title;
+    document.getElementById('nBody').textContent = n.body;
+    const who = document.getElementById('nWho');
+    who.hidden = s.status !== 'pending';
+    who.textContent = `${s.name} · code ${s.code}`;
+    if (s.status === 'pending') pollTimer = setTimeout(check, POLL_MS, true);
+  }
+
+  async function check(wasPending = false) {
+    try {
+      render(await (await fetch('/api/status')).json(), wasPending);
+    } catch {
+      if (wasPending) pollTimer = setTimeout(check, POLL_MS, true);
+      else showForm('Cannot reach the Mac');
+    }
+  }
+
+  if (new URLSearchParams(location.search).get('e') === 'qr') {
+    showForm('QR code expired, scan a new one (npm run qr) or enter the password');
+  } else {
+    check();
+  }
+
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
     go.disabled = true;
@@ -45,8 +115,9 @@
         headers: { 'content-type': 'application/json', 'x-pocket-dev': '1' },
         body: JSON.stringify({ password: document.getElementById('pw').value }),
       });
-      if (r.ok) return location.replace('/');
       const data = await r.json().catch(() => ({}));
+      if (r.ok && !data.pending) return location.replace('/');
+      if (data.pending || data.blocked) return check();
       err.textContent = data.error || `Login failed (${r.status})`;
     } catch {
       err.textContent = 'Cannot reach the Mac';

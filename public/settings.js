@@ -77,7 +77,7 @@
         <h3>Password</h3>
         <form class="st-form" data-form="password">
           <input type="password" name="current" autocomplete="current-password" placeholder="Current password" required>
-          <input type="password" name="next" autocomplete="new-password" placeholder="New password (4+ characters)" minlength="4" required>
+          <input type="password" name="next" autocomplete="new-password" placeholder="New password (6+ characters)" minlength="6" required>
           <input type="password" name="confirm" autocomplete="new-password" placeholder="Repeat new password" required>
           <label class="st-check"><input type="checkbox" name="logoutOthers"> Log out all other devices</label>
           <button class="st-primary">Change password</button>
@@ -85,6 +85,7 @@
           <p class="st-err" data-for="password"></p>
         </form>
       </section>
+      <section data-mount="service"></section>
       <section>
         <button class="st-btn st-danger" data-act="logout">Log out this device</button>
       </section>
@@ -265,7 +266,7 @@
     const { current, next, confirm: again, logoutOthers } = form.elements;
     msg('ok', 'password', '');
     msg('err', 'password', '');
-    if (next.value.length < 4) return msg('err', 'password', 'The new password needs at least 4 characters.');
+    if (next.value.length < 6) return msg('err', 'password', 'The new password needs at least 6 characters.');
     if (next.value !== again.value) return msg('err', 'password', 'The new passwords do not match.');
     const button = form.querySelector('button');
     button.disabled = true;
@@ -309,6 +310,7 @@
     sheet.querySelector('.st-body').scrollTop = 0;
     clearInterval(timer);
     timer = setInterval(refresh, REFRESH_MS);
+    import('/service.js').then((m) => m.renderServiceSection($('[data-mount=\"service\"]'), api)).catch(() => {});
     mountPower();
     await refresh();
   }

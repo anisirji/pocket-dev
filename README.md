@@ -24,13 +24,14 @@ Pocket Dev running at http://192.168.1.17:7777
 Also at http://your-mac.local:7777 (same Wi-Fi only; some Android phones cannot open .local names)
 Password: (set; change it in Settings)
 Scan the QR code to log in without the password. It works once and expires in 10 minutes. New code: npm run qr
+Admin (this Mac only): http://localhost:7778
 ```
 
 Scan the QR code with your phone's camera and open the link in Chrome. You are logged in. You can also open the URL and type the password.
 
 - On first start, the server writes `config.json` with port 7777 and prints a random password. Only the first start prints it.
 - `config.json` stores a scrypt hash of the password (`passwordHash`), never the password. If it still has a plaintext `password`, the server converts it at start.
-- To change the password, use **Settings**. `POCKET_DEV_PASSWORD` overrides the stored password, and the server then prints it at start.
+- To change the password, use **Settings** or the admin page. A new password needs at least 6 characters. `POCKET_DEV_PASSWORD` overrides the stored password, and the server then prints it at start.
 - To use a different port, set `PORT`.
 - Logged-in devices stay logged in across restarts. The terminals do not survive a restart.
 
@@ -57,6 +58,40 @@ Each login is a device. Tap **⚙** to see them.
 - A QR login always works. When the limit is reached, it logs out the device used least recently.
 - Lowering the limit logs nobody out. It only blocks new password logins.
 
+## Admin page (this Mac only)
+
+`npm run admin` opens `http://localhost:7778` in the default browser. The page shows who is logged in and lets you control phone access.
+
+The page has no password. Only this Mac can reach it, and anyone using this Mac account can open it. Lock the Mac when you step away.
+
+- It listens on 127.0.0.1 and ::1 only. The port is `adminPort` in `config.json`, or `POCKET_DEV_ADMIN_PORT`. The default is the main port plus 1.
+- It refuses requests with a foreign `Host` or `Origin` header, requests with proxy headers, and changes without the `x-pocket-admin: 1` header and a JSON body. Other web pages and tunnels on the Mac cannot use it.
+
+### Connect and disconnect
+
+The top card opens or closes phone access. **Disconnect** closes the phone port: every phone disconnects and port forwards stop. Terminals keep running on the Mac. **Connect** opens the port again and reopens the forwards.
+
+- **Keep connection open** on (the default): the state survives closing the page and restarting.
+- **Keep connection open** off: phone access closes about 30 seconds after the admin page closes, and Pocket Dev starts disconnected. `npm start` then opens the admin page so that **Connect** is one click away.
+- `npm run connect` and `npm run disconnect` do the same from a terminal on the Mac.
+- A phone can disconnect from **Settings**, but only the Mac can connect again.
+- If another program holds the phone port, Pocket Dev stays up, the admin page names that program, and **Connect** tries again.
+
+### Devices, approval, and blocking
+
+- **Log out** removes a device and closes its terminals at once.
+- **Block** keeps the device listed and refuses everything it sends. Its phone shows "This device is blocked". **Unblock** restores it, and **Remove** deletes the record.
+- A blocked browser that clears its cookies becomes a new device and can log in again with the password. To prevent that, turn on **Approve new devices**: a password login then waits on the phone ("Waiting for approval on the Mac…") until you press **Approve** on the admin page. The phone and the admin page show the same 4-character code. Requests expire after 10 minutes. QR logins skip approval, because scanning a code from the Mac proves you are there.
+- After 10 wrong passwords in 15 minutes from one IP address, that address cannot log in for 15 minutes.
+
+### Security log
+
+Pocket Dev appends logins, failed logins, QR use, device changes, password and setting changes, connects, disconnects, and lockdowns to `~/.pocket-dev/security.log` (JSON lines, mode 0600). At 1 MB the file moves to `security.log.1`, which replaces the older copy. The admin page shows the latest 200 entries and warns when 5 or more logins failed in the last hour.
+
+### Lockdown
+
+**Lock down now** disconnects phone access, logs out every device (including ones waiting for approval), stops every port forward, and cancels every login QR code. Blocked devices stay blocked. Terminals keep running unless you tick **Also close all terminals**. You can set a new password in the same step.
+
 ## Run it always
 
 Pocket Dev can run as a launchd agent. launchd starts it when you log in and restarts it within about 10 seconds if it crashes.
@@ -77,8 +112,10 @@ Pocket Dev can run as a launchd agent. launchd starts it when you log in and res
 | Follow the log (`~/Library/Logs/pocket-dev.log`) | `npm run service:logs` |
 | Restart, for example after `git pull` | `npm run service:install` |
 | Stop and remove the service | `npm run service:uninstall` |
+| Turn starting at login on or off, or show it | `npm run autostart -- on`, `off`, or `status` |
 
 - Each restart closes all terminals. Devices stay logged in.
+- `npm run autostart -- off`, or the switch in **Settings** or on the admin page, keeps the service from starting at the next login. It does not stop the running server. **Stop Pocket Dev now** on the admin page stops it, including when it runs as the service.
 - The log contains a login QR code and URL from each start. Each works once and expires after 10 minutes. The log contains the password only when the server generated it or it comes from `POCKET_DEV_PASSWORD`.
 - The service is a per-user agent. After a reboot it starts when you log in, not before.
 - The service runs `node server.js` directly. The server itself keeps the Mac awake, as the mode in [Power](#power) says.
