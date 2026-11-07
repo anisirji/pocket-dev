@@ -16,7 +16,7 @@ Pocket Dev is one Node.js server that runs on the Mac as your user. The phone op
 | Folder picker | **+** lists Home, pinned folders, the last 5 folders, and every folder in `~/Desktop` and `~/Desktop/Projects` with `.git` or `package.json`. Type any other path. | Scan deeper than one level for the project list. |
 | Tab names | Named after the folder (`app`, `app 2`). Resumed tabs are `claude · app` or `codex · app`. | |
 | All terminals | **☰** next to **+** lists every terminal with its folder, running or exited, and when it last printed. Tap a row to jump to it, **✕** to close it. | |
-| Input and key bar | **Send** types the input and then Enter 30 ms later. Empty **Send** sends Enter. Keys: ⚡, 📋, Ctrl+C, Enter, Esc, Tab, arrows (application cursor mode aware), Ctrl+D. | |
+| Input and key bar | **Send** types the input and then Enter 30 ms later. Empty **Send** sends Enter. One compact row has **Answer**, ↑ / ↓, **Enter**, and **More**. When Codex shows “⇧← to answer”, tap **Answer**, use ↑ / ↓ to choose, then **Enter**. **More** opens the remaining keys, shortcuts, and Copy; it closes after a choice. Terminal tabs hide while the phone keyboard is open and return when it closes. | |
 | Scrolling | Touch scroll with fling, 5,000 lines on the phone. **↓ latest** jumps to the bottom. | |
 | Reconnect | Terminals keep running when the phone sleeps. On reconnect, the server replays up to about 500 KB per terminal. Dead sockets are pinged out every 30 s. | |
 | Shared terminals | Several pages can attach to one terminal. The page that types last sets the size. | Keep two different sizes at once. |
@@ -48,15 +48,15 @@ It does not protect forwarded ports with a password, persist forwards across res
 
 Lists the 30 most recent Claude Code and Codex conversations from `~/.claude/projects` and `~/.codex`, filtered by **All**, **Claude**, or **Codex**. Shows the latest 20 messages. **Continue in terminal** opens a terminal in the conversation's folder and types `claude --resume <id>` or `codex resume <id>`. A conversation is marked **open on laptop?** when a running process has its id on the command line or its file changed in the last 2 minutes.
 
-Choose **Continue in terminal** or **Continue in chat**. Resume reads the history files; the selected engine writes its normal history when you continue. Close the conversation on the laptop before resuming elsewhere.
+Choose **Continue in terminal** or **Continue in chat**. Resume reads the history files; the selected engine writes its normal history when you continue. Codex Chat reuses the local daemon when available. If a conversation belongs to a different Codex server and reports an active writer, close the original session before retrying. Close Claude conversations on the laptop before resuming elsewhere.
 
 ### Chat
 
 | Feature | What it does | Does not |
 | --- | --- | --- |
-| Engines | Claude through `@anthropic-ai/claude-agent-sdk` 0.2.139, which runs your installed `claude`. Codex through one shared `codex app-server`. Both use your existing logins. | Store any Claude or Codex credentials. |
+| Engines | Claude through `@anthropic-ai/claude-agent-sdk` 0.2.139, which runs your installed `claude`. Codex connects to its running local daemon so terminal conversations can continue in Chat. Without a daemon, it starts one shared `codex app-server` process. Both use your existing logins. | Store any Claude or Codex credentials. |
 | Chat screens | Chat list, new chat (engine, folder, model, mode), and a conversation view with markdown, tool folds, and diffs. | |
-| Queue | Type while the agent is working and the button says **Queue**. The message shows as a dashed **Queued** bubble (with **Remove**) and goes out by itself, one per turn and in order, when the turn ends. There is one **Stop**, in the status line next to "working…"; the bottom button is **Queue** and stays greyed out until you type. Up to 20 messages can wait. After a failed turn the rest are kept as **Not sent** instead of running. Waiting messages are held in memory, so a server restart marks them **Not sent**. | Survive a restart. |
+| Queue | Type while the agent is working and the button says **Queue**. Waiting messages stay in a compact tray above the composer, with a shortened one-line preview and **Remove**. The tray stays at the bottom while replies stream; a large queue scrolls inside the tray. When the agent takes a message, it leaves the tray and appears in full in the conversation. Messages go out one per turn, in order. There is one **Stop** in the status line. Up to 20 messages can wait. After a failed turn the rest appear as **Not sent** instead of running. Waiting messages are held in memory, so a server restart marks them **Not sent**. | Survive a restart. |
 | Attached images | A picture you attach with 📎 shows as a small preview in your own message, not just a file name. Tap it for the original. Other files stay as `📎 name`. The preview is a 480 px JPEG made once with `sips` and kept in the chat's `.images` folder. The route serves only a file listed on that message and only if it is an image, never an arbitrary path. | Preview files that are gone (they fall back to the name). |
 | Tool images | A picture a tool returns (for example `Read` on a PNG) shows in the tool's fold instead of `[image]`. Tap it for the full size. Files up to 8 MB are saved in `~/.pocket-dev/chats/<id>.images/` (mode 0600), only their names go in the chat, and deleting the chat deletes them. | Show images over 8 MB or in other formats (those stay `[image]`). |
 | Allow and Deny | Cards for commands, file edits, tools, and plans: **Allow once**, **Always allow in this chat**, **Always allow in this project** when Claude offers it, and **Deny** with an optional reason. The Permissions screen lists and removes remembered rules. | Time out a waiting card. |
@@ -65,6 +65,12 @@ Choose **Continue in terminal** or **Continue in chat**. Resume reads the histor
 | Models and modes | Model lists come from each engine, with custom model names supported. Claude has Ask every time, Accept edits, Plan, Auto, Don’t ask, and Bypass. Codex has independent Approval (Ask first, On request, Never ask), Sandbox (Read only, Workspace, Full access), and Effort controls. Bypass and Full access need confirmation. Chips report whether a change applies now or next turn; replies show their model. | |
 | Sessions | Pocket Dev keeps `~/.pocket-dev/chats/<id>.json`. Claude Code and Codex keep their own transcripts in `~/.claude` and `~/.codex`, shared with VS Code and the CLI. | Delete the engine's own transcripts. |
 | Idle sleep | Stops an idle engine after `chatIdleMinutes` (default 10). The next message wakes and resumes it. | Sleep a chat with a running turn or a waiting card. |
+
+Switching Codex Approval to **Never ask** immediately declines pending and new permission requests, including during a running turn. It preserves sandbox restrictions and ordinary questions. The next turn also receives the updated Codex policy.
+
+Terminal and Chat reconnect when the phone wakes or its network returns. Heartbeats detect a socket that still appears open after losing its connection. Chat waits for a fresh server snapshot before enabling Send or showing approval cards. Draft text stays editable while offline; reconnecting never submits it automatically.
+
+Chat drafts (including uploaded attachments) and terminal command drafts are saved per conversation in the current browser tab and restored after a reload. Files still uploading cannot be restored after a reload. A delayed response cannot clear another chat's draft or text typed since sending. Chat sends time out after 20 seconds if the response never arrives; retrying the same draft uses its original message ID, with the last 256 accepted IDs saved per chat to prevent duplicate messages or queued entries. Server-side queues still have the restart limits described above.
 
 ### Files
 
@@ -123,14 +129,14 @@ It needs **Screen Recording** for the program that runs Pocket Dev. Without it t
 | Feature | What it does |
 | --- | --- |
 | Password | scrypt hash (N=16384, r=8, p=1) in `config.json` as `passwordHash`. A random 12-character password is printed on the first start only. A plaintext `password` key is converted at start. Wrong passwords wait 1 s. New passwords need 6 to 200 characters. |
-| QR login | One-time key, 10 minutes, kept in memory. Printed at start, by `npm run qr`, or by **Show login QR** on a logged-in phone. Only the Mac can mint keys (loopback, no proxy headers, secret from `~/.pocket-dev/local-secret`). |
+| QR sharing and login | The Admin page's **Share & login** section has **Show share QR** (a reusable address, password and approval still required) and **Show login QR** (one-time login, 10 minutes, skips approval), with copyable links. Phones must be on the same Wi-Fi. Login keys are kept in memory and are also printed at start or by `npm run qr`. Only the Mac can mint keys (loopback, no proxy headers, secret from `~/.pocket-dev/local-secret`). |
 | Devices | Each login is a device in `~/.pocket-dev/devices.json` (sha256 of the cookie, never the cookie). Rename, log out, online now (open terminal or a request in the last 60 s). |
 | Device limit | `maxDevices`, default 2, 1 to 20. Password logins stop at the limit. A QR login evicts the least recently used device. |
 | Rate limit | 10 wrong passwords per IP in 15 minutes locks that IP for 15 minutes. The Admin page warns at 5 failures in an hour. |
 | Cookie | `pd_token`, HttpOnly, SameSite=Strict, 1 year. No `Secure` flag, because the transport is http. |
 | CSRF | Every POST, PUT, PATCH, and DELETE needs `x-pocket-dev: 1`. JSON bodies need `content-type: application/json`. WebSocket upgrades check `Origin`. |
 | Approve, block, lockdown, security log | `requireApproval` makes password logins wait up to 10 minutes for approval on the Mac, with a 4-character code to compare. Blocked devices are refused on every route, across restarts. Lockdown logs out every non-blocked device, stops forwards, voids QR keys, disconnects phone access, and optionally closes terminals or sets a new password. Only the Mac can reconnect phone access. Events go to `~/.pocket-dev/security.log` (JSONL, mode 0600, rotated at 1 MB to `security.log.1`). |
-| Admin page | `http://localhost:7778` (`adminPort`, default phone port + 1), bound to 127.0.0.1 and ::1, with a Host allowlist, Origin and proxy-header refusal, and an `x-pocket-admin: 1` header on writes. It has no password, because only a process on the Mac can reach it. Sections: Connection, Waiting, Devices (rename, log out, block, unblock), Security log (latest 200, filters), Password (no old password needed), Settings (device limit, approval, login QR, addresses), Live (close terminals, stop forwards and active chats, read-only Power and Open apps status), Service (install, Start automatically, stop), Lockdown. |
+| Admin page | `http://localhost:7778` (`adminPort`, default phone port + 1), bound to 127.0.0.1 and ::1, with a Host allowlist, Origin and proxy-header refusal, and an `x-pocket-admin: 1` header on writes. It has no password, because only a process on the Mac can reach it. Sections: Connection, Share & login (share QR, one-time login QR, copy links), Waiting, Devices (rename, log out, block, unblock), Security log (latest 200, filters), Password (no old password needed), Settings (device limit, approval, addresses), Live (close terminals, stop forwards and active chats, read-only Power and Open apps status), Service (install, Start automatically, stop), Lockdown. |
 | Connect and Disconnect | Disconnect closes port 7777 and all forwards. Terminals keep running and devices stay logged in. A phone can disconnect, only the Mac can connect. With **Keep connection open** off, access closes about 30 s after the last Admin page closes (10 s heartbeat) and a restart starts disconnected. Saved as `access` in `config.json`. |
 | Start automatically | `launchctl enable` or `disable` for `dev.pocket.server`, from the Admin page, the phone, or `npm run autostart`. Does not stop the running server. |
 
@@ -140,7 +146,7 @@ It needs **Screen Recording** for the program that runs Pocket Dev. Without it t
 - Node.js 22.
 - Xcode Command Line Tools (`xcode-select --install`), to build `node-pty`.
 - Optional: `claude` (Claude Code), `codex`, and `gh` (GitHub CLI, logged in with `gh auth login`). Features that need a missing tool show an error.
-- The phone needs internet access, because it loads xterm.js from `cdn.jsdelivr.net`.
+- Terminal scripts and styles are bundled locally; opening Pocket Dev does not require internet access on the phone.
 
 ## Install as a command
 
@@ -230,6 +236,8 @@ The launchd agent writes `~/Library/LaunchAgents/dev.pocket.server.plist`, start
 
 Environment variables: `PORT`, `POCKET_DEV_CONFIG`, `POCKET_DEV_PASSWORD` (overrides the stored password and is printed at start), `POCKET_DEV_REPO_ROOTS`, `POCKET_DEV_STATE_DIR` (instead of `~/.pocket-dev` for authentication, security logs, Admin metadata, and chats), `POCKET_DEV_CHAT_DIR` (an explicit chat-storage override), `POCKET_DEV_ADMIN_PORT`, and `POCKET_DEV_NO_OPEN` (do not open the Admin page at start).
 
+Codex Chat uses the daemon socket at `$CODEX_HOME/app-server-control/app-server-control.sock` (`CODEX_HOME` defaults to `~/.codex`). `POCKET_DEV_CODEX_SOCKET` selects a different local socket. `POCKET_DEV_CODEX` selects a binary and uses a private stdio server unless a socket override is also supplied.
+
 ## Permissions it needs
 
 Pocket Dev runs as your user, never as root, and never runs `sudo` itself.
@@ -262,7 +270,7 @@ macOS grants TCC permissions to the app that started `node`: Terminal or VS Code
 - Terminals and port forwards do not survive a restart.
 - Old uploads in `~/.pocket-dev/uploads` are never deleted.
 - The Git view does not stage, commit, pull, or switch branches.
-- The phone needs internet for xterm.js from cdn.jsdelivr.net.
+- Agent services such as Claude and Codex still need internet access on the Mac.
 - Pocket Dev cannot wake or power on the Mac.
 
 ## Tests

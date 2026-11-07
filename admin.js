@@ -8,6 +8,7 @@ import { EVENT_KINDS, isLogFilter } from './security-log.js';
 import { serviceStatus, setAutostart, installService, stopThisServer, restartThisServer } from './launchd.js';
 import { checkPermissions, openPane } from './permissions.js';
 import { captureScreen } from './screen.js';
+import { svgQr } from './qr.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 export const ADMIN_URL_PATH = path.join(STATE_DIR, 'admin.json');
@@ -242,9 +243,15 @@ export async function startAdmin({ auth, access, config, mainPort, urls, section
     'PATCH /api/devices/:id': ({ params, body }) => auth.admin.rename(params.id, body.name),
     'PUT /api/settings': ({ body }) => auth.admin.updateSettings(body),
     'POST /api/password': ({ body }) => auth.admin.setPassword(body),
-    'POST /api/qr': async () => (access.view().connected
-      ? ok(await auth.admin.mintQr())
-      : reply(409, { error: 'Phone access is off. Connect first, then show the code.' })),
+    'POST /api/qr': async ({ body }) => {
+      const kind = body.kind ?? 'login';
+      if (!['share', 'login'].includes(kind)) return reply(400, { error: 'kind must be share or login.' });
+      if (!access.view().connected) return reply(409, { error: 'Phone access is off. Connect first, then show the code.' });
+      const address = urls().lan;
+      if (!address) return reply(409, { error: 'No Wi-Fi address. Connect this Mac to a network first.' });
+      if (kind === 'login') return ok(await auth.admin.mintQr());
+      return ok({ url: address, svg: await svgQr(address) });
+    },
     'POST /api/sections/:section/:item': async ({ params }) => {
       const s = Object.hasOwn(sections, params.section) ? sections[params.section] : null;
       if (!s?.act) return reply(404, { error: 'No such section' });

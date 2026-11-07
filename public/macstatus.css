@@ -1,17 +1,35 @@
 /* The top of the page on every screen. Layers that fill the screen start below it via --status-h. */
 :root { --status-h: 0px; }
-#macStatus { position: fixed; top: 0; left: 0; right: 0; z-index: 3000; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+#macStatus { position: fixed; top: var(--viewport-top, 0px); left: 0; right: 0; z-index: 3000; padding-top: env(safe-area-inset-top, 0px); background: var(--panel, #131823); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 #macStatus[hidden] { display: none; }
-.ms-strip { width: 100%; text-align: left; font: inherit; cursor: pointer; display: flex; align-items: center; gap: 12px; height: 22px; padding: 0 10px; background: var(--panel, #131823); border-bottom: 1px solid var(--line, #252d3c); color: var(--muted, #7d8799); }
+#macStatus { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.ms-strip { width: 100%; text-align: left; font: inherit; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-height: 22px; padding: 2px 10px; background: var(--panel, #131823); border-bottom: 1px solid var(--line, #252d3c); color: var(--muted, #7d8799); }
 .ms-label { font-weight: 600; letter-spacing: .03em; }
 .ms-item { color: var(--text, #d7dce5); white-space: nowrap; }
 .ms-item[hidden] { display: none; }
 .ms-item.warn { color: #f0c674; }
 .ms-item.crit { color: #ff7b72; font-weight: 600; }
-.ms-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; font-size: 13.5px; line-height: 1.35; border-bottom: 1px solid #5a4a22; background: #2a2210; color: #f0c674; }
+.ms-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; font-size: 13.5px; line-height: 1.35; border-bottom: 1px solid #5a4a22; background: #2a2210; color: #f0c674; }
+.ms-text { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
 .ms-banner[hidden] { display: none; }
 .ms-banner.critical { border-bottom-color: #5c2b2b; background: #2a1414; color: #ff9d96; }
 .ms-actions { flex: none; display: flex; gap: 6px; }
 .ms-btn { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid currentColor; background: transparent; color: inherit; font-size: 12.5px; font-weight: 600; }
 .ms-btn:active { opacity: .7; }
-body :is(#app, .fx-root, .chat, .hist, .st-sheet, .apps-sheet, .screen-sheet, .health-sheet) { top: var(--status-h); height: calc(100dvh - var(--status-h)); }
+/* Every screen shares the visible viewport, including Safari's keyboard pan. */
+body :is(#app, .fx-root, .chat, .hist, .st-sheet, .apps-sheet, .screen-sheet, .health-sheet, .pw-screen) {
+  top: calc(var(--viewport-top, 0px) + var(--status-h));
+  bottom: auto;
+  height: max(0px, calc(var(--viewport-h, 100dvh) - var(--status-h)));
+  min-height: 0;
+  min-width: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+/* Absolute panels fill the padding box, so reserve safe areas explicitly. */
+#app .layer, .chat :is(.chat-screen, .chat-sheet-wrap) {
+  left: env(safe-area-inset-left, 0px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+}

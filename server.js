@@ -363,6 +363,8 @@ function attachClient(session, ws) {
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.t === 'ping') { ws.send(JSON.stringify({ t: 'pong' })); return; }
     if (session.exitCode !== null) return;
     if (msg.t === 'in' && typeof msg.d === 'string') {
       // Several pages can share a session (another browser tab, the desktop); the one typing owns the size.
@@ -623,11 +625,14 @@ const handleFiles = createFilesApi({ sendJson, readJson, config });
 
 const PAGES = {
   '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html',
+  '/vendor/xterm/xterm.js': 'vendor/xterm/xterm.js', '/vendor/xterm/xterm.css': 'vendor/xterm/xterm.css',
+  '/vendor/xterm/addon-fit.js': 'vendor/xterm/addon-fit.js',
   '/git.js': 'git.js', '/graph.js': 'graph.js', '/git.css': 'git.css',
   '/history.js': 'history.js', '/history.css': 'history.css',
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
   '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
+  '/connection.js': 'connection.js',
 };
 const PUBLIC_PAGES = new Set(['login.html']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };

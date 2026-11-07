@@ -94,7 +94,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     return ws;
   }
   const apis = ['/api/sessions', '/api/folders', '/api/shortcuts', '/api/forwards', '/api/info', '/api/history', '/api/git/repos', '/api/settings', '/api/service', '/api/power', '/api/apps', '/api/chat', `/api/files/list?path=${encodeURIComponent(home)}`];
-  const assets = ['/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
+  const assets = ['/vendor/xterm/xterm.js', '/vendor/xterm/xterm.css', '/vendor/xterm/addon-fit.js', '/connection.js', '/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
   await t.test('every feature requires authentication; private source stays private', async () => {
     assert.equal((await request('GET', '/')).status, 302);
     for (const endpoint of [...apis, ...assets]) assert.equal((await request('GET', endpoint)).status, 401, endpoint);
@@ -105,6 +105,13 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
   const A = await login();
   assert.equal(A.status, 200);
   assert.match(A.cookie, /^pd_token=/);
+  await t.test('logged-in pages can load every script and stylesheet, including bundled terminal assets', async () => {
+    for (const endpoint of assets) {
+      const res = await request('GET', endpoint, { cookie: A.cookie });
+      assert.equal(res.status, 200, endpoint);
+      assert.match(res.headers.get('content-type'), endpoint.endsWith('.css') ? /text\/css/ : /javascript/, endpoint);
+    }
+  });
   let chat, session;
   await t.test('restart needs a login and refuses when this copy is not the launchd service', async () => {
     assert.equal((await request('POST', '/api/service/restart', { body: {} })).status, 401);
@@ -222,6 +229,31 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     const created = await request('POST', '/api/chat', { cookie: A.cookie, body: { tool: 'codex', cwd: home } });
     assert.equal(created.status, 201);
   });
+  await t.test('retrying a chat message after a lost response accepts it once and persists the receipt', async () => {
+    const created = await request('POST', '/api/chat', { cookie: A.cookie, body: { tool: 'codex', cwd: home } });
+    const id = created.data.id;
+    const endpoint = `/api/chat/${id}/message`;
+    const body = { text: 'retry-safe message', clientMessageId: 'retry-fixture-0123456789' };
+    const responses = await Promise.all([request('POST', endpoint, { cookie: A.cookie, body }), request('POST', endpoint, { cookie: A.cookie, body })]);
+    assert.deepEqual(responses.map((r) => r.status), [202, 202]);
+    const snapshot = await request('GET', `/api/chat/${id}`, { cookie: A.cookie });
+    assert.equal(snapshot.data.events.filter((e) => e.type === 'user-text' && e.text === body.text).length, 1);
+    assert.equal((await request('POST', endpoint, { cookie: A.cookie, body: { ...body, text: 'different' } })).status, 409);
+    assert.equal((await request('POST', endpoint, { cookie: A.cookie, body: { ...body, clientMessageId: 'bad' } })).status, 400);
+    const saved = JSON.parse(fs.readFileSync(path.join(state, 'chats', `${id}.json`), 'utf8'));
+    assert.equal(saved.acceptedInputs.filter((r) => r.id === body.clientMessageId).length, 1);
+    // The configured Codex executable is deliberately absent: no model is called.
+    await request('DELETE', `/api/chat/${id}`, { cookie: A.cookie });
+  });
+  await t.test('browser heartbeats receive replies on chat sockets', async () => {
+    const ws = await socket(`/ws/chat/${chat.id}`, A.cookie);
+    const pong = new Promise((resolve) => {
+      ws.on('message', (raw) => { if (JSON.parse(raw).t === 'pong') resolve(); });
+    });
+    ws.send(JSON.stringify({ t: 'ping' }));
+    await Promise.race([pong, pause(2000).then(() => assert.fail('chat heartbeat not answered'))]);
+    ws.close();
+  });
   await t.test('new terminal commands run once; Unicode works with an inherited C.UTF-8 locale', async () => {
     const file = path.join(home, 'command-result');
     const created = await request('POST', '/api/sessions', { cookie: A.cookie, body: { cwd: home, command: `printf 'a\\u202fb|%s\\n' "$LANG" >> '${file}'` } });
@@ -240,6 +272,15 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     assert.equal(mine.cwd, home);
     assert.ok(Number.isInteger(mine.startedAt) && Number.isInteger(mine.activeAt));
     assert.ok(mine.activeAt >= mine.startedAt, 'output moves activeAt forward');
+  });
+  await t.test('browser heartbeats work even after the terminal process exits', async () => {
+    const ws = await socket(`/ws/${session.id}`, A.cookie);
+    const pong = new Promise((resolve) => {
+      ws.on('message', (raw) => { if (JSON.parse(raw).t === 'pong') resolve(); });
+    });
+    ws.send(JSON.stringify({ t: 'ping' }));
+    await Promise.race([pong, pause(2000).then(() => assert.fail('terminal heartbeat not answered'))]);
+    ws.close();
   });
   await t.test('Files enforces roots, preserves uploads, and sandboxes HTML', async () => {
     const upload = (content) => fetch(`${base}/api/files/upload?dir=${encodeURIComponent(home)}&name=note.html`, { method: 'POST', headers: { cookie: A.cookie, 'x-pocket-dev': '1' }, body: content });
@@ -280,11 +321,48 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     assert.equal((await local('POST', `/api/devices/${pending.id}/approve`, {})).status, 200);
     assert.equal((await request('GET', '/api/chat', { cookie: B.cookie })).status, 200);
   });
+  await t.test('admin sharing keeps password approval; login QR grants one-time access', async () => {
+    const share = await local('POST', '/api/qr', { kind: 'share' });
+    assert.equal(share.status, 200);
+    assert.match(share.data.svg, /<svg/);
+    const address = (await local('GET', '/api/state')).data.urls.lan;
+    assert.equal(share.data.url, address);
+    assert.equal(new URL(share.data.url).search, '', 'a share link must not contain login credentials');
+    assert.equal(share.data.expiresAt, undefined, 'share links are reusable addresses');
+    const landing = await request('GET', '/');
+    assert.equal(landing.status, 302);
+    assert.equal(landing.headers.get('location'), '/login.html');
+    const waiting = await login();
+    assert.equal(waiting.data.pending, true, 'sharing leaves password approval enabled');
+    assert.equal((await request('POST', '/api/qr', { cookie: A.cookie, body: { kind: 'share' } })).status, 404, 'QR generation stays on the Mac admin listener');
+    assert.equal((await local('POST', '/api/qr', { kind: 'unknown' })).status, 400);
+    assert.equal((await request('POST', '/api/qr', { adminRequest: true, body: { kind: 'share' }, csrf: false })).status, 403);
+    const qr = await local('POST', '/api/qr', { kind: 'login' });
+    assert.equal(qr.status, 200);
+    assert.match(qr.data.svg, /<svg/);
+    assert.ok(qr.data.expiresAt > Date.now());
+    assert.ok(qr.data.expiresAt <= Date.now() + qr.data.expiresInMin * 60_000);
+    const link = new URL(qr.data.url);
+    assert.equal(link.origin, address);
+    assert.match(link.searchParams.get('k'), /^[a-f0-9]{64}$/);
+    const redeemed = await request('GET', link.pathname + link.search);
+    assert.equal(redeemed.status, 200);
+    assert.match(redeemed.cookie, /^pd_token=/);
+    assert.equal((await request('GET', '/api/status', { cookie: redeemed.cookie })).data.status, 'active', 'QR login skips password approval');
+    const reused = await request('GET', link.pathname + link.search);
+    assert.equal(reused.status, 302);
+    assert.equal(reused.headers.get('location'), '/login.html?e=qr');
+    assert.equal(reused.cookie, undefined, 'a QR login is single-use');
+    const legacy = await local('POST', '/api/qr', {});
+    assert.equal(legacy.status, 200, 'existing login QR callers keep working');
+    assert.ok(new URL(legacy.data.url).searchParams.has('k'));
+  });
   await t.test('lockdown closes chat and terminal sockets, disconnects phones, and keeps admin available', async () => {
     const ws = await socket(`/ws/chat/${chat.id}`, A.cookie);
     assert.equal((await local('POST', '/api/lockdown', { also: [] })).status, 200);
     await Promise.race([ws.closed, pause(3000).then(() => assert.fail('lockdown left chat socket open'))]);
     assert.equal((await local('GET', '/api/state')).data.access.connected, false);
+    for (const kind of ['share', 'login']) assert.equal((await local('POST', '/api/qr', { kind })).status, 409, `refuse unusable ${kind} codes while disconnected`);
     await assert.rejects(fetch(`${base}/api/chat`, { signal: AbortSignal.timeout(1000) }));
     assert.equal((await local('PUT', '/api/access', { connected: true })).status, 200);
     assert.equal((await request('GET', '/api/chat', { cookie: A.cookie })).status, 401);

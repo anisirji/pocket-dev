@@ -1,4 +1,5 @@
 .chat {
+  --chat-h: calc(var(--viewport-h, 100dvh) - var(--status-h, 0px) - env(safe-area-inset-bottom, 0px));
   --chat-claude: #e08a5f; --chat-claude-bg: #3a2216;
   --chat-codex: #4cc79a; --chat-codex-bg: #12322a;
   --chat-warn: #f0c674; --chat-warn-bg: #3a2a10;
@@ -7,6 +8,7 @@
   --chat-user: #1d2a40; --chat-user-line: #2c4166;
   position: fixed; top: 0; left: 0; right: 0; z-index: 45; height: 100dvh; overflow: hidden;
   background: var(--bg); color: var(--text);
+  container: chat / size;
 }
 .chat [hidden] { display: none !important; }
 .chat button { -webkit-user-select: none; user-select: none; }
@@ -43,6 +45,17 @@
 .chat-chip-face::after { content: ''; flex: none; align-self: center; width: 5px; height: 5px; margin: -3px 1px 0 1px; border: solid var(--muted); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
 .chat-chip-risky .chat-chip-face { background: var(--chat-warn-bg); border-color: #6b5520; }
 .chat-chip-risky .chat-chip-v { color: var(--chat-warn); }
+
+/* A keyboard leaves little vertical room. Keep settings available in a
+   horizontal strip beside the title instead of spending a second header row. */
+@container chat (max-height: 420px) {
+  .chat-convo-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 34%); gap: 6px; min-height: 52px; padding: 6px; }
+  .chat-head-row { padding: 0; }
+  .chat-convo-head .chat-chips { min-height: 40px; padding: 0; }
+  .chat-convo-head .chat-chip-face { padding: 0 8px; }
+  .chat-convo-head .chat-chip-k { display: none; }
+  .chat-convo-screen .chat-card-inner { padding: 8px; gap: 6px; }
+}
 
 .chat-badge { flex: none; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.35; }
 .chat-badge.chat-claude { background: var(--chat-claude-bg); color: var(--chat-claude); }
@@ -153,10 +166,11 @@
 .chat-error { padding: 9px 11px; border-radius: 8px; background: var(--chat-del-bg); border: 1px solid #5a2a2a; color: var(--danger); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Dock: request card, status line, composer */
-.chat-dock { flex: none; display: flex; flex-direction: column; border-top: 1px solid var(--line); background: var(--panel); }
-.chat-card { padding: 10px 10px 0; }
-.chat-card-inner { display: flex; flex-direction: column; gap: 10px; max-height: calc(var(--chat-h, 100dvh) * 0.58); padding: 12px; border-radius: 12px; background: var(--bg); border: 1px solid #6b5520; box-shadow: 0 0 0 1px #00000040, 0 -6px 18px #0006; }
+.chat-dock { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); background: var(--panel); }
+.chat-card { flex: 0 1 auto; min-height: 0; display: flex; padding: 10px 10px 0; }
+.chat-card-inner { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; max-height: calc(var(--chat-h, 100dvh) * 0.58); padding: 12px; border-radius: 12px; background: var(--bg); border: 1px solid #6b5520; box-shadow: 0 0 0 1px #00000040, 0 -6px 18px #0006; }
 .chat-card-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; }
+.chat-card-scroll > * { flex-shrink: 0; }
 .chat-card-kicker { color: var(--chat-warn); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
 .chat-card-title { font-size: 15px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
 .chat-card-detail { flex: none; margin: 0; max-height: 120px; padding: 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; overflow-y: auto; }
@@ -186,16 +200,25 @@
 .chat-q-desc { grid-column: 2; color: var(--muted); font-size: 12.5px; line-height: 1.35; overflow-wrap: anywhere; }
 .chat-submit { width: 100%; }
 
-.chat-statusline { display: flex; align-items: center; gap: 8px; padding: 8px 14px 0; color: var(--accent); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.chat-statusline { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 14px 0; color: var(--accent); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .chat-statusline-wait { color: var(--chat-warn); font-weight: 600; }
 .chat-notice { margin: 8px 10px 0; padding: 7px 10px; border-radius: 8px; background: var(--chat-del-bg); color: var(--danger); font-size: 12.5px; line-height: 1.4; }
+/* Keep waiting input beside the composer until the engine takes it. Long
+   messages stay one line; a large queue scrolls without growing the dock. */
+.chat-queue { flex: none; min-width: 0; max-height: clamp(46px, calc(var(--chat-h, 100dvh) * .15), 134px); margin: 6px 8px 0; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.chat-queue-row { display: flex; align-items: center; gap: 8px; min-height: 44px; padding-left: 10px; }
+.chat-queue-row + .chat-queue-row { border-top: 1px solid var(--line); }
+.chat-queue-label { flex: none; color: var(--chat-warn); font-size: 11.5px; }
+.chat-queue-preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.chat-queue-remove { flex: none; min-width: 44px; height: 44px; padding: 0 10px; color: var(--muted); font-size: 12px; }
+.chat-queue-remove:active { background: var(--panel-2); }
 .chat-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px 0; }
 .chat-file { display: flex; align-items: center; max-width: 100%; border-radius: 19px; background: var(--panel-2); border: 1px solid var(--line); }
 .chat-file-name { min-width: 0; padding-left: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; }
 .chat-file-up .chat-file-name { color: var(--muted); }
 .chat-file-x { flex: none; width: 40px; height: 38px; color: var(--muted); font-size: 12px; }
 
-.chat-composer { display: flex; align-items: flex-end; gap: 6px; padding: 8px; }
+.chat-composer { flex: none; display: flex; align-items: flex-end; gap: 6px; padding: 8px; }
 .chat-attach { flex: none; width: 42px; height: 42px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); font-size: 18px; }
 .chat-input { flex: 1; min-width: 0; height: 42px; min-height: 42px; max-height: 140px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: 16px/20px system-ui, -apple-system, Roboto, sans-serif; resize: none; outline: none; overflow-y: hidden; }
 .chat-input:focus { border-color: var(--accent); }
@@ -206,10 +229,11 @@
 /* Sheets */
 .chat-sheet-wrap { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; justify-content: flex-end; }
 .chat-backdrop { position: absolute; inset: 0; background: #000a; }
-.chat-sheet { position: relative; display: flex; flex-direction: column; max-height: calc(var(--chat-h, 100dvh) - 40px); border-radius: 16px 16px 0 0; background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -8px 30px #000a; }
+.chat-sheet { position: relative; display: flex; flex-direction: column; min-height: 0; max-height: calc(100% - 12px); border-radius: 16px 16px 0 0; background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -8px 30px #000a; }
 .chat-sheet-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 10px 6px 16px; }
 .chat-h3 { flex: 1; margin: 0; font-size: 17px; font-weight: 600; }
 .chat-sheet-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px; padding: 6px 16px 14px; }
+.chat-sheet-body > * { flex-shrink: 0; }
 .chat-sheet-foot { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); }
 .chat-sheet-foot .chat-primary { width: 100%; height: 48px; font-size: 16px; }
 .chat-sheet-err { color: var(--danger); font-size: 13px; line-height: 1.4; }
@@ -284,10 +308,8 @@
 /* Pictures a tool returned, and messages waiting in the queue. */
 .chat-tool-img-link { display: block; margin: 4px 0 8px; }
 .chat-tool-img { display: block; max-width: 100%; max-height: 360px; border-radius: 8px; border: 1px solid var(--line); background: #000; object-fit: contain; }
-.chat-user-queued { border-style: dashed; opacity: .8; }
 .chat-queued-tag { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--chat-user-line); color: var(--chat-warn); font-size: 12px; }
 .chat-queued-lost { color: var(--danger, #ff7b72); }
-.chat-queued-x { flex: none; height: 26px; padding: 0 8px; border-radius: 7px; border: 1px solid currentColor; background: transparent; color: inherit; font-size: 12px; }
 .chat-status-stop { margin-left: auto; height: 28px; padding: 0 12px; border-radius: 8px; border: 1px solid #5c2b2b; background: #2a1414; color: var(--chat-del, #ff7b72); font-size: 13px; font-weight: 600; }
 .chat-statusline .chat-status-text { min-width: 0; }
 

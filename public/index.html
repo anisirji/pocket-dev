@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#0b0e14">
 <title>Pocket Dev</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.css">
-<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10/lib/addon-fit.js"></script>
+<link rel="stylesheet" href="/vendor/xterm/xterm.css">
+<script src="/vendor/xterm/xterm.js"></script>
+<script src="/vendor/xterm/addon-fit.js"></script>
+<script src="/connection.js"></script>
 <link rel="stylesheet" href="/git.css">
 <script type="module" src="/git.js"></script>
 <link rel="stylesheet" href="/history.css">
@@ -39,8 +40,9 @@
 
   /* Two rows at phone width: the views and the app-wide buttons, then the terminal tabs (Terminal view only). One row
      left the tabs about 50px at 360px. */
-  header, #tabbar { display: flex; align-items: center; gap: 4px; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header, #tabbar { flex: none; display: flex; align-items: center; gap: 4px; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
   #tabbar { padding-top: 0; }
+  #app.keyboard-open #tabbar { display: none; }
   #headGap { flex: 1; }
   #app:not([data-view="terminal"]) :is(#tabbar, #headGap) { display: none; }
   #tabs { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
@@ -64,7 +66,7 @@
   #portsCount { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--accent); color: #08101e; font-size: 11px; font-weight: 600; line-height: 17px; text-align: center; }
   #portsCount:empty { display: none; }
 
-  #ports { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #ports { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 0; max-height: 25%; overflow-y: auto; overscroll-behavior: contain; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
   #ports[hidden] { display: none; }
   #portForm { display: flex; gap: 6px; }
   #portInput { width: 92px; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); outline: none; }
@@ -84,9 +86,12 @@
   .term .xterm { height: 100%; padding: 4px 0 0 6px; }
   #latest { position: absolute; right: 14px; bottom: 12px; z-index: 5; height: 34px; padding: 0 14px; border-radius: 17px; background: var(--accent); color: #08101e; font-weight: 600; box-shadow: 0 2px 10px #0008; }
   #badge { position: absolute; top: 8px; right: 10px; z-index: 5; padding: 3px 9px; border-radius: 10px; background: #3a2a10; color: #f0c674; font-size: 12px; }
+  #clientError { flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+  #clientError p { flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+  #clientReload { flex: none; }
   [hidden] { display: none !important; }
 
-  #inputBar { display: flex; gap: 6px; padding: 6px; border-top: 1px solid var(--line); background: var(--panel); }
+  #inputBar { flex: none; display: flex; gap: 6px; padding: 6px; border-top: 1px solid var(--line); background: var(--panel); }
   #cmd { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 16px; outline: none; }
   #cmd:focus { border-color: var(--accent); }
   #attach { flex: none; width: 42px; height: 42px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-size: 18px; }
@@ -95,9 +100,18 @@
   #uploadStatus.error { color: var(--danger); white-space: normal; }
   #send { height: 42px; padding: 0 16px; border-radius: 10px; background: var(--accent); color: #08101e; font-weight: 600; }
 
-  #keys { display: flex; gap: 6px; padding: 0 6px 6px; overflow-x: auto; background: var(--panel); scrollbar-width: none; }
-  #keys::-webkit-scrollbar { display: none; }
-  .key { flex: none; min-width: 52px; height: 42px; padding: 0 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-family: var(--mono); font-size: 13px; }
+  #keys { position: relative; flex: none; padding: 0 6px 4px; background: var(--panel); }
+  #keyNav { display: flex; align-items: center; gap: 4px; }
+  #keyNav .key { min-width: 44px; padding: 0 10px; border-color: transparent; background: transparent; }
+  #keyNav .key:first-child { margin-right: auto; }
+  #keyNav .key.arrow { width: 44px; padding: 0; }
+  .key svg { display: block; width: 18px; height: 18px; margin: auto; }
+  #keyTools { position: absolute; z-index: 10; bottom: calc(100% + 6px); left: 6px; right: 6px; max-width: 400px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: 0 4px 18px #0006; }
+  #keyTools .key { min-width: 0; padding: 0 4px; }
+  #keyTools { max-height: max(44px, calc(var(--viewport-h, 100dvh) - var(--status-h, 0px) - 60px - env(safe-area-inset-bottom, 0px))); overflow-y: auto; overscroll-behavior: contain; }
+  #keyMore[aria-expanded="true"] { color: var(--accent); background: var(--panel-2); }
+  .key { flex: none; min-width: 52px; height: 44px; padding: 0 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-family: var(--mono); font-size: 13px; }
+  .key:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .key:active, .icon-btn:active { background: var(--line); }
 
   .layer { position: absolute; inset: 0; z-index: 20; }
@@ -105,7 +119,7 @@
   #sheetPanel { display: flex; flex-direction: column; max-height: 80%; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; background: var(--panel); }
   .layer-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 6px 8px 14px; }
   .layer-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
-  #sheetBody { overflow-y: auto; overscroll-behavior: contain; padding: 0 6px; }
+  #sheetBody { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 6px; }
   #sheetFoot { flex: none; padding: 0 6px 10px; }
   .sheet-label { margin: 12px 10px 2px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
   .row { display: flex; align-items: center; gap: 2px; }
@@ -159,6 +173,10 @@
     <div id="chips" style="display:contents"></div>
     <p id="portErr"></p>
   </div>
+  <aside id="clientError" role="alert" hidden>
+    <p id="clientErrorText"></p>
+    <button id="clientReload" type="button" class="primary">Reload</button>
+  </aside>
   <main id="terms">
     <div id="badge" hidden></div>
     <button id="latest" hidden>↓ latest</button>
@@ -170,7 +188,10 @@
     <input id="cmd" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" placeholder="Type a command">
     <button id="send">Send</button>
   </form>
-  <div id="keys"></div>
+  <div id="keys">
+    <div id="keyNav" role="group" aria-label="Question and menu controls"></div>
+    <div id="keyTools" role="group" aria-label="More terminal keys" hidden></div>
+  </div>
   <div id="textView" class="layer" hidden>
     <div class="layer-head"><h2 id="textTitle"></h2><button id="copyAll" class="primary">Copy all</button><button id="textClose" class="icon-btn">Close</button></div>
     <pre id="textPre"></pre>
@@ -198,9 +219,10 @@ const store = {
 };
 
 // The one request helper for every page script: the server refuses changes without x-pocket-dev (see server.js).
-async function api(method, url, body) {
+async function api(method, url, body, { signal } = {}) {
   const res = await fetch(url, {
     method,
+    signal,
     headers: { 'x-pocket-dev': '1', ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -225,15 +247,29 @@ const THEME = {
 };
 
 function sendMsg(view, msg) {
-  if (view.ws?.readyState === WebSocket.OPEN) view.ws.send(JSON.stringify(msg));
+  return view.connection?.send(msg) ?? false;
 }
 const sendInput = (view, d) => sendMsg(view, { t: 'in', d });
 const phoneInput = matchMedia('(pointer: coarse)').matches;
+const CLIENT_UPDATE_MESSAGE = 'Pocket Dev could not load its connection code. On the Mac, open Admin and press Restart Pocket Dev, then reload this page.';
+function showClientError(message) {
+  $('clientErrorText').textContent = message;
+  $('clientError').hidden = false;
+}
+$('clientReload').addEventListener('click', () => location.reload());
+
+function requireTerminalClient() {
+  if (typeof window.PocketDevConnection !== 'function') throw new Error(CLIENT_UPDATE_MESSAGE);
+  if (typeof Terminal !== 'function' || typeof window.FitAddon?.FitAddon !== 'function') {
+    throw new Error('Pocket Dev could not load its terminal code. Reload this page. If it still fails, restart Pocket Dev from Admin on the Mac.');
+  }
+}
 // The HTML is read from disk on every request, but a running server may predate
 // newly added asset routes. Give both health entry points a useful failure state.
 window.openHealthSheet = () => alert('Mac health has not loaded. Open Settings → This Mac → Update to load the latest server, then reload this page.');
 
 function makeView(session) {
+  requireTerminalClient();
   const el = h('div', 'term');
   $('terms').appendChild(el);
   const term = new Terminal({
@@ -264,56 +300,50 @@ function makeView(session) {
 }
 
 function connect(view) {
-  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/${view.id}`);
-  view.ws = ws;
-  ws.onopen = () => {
-    view.online = view.everOnline = true;
-    view.term.reset();
-    if (terminalShown() && view.id === activeId) sendMsg(view, { t: 'resize', cols: view.term.cols, rows: view.term.rows });
-    renderBadge();
-  };
-  ws.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    if (msg.t === 'out') {
-      view.activeAt = Date.now();
-      view.term.write(msg.d);
-    }
-    else if (msg.t === 'exit') {
-      view.exitCode = msg.code;
-      view.term.write(`\r\n\x1b[2m[process exited ${msg.code}]\x1b[0m\r\n`);
-      renderTabs();
-    }
-  };
-  ws.onclose = (e) => {
-    if (view.ws !== ws || view.closed) return;
-    view.online = false;
-    renderBadge();
-    clearTimeout(view.retry);
-    if (POWER_REASONS.has(e.reason)) return showPower(e.reason);
-    if (!powerPaused) view.retry = setTimeout(reconnect, 2000, view);
-  };
-}
-
-// Syncing first drops views whose session is gone and redirects to login if the cookie died,
-// neither of which a failed WebSocket handshake can report.
-async function reconnect(view) {
-  try { await syncSessions(); } catch {}
-  if (views.get(view.id) !== view) return;
-  if (view.ws?.readyState === WebSocket.OPEN || view.ws?.readyState === WebSocket.CONNECTING) return;
-  connect(view);
+  view.connection = new window.PocketDevConnection({
+    url: () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/${view.id}`,
+    beforeConnect: async (signal) => {
+      if (view.everOnline) await syncSessions(signal);
+      return !view.closed;
+    },
+    onOpen(ws) {
+      view.ws = ws;
+      view.term.reset();
+      if (terminalShown() && view.id === activeId) sendMsg(view, { t: 'resize', cols: view.term.cols, rows: view.term.rows });
+    },
+    onState(state) {
+      view.online = state === 'connected';
+      if (view.online) view.everOnline = true;
+      renderBadge();
+    },
+    onMessage(msg) {
+      if (msg.t === 'out') {
+        view.activeAt = Date.now();
+        view.term.write(msg.d);
+      }
+      else if (msg.t === 'exit') {
+        view.exitCode = msg.code;
+        view.term.write(`\r\n\x1b[2m[process exited ${msg.code}]\x1b[0m\r\n`);
+        renderTabs();
+      }
+    },
+    onClose(e) {
+      if (POWER_REASONS.has(e.reason)) { showPower(e.reason); return false; }
+      return !powerPaused;
+    },
+  });
 }
 
 function dropView(view) {
   view.closed = true;
-  clearTimeout(view.retry);
-  view.ws?.close();
+  view.connection?.dispose();
   view.term.dispose();
   view.el.remove();
   views.delete(view.id);
 }
 
-async function syncSessions() {
-  const list = await api('GET', '/api/sessions');
+async function syncSessions(signal) {
+  const list = await api('GET', '/api/sessions', undefined, { signal });
   const ids = new Set(list.map((s) => s.id));
   for (const view of [...views.values()]) if (!ids.has(view.id)) dropView(view);
   for (const s of list) {
@@ -341,6 +371,10 @@ async function closeSession(view) {
 }
 
 function activate(id) {
+  if (activeId !== id) {
+    saveCommandDraft();
+    try { $('cmd').value = sessionStorage.getItem(`pd.terminal.draft.${id}`) || ''; } catch { $('cmd').value = ''; }
+  }
   activeId = id;
   store.set('pd.active', id);
   for (const v of views.values()) v.el.classList.toggle('active', v.id === id);
@@ -351,6 +385,16 @@ function activate(id) {
   if (view) fitView(view);
   $('tabs').querySelector('.tab.active')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 }
+function saveCommandDraft() {
+  if (!activeId) return;
+  try {
+    const key = `pd.terminal.draft.${activeId}`;
+    if ($('cmd').value) sessionStorage.setItem(key, $('cmd').value);
+    else sessionStorage.removeItem(key);
+  } catch {}
+}
+$('cmd').addEventListener('input', saveCommandDraft);
+window.addEventListener('pagehide', saveCommandDraft);
 
 function renderTabs() {
   $('tabs').replaceChildren(...[...views.values()].map((v) => {
@@ -409,7 +453,7 @@ $('tabsList').addEventListener('click', openTabsSheet);
 function renderBadge() {
   const view = active();
   $('badge').hidden = !view || view.online;
-  if (view) $('badge').textContent = view.everOnline ? 'reconnecting…' : 'connecting…';
+  if (view) $('badge').textContent = navigator.onLine === false ? 'Offline · reconnects when you’re back online' : view.everOnline ? 'reconnecting…' : 'connecting…';
 }
 
 function renderLatest() {
@@ -493,11 +537,16 @@ function attachTouchScroll(view) {
   }, { passive: true, capture: true });
 }
 
-const KEYS = [
-  ['Ctrl+C', '\x03'], ['Enter', '\r'], ['Esc', '\x1b'], ['Tab', '\t'],
-  ['↑', 'A'], ['↓', 'B'], ['←', 'D'], ['→', 'C'], ['Ctrl+D', '\x04'],
+const NAV_KEYS = [
+  ['Answer', '\x1b[1;2D', 'Answer Codex question (Shift+Left)'],
+  ['↑', 'A', 'Up'], ['↓', 'B', 'Down'], ['Enter', '\r'],
+];
+const TOOL_KEYS = [
+  ['Esc', '\x1b'], ['Tab', '\t'], ['Shift+Tab', '\x1b[Z'],
+  ['←', 'D', 'Left'], ['→', 'C', 'Right'], ['Ctrl+C', '\x03'], ['Ctrl+D', '\x04'],
 ];
 const ARROWS = 'ABCD';
+const ARROW_PATHS = { A: 'm6 14 6-6 6 6', B: 'm6 10 6 6 6-6', D: 'm14 6-6 6 6 6', C: 'm10 6 6 6-6 6' };
 
 const closeKeyboard = () => document.activeElement?.blur();
 
@@ -509,28 +558,65 @@ function keepFocus(button) {
 }
 
 function iconKey(label, ariaLabel, onClick) {
-  const key = h('button', 'key icon', label);
+  const key = h('button', 'key', label);
   key.setAttribute('aria-label', ariaLabel);
   keepFocus(key);
-  key.onclick = onClick;
-  $('keys').appendChild(key);
+  key.onclick = () => { closeMoreKeys(); onClick(); };
+  $('keyTools').appendChild(key);
 }
-iconKey('⚡', 'Shortcuts', () => openShortcuts());
-iconKey('📋', 'Copy output', () => openText());
+iconKey('Shortcuts', 'Shortcuts', () => openShortcuts());
+iconKey('Copy', 'Copy output', () => openText());
 
-for (const [label, seq] of KEYS) {
+function terminalKey(container, [label, seq, description = label]) {
   const key = h('button', 'key', label);
+  key.setAttribute('aria-label', description);
+  key.title = description;
+  if (ARROW_PATHS[seq]) {
+    key.classList.add('arrow');
+    key.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ARROW_PATHS[seq]}"/></svg>`;
+  }
   keepFocus(key);
+  key.removeAttribute('tabindex');
   key.onclick = () => {
+    closeMoreKeys();
     const view = active();
     if (!view) return;
+    if (!view.online || view.ws?.readyState !== WebSocket.OPEN) {
+      showStatus('Terminal is reconnecting. Your key has not been sent.', true);
+      return;
+    }
     // Match what xterm sends for a real arrow key: SS3 form when the app enabled application cursor mode.
+    // Modified arrows (Answer is Shift+Left) always use CSI with the modifier parameter.
     const data = ARROWS.includes(seq) ? (view.term.modes.applicationCursorKeysMode ? '\x1bO' : '\x1b[') + seq : seq;
+    view.term.scrollToBottom();
     sendInput(view, data);
     if (seq === '\r') closeKeyboard();
   };
-  $('keys').appendChild(key);
+  $(container).appendChild(key);
 }
+NAV_KEYS.forEach((key) => terminalKey('keyNav', key));
+TOOL_KEYS.forEach((key) => terminalKey('keyTools', key));
+const moreKeys = h('button', 'key', 'More');
+moreKeys.id = 'keyMore';
+moreKeys.setAttribute('aria-label', 'More terminal keys');
+moreKeys.setAttribute('aria-controls', 'keyTools');
+moreKeys.setAttribute('aria-expanded', 'false');
+keepFocus(moreKeys);
+moreKeys.removeAttribute('tabindex');
+moreKeys.onclick = () => {
+  const open = $('keyTools').hidden;
+  $('keyTools').hidden = !open;
+  moreKeys.setAttribute('aria-expanded', String(open));
+};
+$('keyNav').appendChild(moreKeys);
+function closeMoreKeys() {
+  $('keyTools').hidden = true;
+  $('keyMore')?.setAttribute('aria-expanded', 'false');
+}
+document.addEventListener('pointerdown', (e) => { if (!$('keys').contains(e.target)) closeMoreKeys(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('keyTools').hidden) { e.preventDefault(); closeMoreKeys(); moreKeys.focus({ preventScroll: true }); }
+});
 
 function runCommand(view, text) {
   if (!view.online || view.ws?.readyState !== WebSocket.OPEN) {
@@ -538,11 +624,15 @@ function runCommand(view, text) {
     return false;
   }
   if (text) {
-    sendInput(view, text);
+    const socket = view.connection.socket;
+    if (!sendInput(view, text)) return false;
     // A TUI that detects pastes by chunk can read text+CR arriving together as a pasted newline, not a submit.
-    setTimeout(sendInput, 30, view, '\r');
+    setTimeout(() => {
+      if (view.connection.socket === socket && view.online) sendInput(view, '\r');
+      else showStatus('Connection changed before Enter was sent. Check the terminal before retrying.', true);
+    }, 30);
   } else {
-    sendInput(view, '\r');
+    if (!sendInput(view, '\r')) return false;
   }
   view.term.scrollToBottom();
   closeKeyboard();
@@ -555,7 +645,7 @@ $('inputBar').addEventListener('submit', (e) => {
   const view = active();
   if (!view) return;
   const text = $('cmd').value;
-  if (runCommand(view, text)) $('cmd').value = '';
+  if (runCommand(view, text)) { $('cmd').value = ''; saveCommandDraft(); }
 });
 
 $('latest').addEventListener('click', () => {
@@ -1012,31 +1102,31 @@ for (const b of $('viewSwitch').children) {
 setView(store.get('pd.view') === 'git' ? 'git' : 'terminal');
 
 const vv = window.visualViewport;
+let restingViewportHeight = vv?.height ?? innerHeight;
 function onViewportChange() {
-  if (vv) {
-    $('app').style.height = `calc(${vv.height}px - var(--status-h, 0px))`;
-    $('app').style.transform = `translateY(${vv.offsetTop}px)`;
-  }
+  const viewportHeight = vv?.height ?? innerHeight;
+  const typing = document.activeElement === $('cmd');
+  if (!typing) restingViewportHeight = viewportHeight;
+  $('app').classList.toggle('keyboard-open', phoneInput && typing && restingViewportHeight - viewportHeight > 120);
   scheduleFit();
 }
 vv?.addEventListener('resize', onViewportChange);
 vv?.addEventListener('scroll', onViewportChange);
+$('cmd').addEventListener('focus', onViewportChange);
+$('cmd').addEventListener('blur', onViewportChange);
 window.addEventListener('orientationchange', onViewportChange);
+window.addEventListener('resize', onViewportChange);
 new ResizeObserver(scheduleFit).observe($('terms'));
 
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) return;
+  if (document.hidden) { saveCommandDraft(); return; }
   scheduleFit();
-  if (!powerPaused) reconnectClosed();
   refreshForwards().catch(() => {});
 });
 
 function reconnectClosed() {
   for (const view of views.values()) {
-    if (view.ws?.readyState === WebSocket.CLOSED) {
-      clearTimeout(view.retry);
-      reconnect(view);
-    }
+    view.connection?.resume();
   }
 }
 
@@ -1075,6 +1165,8 @@ window.pocketDev = {
   overlays,
   power,
   powerOptions,
+  showClientError,
+  clientUpdateMessage: CLIENT_UPDATE_MESSAGE,
   // Resume continues a conversation from either view; the new terminal has to be on screen.
   openSession(s) {
     setView('terminal');
@@ -1087,12 +1179,13 @@ window.pocketDev = {
 };
 
 (async () => {
+  requireTerminalClient();
   const stored = store.get('pd.active');
   await syncSessions();
   if (!views.size) await newSession();
   activate(views.has(stored) ? stored : activeId);
   refreshForwards().catch(() => {});
-})();
+})().catch((err) => showClientError(`Could not open terminals: ${err.message}`));
 </script>
 <script src="/history.js"></script>
 <script src="/settings.js"></script>

@@ -534,7 +534,8 @@ export function createAuth({ config, port, urls, localNote }) {
     },
     async mintQr() {
       const url = mintQrUrl();
-      return { url, svg: await svgQr(url), expiresInMin: QR_TTL_MIN };
+      const expiresAt = qrKeys.get(new URL(url).searchParams.get('k'));
+      return { url, svg: await svgQr(url), expiresInMin: QR_TTL_MIN, expiresAt };
     },
     newPasswordError,
     // Logs out every device that is not blocked, cancels every login code, and sets `next` as the password when given.

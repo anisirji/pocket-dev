@@ -16,12 +16,16 @@
     <h1>Pocket Dev <span>Admin</span></h1>
     <span class="pill">This Mac only</span>
   </div>
-  <p class="updated" id="updated" aria-live="polite"></p>
+  <div class="top-actions">
+    <p class="updated" id="updated" aria-live="polite"></p>
+    <button type="button" class="btn" id="restartBtn" disabled>Restart Pocket Dev</button>
+  </div>
 </header>
 
 <div class="layout">
   <nav class="side" aria-label="Sections">
     <a href="#connection">Connection</a>
+    <a href="#sharing">Share &amp; login</a>
     <a href="#pending" data-nav="pending">Waiting <b id="navPending"></b></a>
     <a href="#devices">Devices</a>
     <a href="#log">Security log</a>
@@ -50,6 +54,29 @@
         <input type="checkbox" id="keepOpen">
         <span><b>Keep connection open</b><small>On: stays open after you close this page and after a restart. Off: closes about 30 s after this page is closed.</small></span>
       </label>
+    </section>
+
+    <section id="sharing" class="panel" aria-labelledby="sharingTitle">
+      <div class="panel-head"><h2 id="sharingTitle">Share &amp; login</h2></div>
+      <p class="note">Scan from a phone on the same Wi-Fi as this Mac.</p>
+      <div class="setting">
+        <div class="setting-text"><b>Share Pocket Dev</b><small>Opens Pocket Dev. A new device still needs the password and any required approval.</small></div>
+        <button type="button" class="btn" id="shareQrBtn" aria-controls="shareQr" aria-expanded="false" disabled>Show share QR</button>
+      </div>
+      <div class="qr" id="shareQr" hidden>
+        <div class="qr-code" id="shareQrCode" role="img" aria-label="QR code for the Pocket Dev address"></div>
+        <div class="qr-details"><code id="shareQrUrl"></code><button type="button" class="btn btn-sm" id="shareQrCopy">Copy link</button></div>
+      </div>
+      <div class="setting">
+        <div class="setting-text"><b>Log in without a password</b><small>Works once, expires in <span id="qrTtl">10</span> minutes, and skips approval. Anyone with this link can log in.</small></div>
+        <button type="button" class="btn" id="qrBtn" aria-controls="qr" aria-expanded="false" disabled>Show login QR</button>
+      </div>
+      <div class="qr" id="qr" hidden>
+        <div class="qr-code" id="qrCode" role="img" aria-label="QR code for a one-time Pocket Dev login"></div>
+        <div class="qr-details"><code id="qrUrl"></code><p class="note" id="qrExpiry" role="status"></p><button type="button" class="btn btn-sm" id="qrCopy">Copy login link</button></div>
+      </div>
+      <p class="note" id="qrUnavailable" role="status">Checking connection…</p>
+      <p class="err" id="qrErr" role="alert"></p>
     </section>
 
     <div class="banner" id="guessing" hidden role="alert"></div>
@@ -115,12 +142,6 @@
         <div class="setting">
           <label class="setting-text switch-label" for="approval"><b>Approve new devices</b><small>A password login waits here until you approve it. QR logins skip this: scanning a code from this Mac proves you're here.</small></label>
           <input type="checkbox" role="switch" class="switch" id="approval">
-        </div>
-        <div class="setting setting-col">
-          <div class="setting-text"><b>Log in a phone with a QR code</b><small>Works once, expires in <span id="qrTtl">10</span> minutes, and skips approval.</small></div>
-          <div class="form-row"><button type="button" class="btn" id="qrBtn">Show login QR</button></div>
-          <div class="qr" id="qr" hidden><div class="qr-code" id="qrCode"></div><code id="qrUrl"></code></div>
-          <p class="err" id="qrErr"></p>
         </div>
         <div class="setting setting-col">
           <div class="setting-text"><b>Addresses</b><small>Phones on the same Wi-Fi can use either. Each address logs in separately.</small></div>

@@ -1,4 +1,14 @@
 (() => {
+  // An older running server may serve the new page before it knows the route
+  // for connection.js. Keep the chat entry points usable for explaining recovery.
+  if (typeof window.PocketDevConnection !== 'function' || typeof window.PocketDevDrafts !== 'function') {
+    const message = window.pocketDev.clientUpdateMessage;
+    window.pocketDevChat = {
+      open() { window.pocketDev.showClientError(message); },
+      async startFromSession() { throw new Error(message); },
+    };
+    return;
+  }
   const TOOLS = { claude: 'Claude', codex: 'Codex' };
   const WAITING = ['waiting for you', 'wait'];
   const STATUS = {
@@ -13,7 +23,6 @@
   const DECISIONS = { allow: 'Allowed', 'allow-chat': 'Allowed for this chat', 'allow-project': 'Allowed for this project', deny: 'Denied' };
   const FALLBACK_OPTIONS = [{ id: 'allow', label: 'Allow once' }, { id: 'allow-chat', label: 'Always allow in this chat' }, { id: 'deny', label: 'Deny' }];
   const KINDS = { command: 'Run a command', file: 'Edit a file', tool: 'Use a tool', plan: 'Approve the plan' };
-  const BACKOFF = [1000, 2000, 4000, 8000, 10000];
   const POLL_MS = 3000;
   const MAX_INPUT_PX = 140;
   const TOAST_MS = 2600;
@@ -39,10 +48,11 @@
   }
 
   // Not window.api: the flows below branch on the status code (409 busy, 404 no uploads) and upload raw bodies.
-  async function api(method, url, body, headers) {
+  async function api(method, url, body, headers, { signal } = {}) {
     const raw = body instanceof Blob;
     const res = await fetch(url, {
       method,
+      signal,
       headers: { 'x-pocket-dev': '1', ...(raw ? headers : body ? { 'content-type': 'application/json' } : {}) },
       body: raw ? body : body ? JSON.stringify(body) : undefined,
     });
@@ -50,13 +60,23 @@
       location.replace('/login.html');
       throw new Error('Not logged in');
     }
-    const data = res.status === 204 ? null : await res.json().catch(() => null);
+    const data = res.status === 204 ? null : await res.json().catch((err) => {
+      if (res.ok) throw err; // A missing acknowledgement must not clear the draft.
+      return null;
+    });
     if (!res.ok) {
       const err = new Error(data?.error || `HTTP ${res.status}`);
       err.status = res.status;
       throw err;
     }
     return data;
+  }
+
+  async function sendWithTimeout(url, body, method = 'POST') {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try { return await api(method, url, body, undefined, { signal: controller.signal }); }
+    finally { clearTimeout(timer); }
   }
 
   let optionsPromise = null;
@@ -106,20 +126,43 @@
   const choiceLabel = (setting, value) => choiceOf(setting, value)?.label || value;
   const shortModel = (id) => id.replace(/^claude-/, '').replace(/-\d{8}$/, '');
 
-  // Markdown-ish rendering builds DOM nodes from text, never HTML, so model output cannot inject markup.
-  // Links only take http(s) URLs, so a javascript: href cannot come from the model either.
+  // Local paths open through the authenticated Files API, never file:// or a
+  // shell/editor protocol. Files applies its normal root and symlink checks.
+  function localFileTarget(target) {
+    if (!target.startsWith('/') || target.startsWith('//') || /[\x00-\x1f\x7f\\]/.test(target)) return null;
+    const path = target.replace(/(?::\d+(?::\d+)?|#L\d+(?:C\d+)?)$/, '');
+    return { path, href: `/api/files/download?${new URLSearchParams({ path, inline: '1' })}` };
+  }
+
+  // Build DOM nodes from text, never model-generated HTML. Only web URLs and
+  // local file paths become links; other protocols remain literal text.
   function inline(node, text) {
-    const re = /`([^`\n]+)`|\*\*(.+?)\*\*|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    const re = /`([^`\n]+)`|\*\*(.+?)\*\*|\[([^\]\n]+)\]\((<[^<>\n]+>|[^\s)]+)\)/g;
     let last = 0;
     for (const m of text.matchAll(re)) {
       if (m.index > last) node.append(text.slice(last, m.index));
       if (m[1] != null) node.append(el('code', 'chat-ic', m[1]));
       else if (m[2] != null) node.append(inline(el('strong'), m[2]));
       else {
+        const target = m[4].startsWith('<') ? m[4].slice(1, -1) : m[4];
+        const local = localFileTarget(target);
+        if (!local && !/^https?:\/\//i.test(target)) {
+          node.append(m[0]);
+          last = m.index + m[0].length;
+          continue;
+        }
         const a = inline(el('a', 'chat-md-a'), m[3]);
-        a.href = m[4];
+        a.href = local?.href || target;
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
+        if (local) {
+          a.title = local.path;
+          a.onclick = (event) => {
+            if (event.button > 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !window.openFile) return;
+            event.preventDefault();
+            window.openFile(local.path);
+          };
+        }
         node.append(a);
       }
       last = m.index + m[0].length;
@@ -286,12 +329,13 @@
           <div class="chat-log"></div>
         </div>
         <button type="button" class="chat-latest" hidden>↓ latest</button>
-        <div class="chat-conn" hidden></div>
+        <div class="chat-conn" role="status" aria-live="polite" hidden></div>
       </div>
       <div class="chat-dock">
         <div class="chat-card" hidden></div>
         <div class="chat-statusline" hidden></div>
         <div class="chat-notice" hidden></div>
+        <div class="chat-queue" role="list" aria-label="Queued messages" hidden></div>
         <div class="chat-files" hidden></div>
         <form class="chat-composer">
           <button type="button" class="chat-attach" aria-label="Attach a file">📎</button>
@@ -321,7 +365,7 @@
     listScreen: q('.chat-list-screen'), rows: q('.chat-rows'), newBtn: q('.chat-new-btn'), close: q('.chat-close'),
     convoScreen: q('.chat-convo-screen'), back: q('.chat-back'), title: q('.chat-title'), sub: q('.chat-sub'), menu: q('.chat-menu'), chips: q('.chat-chips'),
     scroll: q('.chat-log-scroll'), empty: q('.chat-empty'), log: q('.chat-log'), latest: q('.chat-latest'), conn: q('.chat-conn'),
-    card: q('.chat-card'), statusline: q('.chat-statusline'), notice: q('.chat-notice'), files: q('.chat-files'),
+    card: q('.chat-card'), statusline: q('.chat-statusline'), notice: q('.chat-notice'), queue: q('.chat-queue'), files: q('.chat-files'),
     dock: q('.chat-dock'), composer: q('.chat-composer'), attach: q('.chat-attach'), input: q('.chat-input'), send: q('.chat-send'), fileInput: q('.chat-file-input'),
     newWrap: q('.chat-new-wrap'), newSheet: q('.chat-new-sheet'), settingsWrap: q('.chat-settings-wrap'), settingsSheet: q('.chat-settings-sheet'),
     permsScreen: q('.chat-perms-screen'), permsBack: q('.chat-perms-back'), permsSub: q('.chat-perms-sub'), permsBody: q('.chat-perms-body'),
@@ -441,8 +485,6 @@
       hideToast();
       // A typed #chat link pops our entries before its hashchange arrives, so only strip the hash we wrote.
       if (!sharedOverlays && prev.length && location.hash === hashFor(prev)) history.replaceState(history.state, '', location.pathname + location.search);
-    } else if (!prev.length) {
-      fitViewport();
     }
   }
 
@@ -877,9 +919,19 @@
   const convo = {
     id: null, chat: null, events: [], byId: new Map(), nodes: new Map(), expanded: new Set(),
     dirty: new Set(), chatDirty: false, frame: 0, stick: true,
-    ws: null, retry: 0, attempt: 0, online: false, everOnline: false, leaving: false,
+    connection: null, online: false, everOnline: false, leaving: false,
     files: [], uploadsOff: false, sending: false,
   };
+  let draftStorage;
+  try { draftStorage = sessionStorage; } catch {}
+  const drafts = new window.PocketDevDrafts(draftStorage);
+  const pendingSends = new Set();
+  const removingQueued = new Set();
+  let queueKey = '';
+  function saveDraft(id = convo.id, text = ui.input.value, files = convo.files) {
+    if (!id) return;
+    drafts.save(id, text, files);
+  }
 
   function resetLog() {
     convo.events = [];
@@ -890,11 +942,15 @@
   }
 
   function enterConvo(id) {
-    Object.assign(convo, { id, chat: seed?.id === id ? seed : null, stick: true, attempt: 0, online: false, everOnline: false, leaving: false, files: [], sending: false });
+    const draft = drafts.get(id);
+    Object.assign(convo, { id, chat: seed?.id === id ? seed : null, stick: true, online: false, everOnline: false, leaving: false, files: draft.files, sending: pendingSends.has(id) });
     convo.expanded = new Set();
     seed = null;
     resetLog();
-    ui.input.value = '';
+    ui.input.value = draft.text;
+    queueKey = '';
+    ui.queue.hidden = true;
+    ui.queue.replaceChildren();
     ui.notice.hidden = true;
     growInput();
     renderFiles();
@@ -917,6 +973,7 @@
 
   function leaveConvo() {
     if (!convo.id) return;
+    saveDraft();
     disconnect();
     convo.id = null;
     convo.chat = null;
@@ -926,33 +983,33 @@
 
   function connect() {
     const id = convo.id;
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/chat/${encodeURIComponent(id)}`);
-    convo.ws = ws;
-    ws.onopen = () => {
-      if (convo.ws !== ws) return;
-      convo.online = convo.everOnline = true;
-      convo.attempt = 0;
-      renderConn();
-    };
-    ws.onmessage = (e) => {
-      if (convo.ws === ws) onMessage(JSON.parse(e.data));
-    };
-    ws.onclose = (e) => {
-      if (convo.ws !== ws) return;
-      convo.ws = null;
-      convo.online = false;
-      if (e.code === 4404) return chatGone();
-      renderConn();
-      clearTimeout(convo.retry);
-      convo.retry = setTimeout(connect, BACKOFF[Math.min(convo.attempt++, BACKOFF.length - 1)]);
-    };
+    convo.connection = new window.PocketDevConnection({
+      url: () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/chat/${encodeURIComponent(id)}`,
+      waitForHello: true,
+      beforeConnect: async (signal) => {
+        if (convo.everOnline) {
+          try {
+            const chats = await api('GET', '/api/chat', undefined, undefined, { signal });
+            if (!chats.some((c) => c.id === id)) { chatGone(); return false; }
+          }
+          catch (err) { if (err.status === 404) { chatGone(); return false; } throw err; }
+        }
+        return convo.id === id;
+      },
+      onState(state) {
+        convo.online = state === 'connected';
+        if (convo.online) convo.everOnline = true;
+        renderConn();
+      },
+      onMessage,
+      onClose(e) { if (e.code === 4404) { chatGone(); return false; } },
+    });
   }
 
   function disconnect() {
-    clearTimeout(convo.retry);
-    const ws = convo.ws;
-    convo.ws = null;
-    ws?.close();
+    convo.connection?.dispose();
+    convo.connection = null;
+    convo.online = false;
   }
 
   function chatGone() {
@@ -964,13 +1021,10 @@
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden || !convo.id) return;
-    if (!convo.ws) {
-      clearTimeout(convo.retry);
-      convo.attempt = 0;
-      connect();
-    }
+    if (document.hidden) saveDraft();
+    else if (listVisible()) refreshList();
   });
+  window.addEventListener('pagehide', () => saveDraft());
 
   function onMessage(msg) {
     if (msg.t === 'hello') {
@@ -1045,6 +1099,7 @@
       renderChrome();
     }
     renderCard();
+    renderQueue();
     if (stick) scrollToBottom();
     renderLatest();
   }
@@ -1110,11 +1165,46 @@
     return link;
   }
 
+  function renderQueue() {
+    const waiting = convo.events.filter((ev) => ev.type === 'user-text' && ev.queued && !ev.removed && !ev.notSent);
+    const tool = TOOLS[convo.chat?.tool] || 'Agent';
+    const key = JSON.stringify([convo.id, tool, convo.online, waiting.map((ev) => [ev.id, ev.text, ev.attachments, removingQueued.has(ev.id)])]);
+    if (key === queueKey) return;
+    queueKey = key;
+    ui.queue.hidden = !waiting.length;
+    ui.queue.setAttribute('aria-label', `${tool} queued messages`);
+    const scroll = ui.queue.scrollTop;
+    ui.queue.replaceChildren(...waiting.map((ev, index) => {
+      const row = el('div', 'chat-queue-row');
+      row.setAttribute('role', 'listitem');
+      const label = el('span', 'chat-queue-label', waiting.length > 1 ? `Queued ${index + 1}/${waiting.length}` : 'Queued');
+      const files = ev.attachments || [];
+      const text = ev.text || files.map(baseName).join(', ') || 'Attached file';
+      const preview = el('span', 'chat-queue-preview', `${text}${ev.text && files.length ? ` · ${files.length} attached` : ''}`);
+      preview.title = preview.textContent;
+      const remove = button('chat-queue-remove', 'Remove', () => removeQueued(ev.id));
+      remove.setAttribute('aria-label', `Remove queued message ${index + 1}`);
+      remove.disabled = !convo.online || removingQueued.has(ev.id);
+      keepFocus(remove);
+      row.append(label, preview, remove);
+      return row;
+    }));
+    ui.queue.scrollTop = scroll;
+  }
+
   async function removeQueued(eventId) {
+    if (!convo.online || removingQueued.has(eventId)) return;
+    const id = convo.id;
+    removingQueued.add(eventId);
+    renderQueue();
     try {
-      setChat(await api('DELETE', `/api/chat/${convo.id}/queue`, { eventId }));
+      const chat = await sendWithTimeout(`/api/chat/${id}/queue`, { eventId }, 'DELETE');
+      if (convo.id === id) setChat(chat);
     } catch (err) {
-      notice(err.message);
+      if (convo.id === id) notice(err.message);
+    } finally {
+      removingQueued.delete(eventId);
+      if (convo.id === id) renderQueue();
     }
   }
 
@@ -1138,26 +1228,19 @@
 
   const RENDER = {
     'user-text': (ev) => {
-      if (ev.removed) {
+      if (ev.removed || ev.queued) {
         const gone = el('div');
         gone.hidden = true;
         return gone;
       }
-      const node = el('div', `chat-user${ev.queued ? ' chat-user-queued' : ''}`);
+      const node = el('div', 'chat-user');
       if (ev.text) node.append(el('div', 'chat-user-text', ev.text));
       if (ev.attachments?.length) {
         const files = el('div', 'chat-user-files');
         ev.attachments.forEach((p, i) => files.append(IMAGE_EXT.test(p) ? attachedImage(ev, i) : el('span', 'chat-user-file', `📎 ${baseName(p)}`)));
         node.append(files);
       }
-      if (ev.queued) {
-        const tag = el('div', 'chat-queued-tag');
-        tag.append(el('span', null, 'Queued: sends when Claude is done'));
-        const x = button('chat-queued-x', 'Remove', () => removeQueued(ev.id));
-        keepFocus(x);
-        tag.append(x);
-        node.append(tag);
-      } else if (ev.notSent) {
+      if (ev.notSent) {
         node.append(el('div', 'chat-queued-tag chat-queued-lost', 'Not sent: the turn failed or the server restarted'));
       }
       return node;
@@ -1312,7 +1395,11 @@
 
   function renderConn() {
     ui.conn.hidden = convo.online;
-    ui.conn.textContent = convo.everOnline ? 'reconnecting…' : 'connecting…';
+    ui.conn.textContent = navigator.onLine === false ? 'Offline · your draft is saved' : convo.everOnline ? 'Reconnecting… your draft is saved' : 'Connecting…';
+    ui.card.hidden = !convo.online || !pendingEvent();
+    statusStop.disabled = !convo.online;
+    renderQueue();
+    renderComposer();
   }
 
   const atBottom = () => ui.scroll.scrollHeight - ui.scroll.scrollTop - ui.scroll.clientHeight < 40;
@@ -1352,17 +1439,21 @@
   function renderCard() {
     const ev = pendingEvent();
     const key = ev ? `${convo.id}:${ev.requestId}` : null;
+    ui.card.hidden = !convo.online || !ev;
     if (key === cardKey) return;
     cardKey = key;
-    ui.card.hidden = !ev;
     ui.card.replaceChildren(...(ev ? [ev.type === 'question' ? questionCard(ev) : permissionCard(ev)] : []));
   }
 
   async function answer(card, body) {
+    if (!convo.online) return;
+    const id = convo.id;
     for (const b of card.querySelectorAll('button')) b.disabled = true;
     try {
-      setChat(await api('POST', `/api/chat/${convo.id}/answer`, body));
+      const chat = await sendWithTimeout(`/api/chat/${id}/answer`, body);
+      if (convo.id === id) setChat(chat);
     } catch (err) {
+      if (convo.id !== id) return;
       for (const b of card.querySelectorAll('button')) b.disabled = false;
       card.dispatchEvent(new Event('chat-reenable'));
       notice(err.message);
@@ -1522,11 +1613,11 @@
     const busy = convo.chat && isBusy(convo.chat);
     const uploading = convo.files.some((f) => !f.path);
     const hasInput = !!ui.input.value.trim() || convo.files.length > 0;
-    // While Claude works, text in the box is queued. Stop lives in the status line, so there is never a second one here.
+    // While the agent works, text in the box is queued. Stop lives in the status line, so there is never a second one here.
     ui.send.textContent = busy ? 'Queue' : 'Send';
     ui.send.classList.remove('chat-stop');
-    ui.send.disabled = convo.sending || uploading || !hasInput;
-    ui.attach.disabled = convo.uploadsOff;
+    ui.send.disabled = !convo.online || convo.sending || uploading || !hasInput;
+    ui.attach.disabled = !convo.online || convo.uploadsOff;
     ui.attach.title = convo.uploadsOff ? 'Attachments are not available on this server' : 'Attach a file';
   }
 
@@ -1537,6 +1628,7 @@
       chip.append(el('span', 'chat-file-name', f.path ? f.name : `${f.name} (uploading…)`));
       const x = button('chat-file-x', '✕', () => {
         convo.files = convo.files.filter((g) => g !== f);
+        saveDraft();
         renderFiles();
       });
       x.setAttribute('aria-label', `Remove ${f.name}`);
@@ -1547,73 +1639,79 @@
   }
 
   ui.input.addEventListener('input', () => {
+    saveDraft();
     growInput();
     renderComposer();
   });
   keepFocus(ui.send);
   ui.composer.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const c = convo.chat;
-    if (!convo.id) return;
+    if (!convo.id || !convo.online || convo.sending || convo.files.some((f) => !f.path)) return;
+    const id = convo.id;
     const text = ui.input.value.trim();
     const attachments = convo.files.filter((f) => f.path).map((f) => f.path);
     if (!text && !attachments.length) return;
+    saveDraft();
+    const sent = drafts.submission(id);
     convo.sending = true;
+    pendingSends.add(id);
     renderComposer();
     try {
-      const chat = await api('POST', `/api/chat/${convo.id}/message`, { text, ...(attachments.length ? { attachments } : {}) });
-      ui.input.value = '';
-      convo.files = [];
+      const chat = await sendWithTimeout(`/api/chat/${id}/message`, { text, clientMessageId: sent.clientMessageId, ...(attachments.length ? { attachments } : {}) });
+      if (chat?.id !== id) throw new Error('The server did not confirm this message. Your draft is saved.');
+      // A response can arrive after the user switches chats or keeps typing.
+      // Clear only the draft that was actually submitted.
+      if (convo.id === id) saveDraft();
+      const draft = drafts.acknowledge(id, sent);
+      if (convo.id !== id) return;
+      ui.input.value = draft.text;
+      convo.files = draft.files;
       growInput();
       renderFiles();
       convo.stick = true;
       setChat(chat);
       closeKeyboard();
     } catch (err) {
-      notice(err.message);
+      if (convo.id === id) notice(err.name === 'AbortError' || err instanceof TypeError ? 'Could not confirm sending. Your draft is saved; retrying will not send it twice.' : err.message);
     } finally {
-      convo.sending = false;
-      renderComposer();
+      pendingSends.delete(id);
+      if (convo.id === id) { convo.sending = false; renderComposer(); }
     }
   });
 
   ui.attach.onclick = () => ui.fileInput.click();
   ui.fileInput.onchange = async () => {
     const picked = [...ui.fileInput.files];
+    const id = convo.id;
+    const files = convo.files;
     ui.fileInput.value = '';
     for (const file of picked) {
       const f = { name: file.name, path: null };
-      convo.files.push(f);
-      renderFiles();
+      files.push(f);
+      if (convo.id === id && convo.files === files) renderFiles();
       try {
         f.path = (await api('POST', '/api/upload', file, { 'x-filename': encodeURIComponent(file.name) })).path;
       } catch (err) {
-        convo.files = convo.files.filter((g) => g !== f);
+        const index = files.indexOf(f);
+        if (index !== -1) files.splice(index, 1);
+        if (convo.id !== id || convo.files !== files) continue;
         if (err.status === 404) {
           convo.uploadsOff = true;
-          convo.files = [];
+          convo.files = convo.files.filter((g) => g.path);
+          saveDraft();
           renderFiles();
           notice('This server cannot receive attachments yet.');
           return;
         }
         notice(`Could not upload ${file.name}: ${err.message}`);
       }
-      renderFiles();
+      if (convo.id === id && convo.files === files) { saveDraft(); renderFiles(); }
+      else {
+        const draft = drafts.get(id);
+        if (draft?.files === files) saveDraft(id, draft.text, files);
+      }
     }
   };
-
-  const vv = window.visualViewport;
-  function fitViewport() {
-    if (root.hidden) return;
-    const h = vv ? vv.height : window.innerHeight;
-    const usable = `calc(${h}px - var(--status-h, 0px))`;
-    root.style.height = usable;
-    root.style.setProperty('--chat-h', usable);
-    if (vv) root.style.transform = `translateY(${vv.offsetTop}px)`;
-  }
-  vv?.addEventListener('resize', fitViewport);
-  vv?.addEventListener('scroll', fitViewport);
-  window.addEventListener('orientationchange', fitViewport);
 
   window.pocketDevChat = {
     open(chatId) {

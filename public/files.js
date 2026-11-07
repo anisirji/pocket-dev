@@ -428,7 +428,7 @@
       state.trail.pop();
       queueMicrotask(() => { if (state.open) load(state.trail.at(-1)); });
     });
-    load(path);
+    return load(path);
   }
 
   let searchSeq = 0;
@@ -916,10 +916,12 @@
   }
 
   function onFilesClosed() {
+    fileLinkRequest++;
     state.open = false;
     closePreview();
     closeMenu();
     state.root.hidden = true;
+    state.root.classList.remove('fx-from-chat');
     state.selecting = false;
     state.selected.clear();
     state.trail = [];
@@ -927,9 +929,10 @@
 
   const closeFiles = () => overlays.close('files');
 
-  window.openFiles = async (path) => {
+  window.openFiles = async (path, { overChat = false } = {}) => {
     overlays ??= window.pocketDev?.overlays ?? localOverlays();
     if (!state.root) build();
+    if (overChat) state.root.classList.add('fx-from-chat');
     if (state.open) return navigate(path || state.places?.home || '');
     state.open = true;
     state.root.hidden = false;
@@ -941,6 +944,32 @@
     }
     const start = path || state.dir?.path || state.places?.home || '';
     state.trail = [start];
-    load(start);
+    await load(start);
+  };
+
+  let fileLinkRequest = 0;
+  window.openFile = async (path) => {
+    const request = ++fileLinkRequest;
+    await window.openFiles(parentOf(path), { overChat: true });
+    if (request !== fileLinkRequest || !state.open) return;
+    const loadSeq = state.loadSeq;
+    try {
+      // HEAD also handles hidden files or entries beyond the list limit. The
+      // server validates this path before returning any metadata or contents.
+      const res = await fetch(fileUrl(path, true), { method: 'HEAD' });
+      if (request !== fileLinkRequest || !state.open || loadSeq !== state.loadSeq) return;
+      if (res.status === 401) return location.replace('/login.html');
+      if (res.status === 400) return navigate(path); // Folder links open Files.
+      if (!res.ok) throw new Error(res.status === 403 ? 'This file is outside your allowed folders.' : res.status === 404 ? 'This file no longer exists.' : `Could not open file (HTTP ${res.status}).`);
+      const entry = {
+        name: baseName(path), path, type: 'file',
+        size: Number(res.headers.get('content-length')) || 0,
+        mime: res.headers.get('content-type')?.split(';')[0] || '',
+        mtime: Date.parse(res.headers.get('last-modified')) || Date.now(),
+      };
+      openPreview(entry);
+    } catch (err) {
+      if (request === fileLinkRequest && state.open) toast(err.message, true);
+    }
   };
 })();

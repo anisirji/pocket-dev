@@ -34,11 +34,20 @@
   const setHeight = () => document.documentElement.style.setProperty('--status-h', wrap.hidden ? '0px' : `${wrap.offsetHeight}px`);
   new ResizeObserver(setHeight).observe(wrap);
 
-  // The keyboard moves the visual viewport; the strip follows it like the app does.
+  // Publish one geometry for all screens. Resizing only #app leaves overlays behind
+  // the keyboard; translating it also gives nested fixed elements a new containing block.
   const vv = window.visualViewport;
-  const follow = () => { wrap.style.transform = `translateY(${vv?.offsetTop ?? 0}px)`; };
+  const follow = () => {
+    const style = document.documentElement.style;
+    style.setProperty('--viewport-h', `${vv?.height ?? window.innerHeight}px`);
+    style.setProperty('--viewport-top', `${vv?.offsetTop ?? 0}px`);
+  };
   vv?.addEventListener('resize', follow);
   vv?.addEventListener('scroll', follow);
+  window.addEventListener('resize', follow);
+  window.addEventListener('orientationchange', follow);
+  window.addEventListener('pageshow', follow);
+  follow();
 
   const dismissed = new Map(); // key -> { level, at }
   const announced = new Map(); // key -> level already vibrated for
@@ -88,13 +97,13 @@
   }
 
   function render(v) {
-    const parts = [];
     battery.hidden = v.battery === null;
     if (v.battery !== null) {
       const plugged = v.onAC || v.charging;
-      battery.textContent = `${v.battery}%${plugged ? ' ⚡' : ''}`;
+      const charge = v.charging ? 'Charging' : v.onAC && v.battery === 100 ? 'Fully charged' : 'Not charging';
+      battery.textContent = `${v.battery}% · ${charge}`;
+      battery.title = `Mac battery: ${v.battery}%, ${charge.toLowerCase()}, ${plugged ? 'plugged in' : 'on battery'}`;
       battery.className = `ms-item${!plugged && v.battery <= 10 ? ' crit' : !plugged && v.battery <= v.limits.batteryPercent ? ' warn' : ''}`;
-      parts.push(battery);
     }
     const { batteryC, thermal } = v.temperature;
     temp.hidden = batteryC === null && !thermal;

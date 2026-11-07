@@ -240,7 +240,7 @@ function renderDevices() {
   const head = h('div', { class: 'row row-head' }, h('div', {}, 'Device'), h('div', {}, 'Address'), h('div', {}, 'Logged in with'), h('div', {}, 'Activity'), h('div', {}, ''));
   $('deviceRows').replaceChildren(...(list.length
     ? [head, ...list.map(deviceRow)]
-    : [h('p', { class: 'empty' }, 'No devices yet. Show a login QR code below, or open the address on a phone and type the password.')]));
+    : [h('p', { class: 'empty' }, 'No devices yet. Show a login QR in Share & login above, or open the address on a phone and type the password.')]));
 }
 
 function renderPending() {
@@ -343,7 +343,7 @@ $('pwForm').addEventListener('submit', async (e) => {
 // ---- Settings
 
 function renderSettings() {
-  const { maxDevices, overview, requireApproval, qrTtlMin, urls, access } = state;
+  const { maxDevices, overview, requireApproval, urls } = state;
   const limit = limitDraft ?? maxDevices;
   $('limitOut').textContent = limit;
   document.querySelector('[data-step="-1"]').disabled = limit <= MIN_DEVICES;
@@ -353,10 +353,7 @@ function renderSettings() {
     ? `${plural(overview.loggedIn, 'device is', 'devices are')} logged in, so new password logins stay refused until you log some out. Lowering the limit logs nobody out.`
     : 'Password logins stop at this many devices. QR logins always work and replace the device used least recently.';
   $('approval').checked = requireApproval;
-  $('qrTtl').textContent = qrTtlMin;
-  $('qrBtn').disabled = !access.connected;
-  $('qrBtn').title = access.connected ? '' : 'Connect first';
-  const copy = (text) => h('button', { class: 'btn btn-sm', type: 'button', onclick: () => navigator.clipboard.writeText(text).then(() => toast('Copied')) }, 'Copy');
+  const copy = (text) => h('button', { class: 'btn btn-sm', type: 'button', onclick: () => copyLink(text) }, 'Copy');
   $('urls').replaceChildren(
     h('dt', {}, 'Wi-Fi IP'), ...(urls.lan ? [h('dd', {}, urls.lan), copy(urls.lan)] : [h('dd', {}, 'No network'), h('span')]),
     h('dt', {}, 'Name'), h('dd', {}, urls.mdns), copy(urls.mdns),
@@ -380,18 +377,106 @@ async function setApproval(on) {
 }
 $('approval').addEventListener('change', (e) => setApproval(e.target.checked));
 
-$('qrBtn').addEventListener('click', async () => {
-  $('qrErr').textContent = '';
+// ---- Share and login QR codes
+
+const qrViews = {
+  share: { button: 'shareQrBtn', box: 'shareQr', code: 'shareQrCode', url: 'shareQrUrl', copy: 'shareQrCopy', label: 'Show share QR' },
+  login: { button: 'qrBtn', box: 'qr', code: 'qrCode', url: 'qrUrl', copy: 'qrCopy', label: 'Show login QR' },
+};
+let qrAddress = null;
+let qrGeneration = 0;
+let qrExpiryTimer = 0;
+const qrLoading = new Set();
+
+async function copyLink(text) {
   try {
-    const { svg, url } = await api('POST', '/api/qr');
-    $('qrCode').innerHTML = svg;
-    $('qrUrl').textContent = url;
-    $('qr').hidden = false;
-    $('qrBtn').textContent = 'New code';
-  } catch (err) {
-    $('qrErr').textContent = err.message;
+    await navigator.clipboard.writeText(text);
+    toast('Copied');
+  } catch {
+    toast('Could not copy. Select the link and copy it manually.', true);
   }
-});
+}
+
+function clearQr(kind) {
+  const view = qrViews[kind];
+  $(view.box).hidden = true;
+  $(view.code).replaceChildren();
+  $(view.url).textContent = '';
+  $(view.button).textContent = view.label;
+  $(view.button).setAttribute('aria-expanded', 'false');
+  if (kind === 'login') {
+    clearTimeout(qrExpiryTimer);
+    $('qrExpiry').textContent = '';
+  }
+}
+
+function renderSharing(online = true) {
+  const address = online && state?.access.connected ? state.urls.lan : null;
+  const reason = !online ? 'Cannot reach Pocket Dev. QR codes will be available when it reconnects.'
+    : !state?.access.connected ? 'Press Connect above to share or log in a phone.'
+      : !address ? 'Connect this Mac to Wi-Fi to show a QR code.' : '';
+  if (address !== qrAddress) {
+    qrGeneration++;
+    qrAddress = address;
+    for (const kind of Object.keys(qrViews)) clearQr(kind);
+    $('qrErr').textContent = '';
+  }
+  $('qrUnavailable').textContent = reason;
+  $('qrUnavailable').hidden = !reason;
+  $('qrTtl').textContent = state?.qrTtlMin ?? 10;
+  for (const [kind, view] of Object.entries(qrViews)) {
+    $(view.button).disabled = !address || qrLoading.has(kind);
+    $(view.button).title = reason;
+  }
+}
+
+for (const [kind, view] of Object.entries(qrViews)) {
+  $(view.copy).addEventListener('click', () => copyLink($(view.url).textContent));
+  $(view.button).addEventListener('click', async () => {
+    if (!qrAddress || qrLoading.has(kind)) return;
+    const generation = qrGeneration;
+    qrLoading.add(kind);
+    clearQr(kind);
+    $(view.button).textContent = 'Creating…';
+    $(view.button).setAttribute('aria-busy', 'true');
+    $('qrErr').textContent = '';
+    renderSharing();
+    try {
+      const { svg, url, expiresAt } = await api('POST', '/api/qr', { kind });
+      if (generation !== qrGeneration) return;
+      if ((kind === 'share' && new URL(url).search) || (kind === 'login' && !Number.isFinite(expiresAt))) {
+        $('qrErr').textContent = 'Restart Pocket Dev to load the updated QR options, then try again.';
+        return;
+      }
+      if (new URL(url).origin !== qrAddress) {
+        $('qrErr').textContent = 'The Wi-Fi address changed. Try again for a current code.';
+        return;
+      }
+      if (kind === 'login' && expiresAt <= Date.now()) {
+        $('qrErr').textContent = 'The login QR expired. Show a new code.';
+        return;
+      }
+      $(view.code).innerHTML = svg;
+      $(view.url).textContent = url;
+      $(view.box).hidden = false;
+      $(view.button).setAttribute('aria-expanded', 'true');
+      if (kind === 'login') {
+        $('qrExpiry').textContent = `Expires at ${new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Works once.`;
+        qrExpiryTimer = setTimeout(() => {
+          clearQr('login');
+          $('qrErr').textContent = 'The login QR expired. Show a new code.';
+        }, expiresAt - Date.now());
+      }
+    } catch (err) {
+      if (generation === qrGeneration) $('qrErr').textContent = err.message;
+    } finally {
+      qrLoading.delete(kind);
+      $(view.button).removeAttribute('aria-busy');
+      $(view.button).textContent = $(view.box).hidden ? view.label : kind === 'login' ? 'New login QR' : 'Refresh share QR';
+      renderSharing($('offline').hidden);
+    }
+  });
+}
 
 // ---- Live overview
 
@@ -439,6 +524,11 @@ function renderService() {
         h('small', {}, 'Installs Pocket Dev as a launchd service: it starts when you log in and restarts if it crashes.')),
       h('button', { class: 'btn btn-primary', type: 'button', onclick: () => install(false) }, 'Install service'));
   const canRestart = svc.running && svc.isThisServer;
+  const restartButton = $('restartBtn');
+  restartButton.disabled = !canRestart || !!restarting;
+  restartButton.textContent = restarting ? 'Restarting…' : 'Restart Pocket Dev';
+  restartButton.title = canRestart ? 'Load the latest code. This page reconnects automatically.'
+    : 'Restart is available when Pocket Dev runs as the background service. See Service below.';
   const restartRow = h('div', { class: 'setting' },
     h('div', { class: 'setting-text' }, h('b', {}, svc.updateReady ? 'Update ready' : 'Restart Pocket Dev'),
       h('small', {}, restarting ? 'Back in about 15 seconds. This page reloads by itself.' : !canRestart
@@ -465,6 +555,7 @@ function restartWarning() {
 }
 
 async function restartServer() {
+  if (restarting || !state?.service.running || !state.service.isThisServer) return;
   if (!(await ask({ title: 'Restart Pocket Dev now?', body: restartWarning(), confirm: 'Restart' }))) return;
   try {
     await api('POST', '/api/service/restart');
@@ -487,6 +578,8 @@ async function restartServer() {
   renderService();
   toast('Pocket Dev has not come back yet. Check pocket-dev service status.', true);
 }
+
+$('restartBtn').addEventListener('click', restartServer);
 
 async function install(force) {
   $('svcErr').textContent = '';
@@ -568,11 +661,14 @@ async function refresh(force = false) {
     renderLog(log);
     renderPassword();
     renderSettings();
+    renderSharing();
     renderLive();
     renderService();
     permissionsOnState(state);
   } catch {
     $('offline').hidden = false;
+    $('restartBtn').disabled = true;
+    renderSharing(false);
   } finally {
     refreshing = false;
     renderUpdated();

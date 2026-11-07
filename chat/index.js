@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { Chat, QUEUE_MAX } from './chat.js';
 import { IMAGE_FILE_RE, CONTENT_TYPE, ATTACHMENT_NAME_RE, ATTACHMENT_TYPES, thumbnailOf } from './tool-images.js';
 import * as claude from './claude.js';
@@ -333,16 +334,25 @@ export function createChatApi({ sendJson, readJson, config, wss }) {
       return [204];
     },
     'POST :id/message': async (req, chat) => {
-      const { text = '', attachments } = await readJson(req);
+      const { text = '', attachments, clientMessageId } = await readJson(req);
       if (typeof text !== 'string' || text.length > TEXT_MAX) throw new BadRequest(`text must be up to ${TEXT_MAX} characters`);
+      if (clientMessageId !== undefined && (typeof clientMessageId !== 'string' || !/^[0-9a-zA-Z_-]{16,80}$/.test(clientMessageId))) throw new BadRequest('Invalid clientMessageId');
       const files = parseAttachments(attachments);
       if (!text.trim() && !files.length) throw new BadRequest('Type a message or attach a file');
+      const signature = crypto.createHash('sha256').update(JSON.stringify({ text, files: files.map((f) => f.path) })).digest('hex');
+      const previous = clientMessageId && chat.acceptedInputs.find((r) => r.id === clientMessageId);
+      if (previous) {
+        if (previous.signature !== signature) throw new BadRequest('clientMessageId already belongs to another message', 409);
+        return [202, chat.view()];
+      }
       // While a turn runs (or earlier messages still wait) this one joins the queue and goes out after the turn.
       if (chat.turn || chat.queue.length) {
         if (chat.queue.length >= QUEUE_MAX) throw new BadRequest(`Up to ${QUEUE_MAX} messages can wait. Stop the turn or wait.`, 429);
+        if (clientMessageId) chat.acceptedInputs = [...chat.acceptedInputs, { id: clientMessageId, signature }].slice(-256);
         chat.enqueue({ text, files });
         return [202, chat.view()];
       }
+      if (clientMessageId) chat.acceptedInputs = [...chat.acceptedInputs, { id: clientMessageId, signature }].slice(-256);
       chat.emit({ type: 'user-text', text, attachments: files.map((f) => f.path) });
       chat.setTitleFrom(text || path.basename(files[0].path));
       chat.startTurn();
@@ -429,6 +439,12 @@ export function createChatApi({ sendJson, readJson, config, wss }) {
       if (!chat) return ws.close(4404, 'No such chat');
       ws.isAlive = true;
       ws.on('pong', () => { ws.isAlive = true; });
+      ws.on('message', (raw) => {
+        let msg;
+        try { msg = JSON.parse(raw); } catch { return; }
+        if (!msg || typeof msg !== 'object') return;
+        if (msg.t === 'ping') ws.send(JSON.stringify({ t: 'pong' }));
+      });
       chat.clients.add(ws);
       ws.on('close', () => chat.clients.delete(ws));
       ws.send(JSON.stringify({ t: 'hello', chat: chat.view(), events: chat.events }));

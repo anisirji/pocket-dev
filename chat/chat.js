@@ -7,14 +7,14 @@ const TITLE_MAX = 80;
 const PERSIST_DELAY_MS = 1000;
 export const QUEUE_MAX = 20;
 
-const PERSISTED = ['id', 'tool', 'cwd', 'settings', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt'];
+const PERSISTED = ['id', 'tool', 'cwd', 'settings', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt', 'acceptedInputs'];
 
 // One conversation. Status is derived from three independent facts (engine awake, turn running, open requests)
 // so it can never disagree with them.
 export class Chat {
   constructor(data, file) {
     Object.assign(this, {
-      title: 'New chat', sessionId: null, grants: [], seq: 0, events: [], failed: false, turnStartedAt: null,
+      title: 'New chat', sessionId: null, grants: [], seq: 0, events: [], failed: false, turnStartedAt: null, acceptedInputs: [],
       createdAt: Date.now(), updatedAt: Date.now(),
     }, data);
     this.file = file;

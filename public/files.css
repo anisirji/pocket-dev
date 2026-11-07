@@ -6,6 +6,7 @@
   font: 14px/1.35 system-ui, -apple-system, Roboto, sans-serif;
 }
 .fx-root[hidden], .fx-root [hidden] { display: none !important; }
+.fx-root.fx-from-chat { z-index: 60; }
 :where(.fx-root) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 :where(.fx-root) svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 

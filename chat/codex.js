@@ -1,8 +1,12 @@
-import { spawn } from 'node:child_process';
-import readline from 'node:readline';
+import os from 'node:os';
+import path from 'node:path';
 import { findBin, engineEnv, cap, lineDiff, OUTPUT_MAX } from './env.js';
+import { connectCodexRpc } from './codex-rpc.js';
 
 const CODEX_BIN = process.env.POCKET_DEV_CODEX || findBin('codex');
+// A binary override keeps tests/custom installations isolated unless they also select a socket.
+const CODEX_SOCKET = process.env.POCKET_DEV_CODEX_SOCKET || (process.env.POCKET_DEV_CODEX ? null
+  : path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'app-server-control', 'app-server-control.sock'));
 
 const SANDBOX_POLICY = {
   'read-only': { type: 'readOnly', networkAccess: false },
@@ -45,74 +49,59 @@ export async function settingsSchema() {
 
 export const grantLabel = (grant) => (grant === 'files' ? 'All file changes' : grant.replace(/^command:/, 'Command: '));
 
-// All Codex chats share one app-server process: it multiplexes threads, and each extra process costs memory on the
-// Mac. It starts with the first awake chat and exits with the last one.
+// Reuse the terminal's daemon so resuming its threads does not compete for the writer lock.
+// Older installs without a daemon share one private stdio process instead.
 const server = {
-  proc: null,
+  connection: null,
   ready: null,
-  nextId: 1,
-  calls: new Map(),
+  users: 0,
   threads: new Map(),
 
   start() {
     if (this.ready) return this.ready;
-    if (!CODEX_BIN) return Promise.reject(new Error('codex is not installed (not found on PATH or in ~/.local/bin).'));
-    const proc = spawn(CODEX_BIN, ['app-server'], { env: engineEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
-    this.proc = proc;
-    let stderrTail = '';
-    proc.stderr.on('data', (d) => { stderrTail = (stderrTail + d).slice(-2000); });
-    readline.createInterface({ input: proc.stdout }).on('line', (line) => this.onLine(line));
-    const gone = (err) => {
-      if (this.proc !== proc) return;
-      this.proc = this.ready = null;
-      for (const { reject } of this.calls.values()) reject(err);
-      this.calls.clear();
-      for (const engine of [...this.threads.values()]) engine.gone(err);
-      this.threads.clear();
-    };
-    proc.on('error', (err) => gone(new Error(`Could not start codex app-server: ${err.message}`)));
-    proc.stdin.on('error', gone);
-    proc.on('exit', (code) => gone(new Error(`codex app-server exited (${code ?? 'signal'})${stderrTail ? `: ${stderrTail.trim().split('\n').pop()}` : ''}`)));
-    this.ready = this.call('initialize', {
-      clientInfo: { name: 'pocket-dev', title: 'Pocket Dev', version: '1.0.0' },
-      capabilities: { experimentalApi: false, requestAttestation: false },
-    }).then(() => this.write({ method: 'initialized' }));
-    this.ready.catch(() => this.stop());
-    return this.ready;
+    const ready = connectCodexRpc({ bin: CODEX_BIN, env: engineEnv(), socketPath: CODEX_SOCKET }).then((connection) => {
+      this.connection = connection;
+      connection.onMessage = (msg) => this.onMessage(msg);
+      connection.onGone = (err) => {
+        if (this.connection !== connection) return;
+        this.connection = this.ready = null;
+        const engines = [...this.threads.values()];
+        this.threads.clear();
+        for (const engine of engines) engine.gone(err);
+      };
+      return connection;
+    });
+    this.ready = ready;
+    ready.catch(() => { if (this.ready === ready) this.ready = null; });
+    return ready;
+  },
+
+  async acquire() {
+    this.users++;
+    try { await this.start(); }
+    catch (err) { this.release(); throw err; }
   },
 
   stop() {
-    const { proc } = this;
-    this.proc = this.ready = null;
-    proc?.kill();
+    const { connection } = this;
+    this.connection = this.ready = null;
+    connection?.close();
   },
 
   release() {
-    if (!this.threads.size) this.stop();
+    this.users--;
+    if (!this.users) this.stop();
   },
 
   write(msg) {
-    this.proc?.stdin.write(`${JSON.stringify(msg)}\n`);
+    this.connection?.write(msg);
   },
 
   call(method, params) {
-    const id = this.nextId++;
-    return new Promise((resolve, reject) => {
-      this.calls.set(id, { resolve, reject });
-      this.write({ id, method, params });
-    });
+    return this.connection?.call(method, params) ?? Promise.reject(new Error('The Codex connection closed. Send your message again to reconnect.'));
   },
 
-  onLine(line) {
-    let msg;
-    try { msg = JSON.parse(line); } catch { return; }
-    if (msg.id != null && !msg.method) {
-      const call = this.calls.get(msg.id);
-      this.calls.delete(msg.id);
-      if (msg.error) call?.reject(new Error(msg.error.message ?? 'codex error'));
-      else call?.resolve(msg.result);
-      return;
-    }
+  onMessage(msg) {
     const engine = this.threads.get(msg.params?.threadId);
     if (msg.id != null) {
       if (engine) engine.onRequest(msg.id, msg.method, msg.params);
@@ -127,7 +116,7 @@ let modelsCache = null;
 
 export async function listModels() {
   modelsCache ??= (async () => {
-    await server.start();
+    await server.acquire();
     try {
       const { data } = await server.call('model/list', {});
       return [
@@ -152,6 +141,7 @@ const changeDiff = (c) => cap(c.kind.type === 'add' ? lineDiff('', c.diff) : c.k
 const ITEM_STATUS = { completed: 'ok', failed: 'error', declined: 'denied', inProgress: 'running' };
 
 export function createCodexEngine(chat) {
+  let acquired = false;
   let threadId = null;
   let turnId = null;
   // Codex reports thread-wide token totals; a turn's usage is the growth since the turn started.
@@ -252,13 +242,19 @@ export function createCodexEngine(chat) {
   // "Approve for this chat" holds across engine restarts and for requests without that option.
   async function approve(id, params, { grantKey, kind, title, detail, diff, fallback }) {
     const offered = decisions(params, fallback);
+    const deny = offered.includes('decline') ? 'decline' : 'cancel';
+    // A running turn still has the policy it started with. Honor a live switch
+    // to never at the client boundary without granting extra sandbox access.
+    if (chat.settings.approvalPolicy === 'never') {
+      chat.emit({ type: 'status', text: 'Permission request declined because Approval is set to Never ask.' });
+      return reply(id, { decision: deny });
+    }
     if (chat.grants.includes(grantKey)) return reply(id, { decision: 'accept' });
     const res = await chat.ask({
       type: 'permission-request', kind, title, detail, diff,
       rule: grantLabel(grantKey),
       options: [{ id: 'allow', label: 'Approve' }, { id: 'allow-chat', label: 'Approve for this chat' }, { id: 'deny', label: 'Deny' }],
     });
-    const deny = offered.includes('decline') ? 'decline' : 'cancel';
     if (res.cancelled) return reply(id, { decision: 'cancel' });
     if (res.decision === 'deny') {
       reply(id, { decision: deny });
@@ -306,12 +302,23 @@ export function createCodexEngine(chat) {
 
   const engine = {
     async start() {
-      await server.start();
+      await server.acquire();
+      acquired = true;
       const { approvalPolicy, sandbox } = chat.settings;
       const params = { cwd: chat.cwd, model: model(), approvalPolicy, sandbox };
-      const res = chat.sessionId
-        ? await server.call('thread/resume', { threadId: chat.sessionId, ...params, excludeTurns: true })
-        : await server.call('thread/start', params);
+      let res;
+      try {
+        res = chat.sessionId
+          ? await server.call('thread/resume', { threadId: chat.sessionId, ...params, excludeTurns: true })
+          : await server.call('thread/start', params);
+      } catch (err) {
+        acquired = false;
+        server.release();
+        if (/already has an active writer/i.test(err.message)) {
+          throw new Error('This conversation is owned by another Codex server. Close its original Codex session, then send your message again, or start a new Codex chat.');
+        }
+        throw err;
+      }
       threadId = res.thread.id;
       threadModel = res.model;
       if (!chat.sessionId) total = { inputTokens: 0, outputTokens: 0 };
@@ -337,17 +344,24 @@ export function createCodexEngine(chat) {
       if (turnId) await server.call('turn/interrupt', { threadId, turnId });
     },
 
-    // turn/start carries every setting, so a change takes effect from the next turn.
+    // The next turn receives the full policy. Suppressing prompts can take
+    // effect immediately, including requests already waiting for an answer.
     async configure(changes) {
-      return Object.fromEntries(Object.keys(changes).map((k) => [k, 'next-turn']));
+      if (changes.approvalPolicy === 'never') {
+        for (const [requestId, { event }] of chat.requests) {
+          if (event.type === 'permission-request') chat.answer(requestId, { decision: 'deny' });
+        }
+      }
+      return Object.fromEntries(Object.keys(changes).map((k) => [k, k === 'approvalPolicy' && changes[k] === 'never' ? 'now' : 'next-turn']));
     },
 
     async stop() {
+      if (!acquired) return;
       if (threadId) {
         server.threads.delete(threadId);
         await server.call('thread/unsubscribe', { threadId }).catch(() => {});
       }
-      server.release();
+      if (acquired) { acquired = false; server.release(); }
     },
 
     onNotification(method, params) {
@@ -361,6 +375,7 @@ export function createCodexEngine(chat) {
     },
 
     gone(err) {
+      if (acquired) { acquired = false; server.release(); }
       if (chat.engine === engine) chat.engine = null;
       if (chat.turn) chat.fail(err.message);
       else chat.changed();
