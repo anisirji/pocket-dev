@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
+import { createChatApi } from './chat/index.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(ROOT, 'config.json');
@@ -229,6 +230,8 @@ function readJson(req) {
   });
 }
 
+const chatApi = createChatApi({ sendJson, readJson, idleMinutes: config.chatIdleMinutes });
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function login(req, res) {
@@ -256,6 +259,7 @@ async function handleApi(req, res, pathname) {
 
   if (route === 'POST login') return login(req, res);
   if (!isAuthed(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  if (resource === 'chat') return chatApi.handleApi(req, res, pathname);
 
   switch (route) {
     case 'GET sessions':
@@ -293,7 +297,11 @@ async function handleApi(req, res, pathname) {
   }
 }
 
-const PAGES = { '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html' };
+const PAGES = {
+  '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html',
+  '/chat.js': 'chat.js', '/chat.css': 'chat.css',
+};
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function servePage(req, res, pathname) {
   const file = PAGES[pathname];
@@ -302,7 +310,7 @@ function servePage(req, res, pathname) {
     res.writeHead(302, { location: '/login.html' });
     return res.end();
   }
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store' });
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
@@ -329,6 +337,8 @@ server.on('upgrade', (req, socket, head) => {
   // SameSite=Strict should already block cross-site upgrades; the Origin check is the backstop.
   const origin = req.headers.origin;
   if (origin && origin !== `http://${req.headers.host}`) return rejectUpgrade(socket, 403, 'Forbidden');
+  const chatMatch = /^\/ws\/chat\/([0-9a-f]{12})$/.exec(pathname);
+  if (chatMatch) return chatApi.handleUpgrade(req, socket, head, chatMatch[1]);
   const session = match && sessions.get(match[1]);
   if (!session) return rejectUpgrade(socket, 404, 'Not Found');
   wss.handleUpgrade(req, socket, head, (ws) => attachClient(session, ws));
