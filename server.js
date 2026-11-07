@@ -17,6 +17,7 @@ import { startPower, handlePowerApi, powerStatus } from './power.js';
 import { createAppsApi, snapshot as appsSnapshot } from './apps.js';
 import { startAdmin } from './admin.js';
 import { createPhoneAccess } from './access.js';
+import { createChatApi } from './chat/index.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SCROLLBACK_MAX = 500_000;
@@ -483,6 +484,7 @@ async function handleApi(req, res, url) {
   if (resource === 'history') return handleHistory(req, res, url.pathname);
   if (resource === 'apps') return handleApps(req, res, url);
   if (resource === 'power') return handlePowerApi(req, res, key, { readJson, sendJson, wss, sessions });
+  if (resource === 'chat') return chatApi.handleApi(req, res, url.pathname);
 
   switch (route) {
     case 'GET sessions':
@@ -555,6 +557,7 @@ const PAGES = {
   '/history.js': 'history.js', '/history.css': 'history.css',
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
   '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/power.js': 'power.js', '/service.js': 'service.js',
+  '/chat.js': 'chat.js', '/chat.css': 'chat.css',
 };
 const PUBLIC_PAGES = new Set(['login.html']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
@@ -589,7 +592,9 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// Terminal and chat sockets share this server, so a disconnect, sleep or shutdown that closes wss.clients closes both.
 const wss = new WebSocketServer({ noServer: true });
+const chatApi = createChatApi({ sendJson, readJson, config, wss });
 
 const rejectUpgrade = (socket, status, text) => {
   socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
@@ -604,6 +609,8 @@ server.on('upgrade', (req, socket, head) => {
   // SameSite=Strict should already block cross-site upgrades; the Origin check is the backstop.
   const origin = req.headers.origin;
   if (origin && origin !== `http://${req.headers.host}`) return rejectUpgrade(socket, 403, 'Forbidden');
+  const chatMatch = /^\/ws\/chat\/([0-9a-f]{12})$/.exec(pathname);
+  if (chatMatch) return chatApi.handleUpgrade(req, socket, head, chatMatch[1], (ws) => auth.trackSocket(device, ws));
   const session = match && sessions.get(match[1]);
   if (!session) return rejectUpgrade(socket, 404, 'Not Found');
   wss.handleUpgrade(req, socket, head, (ws) => {
@@ -624,6 +631,7 @@ setInterval(() => {
 startPower(config);
 watchLanIp();
 
+const CHAT_STATUS = { running: 'running', 'waiting-permission': 'waiting for you (permission)', 'waiting-answer': 'waiting for you (question)' };
 const AWAKE_LABELS = { off: 'Off', plugged: 'While plugged in', always: 'Always' };
 const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
 // Listing apps runs osascript; the admin page polls, so one listing serves every poll for a few seconds.
@@ -684,6 +692,20 @@ const adminSections = {
       const { apps } = await cachedApps();
       return [{ id: 'count', label: plural(apps.length, 'app') + ' open', details: ['Quit or force quit them from the phone: Settings, Open apps'] }];
     },
+  },
+  chats: {
+    title: 'Chats',
+    empty: 'No chat is running or waiting.',
+    action: 'Stop',
+    warning: 'The turn stops; the chat stays and you can send the next message from the phone.',
+    lockdown: 'optional',
+    list: () => chatApi.active().map((c) => ({
+      id: c.id,
+      label: c.title || 'New chat',
+      details: [c.tool === 'codex' ? 'Codex' : 'Claude', CHAT_STATUS[c.status], c.cwd],
+      startedAt: c.runningSince ?? undefined,
+    })),
+    act: (id) => chatApi.stop(id),
   },
 };
 
