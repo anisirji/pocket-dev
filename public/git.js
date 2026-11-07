@@ -55,7 +55,7 @@ function splitPath(p) {
 function fileRow({ code, path, origPath, stats, onclick }) {
   const [dir, name] = splitPath(path);
   return el('button', { class: 'g-file', onclick },
-    el('span', { class: `g-code c-${code}` }, code),
+    code ? el('span', { class: `g-code c-${code}` }, code) : null,
     el('span', { class: 'g-path' },
       origPath ? el('span', { class: 'g-dir' }, `${origPath} → `) : null,
       el('span', { class: 'g-dir' }, dir), name),
@@ -85,12 +85,28 @@ function diffView(text) {
   return out;
 }
 
+const C_ESCAPES = { n: 10, t: 9, r: 13, a: 7, b: 8, f: 12, v: 11, '"': 34, '\\': 92 };
+
+// git C-quotes paths with special or non-ASCII bytes: "b/caf\303\251.txt".
+function unquotePath(p) {
+  if (!p.startsWith('"')) return p;
+  const bytes = [];
+  const s = p.slice(1, -1);
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] !== '\\') bytes.push(...new TextEncoder().encode(s[i]));
+    else if (/[0-7]/.test(s[i + 1])) { bytes.push(parseInt(s.slice(i + 1, i + 4), 8)); i += 3; }
+    else bytes.push(C_ESCAPES[s[++i]] ?? s.charCodeAt(i));
+  }
+  return new TextDecoder().decode(new Uint8Array(bytes));
+}
+
 // Splits a multi-file diff at its "diff --git" headers so one file's section can be shown on its own.
 function fileSection(text, path) {
   const sections = text.split(/^(?=diff --git )/m);
   return sections.find((s) => {
-    const head = s.slice(0, s.indexOf('\n'));
-    return head.endsWith(` b/${path}`) || head.endsWith(` "b/${path}"`);
+    const header = s.split(/\n@@/)[0];
+    const named = [...header.matchAll(/^(?:\+\+\+|---|rename to|rename from) (.+)$/gm)].map((m) => unquotePath(m[1]).replace(/^[ab]\//, ''));
+    return named.includes(path) || header.slice(0, header.indexOf('\n')).endsWith(` b/${path}`);
   }) ?? text;
 }
 
@@ -272,6 +288,7 @@ async function runAction(screen, button, action, success) {
     const result = await action();
     screen.flash = notice('ok', success(result));
     if (result.deleteError) screen.flash.append(el('div', { class: 'g-sub-error' }, `Branch not deleted: ${result.deleteError}`));
+    for (const s of stacks[state.tab]) s.stale = s !== screen;
     refresh(screen);
   } catch (err) {
     for (const b of all) b.disabled = false;
@@ -358,7 +375,7 @@ async function renderPr(screen) {
       pr.checks.items.length ? pr.checks.items.map((c) => el(c.url ? 'a' : 'div', { class: 'g-checkrow', href: c.url, target: '_blank', rel: 'noopener' },
         el('span', { class: `g-dot ${c.state}` }, CHECK_DOT[c.state]), c.name, el('span', { class: 'g-dim' }, c.state))) : empty('No checks reported.')),
     section(`Files (${pr.files.length})`, pr.files.map((f) => fileRow({
-      code: 'M', path: f.path, stats: numstat(f.additions, f.deletions),
+      path: f.path, stats: numstat(f.additions, f.deletions),
       onclick: () => push('prDiff', { title: f.path, number: pr.number, path: f.path }),
     }))),
     section(`Activity (${activity.length})`, activity.length ? activity.map((a) => el('div', { class: 'g-activity' },
@@ -507,6 +524,11 @@ function back() {
   if (stack.length < 2) return;
   stack.pop().el.remove();
   show();
+  const current = top();
+  if (current.stale) {
+    current.stale = false;
+    refresh(current);
+  }
 }
 
 function selectTab(tab) {
