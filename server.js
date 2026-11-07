@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
+import { createHistoryApi } from './history.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(ROOT, 'config.json');
@@ -256,6 +257,7 @@ async function handleApi(req, res, pathname) {
 
   if (route === 'POST login') return login(req, res);
   if (!isAuthed(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  if (resource === 'history') return handleHistory(req, res, pathname);
 
   switch (route) {
     case 'GET sessions':
@@ -293,16 +295,21 @@ async function handleApi(req, res, pathname) {
   }
 }
 
+const handleHistory = createHistoryApi({ createSession, sessionView, sendJson });
+
 const PAGES = { '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html' };
+PAGES['/history.js'] = 'history.js';
+PAGES['/history.css'] = 'history.css';
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function servePage(req, res, pathname) {
   const file = PAGES[pathname];
   if (!file || req.method !== 'GET') return sendJson(res, 404, { error: 'Not found' });
-  if (file === 'index.html' && !isAuthed(req)) {
+  if (file !== 'login.html' && !isAuthed(req)) {
     res.writeHead(302, { location: '/login.html' });
     return res.end();
   }
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store' });
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
