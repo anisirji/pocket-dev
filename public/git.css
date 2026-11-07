@@ -1,7 +1,7 @@
 :root { --ok: #7ee787; --warn: #f0c674; --merged: #d2a8ff; --add-bg: #12261a; --del-bg: #2d1416; }
 
 #viewSwitch { flex: none; display: flex; height: 36px; padding: 2px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
-#viewSwitch button { padding: 0 9px; border-radius: 6px; color: var(--muted); font-size: 13px; }
+#viewSwitch button { width: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); }
 #viewSwitch button.on { background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
 
 #app[data-view="git"] :is(#tabs, #new, #portsBtn, #ports, #terms, #inputBar, #keys) { display: none; }

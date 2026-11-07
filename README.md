@@ -107,10 +107,17 @@ The service runs the server under `caffeinate -i -s`, so the Mac does not idle-s
 
 Pinned folders, recent folders, and shortcuts are saved in `config.json` as `folders`, `recentFolders`, and `shortcuts`. Set `POCKET_DEV_CONFIG` to use a config file somewhere else.
 
+## Resume a laptop conversation
+
+Tap the clock icon (**Resume**) to list your recent Claude Code and Codex conversations from `~/.claude` and `~/.codex` on the Mac. Tap one to read its last messages, then tap **Continue on phone**. Pocket Dev opens a terminal in the conversation's folder, runs `claude --resume <id>` or `codex resume <id>`, and names the tab `claude · <folder>`. A second terminal for the same folder gets a number, as folder tabs do.
+
+- A conversation marked **open on laptop?** may still be running on the Mac. Close it there first, or both will write to it.
+- Android's back gesture closes the topmost sheet only: Settings, then the conversation, then the list.
+
 ## Open a port
 
 1. Start your dev server on the Mac, for example `npm run dev` on port 3000.
-2. Tap **Ports**, enter `3000`, and tap **Open**.
+2. Tap the globe icon (**Ports**), enter `3000`, and tap **Open**. The icon shows how many ports are open.
 3. Tap the `:3000` chip. It opens `http://<mac-ip>:3000` in a new tab.
 
 The forward is a raw TCP pipe from `<mac-ip>:3000` to `localhost:3000`. It tries 127.0.0.1 first and then ::1. HMR websockets work without changes.
@@ -119,7 +126,7 @@ If the dev server already listens on all interfaces (0.0.0.0), you can open `htt
 
 ## Git
 
-Tap **Git** in the top bar. The terminals keep running while the Git view is open.
+Tap the branch icon (**Git**) at the top left. The terminal icon next to it switches back. The terminals keep running while the Git view is open.
 
 - Pick a repository from the list at the top. Pocket Dev finds repositories up to two levels below `~/Desktop`, `~/Desktop/Projects`, and `~`. To scan other folders, add `"repoRoots": ["~/code", "~/work"]` to `config.json`, or set `POCKET_DEV_REPO_ROOTS` to a colon-separated list.
 - **Graph** shows the last 300 commits on all branches. Tap a commit to see its files, and tap a file to see its diff. A merge commit shows its changes against its first parent, which is what the merge brought in.
