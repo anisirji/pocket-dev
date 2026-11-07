@@ -7,9 +7,10 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
+import { createFilesApi } from './files.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = path.join(ROOT, 'config.json');
+const CONFIG_PATH = process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json');
 const SCROLLBACK_MAX = 500_000;
 const BODY_MAX = 64_000;
 
@@ -25,6 +26,12 @@ function loadConfig() {
 const config = loadConfig();
 const PASSWORD = process.env.POCKET_DEV_PASSWORD || config.password;
 const PORT = Number(process.env.PORT) || config.port || 7777;
+
+function saveConfig() {
+  const tmp = `${CONFIG_PATH}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+  fs.renameSync(tmp, CONFIG_PATH);
+}
 
 function lanIp() {
   const ifaces = os.networkInterfaces();
@@ -256,6 +263,7 @@ async function handleApi(req, res, pathname) {
 
   if (route === 'POST login') return login(req, res);
   if (!isAuthed(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  if (resource === 'files') return handleFiles(req, res, new URL(req.url, 'http://localhost'));
 
   switch (route) {
     case 'GET sessions':
@@ -293,7 +301,10 @@ async function handleApi(req, res, pathname) {
   }
 }
 
-const PAGES = { '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html' };
+const handleFiles = createFilesApi({ sendJson, readJson, config, saveConfig });
+
+const PAGES = { '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html', '/files.js': 'files.js', '/files.css': 'files.css' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function servePage(req, res, pathname) {
   const file = PAGES[pathname];
@@ -302,7 +313,7 @@ function servePage(req, res, pathname) {
     res.writeHead(302, { location: '/login.html' });
     return res.end();
   }
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store' });
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
