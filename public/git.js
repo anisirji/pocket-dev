@@ -130,8 +130,11 @@ function laneSvg(row, lanes) {
 }
 
 const REF_ORDER = { head: 0, branch: 1, tag: 2, remote: 3 };
+// A remote branch sitting on the same commit as its local branch adds nothing but width on a phone.
 function refChips(refs) {
-  return [...refs].sort((a, b) => REF_ORDER[a.kind] - REF_ORDER[b.kind])
+  const local = new Set(refs.filter((r) => r.kind === 'head' || r.kind === 'branch').map((r) => r.name));
+  return refs.filter((r) => r.kind !== 'remote' || !local.has(r.name.slice(r.name.indexOf('/') + 1)))
+    .sort((a, b) => REF_ORDER[a.kind] - REF_ORDER[b.kind])
     .map((r) => el('span', { class: `g-ref ${r.kind}` }, r.kind === 'tag' ? `# ${r.name}` : r.name));
 }
 
