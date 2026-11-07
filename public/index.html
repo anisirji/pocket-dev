@@ -549,7 +549,11 @@ async function openFolders() {
   if (layer === 'folders') renderFolders();
 }
 
+// A double tap on a row must open one terminal, not two.
+let openingFolder = false;
 async function openFolder(dir) {
+  if (openingFolder) return;
+  openingFolder = true;
   try {
     await newSession(dir);
     otherPath.querySelector('input').value = '';
@@ -557,6 +561,8 @@ async function openFolder(dir) {
   } catch (err) {
     folderNote = err.message;
     renderFolders();
+  } finally {
+    openingFolder = false;
   }
 }
 
@@ -658,9 +664,8 @@ $('textClose').addEventListener('click', hideLayer);
 let shortcuts = null;
 let shortcutNote = '';
 let editingShortcuts = false;
-const addShortcut = sheetForm('Command, e.g. npm test', 'Add', (text, input) => {
-  input.value = '';
-  saveShortcuts([...shortcuts, text]);
+const addShortcut = sheetForm('Command, e.g. npm test', 'Add', async (text, input) => {
+  if (await saveShortcuts((list) => [...list, text])) input.value = '';
 });
 addShortcut.querySelector('input').maxLength = 200;
 
@@ -672,11 +677,25 @@ async function openShortcuts() {
   if (layer === 'shortcuts') renderShortcuts();
 }
 
-async function saveShortcuts(next) {
-  shortcutNote = '';
-  try { shortcuts = await api('PUT', '/api/shortcuts', next); } catch (err) { shortcutNote = err.message; }
-  renderShortcuts();
+// Edits run one at a time, each applied to the list the server returned last, so quick taps never undo each other.
+let shortcutSaves = Promise.resolve();
+function saveShortcuts(change) {
+  shortcutSaves = shortcutSaves.then(async () => {
+    shortcutNote = '';
+    try {
+      shortcuts = await api('PUT', '/api/shortcuts', change(shortcuts));
+      return true;
+    } catch (err) {
+      shortcutNote = err.message;
+      return false;
+    } finally {
+      if (layer === 'shortcuts') renderShortcuts();
+    }
+  });
+  return shortcutSaves;
 }
+// A row's index can shift while earlier edits are saving; find the command again in the current list.
+const findShortcut = (list, i, text) => (list[i] === text ? i : list.indexOf(text));
 
 function runShortcut(text) {
   const view = active();
@@ -692,11 +711,15 @@ function renderShortcuts() {
     editingShortcuts = !editingShortcuts;
     renderShortcuts();
   };
-  const move = (i, by) => {
-    const next = [...shortcuts];
-    [next[i], next[i + by]] = [next[i + by], next[i]];
-    saveShortcuts(next);
-  };
+  const move = (i, text, by) => saveShortcuts((list) => {
+    const from = findShortcut(list, i, text);
+    const to = from + by;
+    if (from === -1 || to < 0 || to >= list.length) return list;
+    const next = [...list];
+    [next[from], next[to]] = [next[to], next[from]];
+    return next;
+  });
+  const remove = (i, text) => saveShortcuts((list) => list.filter((_, j) => j !== findShortcut(list, i, text)));
   const iconButton = (label, aria, disabled, onClick) => {
     const b = h('button', 'row-btn', label);
     b.setAttribute('aria-label', aria);
@@ -714,9 +737,9 @@ function renderShortcuts() {
     }
     row.append(
       h('span', 'row-text', text),
-      iconButton('↑', `Move ${text} up`, i === 0, () => move(i, -1)),
-      iconButton('↓', `Move ${text} down`, i === shortcuts.length - 1, () => move(i, 1)),
-      iconButton('✕', `Delete ${text}`, false, () => saveShortcuts(shortcuts.filter((_, j) => j !== i))),
+      iconButton('↑', `Move ${text} up`, i === 0, () => move(i, text, -1)),
+      iconButton('↓', `Move ${text} down`, i === shortcuts.length - 1, () => move(i, text, 1)),
+      iconButton('✕', `Delete ${text}`, false, () => remove(i, text)),
     );
     return row;
   });
