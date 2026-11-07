@@ -77,7 +77,7 @@ Chat runs Claude Code and Codex as phone chat screens instead of terminals. Open
 
 1. Tap **New chat**, pick Claude or Codex, a folder, and the engine settings.
 2. Type a prompt and tap **Send**. Enter adds a new line.
-3. When the engine wants to edit a file or run a command, a card appears above the composer. Pick **Allow once**, **Always allow in this chat**, **Always allow in this project** (Claude only), or **Deny** with an optional reason.
+3. When the engine wants to edit a file or run a command, a card appears above the composer. Pick **Allow once**, **Always allow in this chat**, **Always allow in this project** (Claude only), or **Deny** with an optional reason. For a Claude file edit the card offers **Allow all edits in this chat** instead, which switches the chat to Accept edits, as Claude Code does.
 
 - Claude chats use the Claude Agent SDK with the `claude` CLI on your PATH, so they use your Claude Code login. No API key is needed. Sessions are the usual `~/.claude/projects` files, so they also appear in VS Code and in the Resume sheet.
 - Codex chats use `codex app-server` with your Codex login. All Codex chats share one app-server process.

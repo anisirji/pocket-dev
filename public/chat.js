@@ -394,7 +394,6 @@
     else replace([{ layer: 'list' }, convo]);
   }
 
-  // List screen.
   let list = [];
   let listKey = '';
   let listSeq = 0;
@@ -449,7 +448,6 @@
   for (const wrap of [ui.newWrap, ui.settingsWrap, ui.pickWrap]) wrap.querySelector('.chat-backdrop').onclick = back;
   ui.permsBack.onclick = back;
 
-  // Sheets.
   function field(label, control) {
     const box = el('div', 'chat-field');
     if (control.matches('input')) control.setAttribute('aria-label', label);
@@ -1368,7 +1366,6 @@
     return card;
   }
 
-  // Composer.
   let noticeTimer = 0;
   function notice(text) {
     ui.notice.textContent = text;
