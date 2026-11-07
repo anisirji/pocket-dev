@@ -258,10 +258,11 @@ async function handleApi(req, res, pathname) {
 
   if (route === 'POST login') return login(req, res);
   if (resource === 'local' && key === 'power') {
-    return isLocalRequest(req) ? handlePowerApi(req, res, { readJson, sendJson }) : sendJson(res, 403, { error: 'Local CLI only' });
+    if (!isLocalRequest(req)) return sendJson(res, 403, { error: 'Local CLI only' });
+    return handlePowerApi(req, res, pathname.split('/')[4], { readJson, sendJson, wss, sessions });
   }
   if (!isAuthed(req)) return sendJson(res, 401, { error: 'Not logged in' });
-  if (resource === 'power' && !key) return handlePowerApi(req, res, { readJson, sendJson });
+  if (resource === 'power') return handlePowerApi(req, res, key, { readJson, sendJson, wss, sessions });
 
   switch (route) {
     case 'GET sessions':

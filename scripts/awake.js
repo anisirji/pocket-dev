@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Keeps the Mac awake or lets it sleep, through the running Pocket Dev server.
-// Usage: npm run awake -- on|plugged|off|status
+// Usage: npm run awake -- on|plugged|off|status. `sleep` asks the server to put the Mac to sleep (scripts/sleep.sh uses it).
+// Exits 3 when no server is running, 1 when the server refuses, 2 on a bad argument.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LOCAL_SECRET_HEADER, readLocalSecret } from '../local-secret.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const COMMANDS = { on: 'always', always: 'always', plugged: 'plugged', off: 'off', status: null };
+const COMMANDS = { on: 'always', always: 'always', plugged: 'plugged', off: 'off', status: null, sleep: null };
 const MODE_TEXT = {
   off: 'Off. The Mac sleeps on its normal schedule.',
   plugged: 'When plugged in. The Mac stays awake on the charger and sleeps as usual on battery.',
@@ -31,15 +32,15 @@ function notRunning() {
   console.error(`Pocket Dev is not running on port ${port}.`);
   console.error('Start it with: npm start (or npm run service:install to keep it running).');
   console.error('Set PORT if it runs on a different port.');
-  process.exit(1);
+  process.exit(3);
 }
 
-async function request(method, body) {
+async function request(method, body, action = '') {
   let secret;
   try { secret = readLocalSecret(); } catch { notRunning(); }
   let res;
   try {
-    res = await fetch(`http://127.0.0.1:${port}/api/local/power`, {
+    res = await fetch(`http://127.0.0.1:${port}/api/local/power${action}`, {
       method,
       headers: { [LOCAL_SECRET_HEADER]: secret, ...(body && { 'content-type': 'application/json' }) },
       body: body && JSON.stringify(body),
@@ -72,5 +73,10 @@ function describe(s) {
   ].join('\n');
 }
 
-const mode = COMMANDS[command];
-console.log(describe(mode ? await request('PUT', { awake: mode }) : await request('GET')));
+if (command === 'sleep') {
+  const { sleepingInMs } = await request('POST', undefined, '/sleep');
+  console.log(`Pocket Dev puts the Mac to sleep in ${sleepingInMs / 1000} s. Open the lid or press a key on the Mac to wake it.`);
+} else {
+  const mode = COMMANDS[command];
+  console.log(describe(mode ? await request('PUT', { awake: mode }) : await request('GET')));
+}
