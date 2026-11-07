@@ -60,3 +60,4 @@ section > .st-danger { width: 100%; }
 
 #settingsBtn { font-size: 19px; line-height: 1; }
 .st-note + .st-btn { margin-top: 12px; }
+.st-addr { overflow-wrap: anywhere; }

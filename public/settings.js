@@ -57,6 +57,7 @@
       <section>
         <h3>Log in another phone</h3>
         <p class="st-note">Scan the code with the other phone's camera. It logs in without the password, works once, and expires in 10 minutes.</p>
+        <p class="st-note st-addr"></p>
         <button class="st-btn" data-act="qr">Show login QR</button>
         <div class="st-qr" hidden></div>
         <p class="st-err" data-for="qr"></p>
@@ -184,6 +185,13 @@
     $('[data-note="limit"]').textContent = `Password logins stop at this many devices. Lowering the limit logs nobody out; it only blocks new password logins.${over} QR logins always work and replace the device used least recently.`;
   }
 
+  function renderAddress() {
+    const { lan, local, localNote } = settings.urls;
+    $('.st-addr').textContent = lan
+      ? `Or open ${lan} on the other phone and type the password. ${local} also works (${localNote}).`
+      : `The Mac has no network right now. ${local} works once it is back on Wi-Fi (${localNote}).`;
+  }
+
   async function refresh() {
     try {
       const fresh = await call('GET', '/api/settings');
@@ -192,6 +200,7 @@
       if (stepperUntouched) limit = fresh.maxDevices;
       if (editingId === null) renderDevices();
       renderLimit();
+      renderAddress();
       msg('err', 'devices', '');
     } catch (err) {
       msg('err', 'devices', err.message);

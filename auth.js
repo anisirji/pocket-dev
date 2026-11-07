@@ -109,7 +109,8 @@ function parseDeviceName(v) {
 }
 
 // `config` is the server's config store (config.js): read() at use time, update() writes only the keys auth owns.
-export function createAuth({ config, port, lanIp }) {
+// `urls()` returns the current { lan, local } base URLs; lan is null while the Mac has no network.
+export function createAuth({ config, port, urls, localNote }) {
   const envPassword = process.env.POCKET_DEV_PASSWORD;
   let passwordLine = envPassword ? `Password: ${envPassword} (from POCKET_DEV_PASSWORD)` : 'Password: (set; change it in Settings)';
   const startup = config.read();
@@ -218,7 +219,8 @@ export function createAuth({ config, port, lanIp }) {
     for (const [key, expiresAt] of qrKeys) if (expiresAt <= now) qrKeys.delete(key);
     const key = crypto.randomBytes(32).toString('hex');
     qrKeys.set(key, now + QR_TTL_MS);
-    return `http://${lanIp()}:${port}/?k=${key}`;
+    const { lan, local } = urls();
+    return `${lan ?? local}/?k=${key}`;
   }
 
   function redeemQrKey(req, key) {
@@ -259,7 +261,7 @@ export function createAuth({ config, port, lanIp }) {
       return reply(204, undefined, { 'set-cookie': CLEAR_COOKIE });
     },
     'GET /api/settings'({ device }) {
-      return reply(200, { maxDevices: maxDevices(), currentDeviceId: device.id, devices: listDevices() });
+      return reply(200, { maxDevices: maxDevices(), currentDeviceId: device.id, devices: listDevices(), urls: { ...urls(), localNote } });
     },
     async 'PUT /api/settings/max-devices'({ body }) {
       const { maxDevices: n } = await body();

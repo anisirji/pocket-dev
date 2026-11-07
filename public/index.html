@@ -48,6 +48,8 @@
   .chip { display: flex; align-items: center; border-radius: 17px; background: var(--panel-2); border: 1px solid var(--line); }
   .chip a { padding: 0 4px 0 12px; line-height: 32px; color: var(--accent); text-decoration: none; font-family: var(--mono); }
   .chip button { width: 30px; height: 32px; color: var(--muted); font-size: 12px; }
+  .chip-off { padding: 0 4px 0 12px; line-height: 32px; color: var(--muted); font-family: var(--mono); }
+  .chip-off.error { color: var(--danger); }
   #portErr { flex-basis: 100%; margin: 0; color: var(--danger); font-size: 13px; }
   #portErr:empty { display: none; }
 
@@ -773,12 +775,19 @@ $('cmd').addEventListener('paste', (e) => {
 let forwards = [];
 function renderForwards() {
   $('portsCount').textContent = forwards.length || '';
-  $('chips').replaceChildren(...forwards.map(({ port, url }) => {
+  $('chips').replaceChildren(...forwards.map(({ port, url, state, error }) => {
     const chip = h('span', 'chip');
-    const link = h('a', null, `:${port}`);
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener';
+    let link;
+    if (state === 'open') {
+      link = h('a', null, `:${port}`);
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+    } else {
+      // The Mac changed networks: the forward waits for an address, or could not listen on the new one.
+      link = h('button', `chip-off${error ? ' error' : ''}`, `:${port} ${error ? 'failed' : 'no network'}`);
+      link.onclick = () => { $('portErr').textContent = error || 'The Mac has no network. The forward reopens when it gets one.'; };
+    }
     const stop = h('button', null, '✕');
     stop.setAttribute('aria-label', `Stop forwarding ${port}`);
     stop.onclick = async () => {
@@ -797,6 +806,7 @@ async function refreshForwards() {
 
 $('portsBtn').addEventListener('click', () => {
   $('ports').hidden = !$('ports').hidden;
+  if (!$('ports').hidden) refreshForwards().catch(() => {});
   $('portsBtn').classList.toggle('open', !$('ports').hidden);
   scheduleFit();
 });

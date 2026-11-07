@@ -22,7 +22,11 @@ const UPLOAD_MAX = 25 * 1024 * 1024;
 const config = openConfig(process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json'));
 const PORT = Number(process.env.PORT) || config.read().port || 7777;
 
+// POCKET_DEV_LAN_IP_FILE replaces the interface lookup in tests: the file holds the address, empty means no network.
 function lanIp() {
+  if (process.env.POCKET_DEV_LAN_IP_FILE) {
+    try { return fs.readFileSync(process.env.POCKET_DEV_LAN_IP_FILE, 'utf8').trim() || null; } catch { return null; }
+  }
   const ifaces = os.networkInterfaces();
   const names = ['en0', ...Object.keys(ifaces).filter((n) => n !== 'en0')];
   for (const name of names) {
@@ -30,10 +34,17 @@ function lanIp() {
       if (addr.family === 'IPv4' && !addr.internal) return addr.address;
     }
   }
-  return '127.0.0.1';
+  return null;
 }
 
-const auth = createAuth({ config, port: PORT, lanIp });
+const localName = () => {
+  const name = os.hostname().toLowerCase();
+  return name.endsWith('.local') ? name : `${name}.local`;
+};
+const urls = () => ({ lan: lanIp() && `http://${lanIp()}:${PORT}`, local: `http://${localName()}:${PORT}` });
+const LOCAL_NOTE = 'same Wi-Fi only; some Android phones cannot open .local names';
+
+const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE });
 
 const HOME = os.homedir();
 const RECENT_MAX = 5;
@@ -272,7 +283,9 @@ function attachClient(session, ws) {
 
 const forwards = new Map();
 
-const forwardView = (port, fwd) => ({ port, url: `http://${fwd.host}:${port}` });
+// A forward listens on the Mac's LAN address, which changes with the network. Each one is open (listening on host),
+// waiting (no network), or error (the bind on host failed); watchLanIp moves every forward when the address changes.
+const forwardView = (port, { state, host, error }) => ({ port, state, url: state === 'open' ? `http://${host}:${port}` : null, error });
 const listForwards = () => [...forwards].map(([port, fwd]) => forwardView(port, fwd));
 
 // Dev servers bind 127.0.0.1 or ::1 depending on the tool, so try both before giving up.
@@ -294,22 +307,47 @@ function pipeToLocalhost(client, port, sockets, hosts = ['127.0.0.1', '::1']) {
   });
 }
 
+function stopListening(fwd) {
+  fwd.server?.close();
+  for (const s of fwd.sockets) s.destroy();
+  fwd.server = null;
+}
+
+async function listenOn(fwd, port, host) {
+  stopListening(fwd);
+  Object.assign(fwd, { host, state: 'waiting', error: null });
+  if (!host || fwd.closed) return;
+  const server = net.createServer({ allowHalfOpen: true }, (client) => {
+    fwd.sockets.add(client);
+    client.on('error', () => client.destroy());
+    client.on('close', () => fwd.sockets.delete(client));
+    pipeToLocalhost(client, port, fwd.sockets);
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, host, resolve);
+    });
+  } catch (err) {
+    Object.assign(fwd, { state: 'error', error: forwardError(err, port, host) });
+    return;
+  }
+  if (fwd.closed) return server.close();
+  Object.assign(fwd, { server, state: 'open' });
+}
+
+// Moves are chained per forward so an address change during a bind cannot leave two listeners.
+function moveForward(fwd, port, host) {
+  fwd.moving = fwd.moving.then(() => listenOn(fwd, port, host));
+  return fwd.moving;
+}
+
 async function openForward(port) {
   const existing = forwards.get(port);
   if (existing) return forwardView(port, existing);
-  const host = lanIp();
-  const sockets = new Set();
-  const server = net.createServer({ allowHalfOpen: true }, (client) => {
-    sockets.add(client);
-    client.on('error', () => client.destroy());
-    client.on('close', () => sockets.delete(client));
-    pipeToLocalhost(client, port, sockets);
-  });
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, host, resolve);
-  });
-  const fwd = { server, host, sockets };
+  const fwd = { server: null, host: null, sockets: new Set(), state: 'waiting', error: null, closed: false, moving: Promise.resolve() };
+  await moveForward(fwd, port, lanIp());
+  if (fwd.state === 'error') throw new Error(fwd.error);
   forwards.set(port, fwd);
   return forwardView(port, fwd);
 }
@@ -317,18 +355,30 @@ async function openForward(port) {
 function closeForward(port) {
   const fwd = forwards.get(port);
   if (!fwd) return false;
-  fwd.server.close();
-  for (const s of fwd.sockets) s.destroy();
+  fwd.closed = true;
+  stopListening(fwd);
   forwards.delete(port);
   return true;
 }
 
-function forwardError(err, port) {
+function forwardError(err, port, host) {
   if (err.code === 'EADDRINUSE') {
-    return `Port ${port} is already in use on ${lanIp()}. If your dev server listens on all interfaces (0.0.0.0), it is already reachable at http://${lanIp()}:${port} without a forward.`;
+    return `Port ${port} is already in use on ${host}. If your dev server listens on all interfaces (0.0.0.0), it is already reachable at http://${host}:${port} without a forward.`;
   }
   if (err.code === 'EACCES') return `Not allowed to listen on port ${port} (ports below 1024 need root).`;
-  return `Could not open port ${port}: ${err.message}`;
+  return `Could not open port ${port} on ${host}: ${err.message}`;
+}
+
+const IP_POLL_MS = Number(process.env.POCKET_DEV_IP_POLL_MS) || 10_000;
+function watchLanIp() {
+  let current = lanIp();
+  setInterval(() => {
+    const ip = lanIp();
+    if (ip === current) return;
+    console.log(`LAN address changed from ${current ?? 'none'} to ${ip ?? 'none'}.${ip ? ` Pocket Dev is now at http://${ip}:${PORT}` : ' Port forwards wait for a network.'}`);
+    current = ip;
+    for (const [port, fwd] of forwards) moveForward(fwd, port, ip);
+  }, IP_POLL_MS).unref();
 }
 
 const sendJson = (res, status, body, headers = {}) => {
@@ -421,7 +471,7 @@ async function handleApi(req, res, url) {
       try {
         return sendJson(res, 201, await openForward(port));
       } catch (err) {
-        return sendJson(res, 409, { error: forwardError(err, port) });
+        return sendJson(res, 409, { error: err.message });
       }
     }
     case 'DELETE forwards/:key':
@@ -502,9 +552,12 @@ setInterval(() => {
   }
 }, 30_000).unref();
 
+watchLanIp();
 server.listen(PORT, '0.0.0.0', async () => {
   console.log(await terminalQr(auth.mintQrUrl()));
-  console.log(`Pocket Dev running at http://${lanIp()}:${PORT}`);
+  const { lan, local } = urls();
+  console.log(`Pocket Dev running at ${lan ?? local}`);
+  if (lan) console.log(`Also at ${local} (${LOCAL_NOTE})`);
   console.log(auth.passwordLine);
   console.log(qrNote(QR_TTL_MIN));
 });

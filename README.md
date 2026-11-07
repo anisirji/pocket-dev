@@ -21,6 +21,7 @@ The server prints a QR code, the URL, and a password line:
 ```
 <QR code>
 Pocket Dev running at http://192.168.1.17:7777
+Also at http://your-mac.local:7777 (same Wi-Fi only; some Android phones cannot open .local names)
 Password: (set; change it in Settings)
 Scan the QR code to log in without the password. It works once and expires in 10 minutes. New code: npm run qr
 ```
@@ -132,7 +133,8 @@ Tap **Git** in the top bar. The terminals keep running while the Git view is ope
 
 - Forwarded ports have no password. Anyone on your Wi-Fi can reach them while they are open. Stop a forward with the ✕ on its chip.
 - Pocket Dev uses plain HTTP. Use it only on a network you trust.
-- Forwards bind the Mac's LAN IP at the time you open them. If the IP changes, open them again.
+- Forwards listen on the Mac's LAN IP. When the IP changes, Pocket Dev moves every forward to the new IP within about 10 seconds and logs the change. Without a network, a chip shows **no network** and the forward reopens when the Mac gets an IP. If the forward cannot listen on the new IP, the chip shows **failed**. Tap it to see why.
+- The QR codes and **Settings** always use the current IP. **Settings** also shows the `.local` address, which keeps working when the IP changes but only on the same Wi-Fi, and not on every Android phone.
 - The server keeps about 500 KB of output per terminal for replay.
 - Pocket Dev does not delete old uploads. Clear `~/.pocket-dev/uploads` yourself.
 - The phone loads xterm.js from cdn.jsdelivr.net, so the phone needs internet access.
