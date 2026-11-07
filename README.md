@@ -39,7 +39,7 @@ Scan the QR code with your phone's camera and open the link in Chrome. You are l
 - `npm run qr` prints a new QR code and URL from the running server. Run it on the Mac.
 - On a phone that is already logged in, tap **⚙** and then **Show login QR**. Scan that code with the other phone.
 - Each code works once and expires after 10 minutes. A used or expired code opens the login page with a message.
-- `npm run qr` reads a secret from `~/.pocket-dev/local-secret`, which the server writes at each start with mode 0600. The server creates codes only for requests from 127.0.0.1 that carry this secret and no proxy headers, so a tunnel on the Mac cannot create them.
+- `npm run qr` and `npm run awake` read the server's port and a secret from `~/.pocket-dev/local-secret`, which the server writes at each start with mode 0600. The server accepts these script requests only from 127.0.0.1, with this secret and no proxy headers, so a tunnel on the Mac cannot make them.
 
 ## Devices
 
@@ -105,7 +105,7 @@ npm run awake -- on        # Always
 npm run awake -- off       # Off
 ```
 
-`npm run awake` talks to the running server. If the server runs on a port other than the one in `config.json`, set `PORT`.
+`npm run awake` talks to the server that started last, on the port it wrote to `~/.pocket-dev/local-secret`.
 
 ### Lid closed
 

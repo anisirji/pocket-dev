@@ -17,7 +17,7 @@ const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 };
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 // A tunnel or reverse proxy on the Mac connects from loopback too; these headers mean the request came from elsewhere.
 const PROXY_HEADERS = ['x-forwarded-for', 'forwarded', 'x-real-ip', 'cf-connecting-ip'];
-const SECRET_HEADER = 'x-pocket-dev-secret';
+export const LOCAL_SECRET_HEADER = 'x-pocket-dev-secret';
 
 const scrypt = promisify(crypto.scrypt);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -236,8 +236,7 @@ export function createAuth({ config, port, urls, localNote }) {
 
   const isLocalRequest = (req) => LOOPBACK.has(req.socket.remoteAddress)
     && !PROXY_HEADERS.some((h) => h in req.headers)
-    && typeof req.headers[SECRET_HEADER] === 'string' && sameSecret(req.headers[SECRET_HEADER], localSecret);
-
+    && typeof req.headers[LOCAL_SECRET_HEADER] === 'string' && sameSecret(req.headers[LOCAL_SECRET_HEADER], localSecret);
 
   const routes = {
     async 'POST /api/login'({ req, body }) {
@@ -318,5 +317,5 @@ export function createAuth({ config, port, urls, localNote }) {
     return handler({ req, body, device, id: deviceRoute?.[1] });
   }
 
-  return { passwordLine, deviceFor, trackSocket, mintQrUrl, redeemQrKey, handleApi };
+  return { passwordLine, deviceFor, trackSocket, mintQrUrl, redeemQrKey, isLocalRequest, handleApi };
 }
