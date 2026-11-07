@@ -1,12 +1,12 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 import { svgQr } from './qr.js';
 import { createSecurityLog } from './security-log.js';
+import { STATE_DIR } from './paths.js';
 
-export const STATE_DIR = process.env.POCKET_DEV_STATE_DIR || path.join(os.homedir(), '.pocket-dev');
+export { STATE_DIR };
 const DEVICES_PATH = path.join(STATE_DIR, 'devices.json');
 export const LOCAL_SECRET_PATH = path.join(STATE_DIR, 'local-secret');
 const QR_TTL_MS = Number(process.env.POCKET_DEV_QR_TTL_MS) || 10 * 60_000;

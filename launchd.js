@@ -11,6 +11,23 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 export const LABEL = process.env.LABEL || 'dev.pocket.server';
 const DOMAIN = `gui/${process.getuid()}`;
 const PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', `${LABEL}.plist`);
+const STARTED_AT = Date.now() - process.uptime() * 1000;
+const CODE_DIRS = ['.', 'chat', 'public', 'scripts'];
+const CODE_FILE = /\.(js|mjs|css|html|sh|json)$/;
+// config.json is data the app writes, not code, so saving a setting never counts as an update.
+const NOT_CODE = new Set(['config.json']);
+
+// True when a source file on disk is newer than this process, so a restart would load different code.
+export function updateReady() {
+  let newest = 0;
+  for (const dir of CODE_DIRS) {
+    for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      if (!entry.isFile() || !CODE_FILE.test(entry.name) || (dir === '.' && NOT_CODE.has(entry.name))) continue;
+      newest = Math.max(newest, fs.statSync(path.join(ROOT, dir, entry.name)).mtimeMs);
+    }
+  }
+  return newest > STARTED_AT + 1000;
+}
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 async function launchctl(...args) {
@@ -35,6 +52,7 @@ export async function serviceStatus() {
     pid,
     // The job runs node directly; a plist from before the power feature ran it under caffeinate, so accept the parent too.
     isThisServer: pid !== null && (pid === process.pid || pid === process.ppid),
+    updateReady: updateReady(),
   };
 }
 
@@ -52,6 +70,11 @@ export async function installService({ port, force }) {
   } catch (err) {
     return { ok: false, output: `${err.stdout ?? ''}${err.stderr ?? ''}`.trim() || err.message };
   }
+}
+
+// Exiting is the restart: launchd's KeepAlive starts the service again on whatever code is on disk, within about 10 s.
+export function restartThisServer() {
+  process.exit(0);
 }
 
 // launchd would restart a service that just exits (KeepAlive), so a service unloads itself instead.

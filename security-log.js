@@ -25,6 +25,7 @@ export const EVENT_KINDS = {
   'autostart-changed': 'change',
   'service-installed': 'change',
   'server-stopped': 'change',
+  'server-restarted': 'change',
 };
 
 const FILTERS = {

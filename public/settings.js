@@ -53,6 +53,12 @@
         <p class="st-err" data-for="apps"></p>
       </section>
       <section>
+        <button class="st-link" data-act="health"><span>Mac health</span><span class="st-chev" aria-hidden="true">›</span></button>
+      </section>
+      <section>
+        <button class="st-link" data-act="screen"><span>Mac screen</span><span class="st-chev" aria-hidden="true">›</span></button>
+      </section>
+      <section>
         <h3>Device limit</h3>
         <div class="st-row">
           <div class="st-stepper">
@@ -210,6 +216,8 @@
   }
 
   $('[data-act="apps"]').addEventListener('click', () => window.openAppsSheet());
+  $('[data-act="health"]').addEventListener('click', () => window.openHealthSheet());
+  $('[data-act="screen"]').addEventListener('click', () => window.openScreenSheet());
 
   async function refresh() {
     refreshApps();

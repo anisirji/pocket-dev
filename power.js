@@ -108,6 +108,74 @@ function parseBatt(text) {
   };
 }
 
+// ioreg reports the battery's temperature in hundredths of a degree. It is the only temperature a Mac gives a normal
+// user; CPU and chip sensors need sudo (powermetrics) or a third-party tool.
+export function parseBatteryC(text) {
+  const raw = Number(/"Temperature" = (\d+)/.exec(text)?.[1]);
+  return Number.isFinite(raw) && raw > 0 ? Math.round(raw) / 100 : null;
+}
+
+// macOS's own thermal pressure (NSProcessInfo.thermalState): how hard it is throttling to cool down.
+const THERMAL = ['nominal', 'fair', 'serious', 'critical'];
+export function parseThermal(text) {
+  const level = text.trim();
+  return /^[0-3]$/.test(level) ? THERMAL[Number(level)] : null;
+}
+
+async function temperatures() {
+  const [battery, thermal] = await Promise.all([
+    run(IOREG, ['-r', '-n', 'AppleSmartBattery'], { timeout: 5000 }).then((r) => parseBatteryC(r.stdout), () => null),
+    run(OSASCRIPT, ['-l', 'JavaScript', '-e', "ObjC.import('Foundation'); $.NSProcessInfo.processInfo.thermalState"], { timeout: 5000 }).then((r) => parseThermal(r.stdout), () => null),
+  ]);
+  return { batteryC: battery, thermal };
+}
+
+const BATTERY_ALERT_DEFAULT = 20;
+const BATTERY_CRITICAL = 10;
+const TEMPERATURE_ALERT_DEFAULT = 40;
+const TEMPERATURE_CRITICAL_MARGIN = 5;
+const wholeNumber = (value, min, max, fallback) => (Number.isInteger(value) && value >= min && value <= max ? value : fallback);
+
+// What deserves an alert on the phone, most urgent first. Pure, so the thresholds are easy to test.
+export function alertsFor({ onAC, charging, battery, temperature }, limits) {
+  const alerts = [];
+  if (battery !== null && !(onAC || charging) && battery <= limits.batteryPercent) {
+    const critical = battery <= BATTERY_CRITICAL;
+    alerts.push({
+      key: 'battery',
+      level: critical ? 'critical' : 'warning',
+      text: critical
+        ? `Mac battery is critically low (${battery}%). It may shut down and you could lose open work. Plug it in now.`
+        : `Mac battery is ${battery}% and not charging. Save your work and plug it in.`,
+    });
+  }
+  const { batteryC, thermal } = temperature;
+  const hotThermal = thermal === 'serious' || thermal === 'critical';
+  const hotBattery = batteryC !== null && batteryC >= limits.temperatureC;
+  if (hotThermal || hotBattery) {
+    const critical = thermal === 'critical' || (batteryC !== null && batteryC >= limits.temperatureC + TEMPERATURE_CRITICAL_MARGIN);
+    const detail = [batteryC !== null && `battery ${batteryC.toFixed(1)} °C`, thermal && thermal !== 'nominal' && `thermal ${thermal}`].filter(Boolean).join(', ');
+    alerts.push({
+      key: 'hot',
+      level: critical ? 'critical' : 'warning',
+      text: `Mac is ${critical ? 'very hot' : 'hot'} (${detail}). Close heavy apps or let it cool.`,
+    });
+  }
+  return alerts.sort((a, b) => (a.level === 'critical' ? 0 : 1) - (b.level === 'critical' ? 0 : 1));
+}
+
+// The small, cheap reading the phone polls every 30 s: battery, temperature, and any alerts. powerStatus is heavier.
+export async function vitals() {
+  const [batt, temperature] = await Promise.all([pmset('-g', 'batt'), temperatures()]);
+  const power = parseBatt(batt);
+  const saved = config.read();
+  const limits = {
+    batteryPercent: wholeNumber(saved.batteryAlertPercent, 5, 90, BATTERY_ALERT_DEFAULT),
+    temperatureC: wholeNumber(saved.temperatureAlertC, 30, 70, TEMPERATURE_ALERT_DEFAULT),
+  };
+  return { ...power, temperature, limits, alerts: alertsFor({ ...power, temperature }, limits) };
+}
+
 function parseAssertions(text, caffeinatePid) {
   const count = (name) => Number(new RegExp(`^\\s+${name}\\s+(\\d+)$`, 'm').exec(text)?.[1] ?? 0);
   const ownLine = new RegExp(`^\\s+pid ${caffeinatePid}\\(caffeinate\\): \\S+ \\S+ (\\w+)`, 'gm');
@@ -120,8 +188,8 @@ function parseAssertions(text, caffeinatePid) {
 
 export async function powerStatus() {
   const caffeinatePid = child?.proc.pid ?? null;
-  const [batt, settings, assertions, closed, updating] = await Promise.all([
-    pmset('-g', 'batt'), pmset('-g'), pmset('-g', 'assertions'), lidClosed(), updateInProgress(),
+  const [batt, settings, assertions, closed, updating, temperature] = await Promise.all([
+    pmset('-g', 'batt'), pmset('-g'), pmset('-g', 'assertions'), lidClosed(), updateInProgress(), temperatures(),
   ]);
   const power = parseBatt(batt);
   return {
@@ -134,6 +202,7 @@ export async function powerStatus() {
     repoDir: REPO_DIR,
     shutdown,
     updateInProgress: updating,
+    temperature,
     assertions: parseAssertions(assertions, caffeinatePid),
   };
 }
@@ -215,6 +284,7 @@ export async function handlePowerApi(req, res, action, { readJson, sendJson, wss
     shutdown = null;
     return sendJson(res, 204);
   }
+  if (action === 'vitals' && req.method === 'GET') return sendJson(res, 200, await vitals());
   if (action !== undefined) return sendJson(res, 404, { error: 'Not found' });
   if (req.method === 'GET') return sendJson(res, 200, await powerStatus());
   if (req.method !== 'PUT') return sendJson(res, 405, { error: 'Use GET or PUT' });

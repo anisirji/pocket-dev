@@ -292,6 +292,7 @@ const EVENT_TEXT = {
   'autostart-changed': (e) => `Start automatically turned ${e.on ? 'on' : 'off'}${byText(e)}`,
   'service-installed': () => 'Installed as a launchd service',
   'server-stopped': () => 'Pocket Dev stopped from this page',
+  'server-restarted': (e) => `Pocket Dev restarted from ${e.by === 'phone' ? 'a phone' : 'this page'}`,
 };
 
 function renderLog(entries) {
@@ -420,6 +421,8 @@ function renderLive() {
 
 // ---- Service
 
+let restarting = null;
+
 function renderService() {
   const svc = state.service;
   $('svcLabel').textContent = svc.label;
@@ -435,7 +438,39 @@ function renderService() {
       h('div', { class: 'setting-text' }, h('b', {}, 'Start automatically when the Mac starts'),
         h('small', {}, 'Installs Pocket Dev as a launchd service: it starts when you log in and restarts if it crashes.')),
       h('button', { class: 'btn btn-primary', type: 'button', onclick: () => install(false) }, 'Install service'));
-  $('svcBody').replaceChildren(h('p', { class: 'status-line' }, status), body);
+  const canRestart = svc.running && svc.isThisServer;
+  const restartRow = h('div', { class: 'setting' },
+    h('div', { class: 'setting-text' }, h('b', {}, svc.updateReady ? 'Update ready' : 'Restart Pocket Dev'),
+      h('small', {}, restarting ? 'Back in about 15 seconds. This page reloads by itself.' : !canRestart
+        ? 'Only the background service can restart itself. Install the service first.'
+        : svc.updateReady ? 'Newer code is on disk than what is running. Restart to start using it.' : 'Loads the latest code. Nothing newer is waiting right now.')),
+    h('button', { class: `btn ${canRestart && svc.updateReady && !restarting ? 'btn-primary' : ''}`, type: 'button', disabled: !canRestart || !!restarting, onclick: restartServer },
+      restarting ? `${restarting.verb}… ${Math.floor((Date.now() - restarting.at) / 1000)}s` : svc.updateReady ? 'Update now' : 'Restart'));
+  $('svcBody').replaceChildren(h('p', { class: 'status-line' }, status), restartRow, body);
+}
+
+async function restartServer() {
+  if (!(await ask({ title: 'Restart Pocket Dev now?', body: 'Your phone reconnects by itself and stays logged in. Open terminals end. Back in about 15 seconds.', confirm: 'Restart' }))) return;
+  try {
+    await api('POST', '/api/service/restart');
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
+  restarting = { verb: state.service.updateReady ? 'Updating' : 'Restarting', at: Date.now() };
+  renderService();
+  const tick = setInterval(renderService, 500);
+  await new Promise((r) => setTimeout(r, 4000));
+  for (let i = 0; i < 40; i++) {
+    try {
+      if ((await fetch('/api/state', { cache: 'no-store', headers: { 'x-pocket-admin': '1' } })).ok) return location.reload();
+    } catch {}
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  clearInterval(tick);
+  restarting = null;
+  renderService();
+  toast('Pocket Dev has not come back yet. Check pocket-dev service status.', true);
 }
 
 async function install(force) {
@@ -520,6 +555,7 @@ async function refresh(force = false) {
     renderSettings();
     renderLive();
     renderService();
+    permissionsOnState(state);
   } catch {
     $('offline').hidden = false;
   } finally {

@@ -218,3 +218,15 @@ dialog.danger #askOk { background: #d93b33; border-color: #d93b33; color: #fff; 
   .lock { flex-direction: column; align-items: stretch; }
   .setting { flex-wrap: wrap; }
 }
+
+.perm-group { margin: 14px 0 0; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.perm-group:first-child { margin-top: 0; }
+.perm-badge { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 9px; border: 1px solid var(--line-2); font-size: 11.5px; font-weight: 600; vertical-align: 1px; }
+.perm-granted { color: var(--ok); border-color: #7ee78744; background: #7ee78712; }
+.perm-missing { color: var(--danger); border-color: #ff7b7244; background: #ff7b7212; }
+.perm-waiting, .perm-unknown { color: var(--warn); border-color: #f0c67444; background: #f0c67412; }
+.perm-not-needed { color: var(--muted); }
+.setup { padding: 20px 22px 18px; }
+.setup-step { margin: 0 0 4px; color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.setup h3 { margin: 0 0 8px; font-size: 17px; }
+.setup-status { min-height: 1.4em; margin-top: 10px; color: var(--warn); font-size: 13px; }

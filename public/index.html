@@ -13,7 +13,13 @@
 <link rel="stylesheet" href="/history.css">
 <link rel="stylesheet" href="/settings.css">
 <link rel="stylesheet" href="/apps.css">
+<link rel="stylesheet" href="/screen.css">
+<link rel="stylesheet" href="/health.css">
+<link rel="stylesheet" href="/macstatus.css">
 <script src="/apps.js" defer></script>
+<script src="/screen.js" defer></script>
+<script src="/health.js" defer></script>
+<script src="/macstatus.js" defer></script>
 <link rel="stylesheet" href="/chat.css">
 <script src="/chat.js" defer></script>
 <link rel="stylesheet" href="/files.css">
@@ -48,6 +54,11 @@
   .icon-btn.glyph { width: 36px; padding: 0; display: grid; place-items: center; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   #new { font-size: 20px; line-height: 1; }
+  .tabs-row { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); }
+  .tabs-row.on { background: var(--panel-2); }
+  .tabs-open { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 10px 8px; text-align: left; }
+  .tabs-open b { font-weight: 600; }
+  .tabs-open small { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #portsBtn, #settingsBtn { position: relative; }
   #portsBtn.open { border-color: var(--accent); }
   #portsCount { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--accent); color: #08101e; font-size: 11px; font-weight: 600; line-height: 17px; text-align: center; }
@@ -137,6 +148,7 @@
   </header>
   <nav id="tabbar" aria-label="Terminals">
     <div id="tabs"></div>
+    <button id="tabsList" class="icon-btn glyph" aria-label="All terminals" title="All terminals">☰</button>
     <button id="new" class="icon-btn glyph" aria-label="New terminal">+</button>
   </nav>
   <div id="ports" hidden>
@@ -227,7 +239,7 @@ function makeView(session) {
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(el);
-  const view = { id: session.id, title: session.title, exitCode: session.exitCode, term, fit, el, ws: null, online: false, everOnline: false, retry: 0, closed: false };
+  const view = { id: session.id, title: session.title, exitCode: session.exitCode, cwd: session.cwd, startedAt: session.startedAt, activeAt: session.activeAt, term, fit, el, ws: null, online: false, everOnline: false, retry: 0, closed: false };
   term.onData((d) => sendInput(view, d));
   term.onResize(({ cols, rows }) => sendMsg(view, { t: 'resize', cols, rows }));
   term.onScroll(() => view.id === activeId && renderLatest());
@@ -250,7 +262,10 @@ function connect(view) {
   };
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    if (msg.t === 'out') view.term.write(msg.d);
+    if (msg.t === 'out') {
+      view.activeAt = Date.now();
+      view.term.write(msg.d);
+    }
     else if (msg.t === 'exit') {
       view.exitCode = msg.code;
       view.term.write(`\r\n\x1b[2m[process exited ${msg.code}]\x1b[0m\r\n`);
@@ -291,7 +306,7 @@ async function syncSessions() {
   for (const view of [...views.values()]) if (!ids.has(view.id)) dropView(view);
   for (const s of list) {
     const view = views.get(s.id);
-    if (view) view.exitCode = s.exitCode ?? view.exitCode;
+    if (view) Object.assign(view, { exitCode: s.exitCode ?? view.exitCode, activeAt: Math.max(view.activeAt ?? 0, s.activeAt ?? 0) });
     else makeView(s);
   }
   if (!views.has(activeId) && views.size) activate(views.keys().next().value);
@@ -338,6 +353,46 @@ function renderTabs() {
     return tab;
   }));
 }
+
+// Every terminal in one list: where it is, whether it still runs, and when it last printed something.
+function ago(ms) {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 10) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return `${Math.floor(s / 86400)} d ago`;
+}
+
+async function openTabsSheet() {
+  showLayer('tabs');
+  try { await syncSessions(); } catch {}
+  if (!folders) try { folders = await api('GET', '/api/folders'); } catch {}
+  if (layer === 'tabs') renderTabsSheet();
+}
+
+function renderTabsSheet() {
+  const home = folders?.home;
+  const tilde = (p) => (home && p === home ? '~' : home && p?.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p ?? '');
+  const list = [...views.values()];
+  const running = list.filter((v) => v.exitCode === null).length;
+  const rows = list.map((v) => {
+    const exited = v.exitCode !== null;
+    const row = h('div', `tabs-row${v.id === activeId ? ' on' : ''}`);
+    const open = h('button', 'tabs-open');
+    open.append(
+      h('b', null, v.title),
+      h('small', null, [exited ? `exited ${v.exitCode}` : 'running', v.activeAt ? `active ${ago(v.activeAt)}` : '', tilde(v.cwd)].filter(Boolean).join(' · ')));
+    open.onclick = () => { activate(v.id); hideLayer(); };
+    const close = h('button', 'tab-x', '✕');
+    close.setAttribute('aria-label', `Close ${v.title}`);
+    close.onclick = async () => { await closeSession(v); if (layer === 'tabs') renderTabsSheet(); };
+    row.append(open, close);
+    return row;
+  });
+  setSheet({ title: `Terminals · ${running} running`, rows, note: list.length ? '' : 'No terminals open.' });
+}
+$('tabsList').addEventListener('click', openTabsSheet);
 
 function renderBadge() {
   const view = active();
@@ -530,7 +585,7 @@ function showLayer(name) {
   renderLayer();
 }
 const hideLayer = () => overlays.close('layer');
-const SHEETS = { folders: renderFolders, shortcuts: renderShortcuts };
+const SHEETS = { folders: renderFolders, shortcuts: renderShortcuts, tabs: renderTabsSheet };
 function renderLayer() {
   $('sheet').hidden = !SHEETS[layer];
   $('textView').hidden = layer !== 'text';
@@ -930,7 +985,7 @@ setView(store.get('pd.view') === 'git' ? 'git' : 'terminal');
 const vv = window.visualViewport;
 function onViewportChange() {
   if (vv) {
-    $('app').style.height = `${vv.height}px`;
+    $('app').style.height = `calc(${vv.height}px - var(--status-h, 0px))`;
     $('app').style.transform = `translateY(${vv.offsetTop}px)`;
   }
   scheduleFit();

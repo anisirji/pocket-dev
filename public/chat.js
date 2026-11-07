@@ -107,13 +107,21 @@
   const shortModel = (id) => id.replace(/^claude-/, '').replace(/-\d{8}$/, '');
 
   // Markdown-ish rendering builds DOM nodes from text, never HTML, so model output cannot inject markup.
+  // Links only take http(s) URLs, so a javascript: href cannot come from the model either.
   function inline(node, text) {
-    const re = /`([^`\n]+)`|\*\*(.+?)\*\*/g;
+    const re = /`([^`\n]+)`|\*\*(.+?)\*\*|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
     let last = 0;
     for (const m of text.matchAll(re)) {
       if (m.index > last) node.append(text.slice(last, m.index));
       if (m[1] != null) node.append(el('code', 'chat-ic', m[1]));
-      else node.append(inline(el('strong'), m[2]));
+      else if (m[2] != null) node.append(inline(el('strong'), m[2]));
+      else {
+        const a = inline(el('a', 'chat-md-a'), m[3]);
+        a.href = m[4];
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        node.append(a);
+      }
       last = m.index + m[0].length;
     }
     if (last < text.length) node.append(text.slice(last));
@@ -124,6 +132,47 @@
     const wrap = el('div', 'chat-codewrap');
     if (lang) wrap.append(el('div', 'chat-code-lang', lang));
     wrap.append(el('pre', 'chat-code chat-pre', text));
+    return wrap;
+  }
+
+  // A table row is a line that starts with "|". Pipes inside `code` or written \| stay in the cell.
+  function tableCells(line) {
+    const t = line.trim();
+    if (!t.startsWith('|')) return null;
+    const cells = [];
+    let cur = '';
+    let tick = false;
+    for (let k = 1; k < t.length; k++) {
+      const c = t[k];
+      if (c === '\\' && t[k + 1] === '|') { cur += '|'; k++; }
+      else if (c === '`') { tick = !tick; cur += c; }
+      else if (c === '|' && !tick) { cells.push(cur.trim()); cur = ''; }
+      else cur += c;
+    }
+    if (cur.trim()) cells.push(cur.trim());
+    return cells;
+  }
+
+  const isTableRule = (cells) => cells?.length > 0 && cells.every((c) => /^:?-{3,}:?$/.test(c));
+
+  function table(head, aligns, rows) {
+    const wrap = el('div', 'chat-md-tablewrap');
+    const t = el('table', 'chat-md-table');
+    const addRow = (parent, cells, tag) => {
+      const tr = el('tr');
+      aligns.forEach((align, col) => {
+        const cell = inline(el(tag), cells[col] ?? '');
+        if (align) cell.style.textAlign = align;
+        tr.append(cell);
+      });
+      parent.append(tr);
+    };
+    const thead = el('thead');
+    addRow(thead, head, 'th');
+    const tbody = el('tbody');
+    for (const row of rows) addRow(tbody, row, 'td');
+    t.append(thead, tbody);
+    wrap.append(t);
     return wrap;
   }
 
@@ -143,6 +192,18 @@
         continue;
       }
       if (!line.trim()) {
+        para = list = null;
+        continue;
+      }
+      const head = tableCells(line);
+      const rule = head && i + 1 < lines.length ? tableCells(lines[i + 1]) : null;
+      if (isTableRule(rule)) {
+        const aligns = rule.map((c) => (c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : ''));
+        const rows = [];
+        let j = i + 2;
+        for (let cells; j < lines.length && (cells = tableCells(lines[j])); j++) rows.push(cells);
+        frag.append(table(head, aligns, rows));
+        i = j - 1;
         para = list = null;
         continue;
       }
@@ -1035,14 +1096,69 @@
     return Object.values(answers || {}).flat().join(', ') || '(no answer)';
   }
 
+  // A picture a tool returned, saved by the server. Tapping it opens the full size in a new tab.
+  function toolImage(name) {
+    const link = el('a', 'chat-tool-img-link');
+    link.href = `/api/chat/${convo.id}/image/${name}`;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    const img = el('img', 'chat-tool-img');
+    img.src = link.href;
+    img.loading = 'lazy';
+    img.alt = 'Image from the tool';
+    link.append(img);
+    return link;
+  }
+
+  async function removeQueued(eventId) {
+    try {
+      setChat(await api('DELETE', `/api/chat/${convo.id}/queue`, { eventId }));
+    } catch (err) {
+      notice(err.message);
+    }
+  }
+
+  const IMAGE_EXT = /\.(png|jpe?g|gif|webp)$/i;
+
+  // The picture a person attached, small, with a tap to open the full size. If it is gone, the file name shows instead.
+  function attachedImage(ev, index) {
+    const href = `/api/chat/${convo.id}/attachment/${ev.id}.${index}`;
+    const link = el('a', 'chat-user-img-link');
+    link.href = `${href}?full=1`;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    const img = el('img', 'chat-user-img');
+    img.src = href;
+    img.loading = 'lazy';
+    img.alt = baseName(ev.attachments[index]);
+    img.onerror = () => link.replaceWith(el('span', 'chat-user-file', `📎 ${baseName(ev.attachments[index])}`));
+    link.append(img);
+    return link;
+  }
+
   const RENDER = {
     'user-text': (ev) => {
-      const node = el('div', 'chat-user');
+      if (ev.removed) {
+        const gone = el('div');
+        gone.hidden = true;
+        return gone;
+      }
+      const node = el('div', `chat-user${ev.queued ? ' chat-user-queued' : ''}`);
       if (ev.text) node.append(el('div', 'chat-user-text', ev.text));
       if (ev.attachments?.length) {
         const files = el('div', 'chat-user-files');
-        for (const p of ev.attachments) files.append(el('span', 'chat-user-file', `📎 ${baseName(p)}`));
+        ev.attachments.forEach((p, i) => files.append(IMAGE_EXT.test(p) ? attachedImage(ev, i) : el('span', 'chat-user-file', `📎 ${baseName(p)}`)));
         node.append(files);
+      }
+      if (ev.queued) {
+        const tag = el('div', 'chat-queued-tag');
+        tag.append(el('span', null, 'Queued: sends when Claude is done'));
+        const x = button('chat-queued-x', 'Remove', () => removeQueued(ev.id));
+        keepFocus(x);
+        tag.append(x);
+        node.append(tag);
+      } else if (ev.notSent) {
+        node.append(el('div', 'chat-queued-tag chat-queued-lost', 'Not sent: the turn failed or the server restarted'));
       }
       return node;
     },
@@ -1070,6 +1186,7 @@
         const body = el('div', 'chat-fold-body');
         if (ev.input) body.append(el('div', 'chat-io-label', 'Input'), el('pre', 'chat-io chat-pre', ev.input));
         if (ev.output || ev.status === 'running') body.append(el('div', 'chat-io-label', 'Output'), el('pre', 'chat-io chat-pre', ev.output || '…'));
+        if (ev.images?.length) body.append(el('div', 'chat-io-label', ev.images.length > 1 ? 'Images' : 'Image'), ...ev.images.map(toolImage));
         if (!body.firstChild) body.append(el('div', 'chat-io-label', 'No output'));
         return body;
       }),
@@ -1149,6 +1266,19 @@
   ui.chips.addEventListener('scroll', fadeChips, { passive: true });
   new ResizeObserver(fadeChips).observe(ui.chips);
 
+  async function stopTurn() {
+    try {
+      setChat(await api('POST', `/api/chat/${convo.id}/interrupt`));
+    } catch (err) {
+      notice(err.message);
+    }
+  }
+  // The text and Stop button are built once so the one-second tick never replaces a button under the finger.
+  const statusText = el('span', 'chat-status-text');
+  const statusStop = button('chat-status-stop', 'Stop', stopTurn);
+  keepFocus(statusStop);
+  let statusMode = null;
+
   function renderStatusLine() {
     const c = convo.chat;
     let text = '';
@@ -1159,13 +1289,19 @@
       text = 'Waiting for you';
       cls = ' chat-statusline-wait';
     } else if (c && isBusy(c)) {
-      text = `${TOOLS[c.tool]} is working… ${c.runningSince ? ticking(Date.now() - c.runningSince) : ''}`.trim();
+      text = `${TOOLS[c.tool]} is working… ${c.runningSince ? ticking(Date.now() - c.runningSince) : ''}${c.queued ? ` · ${c.queued} queued` : ''}`.trim();
     }
     ui.statusline.hidden = !text;
     ui.statusline.className = `chat-statusline${cls}`;
-    if (!text) return;
-    if (cls) ui.statusline.replaceChildren(text);
-    else ui.statusline.replaceChildren(spinner(), text);
+    if (!text) {
+      statusMode = null;
+      return;
+    }
+    statusText.textContent = text;
+    const mode = cls ? 'wait' : c?.waking ? 'wake' : 'busy';
+    if (mode === statusMode) return;
+    statusMode = mode;
+    ui.statusline.replaceChildren(...(mode === 'wait' ? [statusText] : [spinner(), statusText]), ...(mode === 'busy' ? [statusStop] : []));
   }
 
   setInterval(() => {
@@ -1383,9 +1519,11 @@
   function renderComposer() {
     const busy = convo.chat && isBusy(convo.chat);
     const uploading = convo.files.some((f) => !f.path);
-    ui.send.textContent = busy ? 'Stop' : 'Send';
-    ui.send.classList.toggle('chat-stop', !!busy);
-    ui.send.disabled = !busy && (convo.sending || uploading || (!ui.input.value.trim() && !convo.files.length));
+    const hasInput = !!ui.input.value.trim() || convo.files.length > 0;
+    // While Claude works, text in the box is queued; an empty box stops the turn.
+    ui.send.textContent = busy ? (hasInput ? 'Queue' : 'Stop') : 'Send';
+    ui.send.classList.toggle('chat-stop', !!busy && !hasInput);
+    ui.send.disabled = busy ? hasInput && (convo.sending || uploading) : convo.sending || uploading || !hasInput;
     ui.attach.disabled = convo.uploadsOff;
     ui.attach.title = convo.uploadsOff ? 'Attachments are not available on this server' : 'Attach a file';
   }
@@ -1415,16 +1553,9 @@
     e.preventDefault();
     const c = convo.chat;
     if (!convo.id) return;
-    if (c && isBusy(c)) {
-      try {
-        setChat(await api('POST', `/api/chat/${convo.id}/interrupt`));
-      } catch (err) {
-        notice(err.message);
-      }
-      return;
-    }
     const text = ui.input.value.trim();
     const attachments = convo.files.filter((f) => f.path).map((f) => f.path);
+    if (c && isBusy(c) && !text && !attachments.length) return stopTurn();
     if (!text && !attachments.length) return;
     convo.sending = true;
     renderComposer();
@@ -1438,7 +1569,7 @@
       setChat(chat);
       closeKeyboard();
     } catch (err) {
-      notice(err.status === 409 ? `${TOOLS[c?.tool] || 'The agent'} is still working. Stop it or wait.` : err.message);
+      notice(err.message);
     } finally {
       convo.sending = false;
       renderComposer();
@@ -1474,8 +1605,9 @@
   function fitViewport() {
     if (root.hidden) return;
     const h = vv ? vv.height : window.innerHeight;
-    root.style.height = `${h}px`;
-    root.style.setProperty('--chat-h', `${h}px`);
+    const usable = `calc(${h}px - var(--status-h, 0px))`;
+    root.style.height = usable;
+    root.style.setProperty('--chat-h', usable);
     if (vv) root.style.transform = `translateY(${vv.offsetTop}px)`;
   }
   vv?.addEventListener('resize', fitViewport);

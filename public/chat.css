@@ -100,6 +100,12 @@
 .chat-assistant > :last-child { margin-bottom: 0; }
 .chat-md-list { margin: 0 0 8px; padding-left: 22px; }
 .chat-md-list li { margin: 2px 0; padding-left: 2px; }
+.chat-md-tablewrap { margin: 4px 0 10px; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; overscroll-behavior-x: contain; }
+.chat-md-table { border-collapse: collapse; width: 100%; font-size: 13.5px; line-height: 1.4; }
+.chat-md-table th, .chat-md-table td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; min-width: 90px; }
+.chat-md-table th { background: var(--panel-2); font-weight: 600; }
+.chat-md-table tbody tr:last-child td { border-bottom: 0; }
+.chat-md-a { color: var(--accent); text-underline-offset: 2px; overflow-wrap: anywhere; }
 .chat-ic { padding: 1px 5px; border-radius: 5px; background: var(--panel-2); border: 1px solid var(--line); font: 12.5px var(--mono); overflow-wrap: anywhere; }
 .chat-codewrap { margin: 4px 0 10px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
 .chat-code-lang { padding: 4px 10px; border-bottom: 1px solid var(--line); color: var(--muted); font: 11px var(--mono); }
@@ -274,3 +280,17 @@
 .chat-rule-code { font: 13px/1.4 var(--mono); overflow-wrap: anywhere; }
 .chat-rule-label { color: var(--muted); font-size: 12px; }
 .chat-rule-x { flex: none; height: 40px; padding: 0 12px; color: var(--danger); font-size: 13px; }
+
+/* Pictures a tool returned, and messages waiting in the queue. */
+.chat-tool-img-link { display: block; margin: 4px 0 8px; }
+.chat-tool-img { display: block; max-width: 100%; max-height: 360px; border-radius: 8px; border: 1px solid var(--line); background: #000; object-fit: contain; }
+.chat-user-queued { border-style: dashed; opacity: .8; }
+.chat-queued-tag { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--chat-user-line); color: var(--chat-warn); font-size: 12px; }
+.chat-queued-lost { color: var(--danger, #ff7b72); }
+.chat-queued-x { flex: none; height: 26px; padding: 0 8px; border-radius: 7px; border: 1px solid currentColor; background: transparent; color: inherit; font-size: 12px; }
+.chat-status-stop { margin-left: auto; height: 28px; padding: 0 12px; border-radius: 8px; border: 1px solid #5c2b2b; background: #2a1414; color: var(--chat-del, #ff7b72); font-size: 13px; font-weight: 600; }
+.chat-statusline .chat-status-text { min-width: 0; }
+
+/* Pictures the person attached, shown small in their own message. */
+.chat-user-img-link { display: block; }
+.chat-user-img { display: block; max-width: 100%; max-height: 200px; border-radius: 10px; border: 1px solid var(--chat-user-line); background: #000; object-fit: cover; }

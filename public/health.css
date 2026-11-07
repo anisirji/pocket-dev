@@ -1,0 +1,24 @@
+.health-sheet { position: fixed; inset: 0; z-index: 1100; display: flex; flex-direction: column; height: 100dvh; background: var(--bg); color: var(--text); }
+.health-sheet[hidden] { display: none; }
+.health-bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.health-bar h2 { flex: 1; min-width: 0; margin: 0 4px; font-size: 16px; font-weight: 600; }
+.health-btn { flex: none; height: 36px; padding: 0 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); font-size: 13px; }
+.health-btn:active { background: var(--line); }
+.health-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px 10px 16px; display: grid; align-content: start; gap: 10px; }
+.health-verdict { display: grid; gap: 2px; padding: 12px 14px; border-radius: 12px; border: 1px solid #2f5a3a; background: #12261a; color: #a5f0b0; }
+.health-verdict b { font-size: 17px; }
+.health-verdict span { font-size: 13px; opacity: .85; }
+.health-verdict.watch { border-color: #5a4a22; background: #2a2210; color: #f0c674; }
+.health-verdict.attention { border-color: #5c2b2b; background: #2a1414; color: #ff9d96; }
+.health-issue { margin: 0; padding: 9px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.35; background: #2a2210; color: #f0c674; border: 1px solid #5a4a22; }
+.health-issue.critical { background: #2a1414; color: #ff9d96; border-color: #5c2b2b; }
+.health-group { padding: 4px 12px 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); }
+.health-group h3 { margin: 8px 0 2px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.health-row { display: flex; justify-content: space-between; gap: 14px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.health-group h3 + .health-row { border-top: 0; }
+.health-label { color: var(--muted); flex: none; }
+.health-value { min-width: 0; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.health-value.warn { color: #f0c674; font-weight: 600; }
+.health-note { margin: 0; padding: 6px 10px 10px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); background: var(--panel); }
+.health-note:empty { display: none; }
+.health-scroll > .health-note { border: 0; background: none; }

@@ -38,11 +38,17 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
   // These tests never sleep/shut down the Mac, quit apps, install services, or call models.
   const stub = path.join(root, 'read-only-stub');
   fs.writeFileSync(stub, '#!/bin/sh\nprintf "No\\n"\n', { mode: 0o700 });
+  // The screen route runs these instead of screencapture and sips: the first writes a tiny JPEG, the second copies it.
+  const shot = path.join(root, 'screencapture-stub');
+  fs.writeFileSync(shot, '#!/bin/sh\nfor last; do :; done\nprintf "\\377\\330\\377stub" > "$last"\n', { mode: 0o700 });
+  const resize = path.join(root, 'sips-stub');
+  fs.writeFileSync(resize, '#!/bin/sh\n[ "$1" = "-g" ] && { echo "pixelWidth: 800"; echo "pixelHeight: 600"; exit 0; }\nfor a; do case "$prev" in --out) out="$a";; esac; prev="$a"; done\nfor a; do [ -f "$a" ] && raw="$a"; done\ncp "$raw" "$out"\n', { mode: 0o700 });
   const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: {
+    POCKET_DEV_SCREENCAPTURE: shot, POCKET_DEV_SIPS: resize,
     ...process.env, HOME: home, SHELL: '/bin/zsh', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8',
     PORT: String(port), POCKET_DEV_ADMIN_PORT: String(adminPort), POCKET_DEV_CONFIG: config,
     POCKET_DEV_STATE_DIR: state, POCKET_DEV_NO_OPEN: '1', POCKET_DEV_CLAUDE: '/nonexistent/claude',
-    POCKET_DEV_CODEX: '/nonexistent/codex', POCKET_DEV_PMSET: stub, POCKET_DEV_IOREG: stub,
+    POCKET_DEV_CODEX: '/nonexistent/codex', POCKET_DEV_PMSET: stub, POCKET_DEV_IOREG: stub, POCKET_DEV_TOP: stub, POCKET_DEV_MEMORY_PRESSURE: stub,
     POCKET_DEV_UPDATE_CHECK: stub, POCKET_DEV_OSASCRIPT: stub,
   }, stdio: ['ignore', 'pipe', 'pipe'] });
   let logs = '';
@@ -88,7 +94,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     return ws;
   }
   const apis = ['/api/sessions', '/api/folders', '/api/shortcuts', '/api/forwards', '/api/info', '/api/history', '/api/git/repos', '/api/settings', '/api/service', '/api/power', '/api/apps', '/api/chat', `/api/files/list?path=${encodeURIComponent(home)}`];
-  const assets = ['/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/apps.js', '/apps.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
+  const assets = ['/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
   await t.test('every feature requires authentication; private source stays private', async () => {
     assert.equal((await request('GET', '/')).status, 302);
     for (const endpoint of [...apis, ...assets]) assert.equal((await request('GET', endpoint)).status, 401, endpoint);
@@ -100,6 +106,94 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
   assert.equal(A.status, 200);
   assert.match(A.cookie, /^pd_token=/);
   let chat, session;
+  await t.test('restart needs a login and refuses when this copy is not the launchd service', async () => {
+    assert.equal((await request('POST', '/api/service/restart', { body: {} })).status, 401);
+    const svc = await request('GET', '/api/service', { cookie: A.cookie });
+    assert.equal(svc.status, 200);
+    assert.equal(typeof svc.data.updateReady, 'boolean');
+    const refused = await request('POST', '/api/service/restart', { cookie: A.cookie, body: {} });
+    assert.equal(refused.status, 409);
+    assert.match(refused.data.error, /not the background service/);
+    await pause(600);
+    assert.equal(proc.exitCode, null, 'a refused restart must not stop the server');
+  });
+  await t.test('power status carries the temperature block, empty when the Mac gives no reading', async () => {
+    const power = await request('GET', '/api/power', { cookie: A.cookie });
+    assert.equal(power.status, 200);
+    assert.deepEqual(Object.keys(power.data.temperature).sort(), ['batteryC', 'thermal']);
+    assert.equal(power.data.temperature.batteryC, null, 'the stubbed ioreg has no Temperature line');
+    assert.equal(power.data.temperature.thermal, null, 'the stubbed osascript answers No, which is not a level');
+  });
+  await t.test('attached images show as thumbnails, and only files attached to that message can be read', async () => {
+    const made = await request('POST', '/api/chat', { cookie: A.cookie, body: { tool: 'codex', cwd: home } });
+    const chatId = made.data.id;
+    const photo = path.join(home, 'photo.png');
+    const secret = path.join(home, 'secret.txt');
+    fs.writeFileSync(photo, 'not really a png, but named like one');
+    fs.writeFileSync(secret, 'top secret');
+    const sent = await request('POST', `/api/chat/${chatId}/message`, { cookie: A.cookie, body: { text: 'look', attachments: [photo, secret] } });
+    assert.equal(sent.status, 202);
+    const msg = (await request('GET', `/api/chat/${chatId}`, { cookie: A.cookie })).data.events.find((e) => e.type === 'user-text');
+    const get = (name, query = '', cookie = A.cookie) => fetch(`${base}/api/chat/${chatId}/attachment/${name}${query}`, { headers: { ...(cookie && { cookie }), 'x-pocket-dev': '1' } });
+    const small = await get(`${msg.id}.0`);
+    assert.equal(small.status, 200);
+    assert.equal(small.headers.get('content-type'), 'image/jpeg', 'the small version is a JPEG');
+    const full = await get(`${msg.id}.0`, '?full=1');
+    assert.equal(full.headers.get('content-type'), 'image/png');
+    assert.equal(await full.text(), 'not really a png, but named like one');
+    assert.equal((await get(`${msg.id}.1`)).status, 404, 'a non-image attachment is never served');
+    assert.equal((await get(`${msg.id}.2`)).status, 404, 'there is no third attachment');
+    assert.equal((await get(`${msg.id}.0`, '', null)).status, 401);
+    for (const bad of ['../x', '..%2F..%2Fconfig.json', 'abc.0', `${msg.id}`, `${msg.id}.0.png`, `ffffffffffff.0`]) assert.equal((await get(bad)).status, 404, bad);
+    await request('DELETE', `/api/chat/${chatId}`, { cookie: A.cookie });
+  });
+  await t.test('health: behind login, with every part of the panel present even when readings are missing', async () => {
+    assert.equal((await request('GET', '/api/health')).status, 401);
+    const res = await request('GET', '/api/health', { cookie: A.cookie });
+    assert.equal(res.status, 200);
+    for (const key of ['status', 'issues', 'battery', 'temperature', 'limits', 'cpu', 'disk', 'power', 'mac', 'network', 'pocketDev']) assert.ok(key in res.data, key);
+    assert.ok(['good', 'watch', 'attention'].includes(res.data.status));
+    assert.equal(res.data.cpu.usedPercent, null, 'a stubbed top gives no reading, not zero');
+    assert.equal(res.data.memory, null);
+    assert.equal(res.data.pocketDev.version, '1.0.0');
+  });
+  await t.test('vitals: a light reading with limits and alerts, behind login', async () => {
+    assert.equal((await request('GET', '/api/power/vitals')).status, 401);
+    const vitals = await request('GET', '/api/power/vitals', { cookie: A.cookie });
+    assert.equal(vitals.status, 200);
+    assert.deepEqual(vitals.data.limits, { batteryPercent: 20, temperatureC: 40 });
+    assert.deepEqual(Object.keys(vitals.data.temperature).sort(), ['batteryC', 'thermal']);
+    assert.equal(vitals.data.temperature.thermal, null, 'the stubbed osascript answers No, which is not a level');
+    assert.ok(Array.isArray(vitals.data.alerts));
+  });
+  await t.test('screen view: login required, a no-store JPEG, nothing left on disk, and a config switch', async () => {
+    assert.equal((await request('GET', '/api/screen')).status, 401);
+    const res = await fetch(`${base}/api/screen`, { headers: { cookie: A.cookie, 'x-pocket-dev': '1' } });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'image/jpeg');
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+    assert.equal(Buffer.from(await res.arrayBuffer()).subarray(0, 3).toString('hex'), 'ffd8ff');
+    assert.deepEqual(fs.readdirSync(state).filter((f) => f.startsWith('screen-')), [], 'the capture folder is removed');
+    const saved = JSON.parse(fs.readFileSync(config, 'utf8'));
+    fs.writeFileSync(config, JSON.stringify({ ...saved, screenView: false }));
+    const off = await request('GET', '/api/screen', { cookie: A.cookie });
+    assert.equal(off.status, 403);
+    assert.match(off.data.error, /screenView true/);
+    fs.writeFileSync(config, JSON.stringify(saved));
+  });
+  await t.test('permissions: Mac-only, setup status validated and saved, unknown ids refused', async () => {
+    assert.equal((await request('GET', '/api/permissions', { cookie: A.cookie })).status, 404, 'a logged-in phone cannot reach it: the route exists only on the Mac admin port');
+    assert.equal((await request('POST', '/api/permissions/automation/request', { cookie: A.cookie, body: {} })).status, 404);
+    const list = await local('GET', '/api/permissions');
+    assert.equal(list.status, 200);
+    assert.deepEqual(list.data.items.map((i) => i.id), ['automation', 'accessibility', 'fullDisk', 'screenRecording', 'firewall', 'claude', 'codex', 'gh']);
+    assert.ok(list.data.items.every((i) => ['granted', 'missing', 'waiting', 'not-needed', 'unknown'].includes(i.state)));
+    assert.equal(list.data.setup, null);
+    assert.equal((await local('POST', '/api/permissions/setup', { status: 'maybe' })).status, 400);
+    assert.equal((await local('POST', '/api/permissions/setup', { status: 'skipped' })).status, 200);
+    assert.equal((await local('GET', '/api/state')).data.permissionsSetup, 'skipped');
+    assert.equal((await local('POST', '/api/permissions/nope/request', {})).status, 404);
+  });
   await t.test('CSRF, content type, Host, admin proxy and Origin checks', async () => {
     assert.equal((await request('POST', '/api/sessions', { cookie: A.cookie, body: {}, csrf: false })).status, 403);
     assert.equal((await request('POST', '/api/sessions', { cookie: A.cookie, body: {}, headers: { 'content-type': 'text/plain' } })).status, 415);
@@ -139,6 +233,13 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     await pause(400);
     assert.equal(fs.readFileSync(file, 'utf8').split('\n').length, 2, 'attaching must not rerun command');
     await assert.rejects(socket(`/ws/${session.id}`, A.cookie, 'http://evil.example'), /HTTP 403/);
+  });
+  await t.test('the terminal list reports each terminal\'s folder and last output for the Tabs sheet', async () => {
+    const list = await request('GET', '/api/sessions', { cookie: A.cookie });
+    const mine = list.data.find((x) => x.id === session.id);
+    assert.equal(mine.cwd, home);
+    assert.ok(Number.isInteger(mine.startedAt) && Number.isInteger(mine.activeAt));
+    assert.ok(mine.activeAt >= mine.startedAt, 'output moves activeAt forward');
   });
   await t.test('Files enforces roots, preserves uploads, and sandboxes HTML', async () => {
     const upload = (content) => fetch(`${base}/api/files/upload?dir=${encodeURIComponent(home)}&name=note.html`, { method: 'POST', headers: { cookie: A.cookie, 'x-pocket-dev': '1' }, body: content });

@@ -45,9 +45,9 @@ function run([pid]) {
 // Counting Finder's windows touches the same two permissions the window list needs.
 const PROBE_WINDOWS = `Application('System Events').processes.byName('Finder').windows.length; 'ok'`;
 
-function run(file, args) {
+function run(file, args, timeout = 15_000) {
   return new Promise((resolve, reject) => {
-    execFile(file, args, { timeout: 15_000, maxBuffer: 4_000_000 }, (err, stdout, stderr) => {
+    execFile(file, args, { timeout, maxBuffer: 4_000_000 }, (err, stdout, stderr) => {
       if (err) reject(Object.assign(err, { stderr: String(stderr) }));
       else resolve(String(stdout));
     });
@@ -64,7 +64,7 @@ function permissionNeeded(err) {
   return null;
 }
 
-function permissionHelp(access, host) {
+export function permissionHelp(access, host) {
   if (access === 'needs-automation') {
     return `Pocket Dev may not control System Events. On the Mac, open System Settings → Privacy & Security → Automation → ${host} and turn on System Events.`;
   }
@@ -131,13 +131,22 @@ export async function snapshot() {
   return { apps, host };
 }
 
-async function windowAccess() {
+// 'granted'; 'automation' or 'accessibility' for the one still missing (Automation is checked first, so a missing
+// Automation hides the Accessibility answer); 'waiting' when macOS is asking on the Mac and nobody has answered; 'error'.
+export async function probeWindowAccess(timeout = 15_000) {
   try {
-    await jxa(PROBE_WINDOWS);
-    return 'ok';
+    await run(OSASCRIPT, ['-l', 'JavaScript', '-e', PROBE_WINDOWS], timeout);
+    return 'granted';
   } catch (err) {
-    return permissionNeeded(err) ?? 'ok';
+    const needed = permissionNeeded(err);
+    if (needed) return needed.replace('needs-', '');
+    return err.killed ? 'waiting' : 'error';
   }
+}
+
+async function windowAccess() {
+  const result = await probeWindowAccess();
+  return result === 'automation' || result === 'accessibility' ? `needs-${result}` : 'ok';
 }
 
 const isAlive = (pid) => {

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { findBin, engineEnv, cap, lineDiff, INPUT_MAX } from './env.js';
+import { saveToolImages, resultText } from './tool-images.js';
 
 const CLAUDE_BIN = process.env.POCKET_DEV_CLAUDE || findBin('claude') || '/usr/local/bin/claude';
 
@@ -37,9 +38,17 @@ const FALLBACK_MODELS = [
 ];
 
 let modelsCache = null;
+let modelsCacheBin = null;
 
-// Asking the CLI costs one short-lived process (about 2 s) and no model call, so do it once per server run.
+// Asking the CLI costs one short-lived process (about 2 s) and no model call, so ask once per CLI build. Claude Code
+// updates itself in place, so the binary's mtime changes when its model catalog can.
 export async function listModels() {
+  let bin = null;
+  try { bin = fs.statSync(CLAUDE_BIN).mtimeMs; } catch {}
+  if (bin !== modelsCacheBin) {
+    modelsCache = null;
+    modelsCacheBin = bin;
+  }
   modelsCache ??= (async () => {
     const idle = inbox();
     const q = query({ prompt: idle, options: { pathToClaudeCodeExecutable: CLAUDE_BIN, env: engineEnv() } });
@@ -134,12 +143,6 @@ const DIFF = {
 };
 
 const describeInput = (name, input) => (name === 'Bash' ? input.command : DIFF[name] ? input.file_path ?? input.notebook_path : cap(input, INPUT_MAX));
-
-function resultText(content) {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content.map((c) => (c.type === 'text' ? c.text : `[${c.type}]`)).join('\n');
-}
 
 // A pushable async iterable: the SDK reads user turns from it for as long as the engine lives.
 function inbox() {
@@ -251,7 +254,9 @@ export function createClaudeEngine(chat) {
     const ev = chat.find(block.tool_use_id);
     if (!ev) return;
     const status = denied.has(block.tool_use_id) ? 'denied' : block.is_error ? 'error' : 'ok';
-    chat.update(ev.id, ev.type === 'tool-run' ? { status, output: cap(resultText(block.content)) } : { status });
+    if (ev.type !== 'tool-run') return chat.update(ev.id, { status });
+    const images = saveToolImages(chat.imageDir, block.content, block.tool_use_id);
+    chat.update(ev.id, { status, output: cap(resultText(block.content, images)), ...(images.size && { images: [...images.values()] }) });
   }
 
   function onStreamEvent({ event }) {

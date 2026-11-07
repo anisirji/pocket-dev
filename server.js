@@ -13,19 +13,22 @@ import { createHistoryApi } from './history.js';
 import { createAuth, QR_TTL_MIN } from './auth.js';
 import { terminalQr, qrNote } from './qr.js';
 import { openConfig } from './config.js';
+import { resolveConfigPath } from './paths.js';
 import { startPower, handlePowerApi, powerStatus } from './power.js';
 import { createAppsApi, snapshot as appsSnapshot } from './apps.js';
 import { startAdmin } from './admin.js';
 import { createPhoneAccess } from './access.js';
 import { createChatApi } from './chat/index.js';
 import { createFilesApi } from './files.js';
+import { captureScreen } from './screen.js';
+import { collectHealth } from './health.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SCROLLBACK_MAX = 500_000;
 const BODY_MAX = 64_000;
 const UPLOAD_MAX = 25 * 1024 * 1024;
 
-const config = openConfig(process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json'));
+const config = openConfig(resolveConfigPath());
 const PORT = Number(process.env.PORT) || config.read().port || 7777;
 
 // Every IPv4 address the Mac has on a network, en0 first. POCKET_DEV_LAN_IP_FILE replaces the interface lookup in
@@ -271,8 +274,10 @@ function createSession(cwd, base = folderName(cwd), command) {
     clients: new Set(),
     exitCode: null,
     startedAt: Date.now(),
+    activeAt: Date.now(),
   };
   proc.onData((d) => {
+    session.activeAt = Date.now();
     appendScrollback(session, d);
     broadcast(session, { t: 'out', d });
   });
@@ -295,7 +300,7 @@ function destroySession(session) {
   sessions.delete(session.id);
 }
 
-const sessionView = ({ id, title, exitCode }) => ({ id, title, exitCode });
+const sessionView = ({ id, title, exitCode, cwd, startedAt, activeAt }) => ({ id, title, exitCode, cwd, startedAt, activeAt });
 
 const isDim = (n) => Number.isInteger(n) && n >= 10 && n <= 500;
 
@@ -489,6 +494,18 @@ async function handleApi(req, res, url) {
   if (resource === 'files') return handleFiles(req, res, url);
 
   switch (route) {
+    case 'GET health':
+      return sendJson(res, 200, await collectHealth());
+    case 'GET screen': {
+      if (config.read().screenView === false) return sendJson(res, 403, { error: 'Screen view is turned off. On the Mac, run: pocket-dev config set screenView true' });
+      try {
+        const jpeg = await captureScreen();
+        res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': jpeg.length, 'cache-control': 'no-store' });
+        return res.end(jpeg);
+      } catch (err) {
+        return sendJson(res, 503, { error: err.message });
+      }
+    }
     case 'GET sessions':
       return sendJson(res, 200, [...sessions.values()].map(sessionView));
     case 'POST sessions': {
@@ -559,7 +576,7 @@ const PAGES = {
   '/git.js': 'git.js', '/graph.js': 'graph.js', '/git.css': 'git.css',
   '/history.js': 'history.js', '/history.css': 'history.css',
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
-  '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/power.js': 'power.js', '/service.js': 'service.js',
+  '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
 };
 const PUBLIC_PAGES = new Set(['login.html']);

@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Chat } from './chat.js';
+import { Chat, QUEUE_MAX } from './chat.js';
+import { IMAGE_FILE_RE, CONTENT_TYPE, ATTACHMENT_NAME_RE, ATTACHMENT_TYPES, thumbnailOf } from './tool-images.js';
 import * as claude from './claude.js';
 import * as codex from './codex.js';
 
@@ -122,6 +123,7 @@ export function createChatApi({ sendJson, readJson, config, wss }) {
   for (const file of fs.readdirSync(dir).filter((f) => /^[0-9a-f]{12}\.json$/.test(f))) {
     try {
       const chat = Chat.load(path.join(dir, file));
+      chat.afterTurn = (status) => drainQueue(chat, status);
       chats.set(chat.id, chat);
     } catch (err) {
       console.warn(`Skipping unreadable chat ${file}: ${err.message}`);
@@ -171,6 +173,21 @@ export function createChatApi({ sendJson, readJson, config, wss }) {
     }
     const note = files.length ? `\n\nAttached files:\n${files.map((f) => `- ${f}`).join('\n')}` : '';
     return { text: `${text}${note}`.trim() || 'See the attached image.', images };
+  }
+
+  // Sends the next waiting message once a turn is over. A stop sends it too, because the usual reason to queue a message and
+  // then stop is to redirect. A failure holds the rest, so a broken engine does not burn through the queue.
+  function drainQueue(chat, status) {
+    if (!chat.queue.length || chat.closed) return;
+    if (status === 'failed') return chat.holdQueue();
+    setTimeout(() => {
+      if (chat.closed || chat.turn) return;
+      const next = chat.dequeue();
+      if (!next) return;
+      chat.setTitleFrom(next.text || path.basename(next.files[0].path));
+      chat.startTurn();
+      runTurn(chat, prepareInput(next.text, next.files));
+    }, 0);
   }
 
   async function runTurn(chat, input) {
@@ -258,6 +275,7 @@ export function createChatApi({ sendJson, readJson, config, wss }) {
     const chat = Chat.create(fields, dir);
     if (title?.trim()) chat.setTitleFrom(title);
     if (fields.sessionId) chat.emit({ type: 'status', text: `Continuing ${ENGINES[tool].label} session ${fields.sessionId.slice(0, 8)}` });
+    chat.afterTurn = (status) => drainQueue(chat, status);
     chats.set(chat.id, chat);
     chat.persist();
     await rememberDefaults(chat);
@@ -319,12 +337,22 @@ export function createChatApi({ sendJson, readJson, config, wss }) {
       if (typeof text !== 'string' || text.length > TEXT_MAX) throw new BadRequest(`text must be up to ${TEXT_MAX} characters`);
       const files = parseAttachments(attachments);
       if (!text.trim() && !files.length) throw new BadRequest('Type a message or attach a file');
-      if (chat.turn) throw new BadRequest('A turn is already running. Stop it or wait.', 409);
+      // While a turn runs (or earlier messages still wait) this one joins the queue and goes out after the turn.
+      if (chat.turn || chat.queue.length) {
+        if (chat.queue.length >= QUEUE_MAX) throw new BadRequest(`Up to ${QUEUE_MAX} messages can wait. Stop the turn or wait.`, 429);
+        chat.enqueue({ text, files });
+        return [202, chat.view()];
+      }
       chat.emit({ type: 'user-text', text, attachments: files.map((f) => f.path) });
       chat.setTitleFrom(text || path.basename(files[0].path));
       chat.startTurn();
       runTurn(chat, prepareInput(text, files));
       return [202, chat.view()];
+    },
+    'DELETE :id/queue': async (req, chat) => {
+      const { eventId } = await readJson(req);
+      if (typeof eventId !== 'string' || !chat.unqueue(eventId)) throw new BadRequest('That message is not waiting any more', 404);
+      return [200, chat.view()];
     },
     'POST :id/answer': async (req, chat) => {
       const body = await readJson(req);
@@ -339,8 +367,46 @@ export function createChatApi({ sendJson, readJson, config, wss }) {
     },
   };
 
+  // A picture from a tool result, saved by the engine. The name is checked so only files in this chat's folder can be read.
+  function serveImage(res, chat, name = '') {
+    if (!IMAGE_FILE_RE.test(name)) throw new BadRequest('No such image', 404);
+    const file = path.join(chat.imageDir, name);
+    if (!fs.existsSync(file)) throw new BadRequest('No such image', 404);
+    res.writeHead(200, { 'content-type': CONTENT_TYPE[path.extname(name).slice(1)], 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff' });
+    fs.createReadStream(file).pipe(res);
+  }
+
+  // An image a person attached to one of this chat's messages. The name is "<message id>.<position>", so only a file that
+  // really is listed on a message here can be read, never an arbitrary path. Small by default; ?full=1 gives the original.
+  async function serveAttachment(req, res, chat, name = '') {
+    const match = ATTACHMENT_NAME_RE.exec(name);
+    const file = match && chat.find(match[1])?.type === 'user-text' ? chat.find(match[1]).attachments?.[Number(match[2])] : null;
+    const type = file && ATTACHMENT_TYPES[path.extname(file).toLowerCase()];
+    const stat = type && fs.statSync(file, { throwIfNoEntry: false });
+    if (!stat?.isFile()) throw new BadRequest('No such image', 404);
+    const full = new URL(req.url, 'http://x').searchParams.get('full') === '1';
+    const thumb = full ? null : await thumbnailOf(chat.imageDir, name, file);
+    if (!full && !thumb && stat.size > IMAGE_MAX) throw new BadRequest('No preview for this image', 404);
+    res.writeHead(200, { 'content-type': thumb ? 'image/jpeg' : type, 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff' });
+    fs.createReadStream(thumb ?? file).pipe(res);
+  }
+
   async function handleApi(req, res, pathname) {
     const [, , , first = '', action] = pathname.split('/');
+    if (req.method === 'GET' && action === 'image') {
+      try {
+        return serveImage(res, getChat(first), pathname.split('/')[5]);
+      } catch (err) {
+        return sendJson(res, err.status ?? 400, { error: err.message });
+      }
+    }
+    if (req.method === 'GET' && action === 'attachment') {
+      try {
+        return await serveAttachment(req, res, getChat(first), pathname.split('/')[5]);
+      } catch (err) {
+        return sendJson(res, err.status ?? 400, { error: err.message });
+      }
+    }
     const isOptions = first === 'options' && !action;
     const key = `${req.method} ${isOptions ? 'options' : first ? `:id${action ? `/${action}` : ''}` : ''}`;
     const route = routes[key];

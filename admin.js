@@ -5,7 +5,9 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PROXY_HEADERS, STATE_DIR, deviceName } from './auth.js';
 import { EVENT_KINDS, isLogFilter } from './security-log.js';
-import { serviceStatus, setAutostart, installService, stopThisServer } from './launchd.js';
+import { serviceStatus, setAutostart, installService, stopThisServer, restartThisServer } from './launchd.js';
+import { checkPermissions, openPane } from './permissions.js';
+import { captureScreen } from './screen.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 export const ADMIN_URL_PATH = path.join(STATE_DIR, 'admin.json');
@@ -18,6 +20,7 @@ const FILES = {
   '/admin.css': ['admin.css', 'text/css; charset=utf-8'],
   '/admin-client.js': ['admin-client.js', 'text/javascript; charset=utf-8'],
   '/admin-heartbeat.js': ['admin-heartbeat.js', 'text/javascript; charset=utf-8'],
+  '/admin-permissions.js': ['admin-permissions.js', 'text/javascript; charset=utf-8'],
 };
 const HEADERS = {
   'cache-control': 'no-store',
@@ -142,6 +145,7 @@ export async function startAdmin({ auth, access, config, mainPort, urls, section
         local: `http://localhost:${mainPort}`,
       },
       service: await serviceStatus(),
+      permissionsSetup: config.read().permissionsSetup ?? null,
       sections: await sectionViews(),
     };
   }
@@ -191,7 +195,42 @@ export async function startAdmin({ auth, access, config, mainPort, urls, section
     return ok(await serviceStatus());
   }
 
+  // Only the launchd job restarts itself: a copy started with `npm start` that exits would just be gone.
+  async function restart(by) {
+    const svc = await serviceStatus();
+    if (!svc.isThisServer) {
+      return reply(409, { error: 'This copy is not the background service, so it cannot restart itself. Stop it and run pocket-dev start, or install the service from the admin page on the Mac.' });
+    }
+    auth.admin.log('server-restarted', { by, updateReady: svc.updateReady });
+    // Let this reply reach the caller before the process exits.
+    setTimeout(restartThisServer, 300);
+    return ok({ ok: true });
+  }
+
+  const SETUP_STATUSES = new Set(['done', 'skipped']);
+
+  // "Allow" for Control System Events raises macOS's own prompt on this Mac and waits for the answer. Every other
+  // permission has no prompt to raise, so it opens the System Settings page where the person turns it on.
+  async function requestPermission(id) {
+    let items = await checkPermissions({ ask: id === 'automation' });
+    const item = items.find((i) => i.id === id);
+    if (!item) return reply(404, { error: 'No such permission.' });
+    const opened = item.state === 'missing' && !!item.pane;
+    // node only appears in the Screen Recording list after it has tried to capture, so try once before opening it.
+    if (opened && id === 'screenRecording') await captureScreen().catch(() => {});
+    if (opened) openPane(item.pane);
+    if (id === 'automation') items = await checkPermissions();
+    return ok({ items, opened, setup: config.read().permissionsSetup ?? null });
+  }
+
   const route = router({
+    'GET /api/permissions': async () => ok({ items: await checkPermissions(), setup: config.read().permissionsSetup ?? null }),
+    'POST /api/permissions/setup': ({ body }) => {
+      if (!SETUP_STATUSES.has(body.status)) return reply(400, { error: 'status must be done or skipped.' });
+      config.update({ permissionsSetup: body.status });
+      return ok({ setup: body.status });
+    },
+    'POST /api/permissions/:id/request': ({ params }) => requestPermission(params.id),
     'GET /api/state': async () => ok(await state()),
     'GET /api/log': ({ query }) => {
       const filter = query.get('filter') ?? 'all';
@@ -227,6 +266,7 @@ export async function startAdmin({ auth, access, config, mainPort, urls, section
       }
       return reply(r.ok ? 200 : 409, { ...r, service: await serviceStatus() });
     },
+    'POST /api/service/restart': () => restart('admin'),
     'POST /api/stop': () => {
       auth.admin.log('server-stopped', { by: 'admin' });
       setTimeout(stopThisServer, 200);
@@ -279,6 +319,7 @@ export async function startAdmin({ auth, access, config, mainPort, urls, section
   const phoneRoute = router({
     'GET /api/service': async () => ok(await serviceStatus()),
     'PUT /api/service/autostart': ({ body }) => changeAutostart(body, 'phone'),
+    'POST /api/service/restart': () => restart('phone'),
     'POST /api/access/disconnect': () => {
       // Let this reply reach the phone before its connection closes.
       setTimeout(() => access.close('phone'), 200);

@@ -7,6 +7,7 @@
 <title>Pocket Dev Admin</title>
 <link rel="stylesheet" href="/admin.css">
 <script src="/admin-client.js" defer></script>
+<script src="/admin-permissions.js" defer></script>
 </head>
 <body>
 <header class="top">
@@ -27,6 +28,7 @@
     <a href="#password">Password</a>
     <a href="#settings">Settings</a>
     <a href="#live">Live</a>
+    <a href="#permissions">Permissions</a>
     <a href="#service">Service</a>
     <a href="#lockdown" class="nav-danger">Lockdown</a>
   </nav>
@@ -133,6 +135,16 @@
       <div class="live" id="liveSections"></div>
     </section>
 
+    <section id="permissions" class="panel">
+      <div class="panel-head">
+        <h2>Permissions</h2><span class="count" id="permCount"></span>
+        <span class="seg"><button type="button" class="btn btn-sm" id="permSetup">Run setup</button> <button type="button" class="btn btn-sm" id="permRecheck">Check again</button></span>
+      </div>
+      <p class="note">Checked on this Mac for the program that runs Pocket Dev. Checking Control System Events can make macOS show a pop-up here.</p>
+      <div id="permBody"></div>
+      <p class="err" id="permErr"></p>
+    </section>
+
     <section id="service" class="panel">
       <div class="panel-head"><h2>Service</h2><span class="count" id="svcLabel"></span></div>
       <div id="svcBody"></div>
@@ -158,6 +170,15 @@
   </main>
 </div>
 
+<dialog id="setup">
+  <div class="setup">
+    <p class="setup-step" id="setupStep"></p>
+    <h3 id="setupTitle"></h3>
+    <p id="setupWhy"></p>
+    <p class="setup-status" id="setupStatus" aria-live="polite"></p>
+    <div class="dialog-actions" id="setupActions"></div>
+  </div>
+</dialog>
 <dialog id="ask">
   <form method="dialog">
     <h3 id="askTitle"></h3>

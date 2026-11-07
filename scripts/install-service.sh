@@ -19,7 +19,7 @@ for arg in "$@"; do
 done
 
 NODE="$(command -v node)" || { echo "node is not on PATH" >&2; exit 1; }
-PORT="${PORT:-$("$NODE" -e 'try { console.log(JSON.parse(require("fs").readFileSync("config.json")).port || 7777) } catch { console.log(7777) }')}"
+PORT="${PORT:-$("$NODE" bin/pocket-dev.js config get port 2>/dev/null | grep -E '^[0-9]+$' || echo 7777)}"
 LOG="${LOG:-$HOME/Library/Logs/pocket-dev.log}"
 
 extra_env=""

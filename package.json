@@ -1,10 +1,9 @@
 {
   "name": "pocket-dev",
   "version": "1.0.0",
-  "main": "index.js",
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper",
+    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
     "start": "node server.js",
     "qr": "node scripts/qr.js",
     "admin": "node scripts/admin.js open",
@@ -23,7 +22,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Control your Mac from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
   "private": true,
   "type": "module",
   "dependencies": {
@@ -31,5 +30,25 @@
     "node-pty": "^1.1.0",
     "qrcode": "^1.5.4",
     "ws": "^8.22.1"
+  },
+  "bin": {
+    "pocket-dev": "bin/pocket-dev.js"
+  },
+  "files": [
+    "bin",
+    "chat",
+    "public",
+    "scripts",
+    "*.js",
+    "README.md",
+    "ACCESS.md",
+    "docs/CHALLENGES.md",
+    "docs/VALIDATION.md"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=22"
   }
 }

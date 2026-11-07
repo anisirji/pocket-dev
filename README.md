@@ -15,6 +15,7 @@ Pocket Dev is one Node.js server that runs on the Mac as your user. The phone op
 | Real terminals | Each tab is a login shell (`$SHELL -l`, zsh) in a pty on the Mac. Output streams over a WebSocket. | Survive a server restart. Run as root. |
 | Folder picker | **+** lists Home, pinned folders, the last 5 folders, and every folder in `~/Desktop` and `~/Desktop/Projects` with `.git` or `package.json`. Type any other path. | Scan deeper than one level for the project list. |
 | Tab names | Named after the folder (`app`, `app 2`). Resumed tabs are `claude · app` or `codex · app`. | |
+| All terminals | **☰** next to **+** lists every terminal with its folder, running or exited, and when it last printed. Tap a row to jump to it, **✕** to close it. | |
 | Input and key bar | **Send** types the input and then Enter 30 ms later. Empty **Send** sends Enter. Keys: ⚡, 📋, Ctrl+C, Enter, Esc, Tab, arrows (application cursor mode aware), Ctrl+D. | |
 | Scrolling | Touch scroll with fling, 5,000 lines on the phone. **↓ latest** jumps to the bottom. | |
 | Reconnect | Terminals keep running when the phone sleeps. On reconnect, the server replays up to about 500 KB per terminal. Dead sockets are pinged out every 30 s. | |
@@ -55,6 +56,9 @@ Choose **Continue in terminal** or **Continue in chat**. Resume reads the histor
 | --- | --- | --- |
 | Engines | Claude through `@anthropic-ai/claude-agent-sdk` 0.2.139, which runs your installed `claude`. Codex through one shared `codex app-server`. Both use your existing logins. | Store any Claude or Codex credentials. |
 | Chat screens | Chat list, new chat (engine, folder, model, mode), and a conversation view with markdown, tool folds, and diffs. | |
+| Queue | Type while the agent is working and the button says **Queue**. The message shows as a dashed **Queued** bubble (with **Remove**) and goes out by itself, one per turn and in order, when the turn ends. An empty box shows **Stop**; a **Stop** button also stays in the status line while you type. Up to 20 messages can wait. After a failed turn the rest are kept as **Not sent** instead of running. Waiting messages are held in memory, so a server restart marks them **Not sent**. | Survive a restart. |
+| Attached images | A picture you attach with 📎 shows as a small preview in your own message, not just a file name. Tap it for the original. Other files stay as `📎 name`. The preview is a 480 px JPEG made once with `sips` and kept in the chat's `.images` folder. The route serves only a file listed on that message and only if it is an image, never an arbitrary path. | Preview files that are gone (they fall back to the name). |
+| Tool images | A picture a tool returns (for example `Read` on a PNG) shows in the tool's fold instead of `[image]`. Tap it for the full size. Files up to 8 MB are saved in `~/.pocket-dev/chats/<id>.images/` (mode 0600), only their names go in the chat, and deleting the chat deletes them. | Show images over 8 MB or in other formats (those stay `[image]`). |
 | Allow and Deny | Cards for commands, file edits, tools, and plans: **Allow once**, **Always allow in this chat**, **Always allow in this project** when Claude offers it, and **Deny** with an optional reason. The Permissions screen lists and removes remembered rules. | Time out a waiting card. |
 | Questions | Answers `AskUserQuestion` (Claude) and `requestUserInput` (Codex), with **Other…**. | Multi-select on Codex. |
 | Stop | Interrupts the turn. The server ends it after 5 s if the engine does not stop. | |
@@ -73,6 +77,35 @@ Trash uses macOS’s native Trash operation. Restore items in Finder on the Mac.
 Lists regular apps (the same set as the Force Quit window) with memory and CPU summed over each app's process tree, frontmost first, refreshed every 10 s. Shows each app's windows and document paths. **Quit** sends a normal quit and waits 8 s. **Force quit** sends SIGTERM, then SIGKILL after 3 s.
 
 It does not quit protected apps (Finder, Dock, SystemUIServer, loginwindow, WindowServer, ControlCenter, NotificationCenter, Spotlight, and the app Pocket Dev runs inside), list windows on other Spaces, open apps, or move windows.
+
+### Mac health
+
+**Settings → Mac health**, or a tap on the strip at the top of any screen, opens one panel with a verdict (**Healthy**, **Worth a look**, **Needs attention**) and the readings behind it, refreshed every 10 s while open:
+
+- **Battery:** charge, time left or to full, condition (full-charge capacity as a percent of the original, from `AppleRawMaxCapacity` over `DesignCapacity`), and charge cycles against the rated life.
+- **Temperature:** battery temperature and macOS thermal state, with your alert limits.
+- **Performance:** processor use (from `top`, sampled twice because the first sample averages since boot), memory free (from `memory_pressure`, because used memory alone misleads while macOS caches), memory used, and free disk space.
+- **Staying awake:** the Keep awake mode, whether the Mac is staying awake now, and the lid.
+- **This Mac and Pocket Dev:** name, uptime, network address, version, Node.
+
+The verdict reuses the battery and heat alert rules and adds: battery worn below 80% of its original capacity, processor at 90% or more, memory under 10% free (red under 5%), and disk under 10 GB (red under 3 GB). A reading the Mac cannot give shows **No reading** and never counts as healthy or as a problem. `GET /api/health` needs a login and is on the phone listener only.
+
+### Battery, temperature, and alerts
+
+A strip at the top of every phone screen shows the Mac's battery (with ⚡ when plugged in) and temperature, refreshed every 30 s. The temperature is the battery's, in °C, plus macOS's thermal pressure (warm, hot, very hot) when it is above normal. A Mac cannot report its chip temperature to a normal user without `sudo` (`powermetrics`) or a third-party tool, so Pocket Dev does not show one.
+
+An amber or red banner appears under the strip, and the phone vibrates once, when:
+
+- the battery is at or below `batteryAlertPercent` (default 20) and not charging; red at 10% or less. The text says you could lose open work.
+- the battery temperature reaches `temperatureAlertC` (default 40 °C; red 5 °C above), or macOS thermal pressure is serious or critical. **Open apps** on that banner helps close heavy apps.
+
+**Dismiss** hides a banner for 15 minutes, or until it gets worse. The page title gets a ⚠ while a condition lasts. Alerts show only while the Pocket Dev page is open on the phone: a closed page cannot be reached without https and push notifications, which are on the roadmap.
+
+### Mac screen
+
+Settings → **Mac screen** shows a picture of the Mac's main display: **Refresh** takes a new one, **Auto** refreshes every 3 s, **Zoom** enlarges it to scroll around. It is read-only (no clicks or typing reach the Mac) and needs a logged-in phone. Each picture is a JPEG at most 1,600 px on its longest side, taken with `screencapture`, shrunk with `sips`, sent, and deleted; nothing is kept on disk. Turn it off with `pocket-dev config set screenView false`.
+
+It needs **Screen Recording** for the program that runs Pocket Dev. Without it the picture shows only the wallpaper. The Admin page's Permissions panel shows whether it is allowed and opens the right System Settings page. The check looks for titled windows from other apps, because macOS hides those titles until Screen Recording is allowed; with no other window open it reports Unknown.
 
 ### Power
 
@@ -109,7 +142,35 @@ It does not quit protected apps (Finder, Dock, SystemUIServer, loginwindow, Wind
 - Optional: `claude` (Claude Code), `codex`, and `gh` (GitHub CLI, logged in with `gh auth login`). Features that need a missing tool show an error.
 - The phone needs internet access, because it loads xterm.js from `cdn.jsdelivr.net`.
 
-## Install and run
+## Install as a command
+
+Build a tarball and install it globally. Nothing is published to the npm registry.
+
+```sh
+npm pack
+npm install -g ./pocket-dev-1.0.0.tgz
+pocket-dev start
+```
+
+Or run `npm link` in this folder to use your working copy as `pocket-dev`.
+
+| Command | What it does |
+| --- | --- |
+| `pocket-dev start [--port N] [--admin-port N] [--no-open]` | Run the server in this terminal. The flags override `config.json` for this run. |
+| `pocket-dev config list` | Show every setting and the file it is saved in. The password hash shows as `<set>`. |
+| `pocket-dev config get <key>` | Show one setting. |
+| `pocket-dev config set <key> <value>` | Change a setting. The value is checked first, and a bad value changes nothing. |
+| `pocket-dev config unset <key>` | Go back to the default. |
+| `pocket-dev config path` | Print the config file path. |
+| `pocket-dev service install\|restart\|uninstall\|status\|logs` | Run it in the background (launchd), or manage that. |
+| `pocket-dev service autostart on\|off\|status` | Start at login or not. |
+| `pocket-dev qr`, `admin`, `connect`, `disconnect`, `awake` | The same as the `npm run` commands below. |
+
+`config set` accepts `port`, `adminPort`, `awake`, `requireApproval`, `maxDevices`, `chatIdleMinutes`, `batteryAlertPercent`, `temperatureAlertC`, `screenView`, and `allowedHosts` (comma separated). Run `pocket-dev help` for the ranges. `port` and `adminPort` apply after a restart (`pocket-dev service restart`); the rest apply right away. Change the password on the Admin page (`pocket-dev admin`).
+
+The config file is `~/.pocket-dev/config.json` (mode 0600). A `config.json` left in the package folder by an older version moves there on the first run, and the old file stays as `config.json.migrated`.
+
+## Install and run from the repository
 
 ```sh
 npm install
@@ -118,7 +179,7 @@ npm start
 
 `postinstall` marks node-pty's `spawn-helper` as executable, because node-pty 1.1.0 ships it without the execute bit.
 
-The first start writes `config.json` (mode 0600) and prints the password once, a login QR code, and the URL.
+The first start writes `~/.pocket-dev/config.json` (mode 0600) and prints the password once, a login QR code, and the URL.
 
 | Command | What it does |
 | --- | --- |
@@ -129,6 +190,7 @@ The first start writes `config.json` (mode 0600) and prints the password once, a
 | `npm run autostart -- on\|off\|status` | Turn the launchd agent's start at login on or off, or show it. |
 | `npm run service:install` | Install or restart the launchd agent `dev.pocket.server` (`--force` if the port is busy). |
 | `npm run service:uninstall` | Stop and remove the launchd agent. |
+| Settings → Restart / Update (phone), Service → Update now (Admin) | Restart the background service so it loads the latest code. The button says **Update** when a source file on disk is newer than the running server. Works only for the launchd service; a copy started with `npm start` refuses. Back in about 15 s, devices stay logged in, terminals end. |
 | `npm run service:status` | Show job state, URL, caffeinate assertions, and the last 20 log lines. |
 | `npm run service:logs` | Follow `~/Library/Logs/pocket-dev.log`. |
 | `npm run awake -- on\|plugged\|off\|status` | Set or show the Keep awake mode (`on` is `always`). |
@@ -140,7 +202,7 @@ The launchd agent writes `~/Library/LaunchAgents/dev.pocket.server.plist`, start
 
 ## Configuration
 
-`config.json` lives in the repository folder (or at `POCKET_DEV_CONFIG`). Pocket Dev rereads it at use, and app changes write back only the changed key, so you can edit it while the server runs.
+`config.json` lives in `~/.pocket-dev/` (or `POCKET_DEV_STATE_DIR`, or exactly at `POCKET_DEV_CONFIG`). Edit it by hand or with `pocket-dev config`. Pocket Dev rereads it at use, and app changes write back only the changed key, so you can edit it while the server runs.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -156,6 +218,9 @@ The launchd agent writes `~/Library/LaunchAgents/dev.pocket.server.plist`, start
 | `allowedHosts` | `[]` | Additional hostnames accepted by the phone listener. |
 | `chatDefaults` | saved by Chat | Last safe tool, folder, model, mode, and effort choices. Bypass and Full access are never silently remembered. |
 | `chatIdleMinutes` | `10` | Idle minutes before a chat engine stops. |
+| `batteryAlertPercent` | `20` | Alert when the Mac battery is at or below this percent and not charging, 5 to 90. |
+| `temperatureAlertC` | `40` | Alert when the battery temperature reaches this many °C, 30 to 70. |
+| `screenView` | `true` | Whether a logged-in phone may see the Mac's screen. `false` refuses with 403. |
 | `requireApproval` | `false` | New devices wait for approval on the Mac. |
 | `fileRoots` | home folder | Folders Files may show. |
 | `fileUploadMax` | 2 GiB | Files upload limit in bytes. |
@@ -177,6 +242,8 @@ Pocket Dev runs as your user, never as root, and never runs `sudo` itself.
 | Full Disk Access (maybe) | Files, for TCC-protected folders. |
 | Your `claude`, `codex`, and `gh` logins | Chat, terminals, Git. |
 | Your Mac password, typed by you in a terminal | Lid closed, sleep with Lid closed on, force shutdown. |
+
+The Admin page has a **Permissions** panel that shows each of these as Allowed, Not allowed, Waiting for you, or Not needed, plus whether `claude`, `codex`, and `gh` are ready. The first time you open the Admin page, a setup walks through the missing ones one at a time and every step can be skipped. **Run setup** repeats it, and **Check again** re-checks (it also re-checks when you return to the tab from System Settings). Control System Events is the only one macOS can prompt for; for the others the button opens the right System Settings page. Checking Control System Events can make macOS show its pop-up on the Mac. The panel is on the Admin page only, never on the phone listener.
 
 macOS grants TCC permissions to the app that started `node`: Terminal or VS Code for `npm start`, `node` for the launchd agent.
 

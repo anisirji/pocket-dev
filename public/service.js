@@ -9,6 +9,7 @@ const STYLE = `
 .sv-text small { color: var(--muted); font-size: 13px; }
 .sv-live { display: inline-flex; align-items: center; gap: 7px; }
 .sv-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok, #7ee787); box-shadow: 0 0 0 3px #7ee78726; }
+.sv-update { background: var(--accent); border-color: var(--accent); color: #08101e; }
 .sv-switch { appearance: none; flex: none; width: 50px; height: 30px; margin: 0; border-radius: 15px; background: #2c3445; position: relative; }
 .sv-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #c9d0dc; transition: transform .15s; }
 .sv-switch:checked { background: var(--accent); }
@@ -61,9 +62,64 @@ export async function renderServiceSection(container, api = window.api) {
   toggle.setAttribute('role', 'switch');
   auto.append(autoText, toggle);
 
-  container.replaceChildren(title, access, auto, err);
+  const restart = h('div', 'sv-row');
+  const restartText = h('div', 'sv-text');
+  restartText.append(h('b', null, 'Restart Pocket Dev'), h('small'));
+  const restartBtn = h('button', 'st-btn', 'Restart');
+  restartBtn.type = 'button';
+  restartBtn.disabled = true;
+  restart.append(restartText, restartBtn);
+
+  container.replaceChildren(title, access, restart, auto, err);
+
+  // The restart takes the page's own server down, so wait for it to answer again and then load the new code.
+  let busy = false;
+  async function reloadWhenBack(verb) {
+    busy = true;
+    restartBtn.disabled = true;
+    restartBtn.classList.remove('sv-update');
+    restartText.lastChild.textContent = 'Back in about 15 seconds. This page reloads by itself.';
+    const started = Date.now();
+    const tick = setInterval(() => { restartBtn.textContent = `${verb}… ${Math.floor((Date.now() - started) / 1000)}s`; }, 250);
+    await new Promise((r) => setTimeout(r, 4000));
+    for (let i = 0; i < 40; i++) {
+      try {
+        if ((await fetch('/api/status', { cache: 'no-store' })).ok) return location.reload();
+      } catch {}
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    clearInterval(tick);
+    busy = false;
+    restartBtn.textContent = 'Restart';
+    restartBtn.disabled = false;
+    restartText.lastChild.textContent = 'Pocket Dev has not come back yet. Check the Mac (pocket-dev service status), then try again.';
+  }
+  restartBtn.onclick = async () => {
+    if (!confirm('Restart Pocket Dev now? Open terminals end. You stay logged in.')) return;
+    err.textContent = '';
+    const verb = restartBtn.textContent === 'Update' ? 'Updating' : 'Restarting';
+    restartBtn.disabled = true;
+    restartBtn.textContent = `${verb}… 0s`;
+    try {
+      await api('POST', '/api/service/restart', {});
+    } catch (e) {
+      err.textContent = e.message;
+      restartBtn.disabled = false;
+      restartBtn.textContent = verb === 'Updating' ? 'Update' : 'Restart';
+      return;
+    }
+    reloadWhenBack(verb);
+  };
 
   const show = (svc) => {
+    if (busy) return;
+    const canRestart = svc.running && svc.isThisServer;
+    restartBtn.disabled = !canRestart;
+    restartBtn.classList.toggle('sv-update', canRestart && svc.updateReady);
+    restartBtn.textContent = svc.updateReady ? 'Update' : 'Restart';
+    restartText.lastChild.textContent = !canRestart
+      ? 'Pocket Dev is not running as the background service, so it cannot restart itself. Install the service from the admin page on the Mac.'
+      : svc.updateReady ? 'Newer code is on the Mac. Update to start using it.' : 'Loads the latest code on the Mac. Nothing newer is waiting right now.';
     toggle.checked = svc.autostart;
     toggle.disabled = !svc.installed;
     autoText.lastChild.textContent = svc.installed

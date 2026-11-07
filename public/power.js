@@ -39,6 +39,8 @@ const CSS = `
   .pw-seg button[aria-checked="true"] { background: var(--panel-2, #1b2130); color: var(--text, #d7dce5); box-shadow: inset 0 0 0 1px var(--accent, #6aa9ff); font-weight: 600; }
   .pw-seg button:disabled { opacity: .6; }
   .pw-hint, .pw-sub { margin: 0; color: var(--muted, #7d8799); font-size: 13px; }
+  .pw-temp.hot { color: #ff7b72; }
+  .pw-temp[hidden] { display: none; }
   .pw-status { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; }
   .pw-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted, #7d8799); }
   .pw-status.awake .pw-dot { background: #7ee787; }
@@ -132,6 +134,15 @@ function confirmBox(goLabel, onGo, { danger = false } = {}) {
       node.hidden = false;
     },
   };
+}
+
+// "Battery 31 °C · Thermal: normal". Thermal is how hard macOS is throttling; anything above normal is worth a look.
+const THERMAL_TEXT = { nominal: 'normal', fair: 'warm, slightly slowed', serious: 'hot, slowed down', critical: 'very hot, heavily slowed' };
+function temperatureLine(t) {
+  const parts = [];
+  if (t?.batteryC != null) parts.push(`Battery ${t.batteryC.toFixed(1)} °C`);
+  if (t?.thermal) parts.push(`Thermal: ${THERMAL_TEXT[t.thermal]}`);
+  return parts.join(' · ');
 }
 
 function statusLine(s) {
@@ -265,6 +276,7 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
   const status = el('p', 'pw-status');
   const statusText = el('span');
   status.append(el('span', 'pw-dot'), statusText);
+  const temp = el('p', 'pw-sub pw-temp');
   const err = el('p', 'pw-err');
 
   const lidVal = el('span', 'pw-val');
@@ -300,7 +312,7 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
     return b;
   });
   seg.append(...buttons);
-  root.append(el('h3', 'pw-title', 'Keep Mac awake'), seg, hint, status, err, lid, actions);
+  root.append(el('h3', 'pw-title', 'Keep Mac awake'), seg, hint, status, temp, err, lid, actions);
   container.append(root);
 
   let shown = null;
@@ -330,6 +342,9 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
     hint.textContent = MODES.find((m) => m.id === s.awake).hint;
     statusText.textContent = statusLine(s);
     status.classList.toggle('awake', s.stayingAwake);
+    temp.textContent = temperatureLine(s.temperature);
+    temp.classList.toggle('hot', s.temperature?.thermal === 'serious' || s.temperature?.thermal === 'critical');
+    temp.hidden = !temp.textContent;
     showLid(s);
     sleepButton.disabled = shutdownButton.disabled = s.updateInProgress;
     updateWarn.hidden = !s.updateInProgress;

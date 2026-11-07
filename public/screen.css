@@ -1,0 +1,15 @@
+/* Above Settings and the sleep screen, like Open apps. */
+.screen-sheet { position: fixed; inset: 0; z-index: 1100; display: flex; flex-direction: column; height: 100dvh; background: var(--bg); color: var(--text); }
+.screen-sheet[hidden] { display: none; }
+.screen-bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.screen-bar h2 { flex: 1; min-width: 0; margin: 0 4px; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.screen-btn { flex: none; height: 36px; padding: 0 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); font-size: 13px; }
+.screen-btn:active { background: var(--line); }
+.screen-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; background: #000; }
+.screen-img { display: block; width: 100%; height: auto; }
+.screen-img:not([src]) { display: none; }
+.screen-img.zoom { width: 260%; max-width: none; }
+.screen-error { margin: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid #5c2b2b; background: #2a1414; color: var(--danger); font-size: 14px; }
+.screen-error[hidden] { display: none; }
+.screen-note { flex: none; margin: 0; padding: 6px 10px 10px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); background: var(--panel); }
+.screen-note:empty { display: none; }
