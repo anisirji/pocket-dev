@@ -107,6 +107,8 @@ The service runs the server under `caffeinate -i -s`, so the Mac does not idle-s
 
 Pinned folders, recent folders, and shortcuts are saved in `config.json` as `folders`, `recentFolders`, and `shortcuts`. Set `POCKET_DEV_CONFIG` to use a config file somewhere else.
 
+You can edit `config.json` while the server runs. Pocket Dev reads it again for each request and writes back only the setting you change in the app, so your other edits stay. If a list is malformed, Pocket Dev ignores the part it cannot use, logs a warning, and leaves the file as it is. While the file is not valid JSON, changes from the app fail with a message until you fix it.
+
 ## Resume a laptop conversation
 
 Tap the clock icon (**Resume**) to list your recent Claude Code and Codex conversations from `~/.claude` and `~/.codex` on the Mac. Tap one to read its last messages, then tap **Continue on phone**. Pocket Dev opens a terminal in the conversation's folder, runs `claude --resume <id>` or `codex resume <id>`, and names the tab `claude · <folder>`. A second terminal for the same folder gets a number, as folder tabs do.
