@@ -4,15 +4,17 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
 import { handleGitApi } from './git.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = path.join(ROOT, 'config.json');
+const CONFIG_PATH = process.env.POCKET_DEV_CONFIG || path.join(ROOT, 'config.json');
 const SCROLLBACK_MAX = 500_000;
 const BODY_MAX = 64_000;
+const UPLOAD_MAX = 25 * 1024 * 1024;
 
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
@@ -26,6 +28,12 @@ function loadConfig() {
 const config = loadConfig();
 const PASSWORD = process.env.POCKET_DEV_PASSWORD || config.password;
 const PORT = Number(process.env.PORT) || config.port || 7777;
+
+function saveConfig() {
+  const tmp = `${CONFIG_PATH}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+  fs.renameSync(tmp, CONFIG_PATH);
+}
 
 function lanIp() {
   const ifaces = os.networkInterfaces();
@@ -54,13 +62,125 @@ function cookieToken(req) {
 
 const isAuthed = (req) => tokens.has(cookieToken(req));
 
+const HOME = os.homedir();
+const RECENT_MAX = 5;
+const PROJECT_ROOTS = [path.join(HOME, 'Desktop'), path.join(HOME, 'Desktop', 'Projects')];
+
+const expandHome = (p) => (p === '~' || p.startsWith('~/') ? HOME + p.slice(1) : p);
+const absDir = (p) => path.resolve(HOME, expandHome(p.trim()));
+const isDir = (p) => fs.statSync(p, { throwIfNoEntry: false })?.isDirectory() ?? false;
+const resolveDir = (p) => (typeof p === 'string' && p.trim() && isDir(absDir(p)) ? absDir(p) : null);
+
+const folderName = (dir) => (dir === HOME ? '~' : path.basename(dir) || dir);
+const folderView = (dir) => ({ name: folderName(dir), path: dir });
+
+function listProjects() {
+  const found = [];
+  for (const root of PROJECT_ROOTS) {
+    let entries;
+    try { entries = fs.readdirSync(root, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name.startsWith('.') || e.name === 'node_modules') continue;
+      const dir = path.join(root, e.name);
+      if (fs.existsSync(path.join(dir, '.git')) || fs.existsSync(path.join(dir, 'package.json'))) found.push(dir);
+    }
+  }
+  return found.sort((a, b) => path.basename(a).localeCompare(path.basename(b), undefined, { sensitivity: 'base' }));
+}
+
+function listFolders() {
+  const existing = (list) => list.map(resolveDir).filter(Boolean).map(folderView);
+  return { home: HOME, pinned: existing(config.folders), recent: existing(config.recentFolders), projects: listProjects().map(folderView) };
+}
+
+function setPinned(dir, pinned) {
+  if (config.folders.includes(dir) === pinned) return;
+  config.folders = pinned ? [...config.folders, dir] : config.folders.filter((p) => p !== dir);
+  saveConfig();
+}
+
+// Home is always the sheet's first row, so keeping it out of recent leaves all five slots for real projects.
+function rememberRecent(dir) {
+  if (dir === HOME) return;
+  config.recentFolders = [dir, ...config.recentFolders.filter((p) => p !== dir)].slice(0, RECENT_MAX);
+  saveConfig();
+}
+
+const DEFAULT_SHORTCUTS = ['claude', 'codex', 'npm run dev', 'git status', 'git pull'];
+const isShortcut = (s) => typeof s === 'string' && s.trim() !== '' && s.length <= 200 && !/[\x00-\x1f\x7f]/.test(s);
+const isShortcutList = (v) => Array.isArray(v) && v.length <= 30 && v.every(isShortcut);
+const isPathList = (v) => Array.isArray(v) && v.every((p) => typeof p === 'string');
+
+// config.json is edited by hand too; malformed lists fall back here once so the handlers can trust them.
+if (!isPathList(config.folders)) config.folders = [];
+if (!isPathList(config.recentFolders)) config.recentFolders = [];
+if (!isShortcutList(config.shortcuts)) config.shortcuts = DEFAULT_SHORTCUTS;
+
+const UPLOAD_DIR = path.join(HOME, '.pocket-dev', 'uploads');
+
+function uploadName(header) {
+  let name = '';
+  try { name = decodeURIComponent(header ?? ''); } catch {}
+  name = name.split(/[\\/]/).pop()
+    .replace(/[\x00-\x1f\x7f:]/g, '')
+    .replace(/\s+/g, '-')
+    .slice(-100)
+    .replace(/^[.-]+/, '');
+  return name || 'upload';
+}
+
+function timestamp(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+function openUploadFile(name) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true, mode: 0o700 });
+  const stamp = timestamp();
+  for (let n = 1; ; n++) {
+    const file = path.join(UPLOAD_DIR, `${stamp}-${n === 1 ? '' : `${n}-`}${name}`);
+    try {
+      return { file, fd: fs.openSync(file, 'wx', 0o600) };
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+    }
+  }
+}
+
+function tooLarge(res) {
+  res.setHeader('connection', 'close');
+  sendJson(res, 413, { error: 'File is larger than 25 MB' });
+}
+
+async function upload(req, res) {
+  if (Number(req.headers['content-length']) > UPLOAD_MAX) return tooLarge(res);
+  const { file, fd } = openUploadFile(uploadName(req.headers['x-filename']));
+  let size = 0;
+  try {
+    await pipeline(req, async function* (chunks) {
+      for await (const chunk of chunks) {
+        size += chunk.length;
+        if (size > UPLOAD_MAX) throw new Error('File is larger than 25 MB');
+        yield chunk;
+      }
+    }, fs.createWriteStream(null, { fd }));
+  } catch (err) {
+    fs.rmSync(file, { force: true });
+    if (size > UPLOAD_MAX) return tooLarge(res);
+    throw err;
+  }
+  sendJson(res, 201, { path: file });
+}
+
 const sessions = new Map();
 
-function nextTitle() {
+function nextTitle(cwd) {
+  const base = folderName(cwd);
   const taken = new Set([...sessions.values()].map((s) => s.title));
-  let n = 1;
-  while (taken.has(`Terminal ${n}`)) n++;
-  return `Terminal ${n}`;
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base} ${n}`)) n++;
+  return `${base} ${n}`;
 }
 
 const broadcast = (session, msg) => {
@@ -91,7 +211,7 @@ function createSession(cwd) {
   });
   const session = {
     id: crypto.randomBytes(6).toString('hex'),
-    title: nextTitle(),
+    title: nextTitle(cwd),
     cwd,
     pty: proc,
     scrollback: '',
@@ -266,17 +386,42 @@ async function handleApi(req, res, url) {
     case 'GET sessions':
       return sendJson(res, 200, [...sessions.values()].map(sessionView));
     case 'POST sessions': {
-      const { cwd = os.homedir() } = await readJson(req);
-      if (typeof cwd !== 'string' || !fs.statSync(cwd, { throwIfNoEntry: false })?.isDirectory()) {
-        return sendJson(res, 400, { error: `Not a directory: ${cwd}` });
-      }
-      return sendJson(res, 201, sessionView(createSession(cwd)));
+      const { cwd = HOME } = await readJson(req);
+      const dir = resolveDir(cwd);
+      if (!dir) return sendJson(res, 400, { error: `Not a folder: ${cwd}` });
+      const session = createSession(dir);
+      rememberRecent(dir);
+      return sendJson(res, 201, sessionView(session));
     }
     case 'DELETE sessions/:key': {
       const session = sessions.get(key);
       if (!session) return sendJson(res, 404, { error: 'No such session' });
       destroySession(session);
       return sendJson(res, 204);
+    }
+    case 'GET folders':
+      return sendJson(res, 200, listFolders());
+    case 'PUT folders/:key': {
+      if (key !== 'pinned') return sendJson(res, 404, { error: 'Not found' });
+      const { path: given, pinned } = await readJson(req);
+      if (typeof pinned !== 'boolean') return sendJson(res, 400, { error: 'Expected { path, pinned }' });
+      const dir = resolveDir(given);
+      if (!dir) return sendJson(res, 400, { error: `Not a folder: ${given}` });
+      setPinned(dir, pinned);
+      return sendJson(res, 200, listFolders());
+    }
+    case 'POST upload':
+      return upload(req, res);
+    case 'GET shortcuts':
+      return sendJson(res, 200, config.shortcuts);
+    case 'PUT shortcuts': {
+      const list = await readJson(req);
+      if (!isShortcutList(list)) {
+        return sendJson(res, 400, { error: 'Shortcuts must be a list of up to 30 one-line commands, each 1 to 200 characters.' });
+      }
+      config.shortcuts = list;
+      saveConfig();
+      return sendJson(res, 200, list);
     }
     case 'GET forwards':
       return sendJson(res, 200, listForwards());

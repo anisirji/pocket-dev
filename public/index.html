@@ -60,12 +60,50 @@
   #inputBar { display: flex; gap: 6px; padding: 6px; border-top: 1px solid var(--line); background: var(--panel); }
   #cmd { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 16px; outline: none; }
   #cmd:focus { border-color: var(--accent); }
+  #attach { flex: none; width: 42px; height: 42px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-size: 18px; }
+  #attach:active { background: var(--line); }
+  #uploadStatus { position: absolute; left: 10px; bottom: 12px; z-index: 5; max-width: calc(100% - 130px); padding: 8px 12px; border-radius: 17px; background: var(--panel-2); border: 1px solid var(--line); box-shadow: 0 2px 10px #0008; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #uploadStatus.error { color: var(--danger); white-space: normal; }
   #send { height: 42px; padding: 0 16px; border-radius: 10px; background: var(--accent); color: #08101e; font-weight: 600; }
 
   #keys { display: flex; gap: 6px; padding: 0 6px 6px; overflow-x: auto; background: var(--panel); scrollbar-width: none; }
   #keys::-webkit-scrollbar { display: none; }
   .key { flex: none; min-width: 52px; height: 42px; padding: 0 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-family: var(--mono); font-size: 13px; }
   .key:active, .icon-btn:active { background: var(--line); }
+
+  .layer { position: absolute; inset: 0; z-index: 20; }
+  #sheet { display: flex; flex-direction: column; justify-content: flex-end; background: #000a; }
+  #sheetPanel { display: flex; flex-direction: column; max-height: 80%; border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; background: var(--panel); }
+  .layer-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 6px 8px 14px; }
+  .layer-head h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
+  #sheetBody { overflow-y: auto; overscroll-behavior: contain; padding: 0 6px; }
+  #sheetFoot { flex: none; padding: 0 6px 10px; }
+  .sheet-label { margin: 12px 10px 2px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .row { display: flex; align-items: center; gap: 2px; }
+  .row-main { flex: 1; min-width: 0; min-height: 48px; padding: 5px 10px; border-radius: 10px; text-align: left; }
+  .row-main:active, .row-btn:active { background: var(--panel-2); }
+  .row-name, .row-path { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-path { margin-top: 1px; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .row-btn { flex: none; width: 42px; height: 42px; border-radius: 10px; color: var(--muted); font-size: 18px; }
+  .row-btn.on { color: #f0c674; }
+  .row-btn:disabled { opacity: .3; }
+  .sheet-form { display: flex; gap: 6px; padding: 10px 4px 0; }
+  .sheet-form input { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 16px; outline: none; }
+  .sheet-form input:focus { border-color: var(--accent); }
+  .sheet-form .primary { height: 42px; border-radius: 10px; }
+  .sheet-note { margin: 10px 10px 0; color: var(--muted); font-size: 13px; }
+  .sheet-note:empty { display: none; }
+  .sheet-note.error { color: var(--danger); }
+  .sheet-act { height: 36px; padding: 0 14px; border-radius: 8px; color: var(--accent); font-weight: 600; }
+  .row-main.cmd, .row-text { font-family: var(--mono); font-size: 14px; }
+  .row-text { flex: 1; min-width: 0; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row.editing { min-height: 48px; }
+  #textView { display: flex; flex-direction: column; background: var(--bg); }
+  #textView .layer-head { border-bottom: 1px solid var(--line); background: var(--panel); }
+  #textTitle.ok { color: #7ee787; }
+  #textTitle.error { color: #f0c674; }
+  #textPre { flex: 1; min-height: 0; margin: 0; padding: 8px 10px 16px; overflow: auto; overscroll-behavior: contain; font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+  .key.icon { min-width: 44px; padding: 0; font-family: inherit; font-size: 17px; }
 </style>
 </head>
 <body>
@@ -89,12 +127,26 @@
   <main id="terms">
     <div id="badge" hidden></div>
     <button id="latest" hidden>↓ latest</button>
+    <button id="uploadStatus" hidden></button>
   </main>
   <form id="inputBar">
+    <button id="attach" type="button" aria-label="Attach a file">📎</button>
+    <input id="file" type="file" accept="image/*,*/*" multiple hidden>
     <input id="cmd" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" placeholder="Type a command">
     <button id="send">Send</button>
   </form>
   <div id="keys"></div>
+  <div id="textView" class="layer" hidden>
+    <div class="layer-head"><h2 id="textTitle"></h2><button id="copyAll" class="primary">Copy all</button><button id="textClose" class="icon-btn">Close</button></div>
+    <pre id="textPre"></pre>
+  </div>
+  <div id="sheet" class="layer" hidden>
+    <section id="sheetPanel">
+      <div class="layer-head"><h2 id="sheetTitle"></h2><span id="sheetAction"></span><button id="sheetClose" class="icon-btn" aria-label="Close">✕</button></div>
+      <div id="sheetBody"></div>
+      <div id="sheetFoot"><div id="sheetFormSlot"></div><p id="sheetNote" class="sheet-note"></p></div>
+    </section>
+  </div>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -220,8 +272,8 @@ async function syncSessions() {
   renderTabs();
 }
 
-async function newSession() {
-  const s = await api('POST', '/api/sessions', {});
+async function newSession(cwd) {
+  const s = await api('POST', '/api/sessions', cwd ? { cwd } : {});
   activate(makeView(s).id);
 }
 
@@ -350,6 +402,16 @@ function keepFocus(button) {
   button.addEventListener('mousedown', (e) => e.preventDefault());
 }
 
+function iconKey(label, ariaLabel, onClick) {
+  const key = h('button', 'key icon', label);
+  key.setAttribute('aria-label', ariaLabel);
+  keepFocus(key);
+  key.onclick = onClick;
+  $('keys').appendChild(key);
+}
+iconKey('⚡', 'Shortcuts', () => openShortcuts());
+iconKey('📋', 'Copy output', () => openText());
+
 for (const [label, seq] of KEYS) {
   const key = h('button', 'key', label);
   keepFocus(key);
@@ -364,13 +426,7 @@ for (const [label, seq] of KEYS) {
   $('keys').appendChild(key);
 }
 
-keepFocus($('send'));
-$('inputBar').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const view = active();
-  if (!view) return;
-  const text = $('cmd').value;
-  $('cmd').value = '';
+function runCommand(view, text) {
   if (text) {
     sendInput(view, text);
     // A TUI that detects pastes by chunk can read text+CR arriving together as a pasted newline, not a submit.
@@ -380,6 +436,16 @@ $('inputBar').addEventListener('submit', (e) => {
   }
   view.term.scrollToBottom();
   closeKeyboard();
+}
+
+keepFocus($('send'));
+$('inputBar').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const view = active();
+  if (!view) return;
+  const text = $('cmd').value;
+  $('cmd').value = '';
+  runCommand(view, text);
 });
 
 $('latest').addEventListener('click', () => {
@@ -388,7 +454,317 @@ $('latest').addEventListener('click', () => {
 });
 keepFocus($('latest'));
 
-$('new').addEventListener('click', () => newSession().catch((err) => alert(err.message)));
+// One layer at a time; each pushes a history entry so Android's back gesture closes it instead of leaving the page.
+let layer = null;
+function showLayer(name) {
+  closeKeyboard();
+  if (!layer) history.pushState({ layer: true }, '');
+  layer = name;
+  renderLayer();
+}
+function hideLayer() {
+  if (!layer) return;
+  layer = null;
+  renderLayer();
+  if (history.state?.layer) history.back();
+}
+window.addEventListener('popstate', () => {
+  layer = null;
+  renderLayer();
+});
+const SHEETS = { folders: renderFolders, shortcuts: renderShortcuts };
+function renderLayer() {
+  $('sheet').hidden = !SHEETS[layer];
+  $('textView').hidden = layer !== 'text';
+  SHEETS[layer]?.();
+}
+function setSheet({ title, action, rows = [], form, note = '', error = false }) {
+  $('sheetTitle').textContent = title;
+  $('sheetAction').replaceChildren(...(action ? [action] : []));
+  $('sheetBody').replaceChildren(...rows);
+  // Re-inserting the form would blur its input and drop the phone keyboard after every add.
+  if ($('sheetFormSlot').firstChild !== form) $('sheetFormSlot').replaceChildren(...(form ? [form] : []));
+  $('sheetNote').textContent = note;
+  $('sheetNote').classList.toggle('error', error);
+}
+$('sheetClose').addEventListener('click', hideLayer);
+$('sheet').addEventListener('click', (e) => e.target === $('sheet') && hideLayer());
+
+function sheetForm(placeholder, buttonLabel, onSubmit) {
+  const form = h('form', 'sheet-form');
+  const input = h('input');
+  Object.assign(input, { type: 'text', placeholder, autocomplete: 'off', autocapitalize: 'off', spellcheck: false, enterKeyHint: 'go' });
+  input.setAttribute('autocorrect', 'off');
+  form.append(input, h('button', 'primary', buttonLabel));
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (input.value.trim()) onSubmit(input.value.trim(), input);
+  });
+  return form;
+}
+
+let folders = null;
+let folderNote = '';
+const otherPath = sheetForm('Other path, e.g. ~/app', 'Open', (value) => openFolder(value));
+
+async function openFolders() {
+  folderNote = '';
+  showLayer('folders');
+  try { folders = await api('GET', '/api/folders'); } catch (err) { folderNote = err.message; }
+  if (layer === 'folders') renderFolders();
+}
+
+async function openFolder(dir) {
+  try {
+    await newSession(dir);
+    otherPath.querySelector('input').value = '';
+    hideLayer();
+  } catch (err) {
+    folderNote = err.message;
+    renderFolders();
+  }
+}
+
+async function togglePin(dir, pinned) {
+  try { folders = await api('PUT', '/api/folders/pinned', { path: dir, pinned }); } catch (err) { folderNote = err.message; }
+  renderFolders();
+}
+
+function renderFolders() {
+  if (!folders) return setSheet({ title: 'New terminal', note: folderNote || 'Loading…', error: !!folderNote });
+  const { home, pinned, recent, projects } = folders;
+  const tilde = (p) => (p === home ? '~' : p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p);
+  const pinnedPaths = new Set(pinned.map((f) => f.path));
+  const shown = new Set([home]);
+  const row = (name, dir, pinnable) => {
+    const main = h('button', 'row-main');
+    main.append(h('span', 'row-name', name), h('span', 'row-path', tilde(dir)));
+    main.onclick = () => openFolder(dir);
+    const wrap = h('div', 'row');
+    wrap.append(main);
+    if (!pinnable) return wrap;
+    const on = pinnedPaths.has(dir);
+    const star = h('button', `row-btn${on ? ' on' : ''}`, on ? '★' : '☆');
+    star.setAttribute('aria-label', `${on ? 'Unpin' : 'Pin'} ${name}`);
+    star.onclick = () => togglePin(dir, !on);
+    wrap.append(star);
+    return wrap;
+  };
+  // A folder can be pinned, recent and a project at once; list it once, in the first section it belongs to.
+  const section = (label, list) => {
+    const rows = list.filter((f) => !shown.has(f.path) && shown.add(f.path)).map((f) => row(f.name, f.path, true));
+    return rows.length ? [h('p', 'sheet-label', label), ...rows] : [];
+  };
+  setSheet({
+    title: 'New terminal',
+    rows: [row('Home', home, false), ...section('Pinned', pinned), ...section('Recent', recent), ...section('Projects', projects)],
+    form: otherPath,
+    note: folderNote,
+    error: true,
+  });
+}
+
+$('new').addEventListener('click', openFolders);
+
+const TEXT_LINES = 300;
+
+// Wrapped rows are one logical line; joining them keeps long commands and URLs copyable in one piece.
+function bufferText(term) {
+  const buf = term.buffer.active;
+  const lines = [];
+  for (let i = 0; i < buf.length; i++) {
+    const row = buf.getLine(i);
+    const text = row.translateToString(!buf.getLine(i + 1)?.isWrapped);
+    if (row.isWrapped && lines.length) lines[lines.length - 1] += text;
+    else lines.push(text);
+  }
+  while (lines.length && !lines.at(-1)) lines.pop();
+  return lines.slice(-TEXT_LINES).join('\n');
+}
+
+function openText() {
+  const view = active();
+  if (!view) return;
+  showLayer('text');
+  $('textTitle').textContent = `Last ${TEXT_LINES} lines`;
+  $('textTitle').className = '';
+  $('textPre').textContent = bufferText(view.term);
+  $('textPre').scrollTop = $('textPre').scrollHeight;
+}
+
+// Plain http on the LAN is not a secure context, so navigator.clipboard is missing there; execCommand still works.
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {}
+  }
+  const area = h('textarea');
+  area.value = text;
+  area.readOnly = true;
+  area.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(area);
+  area.select();
+  area.setSelectionRange(0, text.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch {}
+  area.remove();
+  return ok;
+}
+
+$('copyAll').addEventListener('click', async () => {
+  const ok = await copyText($('textPre').textContent);
+  $('textTitle').textContent = ok ? 'Copied' : 'Long-press to select';
+  $('textTitle').className = ok ? 'ok' : 'error';
+});
+$('textClose').addEventListener('click', hideLayer);
+
+let shortcuts = null;
+let shortcutNote = '';
+let editingShortcuts = false;
+const addShortcut = sheetForm('Command, e.g. npm test', 'Add', (text, input) => {
+  input.value = '';
+  saveShortcuts([...shortcuts, text]);
+});
+addShortcut.querySelector('input').maxLength = 200;
+
+async function openShortcuts() {
+  shortcutNote = '';
+  editingShortcuts = false;
+  showLayer('shortcuts');
+  try { shortcuts = await api('GET', '/api/shortcuts'); } catch (err) { shortcutNote = err.message; }
+  if (layer === 'shortcuts') renderShortcuts();
+}
+
+async function saveShortcuts(next) {
+  shortcutNote = '';
+  try { shortcuts = await api('PUT', '/api/shortcuts', next); } catch (err) { shortcutNote = err.message; }
+  renderShortcuts();
+}
+
+function runShortcut(text) {
+  const view = active();
+  if (!view) return;
+  hideLayer();
+  runCommand(view, text);
+}
+
+function renderShortcuts() {
+  if (!shortcuts) return setSheet({ title: 'Shortcuts', note: shortcutNote || 'Loading…', error: !!shortcutNote });
+  const toggle = h('button', 'sheet-act', editingShortcuts ? 'Done' : 'Edit');
+  toggle.onclick = () => {
+    editingShortcuts = !editingShortcuts;
+    renderShortcuts();
+  };
+  const move = (i, by) => {
+    const next = [...shortcuts];
+    [next[i], next[i + by]] = [next[i + by], next[i]];
+    saveShortcuts(next);
+  };
+  const iconButton = (label, aria, disabled, onClick) => {
+    const b = h('button', 'row-btn', label);
+    b.setAttribute('aria-label', aria);
+    b.disabled = disabled;
+    b.onclick = onClick;
+    return b;
+  };
+  const rows = shortcuts.map((text, i) => {
+    const row = h('div', `row${editingShortcuts ? ' editing' : ''}`);
+    if (!editingShortcuts) {
+      const run = h('button', 'row-main cmd', text);
+      run.onclick = () => runShortcut(text);
+      row.append(run);
+      return row;
+    }
+    row.append(
+      h('span', 'row-text', text),
+      iconButton('↑', `Move ${text} up`, i === 0, () => move(i, -1)),
+      iconButton('↓', `Move ${text} down`, i === shortcuts.length - 1, () => move(i, 1)),
+      iconButton('✕', `Delete ${text}`, false, () => saveShortcuts(shortcuts.filter((_, j) => j !== i))),
+    );
+    return row;
+  });
+  setSheet({
+    title: 'Shortcuts',
+    action: toggle,
+    rows,
+    form: editingShortcuts && addShortcut,
+    note: shortcutNote || (shortcuts.length ? '' : 'No shortcuts yet. Tap Edit to add one.'),
+    error: !!shortcutNote,
+  });
+}
+
+const UPLOAD_MAX = 25 * 1024 * 1024;
+
+const shellQuote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
+
+function insertAtCursor(text) {
+  const cmd = $('cmd');
+  const start = cmd.selectionStart ?? cmd.value.length;
+  const pad = start && !/\s/.test(cmd.value[start - 1]) ? ' ' : '';
+  cmd.setRangeText(`${pad}${text} `, start, cmd.selectionEnd ?? start, 'end');
+  cmd.scrollLeft = cmd.scrollWidth;
+}
+
+let statusTimer = 0;
+function showStatus(text, error = false) {
+  clearTimeout(statusTimer);
+  $('uploadStatus').hidden = !text;
+  $('uploadStatus').textContent = text;
+  $('uploadStatus').classList.toggle('error', error);
+  if (text && error) statusTimer = setTimeout(showStatus, 6000, '');
+}
+$('uploadStatus').addEventListener('click', () => showStatus(''));
+keepFocus($('uploadStatus'));
+
+function uploadFile(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload');
+    xhr.setRequestHeader('x-filename', encodeURIComponent(file.name));
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () => {
+      if (xhr.status === 401) location.replace('/login.html');
+      let data = null;
+      try { data = JSON.parse(xhr.responseText); } catch {}
+      if (xhr.status === 201) resolve(data.path);
+      else reject(new Error(data?.error || `HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error('cannot reach the Mac'));
+    xhr.send(file);
+  });
+}
+
+async function uploadFiles(files) {
+  let failed = false;
+  for (const file of files) {
+    try {
+      if (file.size > UPLOAD_MAX) throw new Error('larger than 25 MB');
+      showStatus(`Uploading ${file.name}…`);
+      const path = await uploadFile(file, (p) => showStatus(`Uploading ${file.name} ${Math.round(p * 100)}%`));
+      insertAtCursor(shellQuote(path));
+    } catch (err) {
+      failed = true;
+      showStatus(`${file.name}: ${err.message}`, true);
+    }
+  }
+  if (!failed) showStatus('');
+}
+
+keepFocus($('attach'));
+$('attach').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', () => {
+  const files = [...$('file').files];
+  $('file').value = '';
+  uploadFiles(files);
+});
+$('cmd').addEventListener('paste', (e) => {
+  const files = [...(e.clipboardData?.files ?? [])];
+  if (!files.length) return;
+  e.preventDefault();
+  uploadFiles(files);
+});
 
 let forwards = [];
 function renderForwards() {
