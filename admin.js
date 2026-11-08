@@ -371,6 +371,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
     const { pathname, searchParams } = new URL(req.url, 'http://localhost');
     try {
       if (req.method === 'GET' && pathname === '/api/folders/browse') return send(200, await browseFolders(new URL(req.url, 'http://localhost')));
+      if (req.method === 'POST' && pathname === '/api/folders/create') return send(200, await browseFolders.create(await readJson(req)));
       if (pathname === '/api/messages' || pathname.startsWith('/api/messages/')) return messages.handleApi(req, res, { mac: true, headers: HEADERS });
       if (pathname === '/api/collaborators' || pathname.startsWith('/api/collaborators/')) {
         const r = await collaborators.ownerApi(req.method, pathname, SAFE_METHODS.has(req.method) ? {} : await readJson(req), true);

@@ -180,3 +180,18 @@ test('sort choice and direction are sent with every listing request', async () =
   assert.equal(f.calls.at(-1).sort, 'modified');
   assert.equal(f.calls.at(-1).order, 'desc');
 });
+
+test('New creates a folder in the current directory and opens it', async () => {
+  const f = fixture({ respond: (c) => c.method === 'POST' ? { path: '/home/Fresh' } : listing(c.path, []) });
+  await f.field.button('Browse folders').onclick();
+  const form = f.field.all('form')[0];
+  assert.equal(form.hidden, true);
+  f.field.button('+ New').onclick();
+  assert.equal(form.hidden, false);
+  const name = f.field.cls('fp-newname');
+  name.value = 'Fresh'; f.field.all('select')[1].value = 'folder';
+  form.onsubmit({ preventDefault() {} }); await settle(); await settle();
+  assert.equal(f.calls.find((c) => c.method === 'POST').path, '/home');
+  assert.equal(f.calls.at(-1).path, '/home/Fresh');
+  assert.equal(form.hidden, true);
+});

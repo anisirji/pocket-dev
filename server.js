@@ -613,6 +613,7 @@ async function handleApi(req, res, url) {
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
   if (req.method === 'GET' && url.pathname === '/api/folders/browse') return sendJson(res, 200, await browseFolders(url));
+  if (req.method === 'POST' && url.pathname === '/api/folders/create') return sendJson(res, 200, await browseFolders.create(await readJson(req)));
   // Switching between addresses exists only once internet access is on; before that these routes are not there.
   if ((resource === 'handoff' || resource === 'connection') && !internetOn()) return sendJson(res, 404, { error: 'Not found' });
   if (resource === 'collaborators') {

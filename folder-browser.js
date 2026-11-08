@@ -30,7 +30,28 @@ export function createFolderBrowser({ home = os.homedir(), config = { read: () =
     }
     return result;
   }
-  return async function browse(url) {
+  async function create({ parent, name, kind } = {}) {
+    if (typeof name !== 'string' || typeof parent !== 'string' || parent.includes('\0')) throw error(400, 'Enter a name.');
+    name = name.trim();
+    if (!name) throw error(400, 'Enter a name.');
+    if (name === '.' || name === '..' || /[/\0]/.test(name) || Buffer.byteLength(name) > 255) throw error(400, 'Use a name without slashes.');
+    if (kind !== 'folder' && kind !== 'file') throw error(400, 'Choose folder or file.');
+    try {
+      const dir = await fs.realpath(path.resolve(home, expand(parent)));
+      if (!(await fs.stat(dir)).isDirectory()) throw error(400, 'That location is a file. Choose a folder.');
+      const target = path.join(dir, name);
+      if (kind === 'folder') await fs.mkdir(target);
+      else await (await fs.open(target, 'wx')).close();
+      return { path: target, name, kind };
+    } catch (err) {
+      if (err.status) throw err;
+      if (err.code === 'EEXIST') throw error(409, `"${name}" already exists here.`);
+      if (err.code === 'ENOENT') throw error(404, 'This folder no longer exists. Choose another location.');
+      if (['EACCES', 'EPERM', 'EROFS'].includes(err.code)) throw error(403, 'macOS has not allowed Pocket Dev to create items in this folder.');
+      throw err;
+    }
+  }
+  return Object.assign(async function browse(url) {
     const given = url.searchParams.get('path') || home;
     if (given.includes('\0')) throw error(400, 'Choose a valid folder.');
     try {
@@ -69,5 +90,5 @@ export function createFolderBrowser({ home = os.homedir(), config = { read: () =
       if (['EACCES', 'EPERM'].includes(err.code)) throw error(403, 'macOS has not allowed Pocket Dev to open this folder. Choose another folder or allow access on the Mac.');
       throw err;
     }
-  };
+  }, { create });
 }

@@ -97,3 +97,19 @@ test('folders sort by name, date modified or date created, ascending or descendi
   assert.deepEqual(await names({ sort: 'bogus' }), ['a', 'b', 'c']);
   assert.deepEqual(Object.keys((await get({ path: dir, sort: 'modified' })).entries[0]), ['name', 'path']);
 });
+
+test('create makes a folder or an empty file, and refuses bad names and duplicates', async (t) => {
+  const { home, root } = fixture(t);
+  const browse = createFolderBrowser({ home });
+  const make = (body) => browse.create({ parent: home, ...body });
+  assert.equal((await make({ name: ' new dir ', kind: 'folder' })).name, 'new dir');
+  assert.ok(fs.statSync(path.join(home, 'new dir')).isDirectory());
+  await make({ name: 'a.txt', kind: 'file' });
+  assert.equal(fs.readFileSync(path.join(home, 'a.txt'), 'utf8'), '');
+  for (const [body, status] of [[{ name: 'a.txt', kind: 'file' }, 409], [{ name: 'new dir', kind: 'folder' }, 409], [{ name: '../x', kind: 'folder' }, 400],
+    [{ name: '..', kind: 'folder' }, 400], [{ name: '  ', kind: 'folder' }, 400], [{ name: 'x', kind: 'link' }, 400], [{ name: 'x', kind: 'folder', parent: path.join(home, 'a.txt') }, 400],
+    [{ name: 'x', kind: 'folder', parent: path.join(root, 'nope') }, 404]]) {
+    await assert.rejects(make(body), (e) => e.status === status, JSON.stringify(body));
+  }
+  assert.ok(!fs.existsSync(path.join(root, 'x')));
+});

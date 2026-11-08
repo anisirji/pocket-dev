@@ -48,7 +48,17 @@
     };
     syncOrder();
     const saveSort = () => { try { localStorage.setItem(SORT_KEY, JSON.stringify({ sort: sortSelect.value, order: descending ? 'desc' : 'asc' })); } catch { /* Private mode keeps the choice for this picker only. */ } };
-    toolbar.append(back, up, sortSelect, order, hiddenLabel);
+    const create_ = button('+ New', () => { newForm.hidden = !newForm.hidden; if (!newForm.hidden) newName.focus(); }, 'fp-new');
+    create_.setAttribute('aria-label', 'Create a new folder or file here');
+    toolbar.append(back, up, sortSelect, order, create_, hiddenLabel);
+    const newForm = node('form', 'fp-newform'); newForm.hidden = true;
+    const newName = node('input', 'fp-newname'); newName.type = 'text'; newName.placeholder = 'Name'; newName.setAttribute('aria-label', 'New item name');
+    newName.autocapitalize = 'off'; newName.autocomplete = 'off'; newName.spellcheck = false;
+    const kindSelect = node('select', 'fp-sort'); kindSelect.setAttribute('aria-label', 'Create a');
+    for (const [value, text] of [['folder', 'Folder'], ['file', 'File']]) { const o = node('option', '', text); o.value = value; kindSelect.append(o); }
+    const make = button('Create', () => submitNew(), 'fp-primary');
+    newForm.append(newName, kindSelect, make);
+    newForm.onsubmit = (event) => { event.preventDefault(); submitNew(); };
     const crumbs = node('nav', 'fp-crumbs'); crumbs.setAttribute('aria-label', 'Folder location');
     const search = node('input', 'fp-search');
     search.type = 'search'; search.placeholder = 'Find a folder here'; search.setAttribute('aria-label', 'Find a folder here');
@@ -65,7 +75,7 @@
     }, 'fp-primary');
     const cancel = button('Cancel', () => { close(); onCancel(); });
     footer.append(selected, cancel, choose);
-    element.append(heading, locations, toolbar, crumbs, search, status, list, footer);
+    element.append(heading, locations, toolbar, newForm, crumbs, search, status, list, footer);
     let current = null, sequence = 0, history = [], timer, opener = null, browsingPath = '';
     const sync = () => {
       back.disabled = !history.length;
@@ -93,10 +103,11 @@
           if (entry.path === data.path) crumb.setAttribute('aria-current', 'location');
           return crumb;
         }));
+        crumbs.scrollLeft = crumbs.scrollWidth;
         locations.replaceChildren(...data.shortcuts.map((entry) => button(entry.name, () => navigate(entry.path))));
         list.replaceChildren(...data.entries.map((entry) => {
           const row = button('', () => navigate(entry.path), 'fp-row');
-          row.append(node('span', 'fp-folder-icon', '▱'), node('span', 'fp-folder-name', entry.name), node('span', 'fp-chevron', '›'));
+          row.append(node('span', 'fp-folder-icon'), node('span', 'fp-folder-name', entry.name), node('span', 'fp-chevron', '›'));
           row.children[0].setAttribute('aria-hidden', 'true'); row.children[2].setAttribute('aria-hidden', 'true');
           row.setAttribute('aria-label', `Open folder ${entry.name}`);
           return row;
@@ -116,6 +127,20 @@
       } finally {
         if (request === sequence) { element.setAttribute('aria-busy', 'false'); sync(); }
       }
+    }
+    async function submitNew() {
+      const name = newName.value.trim();
+      if (!current || make.disabled) return;
+      if (!name) { status.textContent = 'Enter a name.'; newName.focus(); return; }
+      const parent = current.path, kind = kindSelect.value;
+      make.disabled = true;
+      try {
+        const made = await api('POST', '/api/folders/create', { parent, name, kind });
+        newName.value = ''; newForm.hidden = true;
+        if (kind === 'folder') { await navigate(made.path); }
+        else { await load(parent, { query: '' }); status.textContent = `Created file ${made.name}`; }
+      } catch (err) { status.textContent = err.message; newName.focus(); }
+      finally { make.disabled = false; }
     }
     function navigate(path, remember = true) {
       clearTimeout(timer); search.value = '';
@@ -140,7 +165,7 @@
       opener?.focus();
     }
     return { element, close, open(path, from) {
-      opener = from ?? document.activeElement; history = []; search.value = ''; current = null;
+      opener = from ?? document.activeElement; history = []; search.value = ''; current = null; newForm.hidden = true; newName.value = '';
       element.hidden = false;
       const result = navigate(path || '');
       heading.focus();
