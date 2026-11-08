@@ -157,6 +157,21 @@ test('a pid that now belongs to another program is not signalled', async () => {
   assert.deepEqual(signals, []);
 });
 
+test('a reused pid with the same command but a new start time is not signalled', async () => {
+  const old = proc(VSCODE, `--resume=${ID}`);
+  const replacement = { ...old, started: old.started + 60_000 };
+  let listings = 0;
+  const signals = [];
+  const takeover = createTakeover({
+    listProcesses: async () => (listings++ === 0 ? [old] : [replacement]),
+    kill: (pid, signal) => signals.push([pid, signal]),
+    sleep: async () => {}, uid: ME, selfPid: SERVER,
+  });
+  const result = await takeover.takeOver({ tool: 'claude', id: ID, mtimeMs: -1e9 });
+  assert.equal(result.status, 409, 'the new writer is still running');
+  assert.deepEqual(signals, []);
+});
+
 function takeoverWith(procs, extra = {}) {
   const sys = fakeSystem([server, ...procs]);
   const logged = [];

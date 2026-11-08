@@ -222,7 +222,9 @@ export function createTakeover({
 }) {
   isAlive ??= async (proc) => {
     const current = (await list()).find((p) => p.pid === proc.pid);
-    return Boolean(current && current.args === proc.args && !current.stat.startsWith('Z'));
+    return Boolean(current && current.uid === proc.uid && current.exe === proc.exe
+      && Number.isFinite(proc.started) && current.started === proc.started
+      && current.args === proc.args && !current.stat.startsWith('Z'));
   };
 
   async function survey() {
