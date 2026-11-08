@@ -105,15 +105,11 @@
   #send { height: 42px; padding: 0 16px; border-radius: 10px; background: var(--accent); color: #08101e; font-weight: 600; }
 
   #keys { position: relative; flex: none; padding: 0 6px 4px; background: var(--panel); }
-  #keyNav { display: flex; align-items: center; gap: 4px; }
+  #keyNav { display: flex; align-items: center; gap: 4px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+  #keyNav::-webkit-scrollbar { display: none; }
   #keyNav .key { min-width: 44px; padding: 0 10px; border-color: transparent; background: transparent; }
-  #keyNav .key:first-child { margin-right: auto; }
   #keyNav .key.arrow { width: 44px; padding: 0; }
   .key svg { display: block; width: 18px; height: 18px; margin: auto; }
-  #keyTools { position: absolute; z-index: 10; bottom: calc(100% + 6px); left: 6px; right: 6px; max-width: 400px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: 0 4px 18px #0006; }
-  #keyTools .key { min-width: 0; padding: 0 4px; }
-  #keyTools { max-height: max(44px, calc(var(--viewport-h, 100dvh) - var(--status-h, 0px) - 60px - env(safe-area-inset-bottom, 0px))); overflow-y: auto; overscroll-behavior: contain; }
-  #keyMore[aria-expanded="true"] { color: var(--accent); background: var(--panel-2); }
   .key { flex: none; min-width: 52px; height: 44px; padding: 0 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-family: var(--mono); font-size: 13px; }
   .key:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .key:active, .icon-btn:active { background: var(--line); }
@@ -193,8 +189,7 @@
     <button id="send">Send</button>
   </form>
   <div id="keys">
-    <div id="keyNav" role="group" aria-label="Question and menu controls"></div>
-    <div id="keyTools" role="group" aria-label="More terminal keys" hidden></div>
+    <div id="keyNav" role="group" aria-label="Terminal keys"></div>
   </div>
   <div id="textView" class="layer" hidden>
     <div class="layer-head"><h2 id="textTitle"></h2><button id="copyAll" class="primary">Copy all</button><button id="textClose" class="icon-btn">Close</button></div>
@@ -542,13 +537,13 @@ function attachTouchScroll(view) {
   }, { passive: true, capture: true });
 }
 
-const NAV_KEYS = [
+// One row that scrolls sideways: Ctrl+C first, then the keys a Codex or Claude prompt needs most, then the rest.
+const KEYS = [
+  ['Ctrl+C', '\x03'],
   ['Answer', '\x1b[1;2D', 'Answer Codex question (Shift+Left)'],
   ['↑', 'A', 'Up'], ['↓', 'B', 'Down'], ['Enter', '\r'],
-];
-const TOOL_KEYS = [
   ['Esc', '\x1b'], ['Tab', '\t'], ['Shift+Tab', '\x1b[Z'],
-  ['←', 'D', 'Left'], ['→', 'C', 'Right'], ['Ctrl+C', '\x03'], ['Ctrl+D', '\x04'],
+  ['←', 'D', 'Left'], ['→', 'C', 'Right'], ['Ctrl+D', '\x04'],
 ];
 const ARROWS = 'ABCD';
 const ARROW_PATHS = { A: 'm6 14 6-6 6 6', B: 'm6 10 6 6 6-6', D: 'm14 6-6 6 6 6', C: 'm10 6 6 6-6 6' };
@@ -566,13 +561,11 @@ function iconKey(label, ariaLabel, onClick) {
   const key = h('button', 'key', label);
   key.setAttribute('aria-label', ariaLabel);
   keepFocus(key);
-  key.onclick = () => { closeMoreKeys(); onClick(); };
-  $('keyTools').appendChild(key);
+  key.onclick = onClick;
+  $('keyNav').appendChild(key);
 }
-iconKey('Shortcuts', 'Shortcuts', () => openShortcuts());
-iconKey('Copy', 'Copy output', () => openText());
 
-function terminalKey(container, [label, seq, description = label]) {
+function terminalKey([label, seq, description = label]) {
   const key = h('button', 'key', label);
   key.setAttribute('aria-label', description);
   key.title = description;
@@ -583,7 +576,6 @@ function terminalKey(container, [label, seq, description = label]) {
   keepFocus(key);
   key.removeAttribute('tabindex');
   key.onclick = () => {
-    closeMoreKeys();
     const view = active();
     if (!view) return;
     if (!view.online || view.ws?.readyState !== WebSocket.OPEN) {
@@ -597,31 +589,11 @@ function terminalKey(container, [label, seq, description = label]) {
     sendInput(view, data);
     if (seq === '\r') closeKeyboard();
   };
-  $(container).appendChild(key);
+  $('keyNav').appendChild(key);
 }
-NAV_KEYS.forEach((key) => terminalKey('keyNav', key));
-TOOL_KEYS.forEach((key) => terminalKey('keyTools', key));
-const moreKeys = h('button', 'key', 'More');
-moreKeys.id = 'keyMore';
-moreKeys.setAttribute('aria-label', 'More terminal keys');
-moreKeys.setAttribute('aria-controls', 'keyTools');
-moreKeys.setAttribute('aria-expanded', 'false');
-keepFocus(moreKeys);
-moreKeys.removeAttribute('tabindex');
-moreKeys.onclick = () => {
-  const open = $('keyTools').hidden;
-  $('keyTools').hidden = !open;
-  moreKeys.setAttribute('aria-expanded', String(open));
-};
-$('keyNav').appendChild(moreKeys);
-function closeMoreKeys() {
-  $('keyTools').hidden = true;
-  $('keyMore')?.setAttribute('aria-expanded', 'false');
-}
-document.addEventListener('pointerdown', (e) => { if (!$('keys').contains(e.target)) closeMoreKeys(); });
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !$('keyTools').hidden) { e.preventDefault(); closeMoreKeys(); moreKeys.focus({ preventScroll: true }); }
-});
+KEYS.forEach(terminalKey);
+iconKey('Shortcuts', 'Shortcuts', () => openShortcuts());
+iconKey('Copy', 'Copy output', () => openText());
 
 function runCommand(view, text) {
   if (!view.online || view.ws?.readyState !== WebSocket.OPEN) {
