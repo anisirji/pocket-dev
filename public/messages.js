@@ -19,6 +19,23 @@ function timeText(at) {
   const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
 }
+const ICON = {
+  back: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
+  attach: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>',
+  send: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10.2 15 12 3.4 13.8z"/></svg>',
+  tick: '<svg viewBox="0 0 16 11" width="16" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m1.5 5.8 3.4 3.4L11 2.2"/></svg>',
+};
+// WhatsApp's day labels: Today, Yesterday, a weekday inside the last week, then the date.
+function dayLabel(at) {
+  const d = new Date(at), now = new Date();
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86_400_000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return d.toLocaleDateString([], { weekday: 'long' });
+  return d.toLocaleDateString([], { day: 'numeric', month: 'long', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
+}
+const clockText = (at) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
 const extOf = (name) => (/\.([a-z0-9]{1,5})$/i.exec(name)?.[1] ?? 'file').toUpperCase();
 const fileUrl = (f, extra = '') => `/api/messages/files/${f.id}${extra}`;
 
@@ -69,14 +86,16 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
 
   const convo = el('section', 'mx-pane mx-convo-pane');
   const convoHead = el('div', 'mx-head');
-  const back = el('button', 'mx-icon mx-back', '‹');
+  const back = el('button', 'mx-icon mx-back');
+  back.innerHTML = ICON.back;
   back.setAttribute('aria-label', 'All chats');
   back.onclick = () => openChat(null);
   const heading = el('div', 'mx-heading');
   const convoTitle = el('h2', 'mx-title');
   const convoSub = el('span', 'mx-sub');
   heading.append(convoTitle, convoSub);
-  convoHead.append(back, heading);
+  const convoAvatar = el('span', 'mx-avatar');
+  convoHead.append(back, convoAvatar, heading);
   const log = el('div', 'mx-log mx-scroll');
   log.setAttribute('aria-live', 'polite');
   const pill = el('button', 'mx-pill', '↓ New messages');
@@ -86,7 +105,8 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   const error = el('p', 'mx-error');
   error.setAttribute('role', 'alert');
   const form = el('form', 'mx-compose');
-  const attach = el('button', 'mx-icon mx-attach', '📎');
+  const attach = el('button', 'mx-icon mx-attach');
+  attach.innerHTML = ICON.attach;
   attach.type = 'button';
   attach.setAttribute('aria-label', 'Attach files');
   const picker = el('input');
@@ -97,7 +117,9 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   input.rows = 1;
   input.placeholder = 'Message';
   input.setAttribute('aria-label', 'Message');
-  const send = el('button', 'mx-send', 'Send');
+  const send = el('button', 'mx-send');
+  send.innerHTML = ICON.send;
+  send.setAttribute('aria-label', 'Send');
   form.append(attach, picker, input, send);
   const gone = el('p', 'mx-gone', 'This person is no longer in Messages.');
   convo.append(convoHead, log, pill, tray, error, gone, form);
@@ -152,7 +174,8 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   function renderChats() {
     chats.replaceChildren();
     for (const c of chatList()) {
-      const row = el('button', `mx-row${c.id === state.chat ? ' on' : ''}`);
+      const unread = unreadIn(c.id);
+      const row = el('button', `mx-row${c.id === state.chat ? ' on' : ''}${unread ? ' unread' : ''}`);
       const avatar = el('span', `mx-avatar mx-k-${c.kind}`, c.kind === 'group' ? '#' : c.name.slice(0, 1).toUpperCase());
       const main = el('span', 'mx-row-main');
       const top = el('span', 'mx-row-top');
@@ -162,7 +185,6 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
       main.append(top, el('span', 'mx-row-preview', preview));
       const side = el('span', 'mx-row-side');
       if (latest) side.append(el('time', 'mx-row-time', timeText(latest.at)));
-      const unread = unreadIn(c.id);
       if (unread) side.append(el('span', 'mx-count', String(unread)));
       row.append(avatar, main, side);
       row.onclick = () => openChat(c.id, true);
@@ -221,11 +243,15 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   const NAME_HUES = [4, 28, 48, 96, 150, 178, 200, 228, 262, 290, 320, 340];
   const nameColor = (id) => `hsl(${NAME_HUES[[...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % NAME_HUES.length]} 70% 66%)`;
 
-  function bubble(m) {
-    const node = el('article', `mx-msg${m.mine ? ' mine' : ''}`);
+  // A run is consecutive messages from one sender on one day; only its first bubble gets the tail and the name.
+  function bubble(m, prev = inChat(m.chat).filter((x) => x.seq < m.seq).at(-1)) {
+    const newDay = !prev || !sameDay(prev.at, m.at);
+    const first = newDay || prev.mine !== m.mine || (!m.mine && prev.from.id !== m.from.id);
+    const node = el('article', `mx-msg${m.mine ? ' mine' : ''}${first ? ' first' : ''}`);
     node.dataset.seq = m.seq;
+    if (newDay) node.append(el('span', 'mx-day', dayLabel(m.at)));
     const body = el('div', 'mx-bubble');
-    if (!m.mine && m.chat === 'everyone') {
+    if (!m.mine && m.chat === 'everyone' && first) {
       const from = el('div', 'mx-from', m.from.name);
       from.style.color = nameColor(m.from.id);
       if (m.from.kind === 'collaborator' || m.from.kind === 'guest') from.append(el('span', 'mx-tag', m.from.kind));
@@ -238,7 +264,9 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     more.setAttribute('aria-label', 'Message actions');
     more.setAttribute('aria-haspopup', 'menu');
     more.onclick = () => openMenu(m, more);
-    meta.append(el('time', null, timeText(m.at)), more);
+    const tick = el('span', 'mx-tick');
+    tick.innerHTML = ICON.tick;
+    meta.append(el('time', null, clockText(m.at)), ...(m.mine ? [tick] : []), more);
     body.append(meta);
     node.append(body);
     // Right-click, and long-press on Android, arrive as contextmenu; iOS Safari has none, so touch waits itself.
@@ -351,6 +379,8 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     if (state.chat === null) return;
     const c = chatList().find((x) => x.id === state.chat) ?? { id: state.chat, name: 'Chat', kind: 'group', here: false };
     convoTitle.textContent = c.name;
+    convoAvatar.className = `mx-avatar mx-k-${c.kind}`;
+    convoAvatar.textContent = c.kind === 'group' ? '#' : c.name.slice(0, 1).toUpperCase();
     convoSub.textContent = c.kind === 'group' ? `Everyone in Messages · ${state.people.size + 1} people` : !c.here ? 'No longer here' : c.kind === 'mac' ? 'The Admin page on the Mac' : KIND[c.kind];
     const open = c.id === 'everyone' || c.here;
     form.hidden = !open;
@@ -361,8 +391,10 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   function rebuildLog() {
     bubbles.clear();
     log.replaceChildren();
+    let prev;
     for (const m of inChat(state.chat)) {
-      const node = bubble(m);
+      const node = bubble(m, prev);
+      prev = m;
       bubbles.set(m.seq, node);
       log.append(node);
     }
