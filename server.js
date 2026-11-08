@@ -779,7 +779,9 @@ const server = http.createServer(async (req, res) => {
       const { status, headers, body } = auth.redeemQrKey(req, url.searchParams.get('k'));
       res.writeHead(status, { 'cache-control': 'no-store', ...headers });
       res.end(body);
-    } else if (url.pathname === '/' && url.searchParams.has('h') && internetOn()) {
+    } else if (url.pathname === '/' && url.searchParams.has('h')) {
+      // Not gated on internet access: the phone that turns it off from the internet address arrives here with a switch
+      // link minted a moment earlier, and the token's own direction, host and 60 seconds already bind it.
       if (collaborators.guest(req)) return sendJson(res, 403, { error: 'Log out collaborator access before switching an owner device.' });
       const { status, headers, body } = auth.redeemHandoff(req, url.searchParams.get('h'), handoffArrival(req));
       res.writeHead(status, { 'cache-control': 'no-store', ...headers });

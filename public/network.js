@@ -72,6 +72,16 @@
     const url = remoteUrl();
     if (url) location.assign(url + fragment());
   }
+  // From the internet address the switch link is minted first: once the link closes this phone reaches the Mac on
+  // Wi-Fi only, where its internet cookie is no login, and the reply to the closing request may never arrive.
+  async function turnOffInternet() {
+    const remote = info.route === 'remote';
+    if (!confirm(remote ? 'Turn off internet access? This phone then reaches the Mac only on its Wi-Fi, and switches there now.' : 'Turn off internet access? Only the Mac can turn it back on.')) return;
+    const next = remote && info.lanUrl ? (await window.api('POST', '/api/handoff', { direction: 'to-lan' })).url + fragment() : null;
+    try { await window.api('PUT', '/api/network', { internet: { kind: 'off' } }); } catch {}
+    if (next) location.assign(next);
+    else check();
+  }
 
   const banner = h('aside', 'nw-banner');
   banner.hidden = true;
@@ -187,13 +197,7 @@
     const remote = info.route === 'remote';
     const off = h('button', 'st-btn st-danger nw-off', 'Turn off internet access');
     off.type = 'button';
-    off.onclick = async () => {
-      if (!confirm(remote ? 'Turn off internet access? This phone then reaches the Mac only on its Wi-Fi, and switches there now.' : 'Turn off internet access? Only the Mac can turn it back on.')) return;
-      // The reply may not arrive when it travels through the link being closed.
-      try { await window.api('PUT', '/api/network', { internet: { kind: 'off' } }); } catch {}
-      if (remote && info.lanUrl) location.assign(info.lanUrl + fragment());
-      else check();
-    };
+    off.onclick = () => turnOffInternet().catch((e) => { err.textContent = e.message; });
     err.textContent = '';
     const linkText = !info.remoteUrl ? 'The internet link is not connected right now.'
       : info.linked ? `Linked to ${hostOf(info.remoteUrl)}: it opens without the password.`

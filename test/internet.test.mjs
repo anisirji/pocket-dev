@@ -15,7 +15,8 @@ test('internet access off by default: nothing new answers, no tunnel starts, no 
   assert.equal((await s.request('PUT', '/api/network', { cookie: A.cookie, body: { internet: { kind: 'off' } } })).status, 404);
   const landing = await s.request('GET', '/?h=0123456789abcdef');
   assert.equal(landing.status, 302);
-  assert.equal(landing.headers.get('location'), '/login.html', 'a handoff link is an ordinary page request while the feature is off');
+  assert.equal(landing.headers.get('location'), '/login.html?e=handoff', 'an unknown switch link is refused the same way whether or not internet access is on');
+  assert.equal(landing.cookie, undefined);
   const refused = await s.local('PUT', '/api/remote', { on: true });
   assert.equal(refused.status, 409);
   assert.match(refused.data.error, /Internet access is off/);
@@ -270,6 +271,24 @@ test('the internet hostname is served over https only: plain http is sent on, an
   assert.equal(secure.status, 200);
   assert.equal(secure.headers.get('strict-transport-security'), 'max-age=31536000');
   assert.equal((await s.request('GET', '/api/status')).headers.get('strict-transport-security'), null, 'Wi-Fi is http, so no HSTS there');
+});
+
+test('a switch link minted through the internet link still works on Wi-Fi after the phone turns internet access off', { timeout: 60000 }, async (t) => {
+  const s = await startServer(t, { network: { internet: { kind: 'domain', hostname: HOSTNAME } }, token: TOKEN });
+  await s.tunnelStatus('connected');
+  const D = await s.login({ via: 'tunnel' });
+  const deviceId = (await s.request('GET', '/api/settings', { cookie: D.cookie, via: 'tunnel' })).data.currentDeviceId;
+  const minted = await s.request('POST', '/api/handoff', { cookie: D.cookie, body: { direction: 'to-lan' }, via: 'tunnel' });
+  assert.equal(minted.status, 200, JSON.stringify(minted.data));
+  const off = await s.request('PUT', '/api/network', { cookie: D.cookie, body: { internet: { kind: 'off' } }, via: 'tunnel' });
+  assert.equal(off.status, 200, JSON.stringify(off.data));
+  assert.equal((await s.status()).network.internet.kind, 'off');
+  const link = new URL(minted.data.url);
+  const landed = await s.request('GET', link.pathname + link.search);
+  assert.equal(landed.status, 200, 'the phone is not stranded: its switch link is honoured on Wi-Fi');
+  assert.match(landed.cookie, /^pd_token=/);
+  assert.equal((await s.request('GET', '/api/settings', { cookie: landed.cookie })).data.currentDeviceId, deviceId, 'the same device, now on Wi-Fi');
+  assert.equal((await s.request('POST', '/api/handoff', { cookie: landed.cookie, body: {} })).status, 404, 'no new switch links while internet access is off');
 });
 
 test('a cookie works only on the address it was issued for', { timeout: 60000 }, async (t) => {

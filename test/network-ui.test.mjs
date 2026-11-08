@@ -109,8 +109,8 @@ test('Settings shows both addresses; only the other route has a working Switch b
   assert.equal(f.assigned[0], 'http://192.168.1.20:7777/?h=' + 'a'.repeat(64) + '#terminal=abc123');
   f.posted.length = 0;
   await section.button('Turn off internet access').onclick();
-  assert.equal(JSON.stringify(f.posted), JSON.stringify([{ method: 'PUT', url: '/api/network', body: { internet: { kind: 'off' } } }]));
-  assert.equal(f.assigned[1], 'http://192.168.1.20:7777#terminal=abc123', 'the internet link is closing, so the phone moves to Wi-Fi');
+  assert.equal(JSON.stringify(f.posted), JSON.stringify([{ method: 'POST', url: '/api/handoff', body: { direction: 'to-lan' } }, { method: 'PUT', url: '/api/network', body: { internet: { kind: 'off' } } }]), 'the switch link is minted before the link closes');
+  assert.equal(f.assigned[1], 'http://192.168.1.20:7777/?h=' + 'a'.repeat(64) + '#terminal=abc123', 'the internet link is closing, so the phone moves to Wi-Fi with its login');
 });
 
 test('on Wi-Fi the internet link is remembered, and a Mac out of reach for five seconds offers it', async () => {
