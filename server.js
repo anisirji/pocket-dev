@@ -26,7 +26,7 @@ import { captureScreen } from './screen.js';
 import { collectHealth } from './health.js';
 import { createTunnel } from './tunnel.js';
 import { readNetwork, readToken } from './network.js';
-import { sameOrigin } from './transport.js';
+import { sameOrigin, fromConnector } from './transport.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SCROLLBACK_MAX = 500_000;
@@ -71,16 +71,24 @@ const LOCAL_NOTE = 'same Wi-Fi only; some Android phones cannot open .local name
 // addresses and .local name on PORT, loopback, the tunnel's hostname on https, and config.json "allowedHosts" (any
 // port). The addresses are read per request because the network can change.
 const LOOPBACK_NAMES = ['localhost', '127.0.0.1', '[::1]'];
-function hostAllowed(host) {
+function parseHost(host) {
   const m = /^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/.exec((host ?? '').toLowerCase());
-  if (!m) return false;
-  const name = m[1].replace(/\.$/, '');
+  return m && { name: m[1].replace(/\.$/, ''), port: m[2] === undefined ? null : Number(m[2]) };
+}
+function hostAllowed(host) {
+  const parsed = parseHost(host);
+  if (!parsed) return false;
+  const { name, port } = parsed;
   const remoteNames = [urls().remote && new URL(urls().remote).hostname, network().internet.hostname].filter(Boolean);
-  if (remoteNames.includes(name) && (m[2] === undefined || Number(m[2]) === 443)) return true;
+  if (remoteNames.includes(name) && (port === null || port === 443)) return true;
   const extra = config.read().allowedHosts;
   if (Array.isArray(extra) && extra.some((h) => typeof h === 'string' && h.toLowerCase() === name)) return true;
-  const port = m[2] === undefined ? 80 : Number(m[2]);
-  return port === PORT && [...LOOPBACK_NAMES, localName(), ...lanIps()].includes(name);
+  return (port ?? 80) === PORT && [...LOOPBACK_NAMES, localName(), ...lanIps()].includes(name);
+}
+// The Mac's own Wi-Fi address or .local name: where a handoff token may be used.
+function lanHost(host) {
+  const parsed = parseHost(host);
+  return Boolean(parsed) && parsed.port === PORT && [localName(), ...lanIps()].includes(parsed.name);
 }
 const MISDIRECTED = 'Misdirected Request: this server answers only to its own addresses.';
 
@@ -573,6 +581,8 @@ async function handleApi(req, res, url) {
     return handlePowerApi(req, res, url.pathname.split('/')[4], { readJson, sendJson, wss, sessions });
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  // Switching between addresses exists only once internet access is on; before that these routes are not there.
+  if (resource === 'handoff' && !internetOn()) return sendJson(res, 404, { error: 'Not found' });
   if (resource === 'collaborators') {
     if (!auth.isTrustedAdmin(req) && !(req.method === 'GET' && url.pathname === '/api/collaborators' && config.read().roleAccessEnabled !== true)) return sendJson(res, 403, { error: 'Only a reviewed Admin device may manage collaborators. Enable access from Admin on the Mac.' });
     const r = await collaborators.ownerApi(req.method, url.pathname, ['POST', 'PUT', 'PATCH'].includes(req.method) ? await readJson(req) : {});
@@ -658,6 +668,12 @@ async function handleApi(req, res, url) {
       return closeForward(Number(key)) ? sendJson(res, 204) : sendJson(res, 404, { error: 'Not forwarded' });
     case 'GET info':
       return sendJson(res, 200, { lanIp: lanIp(), forwards: listForwards(), persistentTerminals: Boolean(terminalHost && !terminalHost.closed) });
+    case 'POST handoff': {
+      if (!network().wifi) return sendJson(res, 403, { error: 'Wi-Fi access is off, so there is no local address to switch to.' });
+      if (!fromConnector(req)) return sendJson(res, 403, { error: 'Switch to local is only offered on the internet address.' });
+      if (!lanIp()) return sendJson(res, 409, { error: 'The Mac has no Wi-Fi address right now.' });
+      return sendJson(res, 200, { url: `http://${lanIp()}:${PORT}/?h=${auth.mintHandoff(auth.deviceFor(req))}` });
+    }
     default:
       return sendJson(res, 404, { error: 'Not found' });
   }
@@ -708,6 +724,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/' && url.searchParams.has('k')) {
       if (collaborators.guest(req)) return sendJson(res, 403, { error: 'Log out collaborator access before pairing an Admin device on the Mac.' });
       const { status, headers, body } = auth.redeemQrKey(req, url.searchParams.get('k'));
+      res.writeHead(status, { 'cache-control': 'no-store', ...headers });
+      res.end(body);
+    } else if (url.pathname === '/' && url.searchParams.has('h') && internetOn()) {
+      if (collaborators.guest(req)) return sendJson(res, 403, { error: 'Log out collaborator access before switching an owner device.' });
+      const { status, headers, body } = auth.redeemHandoff(req, url.searchParams.get('h'), !fromConnector(req) && lanHost(req.headers.host));
       res.writeHead(status, { 'cache-control': 'no-store', ...headers });
       res.end(body);
     } else if (url.pathname.startsWith('/api/')) await handleApi(req, res, url);

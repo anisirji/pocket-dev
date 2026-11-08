@@ -55,7 +55,7 @@ exec sleep 300
   return file;
 }
 
-async function startServer(t, { network, devices, lanIpFile = true, traceUrl } = {}) {
+async function startServer(t, { network, devices, token, lanIpFile = true, traceUrl } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-internet-'));
   const home = path.join(root, 'home'), state = path.join(root, 'state'), record = path.join(root, 'cloudflared-record');
   fs.mkdirSync(home);
@@ -65,6 +65,7 @@ async function startServer(t, { network, devices, lanIpFile = true, traceUrl } =
   const config = path.join(root, 'config.json');
   fs.writeFileSync(config, JSON.stringify({ password: 'test-password', awake: 'off', fileRoots: [home], maxDevices: 20, ...(network && { network }) }));
   if (devices) fs.writeFileSync(path.join(state, 'devices.json'), JSON.stringify({ devices }));
+  if (token) fs.writeFileSync(path.join(state, 'tunnel-token'), `${token}\n`, { mode: 0o600 });
   const lanIp = path.join(root, 'lan-ip');
   fs.writeFileSync(lanIp, '127.0.0.1');
   const port = await freePort(), adminPort = await freePort();
@@ -146,23 +147,109 @@ test('internet access off by default: nothing new answers, no tunnel starts, no 
 });
 
 test('Wi-Fi access off binds loopback only, so the Mac is reached through the tunnel alone', { timeout: 60000 }, async (t) => {
-  const s = await startServer(t, { network: { wifi: false, internet: { kind: 'quick' } } });
+  const s = await startServer(t, { network: { wifi: false, internet: { kind: 'domain', hostname: HOSTNAME } }, token: TOKEN });
   assert.equal((await s.request('GET', '/api/status')).status, 200);
   const lan = lanAddress();
   if (lan) {
     await assert.rejects(fetch(`http://${lan}:${s.port}/api/status`, { signal: AbortSignal.timeout(3000) }), 'the LAN address must refuse');
   }
+  await s.tunnelStatus('connected');
   const st = await s.status();
   assert.equal(st.network.wifi, false);
   assert.equal(st.urls.lan, null);
   assert.equal(st.urls.mdns, null);
-  const qr = await s.local('POST', '/api/qr', { kind: 'share' });
-  assert.equal(qr.status, 409);
-  assert.match(qr.data.error, /internet link is not connected/);
+  assert.equal((await s.local('POST', '/api/qr', { kind: 'share' })).data.url, `https://${HOSTNAME}`);
   assert.doesNotMatch(s.logs(), /running at http/, 'no LAN address is announced');
+  assert.match(s.logs(), new RegExp(`Internet link: https://${HOSTNAME}`));
   const lockout = await s.local('PUT', '/api/network', { internet: { kind: 'off' } });
   assert.equal(lockout.status, 400);
   assert.match(lockout.data.error, /Turn on internet access before/);
+  const D = await s.login({ via: 'tunnel' });
+  const refused = await s.request('POST', '/api/handoff', { cookie: D.cookie, body: {}, via: 'tunnel' });
+  assert.equal(refused.status, 403);
+  assert.match(refused.data.error, /Wi-Fi access is off/);
+});
+
+test('handoff: a Wi-Fi cookie for the same device, minted through the tunnel and usable once, on the Wi-Fi address only', { timeout: 90000 }, async (t) => {
+  const s = await startServer(t, { network: { internet: { kind: 'domain', hostname: HOSTNAME } }, token: TOKEN });
+  await s.tunnelStatus('connected');
+  const D = await s.login({ via: 'tunnel' });
+  assert.equal(D.status, 200);
+  assert.match(D.headers.get('set-cookie'), /; Secure/, 'the internet cookie is https-only');
+  const deviceId = (await s.request('GET', '/api/settings', { cookie: D.cookie, via: 'tunnel' })).data.currentDeviceId;
+  const devices = async (cookie, via) => (await s.request('GET', '/api/settings', { cookie, via })).data.devices;
+  const mint = async () => {
+    const r = await s.request('POST', '/api/handoff', { cookie: D.cookie, body: {}, via: 'tunnel' });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    const link = new URL(r.data.url);
+    assert.equal(link.origin, s.base, 'the link uses the Wi-Fi address');
+    assert.match(link.searchParams.get('h'), /^[a-f0-9]{64}$/);
+    return link.search;
+  };
+  const redeem = (search, options) => s.request('GET', `/${search}`, options);
+  const refused = (r, why) => {
+    assert.equal(r.status, 302, why);
+    assert.equal(r.headers.get('location'), '/login.html?e=handoff', why);
+    assert.equal(r.cookie, undefined, why);
+  };
+
+  assert.equal((await s.request('POST', '/api/handoff', { cookie: D.cookie, body: {} })).status, 403, 'only offered through the tunnel');
+  assert.equal((await s.request('POST', '/api/handoff', { body: {}, via: 'tunnel' })).status, 401);
+  const leaked = await mint();
+  refused(await redeem(leaked, { via: 'tunnel' }), 'a token replayed through the tunnel is refused');
+  refused(await redeem(leaked), 'and spent');
+  refused(await redeem(await mint(), { headers: { host: `localhost:${s.port}` } }), 'only the Wi-Fi address or .local name may redeem');
+  refused(await redeem('?h=' + 'f'.repeat(64)), 'an unknown token');
+  const expiring = await mint();
+  await pause(1700);
+  refused(await redeem(expiring), 'an expired token');
+
+  const search = await mint();
+  const landed = await redeem(search);
+  assert.equal(landed.status, 200);
+  assert.match(landed.data, /location\.replace\("\/" \+ location\.hash\)/, 'the bounce keeps the fragment that names the terminal or chat');
+  assert.match(landed.cookie, /^pd_token=/);
+  assert.doesNotMatch(landed.headers.get('set-cookie'), /; Secure/, 'the Wi-Fi cookie must work over http');
+  const L = landed.cookie;
+  refused(await redeem(search), 'single use');
+  assert.notEqual(L, D.cookie);
+  assert.equal((await s.request('GET', '/api/settings', { cookie: L })).data.currentDeviceId, deviceId, 'the same device on both addresses');
+  assert.deepEqual((await devices(L)).map((d) => d.id), [deviceId], 'one device, not two');
+
+  // At the device limit a handoff still succeeds and nobody is logged out.
+  assert.equal((await s.local('PUT', '/api/settings', { maxDevices: 1 })).status, 200);
+  const again = await redeem(await mint(), { cookie: L });
+  assert.equal(again.status, 200);
+  assert.equal((await devices(again.cookie)).length, 1);
+  assert.equal((await s.request('GET', '/api/settings', { cookie: D.cookie, via: 'tunnel' })).status, 200, 'the internet cookie still works');
+  assert.equal((await s.request('GET', '/api/settings', { cookie: L })).status, 401, 'the Wi-Fi cookie sent with the redeem was replaced, not kept as a third login');
+  const log = (await s.local('GET', '/api/log')).data;
+  assert.equal(log.some((e) => e.type === 'device-revoked'), false, 'no eviction');
+  assert.deepEqual([...new Set(log.filter((e) => e.type.startsWith('handoff')).map((e) => e.type))].sort(), ['handoff-created', 'handoff-failed', 'handoff-redeemed']);
+  const secrets = [search, leaked, expiring].map((q) => q.slice(3));
+  const everything = JSON.stringify(log) + fs.readFileSync(path.join(s.stateDir, 'security.log'), 'utf8') + s.logs();
+  assert.ok(secrets.every((token) => !everything.includes(token)), 'handoff tokens never reach a log');
+
+  // Revoking the device ends both cookies.
+  assert.equal((await s.request('DELETE', `/api/devices/${deviceId}`, { cookie: again.cookie })).status, 204);
+  assert.equal((await s.request('GET', '/api/settings', { cookie: again.cookie })).status, 401);
+  assert.equal((await s.request('GET', '/api/settings', { cookie: D.cookie, via: 'tunnel' })).status, 401);
+
+  // A collaborator session is never an owner device, so it cannot ask for a handoff.
+  const A = await s.login();
+  const adminId = (await s.request('GET', '/api/settings', { cookie: A.cookie })).data.currentDeviceId;
+  const repo = path.join(s.home, 'project');
+  fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+  assert.equal((await s.local('PUT', '/api/settings', { maxDevices: 5 })).status, 200);
+  assert.equal((await s.local('POST', '/api/collaborators/enable', { adminDeviceIds: [adminId] })).status, 200);
+  const grant = await s.request('POST', '/api/collaborators', { cookie: A.cookie, body: { label: 'Reviewer', role: 'viewer', repository: repo, extraFolders: [], ai: false, duration: 3600 } });
+  assert.equal(grant.status, 201, JSON.stringify(grant.data));
+  const invite = await s.request('POST', `/api/collaborators/${grant.data.id}/invite`, { cookie: A.cookie, body: {} });
+  const token = new URLSearchParams(new URL(invite.data.url).hash.slice(1)).get('token');
+  const G = (await s.request('POST', '/api/invitations/accept', { body: { token }, via: 'tunnel' })).cookie;
+  assert.match(G, /^pd_collaborator=/);
+  assert.equal((await s.request('POST', '/api/handoff', { cookie: G, body: {}, via: 'tunnel' })).status, 403);
+  assert.equal((await s.request('POST', '/api/handoff', { cookie: `${G}; ${A.cookie}`, body: {}, via: 'tunnel' })).status, 403, 'a guest cookie never falls through to the owner');
 });
 
 test('domain tunnel: token in the environment only, never in argv, responses or logs; the hostname is served', { timeout: 60000 }, async (t) => {

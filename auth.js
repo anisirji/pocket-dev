@@ -15,6 +15,8 @@ export const QR_TTL_MIN = Math.round(QR_TTL_MS / 60_000);
 const ONLINE_WINDOW_MS = Number(process.env.POCKET_DEV_ONLINE_WINDOW_MS) || 60_000;
 const LAST_SEEN_SAVE_MS = 30_000;
 const PENDING_TTL_MS = Number(process.env.POCKET_DEV_PENDING_TTL_MS) || 10 * 60_000;
+// A handoff token is asked for when the person taps Switch and used by the redirect that follows.
+const HANDOFF_TTL_MS = Number(process.env.POCKET_DEV_HANDOFF_TTL_MS) || 60_000;
 const LOGIN_WINDOW_MS = Number(process.env.POCKET_DEV_LOGIN_WINDOW_MS) || 15 * 60_000;
 const LOGIN_MAX_FAILURES = 10;
 const LOG_MAX_BYTES = Number(process.env.POCKET_DEV_LOG_MAX_BYTES) || 1_000_000;
@@ -120,8 +122,9 @@ const reply = (status, body, headers = {}) => ({ status, body, headers });
 const redirect = (location) => reply(302, undefined, { location });
 // A scanner app can open the QR link as a cross-site navigation. SameSite=Strict then withholds the new cookie on a
 // redirect in that same navigation, so a same-origin script starts a fresh one; replace() also drops ?k= from history.
+// The fragment is kept: a handoff link carries the terminal or chat to reopen there.
 const BOUNCE_HOME = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
-  + '<title>Pocket Dev</title><style>html{background:#0b0e14}</style><script>location.replace("/")</script>';
+  + '<title>Pocket Dev</title><style>html{background:#0b0e14}</style><script>location.replace("/" + location.hash)</script>';
 const bounceHome = (cookie) => reply(200, BOUNCE_HOME, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': cookie });
 const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 
@@ -191,6 +194,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
   const devices = loadDevices();
   const sockets = new Map();
   const qrKeys = new Map();
+  const handoffs = new Map();
   const limiter = createLoginLimiter();
   const localSecret = crypto.randomBytes(32).toString('hex');
   writePrivate(LOCAL_SECRET_PATH, JSON.stringify({ port, secret: localSecret }) + '\n');
@@ -374,6 +378,38 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     const { cookie, device } = addDevice(req, 'qr', 'active');
     log('login', { via: 'qr', ...about(device), ua: device.ua });
     return bounceHome(cookie);
+  }
+
+  // A device logged in on the internet address asks for a handoff token, then opens the Wi-Fi address with it to get
+  // a cookie there too. Only the hash is kept, and the token works once.
+  function mintHandoff(device) {
+    const now = Date.now();
+    for (const [hash, h] of handoffs) if (h.expiresAt <= now) handoffs.delete(hash);
+    const token = crypto.randomBytes(32).toString('hex');
+    handoffs.set(tokenHash(token), { deviceId: device.id, expiresAt: now + HANDOFF_TTL_MS });
+    log('handoff-created', about(device));
+    return token;
+  }
+
+  // `onLan` says the request arrived directly on the Mac's Wi-Fi address, not through the tunnel: a token that leaks
+  // through the tunnel is refused and spent. The device keeps its identity, so nothing is counted or evicted.
+  function redeemHandoff(req, token, onLan) {
+    const hash = tokenHash(token);
+    const entry = handoffs.get(hash);
+    handoffs.delete(hash);
+    const refuse = (reason) => {
+      log('handoff-failed', { reason, ...requestInfo(req) });
+      return redirect('/login.html?e=handoff');
+    };
+    if (!onLan) return refuse('route');
+    if (!entry) return refuse('unknown');
+    if (entry.expiresAt <= Date.now()) return refuse('expired');
+    const device = devices.get(entry.deviceId);
+    if (!device || !isActive(device)) return refuse('device');
+    const existing = lookup(req);
+    if (existing && existing !== device && existing.status === 'blocked') return refuse('blocked');
+    log('handoff-redeemed', about(device));
+    return bounceHome(addCookie(req, device));
   }
 
   const passwordMatches = (given) => (envPassword ? sameSecret(given, envPassword) : verifyPassword(given, config.read().passwordHash));
@@ -598,11 +634,12 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       const out = [...devices.values()].filter((d) => d.status !== 'blocked');
       for (const d of out) revoke(d.id, 'lockdown');
       qrKeys.clear();
+      handoffs.clear();
       if (next !== undefined) changePassword(next, { logoutAll: false, by: 'lockdown' });
       return out.length;
     },
   };
 
-  return { passwordLine, lookup, deviceFor, trackSocket, mintQrUrl, redeemQrKey, isLocalRequest, handleApi, admin, activeCount,
+  return { passwordLine, lookup, deviceFor, trackSocket, mintQrUrl, redeemQrKey, mintHandoff, redeemHandoff, isLocalRequest, handleApi, admin, activeCount,
     isTrustedAdmin: (req) => deviceFor(req)?.role === 'admin' };
 }
