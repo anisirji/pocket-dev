@@ -30,7 +30,7 @@ function fixture({ respond } = {}) {
   vm.runInNewContext(source, runtime);
   const api = async (method, url) => {
     const params = new URL(url, 'http://fixture').searchParams;
-    calls.push({ method, path: params.get('path') || '/home', q: params.get('q'), hidden: params.get('hidden') });
+    calls.push({ method, path: params.get('path') || '/home', q: params.get('q'), hidden: params.get('hidden'), sort: params.get('sort'), order: params.get('order') });
     if (respond) return respond(calls.at(-1));
     return listing(params.get('path') || '/home', params.get('path') === '/home/Projects' ? [] : ['Projects', '<img onerror=bad>']);
   };
@@ -166,4 +166,17 @@ test('the Terminal browser opens a shell in the selected folder and stays open o
   assert.deepEqual(opened, ['/home/Projects']);
   assert.equal(closed, 1);
   assert.equal(picker.element.hidden, true);
+});
+
+test('sort choice and direction are sent with every listing request', async () => {
+  const f = fixture();
+  await f.field.button('Browse folders').onclick();
+  const select = f.field.all('select')[0];
+  assert.equal(select.attrs['aria-label'], 'Sort folders by');
+  select.value = 'modified'; select.onchange(); await settle();
+  assert.equal(f.calls.at(-1).sort, 'modified');
+  assert.equal(f.calls.at(-1).order, 'asc');
+  f.field.cls('fp-order').onclick(); await settle();
+  assert.equal(f.calls.at(-1).sort, 'modified');
+  assert.equal(f.calls.at(-1).order, 'desc');
 });

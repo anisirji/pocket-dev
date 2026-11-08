@@ -1,5 +1,12 @@
 (() => {
   let nextId = 0;
+  const SORT_KEY = 'pocketdev.folderSort';
+  const readSort = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SORT_KEY));
+      return { sort: ['name', 'modified', 'created'].includes(saved?.sort) ? saved.sort : 'name', order: saved?.order === 'desc' ? 'desc' : 'asc' };
+    } catch { return { sort: 'name', order: 'asc' }; }
+  };
   const node = (tag, cls, text) => {
     const element = document.createElement(tag);
     if (cls) element.className = cls;
@@ -26,7 +33,22 @@
     const hiddenLabel = node('label', 'fp-hidden');
     const hidden = node('input'); hidden.type = 'checkbox';
     hiddenLabel.append(hidden, node('span', '', 'Hidden folders'));
-    toolbar.append(back, up, hiddenLabel);
+    const sortSelect = node('select', 'fp-sort');
+    sortSelect.setAttribute('aria-label', 'Sort folders by');
+    for (const [value, text] of [['name', 'Name'], ['modified', 'Date modified'], ['created', 'Date created']]) {
+      const option = node('option', '', text); option.value = value; sortSelect.append(option);
+    }
+    const saved = readSort();
+    sortSelect.value = saved.sort;
+    let descending = saved.order === 'desc';
+    const order = button('', () => { descending = !descending; syncOrder(); saveSort(); reload(); }, 'fp-order');
+    const syncOrder = () => {
+      order.textContent = descending ? '↓' : '↑';
+      order.setAttribute('aria-label', descending ? 'Descending. Switch to ascending' : 'Ascending. Switch to descending');
+    };
+    syncOrder();
+    const saveSort = () => { try { localStorage.setItem(SORT_KEY, JSON.stringify({ sort: sortSelect.value, order: descending ? 'desc' : 'asc' })); } catch { /* Private mode keeps the choice for this picker only. */ } };
+    toolbar.append(back, up, sortSelect, order, hiddenLabel);
     const crumbs = node('nav', 'fp-crumbs'); crumbs.setAttribute('aria-label', 'Folder location');
     const search = node('input', 'fp-search');
     search.type = 'search'; search.placeholder = 'Find a folder here'; search.setAttribute('aria-label', 'Find a folder here');
@@ -59,7 +81,7 @@
       status.textContent = 'Loading folders…';
       list.replaceChildren();
       try {
-        const params = new URLSearchParams({ ...(path && { path }), ...(hidden.checked && { hidden: '1' }), ...(query && { q: query }) });
+        const params = new URLSearchParams({ ...(path && { path }), ...(hidden.checked && { hidden: '1' }), ...(query && { q: query }), sort: sortSelect.value, order: descending ? 'desc' : 'asc' });
         const data = await api('GET', `/api/folders/browse?${params}`);
         if (request !== sequence || element.hidden) return;
         if (remember && previous && previous.path !== data.path) history.push(previous.path);
@@ -99,7 +121,9 @@
       clearTimeout(timer); search.value = '';
       return load(path, { remember });
     }
-    hidden.onchange = () => { clearTimeout(timer); load(browsingPath, { query: search.value.trim() }); };
+    const reload = () => { clearTimeout(timer); load(browsingPath, { query: search.value.trim() }); };
+    hidden.onchange = reload;
+    sortSelect.onchange = () => { saveSort(); reload(); };
     search.oninput = () => {
       clearTimeout(timer);
       const path = browsingPath;

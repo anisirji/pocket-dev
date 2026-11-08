@@ -80,3 +80,20 @@ test('the production phone dispatcher refuses guests and unauthenticated callers
   assert.equal((await call()).status, 403);
   assert.equal(scans, 1, 'only the owner request reaches filesystem navigation');
 });
+
+test('folders sort by name, date modified or date created, ascending or descending', async (t) => {
+  const { home, get } = fixture(t);
+  const dir = path.join(home, 'sorted');
+  for (const name of ['b', 'a', 'c']) fs.mkdirSync(path.join(dir, name), { recursive: true });
+  fs.utimesSync(path.join(dir, 'a'), 3, 3);
+  fs.utimesSync(path.join(dir, 'b'), 1, 1);
+  fs.utimesSync(path.join(dir, 'c'), 2, 2);
+  const names = async (params) => (await get({ path: dir, ...params })).entries.map((e) => e.name);
+  assert.deepEqual(await names(), ['a', 'b', 'c']);
+  assert.deepEqual(await names({ order: 'desc' }), ['c', 'b', 'a']);
+  assert.deepEqual(await names({ sort: 'modified' }), ['b', 'c', 'a']);
+  assert.deepEqual(await names({ sort: 'modified', order: 'desc' }), ['a', 'c', 'b']);
+  assert.equal((await names({ sort: 'created' })).length, 3);
+  assert.deepEqual(await names({ sort: 'bogus' }), ['a', 'b', 'c']);
+  assert.deepEqual(Object.keys((await get({ path: dir, sort: 'modified' })).entries[0]), ['name', 'path']);
+});

@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const LIMIT = 2000;
 const SORT = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+const SORT_KEYS = { name: 'name', modified: 'mtimeMs', created: 'birthtimeMs' };
 const error = (status, message) => Object.assign(new Error(message), { status });
 
 // Owner-only directory navigation. Mount behind device authentication or the Mac-only Admin guard, never guest scope.
@@ -36,6 +37,8 @@ export function createFolderBrowser({ home = os.homedir(), config = { read: () =
       const dir = await fs.realpath(path.resolve(home, expand(given)));
       if (!(await fs.stat(dir)).isDirectory()) throw error(400, 'That location is a file. Choose a folder.');
       const hidden = url.searchParams.get('hidden') === '1';
+      const sortKey = SORT_KEYS[url.searchParams.get('sort')] ? url.searchParams.get('sort') : 'name';
+      const direction = url.searchParams.get('order') === 'desc' ? -1 : 1;
       const query = (url.searchParams.get('q') || '').toLocaleLowerCase();
       const names = (await fs.readdir(dir, { withFileTypes: true }))
         .filter((entry) => (hidden || !entry.name.startsWith('.')) && entry.name.toLocaleLowerCase().includes(query));
@@ -44,11 +47,13 @@ export function createFolderBrowser({ home = os.homedir(), config = { read: () =
       for (let i = 0; i < names.length; i += 64) {
         const batch = await Promise.all(names.slice(i, i + 64).map(async (entry) => {
           if (!entry.isDirectory() && !(entry.isSymbolicLink() && await fs.stat(path.join(dir, entry.name)).then((s) => s.isDirectory(), () => false))) return null;
-          return { name: entry.name, path: path.join(dir, entry.name) };
+          const full = path.join(dir, entry.name);
+          const times = sortKey === 'name' ? null : await fs.stat(full).catch(() => null);
+          return { name: entry.name, path: full, time: times?.[SORT_KEYS[sortKey]] ?? 0 };
         }));
         entries.push(...batch.filter(Boolean));
       }
-      entries.sort((a, b) => SORT.compare(a.name, b.name));
+      entries.sort((a, b) => direction * (sortKey === 'name' ? 0 : a.time - b.time || 0) || direction * SORT.compare(a.name, b.name));
       let current = path.parse(dir).root;
       const breadcrumbs = [{ name: 'Mac', path: current }];
       for (const name of dir.slice(current.length).split(path.sep).filter(Boolean)) {
@@ -56,7 +61,7 @@ export function createFolderBrowser({ home = os.homedir(), config = { read: () =
         breadcrumbs.push({ name, path: current });
       }
       return { path: dir, parent: path.dirname(dir) === dir ? null : path.dirname(dir), breadcrumbs,
-        shortcuts: await shortcuts(), entries: entries.slice(0, LIMIT), truncated: entries.length > LIMIT };
+        shortcuts: await shortcuts(), entries: entries.slice(0, LIMIT).map(({ name, path }) => ({ name, path })), truncated: entries.length > LIMIT };
     } catch (err) {
       if (err.status) throw err;
       if (err.code === 'ENOENT') throw error(404, 'This folder no longer exists. Choose another location.');
