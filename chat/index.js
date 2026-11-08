@@ -7,7 +7,7 @@ import { IMAGE_FILE_RE, CONTENT_TYPE, ATTACHMENT_NAME_RE, ATTACHMENT_TYPES, thum
 import * as claude from './claude.js';
 import * as codex from './codex.js';
 
-const ENGINES = {
+const BUILT_IN_ENGINES = {
   claude: {
     label: 'Claude', create: claude.createClaudeEngine, settingsSchema: claude.settingsSchema, grantLabel: (g) => g,
     projectRules: claude.projectRules, removeProjectRule: claude.removeProjectRule,
@@ -109,7 +109,8 @@ function parseAnswer(event, body) {
 
 // Mount after the auth check: every route here assumes a logged-in caller. config is { read(), update(changes) };
 // chat uses its chatIdleMinutes and chatDefaults keys. `wss` is the server's WebSocketServer, which pings its clients.
-export function createChatApi({ sendJson, readJson, config, wss }) {
+// `engines` replaces Claude and Codex in tests.
+export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINES = BUILT_IN_ENGINES }) {
   const dir = process.env.POCKET_DEV_CHAT_DIR || path.join(process.env.POCKET_DEV_STATE_DIR || path.join(HOME, '.pocket-dev'), 'chats');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const idleMs = () => Number(process.env.POCKET_DEV_CHAT_IDLE_SECONDS) * 1000 || (Number(config.read().chatIdleMinutes) || 10) * 60_000;
@@ -473,5 +474,19 @@ export function createChatApi({ sendJson, readJson, config, wss }) {
     return true;
   }
 
-  return { handleApi, handleUpgrade, active, stop };
+  // For Resume's take over: chats whose engine has a conversation open, and a way to close one so another copy can take
+  // the conversation. Waiting messages are held rather than sent, because sending one would reopen the conversation here.
+  const bound = () => [...chats.values()].filter((c) => c.sessionId && (c.engine || c.waking)).map((c) => c.view());
+  async function release(id, note) {
+    const chat = chats.get(id);
+    if (!chat) return false;
+    if (chat.queue.length) chat.holdQueue();
+    if (chat.turn) await interrupt(chat);
+    await sleep(chat);
+    chat.emit({ type: 'status', text: note });
+    chat.changed();
+    return true;
+  }
+
+  return { handleApi, handleUpgrade, active, stop, bound, release };
 }

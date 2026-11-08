@@ -10,16 +10,17 @@ const OTHER = '28e64788-3976-496f-a7f0-113cf83b11f1';
 const VSCODE = '/Users/ani/.vscode/extensions/anthropic.claude-code-2.1.286-darwin-arm64/resources/native-binary/claude';
 
 let nextPid = 5000;
-const proc = (exe, rest = '', extra = {}) => ({ pid: nextPid++, ppid: 1, uid: ME, stat: 'S', exe, args: `${exe}${rest ? ` ${rest}` : ''}`, ...extra });
+const proc = (exe, rest = '', extra = {}) => ({ pid: nextPid++, ppid: 1, uid: ME, stat: 'S', started: 1000, exe, args: `${exe}${rest ? ` ${rest}` : ''}`, ...extra });
 const server = { pid: SERVER, ppid: 1, uid: ME, stat: 'S', exe: '/usr/local/bin/node', args: `/usr/local/bin/node /Users/ani/pocket-dev/server.js --resume ${ID}` };
 const matches = (p, id = ID) => findCopies({ processes: [server, p], uid: ME, selfPid: SERVER }).some((c) => c.id === id);
 
 test('ps listings join on pid and keep executable paths with spaces whole', () => {
-  const status = `  2865  2242   501 S    ${VSCODE}\n  77 1 501 Ss   /Users/ani/Library/Application Support/Claude/claude-code/2.1.0/claude\n   9   1   0 S    /sbin/launchd\n`;
+  const status = `  2865  2242   501 S    Sun Nov  8 15:26:51 2026    ${VSCODE}\n  77 1 501 Ss   Mon Nov 10 09:05:00 2026    /Users/ani/Library/Application Support/Claude/claude-code/2.1.0/claude\n   9   1   0 S    Sat Nov  7 08:00:00 2026    /sbin/launchd\n`;
   const args = `  2865 ${VSCODE} --output-format stream-json --resume=${ID}\n   77 claude --resume ${ID}\n`;
   const list = parsePs(status, args);
   assert.deepEqual(list.map((p) => [p.pid, p.ppid, p.uid, p.stat]), [[2865, 2242, 501, 'S'], [77, 1, 501, 'Ss']], 'a pid missing from one listing is dropped');
   assert.equal(list[1].exe, '/Users/ani/Library/Application Support/Claude/claude-code/2.1.0/claude');
+  assert.equal(list[0].started, new Date(2026, 10, 8, 15, 26, 51).getTime(), 'start time is read as local time');
   assert.deepEqual(resumeTarget(list[0]), { tool: 'claude', id: ID });
   assert.deepEqual(resumeTarget(list[1]), { tool: 'claude', id: ID });
 });
@@ -51,6 +52,19 @@ test('grep, tail, editors, shells and a different id never match', () => {
   assert.equal(matches(proc(VSCODE, `--resume=${OTHER}`)), false, 'an id that shares a prefix is another conversation');
   assert.equal(matches(proc(VSCODE, `--resume=${ID}-2`)), false);
   assert.equal(matches(proc('/usr/local/bin/claude', `--resume ${OTHER}`), ID), false);
+});
+
+test("Claude's session registry finds a session started without --resume, and a stale entry is ignored", () => {
+  const plain = proc('/usr/local/bin/claude', '', { started: 50_000 });
+  const find = (sessions) => findCopies({ processes: [server, plain], uid: ME, selfPid: SERVER, sessions }).map((c) => [c.id, c.busy]);
+  assert.deepEqual(find([{ pid: plain.pid, sessionId: ID, startedAt: 52_000, status: 'busy' }]), [[ID, true]]);
+  assert.deepEqual(find([{ pid: plain.pid, sessionId: ID, startedAt: 52_000, status: 'idle' }]), [[ID, false]]);
+  assert.deepEqual(find([{ pid: plain.pid, sessionId: ID, startedAt: 40_000 }]), [], 'written by an earlier process that had this pid');
+  const grep = proc('/usr/bin/grep', 'x', { started: 50_000 });
+  assert.deepEqual(findCopies({ processes: [grep], uid: ME, selfPid: SERVER, sessions: [{ pid: grep.pid, sessionId: ID, startedAt: 52_000 }] }), [], 'the registry never makes a reader a writer');
+  const cleared = proc(VSCODE, `--resume=${OTHER}`, { started: 50_000 });
+  const both = findCopies({ processes: [cleared], uid: ME, selfPid: SERVER, sessions: [{ pid: cleared.pid, sessionId: ID, startedAt: 52_000 }] });
+  assert.deepEqual(both.map((c) => c.id).sort(), [ID, OTHER].sort(), 'after /clear it holds both');
 });
 
 test("another user's process, a zombie, and Pocket Dev's own server never match", () => {
@@ -157,11 +171,11 @@ const OLD = 1_000_000 - 10 * 60_000;
 test('take over stops the program, reports what it stopped, and logs it', async () => {
   const vscode = proc(VSCODE, `--resume=${ID}`);
   const { sys, logged, takeOver } = takeoverWith([vscode]);
-  const r = await takeOver({ tool: 'claude', id: ID, mtimeMs: OLD, by: { deviceId: 'd1', name: 'Pixel' } });
+  const r = await takeOver({ tool: 'claude', id: ID, mtimeMs: OLD, who: { by: 'phone', deviceId: 'd1', name: 'Pixel', ip: '10.0.0.5' } });
   assert.equal(r.status, 200);
   assert.deepEqual(r.body, { busy: false, stopped: [{ kind: 'process', pid: vscode.pid, label: `Claude Code in VS Code (pid ${vscode.pid})`, signals: ['SIGINT'] }] });
   assert.deepEqual(sys.signals, [[vscode.pid, 'SIGINT']]);
-  assert.deepEqual(logged, [{ type: 'conversation-taken-over', tool: 'claude', conversationId: ID, pids: [vscode.pid], stopped: ['process'], force: false, by: { deviceId: 'd1', name: 'Pixel' } }]);
+  assert.deepEqual(logged, [{ type: 'conversation-taken-over', tool: 'claude', conversationId: ID, pids: [vscode.pid], stopped: ['process'], force: false, by: 'phone', deviceId: 'd1', name: 'Pixel', ip: '10.0.0.5' }]);
 });
 
 test('the busy flag: a file written in the last 10 s needs a second confirmation before anything stops', async () => {
@@ -177,6 +191,9 @@ test('the busy flag: a file written in the last 10 s needs a second confirmation
   assert.equal(second.status, 200);
   assert.equal(second.body.busy, true);
   assert.deepEqual(sys.signals, [[vscode.pid, 'SIGINT']]);
+  const working = takeoverWith([vscode], { claudeSessions: () => [{ pid: vscode.pid, sessionId: ID, startedAt: 2000, status: 'busy' }] });
+  const registryBusy = await working.takeOver({ tool: 'claude', id: ID, mtimeMs: OLD });
+  assert.deepEqual([registryBusy.status, registryBusy.body.code], [409, 'busy'], "Claude's own busy status counts even before the file changes");
   const quiet = takeoverWith([proc(VSCODE, `--resume=${ID}`)]);
   assert.equal((await quiet.takeOver({ tool: 'claude', id: ID, mtimeMs: 1_000_000 - 11_000 })).body.busy, false);
 });

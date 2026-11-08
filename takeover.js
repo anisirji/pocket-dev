@@ -50,17 +50,37 @@ const codexId = (args) => {
   return at === -1 ? null : args.slice(at + 1).find((a) => CODEX_ID.test(a)) ?? null;
 };
 
-// { tool, id } when this process is Claude Code or Codex running a known conversation, else null.
+// 'claude' or 'codex' when this process is one of them (directly, or a CLI script run by node), else null; with the
+// arguments that follow the program.
+function program(proc) {
+  const args = argv(proc);
+  const tool = programOf(proc.exe);
+  if (tool) return { tool, args };
+  if (/(^|\/)node$/.test(proc.exe) && args[0] && programOf(args[0])) return { tool: programOf(args[0]), args: args.slice(1) };
+  return null;
+}
+
+// { tool, id } when this process's command line names the conversation it runs, else null.
 export function resumeTarget(proc) {
-  let args = argv(proc);
-  let tool = programOf(proc.exe);
-  if (!tool && /(^|\/)node$/.test(proc.exe) && args[0]) {
-    tool = programOf(args[0]);
-    args = args.slice(1);
-  }
-  if (!tool) return null;
-  const id = tool === 'claude' ? claudeId(args) : codexId(args);
-  return id ? { tool, id } : null;
+  const found = program(proc);
+  const id = found && (found.tool === 'claude' ? claudeId(found.args) : codexId(found.args));
+  return id ? { tool: found.tool, id } : null;
+}
+
+// Claude Code 2.1 writes ~/.claude/sessions/<pid>.json with the conversation that process is in, which is how a session
+// started without --resume (a plain `claude`, a new VS Code tab) is found. A file left by a process that has exited may
+// carry a pid the system has since reused, so an entry counts only if it was written after the current process started.
+export function readClaudeSessions(dir) {
+  let names;
+  try { names = fs.readdirSync(dir); } catch { return []; }
+  return names.filter((n) => /^\d+\.json$/.test(n)).flatMap((n) => {
+    try {
+      const { pid, sessionId, startedAt, status } = JSON.parse(fs.readFileSync(path.join(dir, n), 'utf8'));
+      return Number.isInteger(pid) && CLAUDE_ID.test(sessionId ?? '') && Number.isFinite(startedAt) ? [{ pid, sessionId, startedAt, status }] : [];
+    } catch {
+      return [];
+    }
+  });
 }
 
 // Two listings joined by pid: `comm` is the executable path and may hold spaces, `args` is the whole command line.
@@ -72,10 +92,11 @@ export function parsePs(statusText, argsText) {
   }
   const out = [];
   for (const line of statusText.split('\n')) {
-    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line);
+    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.+)$/.exec(line);
     const pid = m && Number(m[1]);
     if (!m || !commands.has(pid)) continue;
-    out.push({ pid, ppid: Number(m[2]), uid: Number(m[3]), stat: m[4], exe: m[5].trim(), args: commands.get(pid) });
+    // lstart is local time to the second, so `started` is at most a second before the real start.
+    out.push({ pid, ppid: Number(m[2]), uid: Number(m[3]), stat: m[4], started: Date.parse(m[5]), exe: m[6].trim(), args: commands.get(pid) });
   }
   return out;
 }
@@ -90,7 +111,7 @@ const fixtureFile = () => process.env.POCKET_DEV_PROCESS_FIXTURE;
 
 export async function listProcesses() {
   if (fixtureFile()) return JSON.parse(fs.readFileSync(fixtureFile(), 'utf8')).processes;
-  const [status, args] = await Promise.all([ps('pid=,ppid=,uid=,stat=,comm='), ps('pid=,args=')]);
+  const [status, args] = await Promise.all([ps('pid=,ppid=,uid=,stat=,lstart=,comm='), ps('pid=,args=')]);
   return parsePs(status, args);
 }
 
@@ -108,8 +129,10 @@ const sleepFor = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Every copy of every conversation in one process listing. `terminals` are Pocket Dev's shells ({ id, pid, ... }); a
 // program under one of them is that terminal's copy. A program under `selfPid` that is not in a terminal is a chat
-// engine, which stops with its chat. Pocket Dev itself and the programs it runs under are never copies.
-export function findCopies({ processes, uid, selfPid, terminals = [] }) {
+// engine, which stops with its chat. Pocket Dev itself and the programs it runs under are never copies. `sessions` is
+// readClaudeSessions(); a process it names holds that conversation as well as the one on its command line, because
+// after /clear the command line still shows the conversation the process started with.
+export function findCopies({ processes, uid, selfPid, terminals = [], sessions = [] }) {
   const byPid = new Map(processes.map((p) => [p.pid, p]));
   const lineage = (pid) => {
     const out = [];
@@ -118,16 +141,21 @@ export function findCopies({ processes, uid, selfPid, terminals = [] }) {
   };
   const guarded = new Set(lineage(selfPid));
   const shells = new Map(terminals.map((t) => [t.pid, t]));
+  const registered = new Map(sessions.map((s) => [s.pid, s]));
   const copies = [];
   for (const proc of processes) {
     if (proc.uid !== uid || guarded.has(proc.pid) || proc.stat.startsWith('Z')) continue;
-    const target = resumeTarget(proc);
-    if (!target) continue;
+    const found = program(proc);
+    if (!found) continue;
+    const entry = found.tool === 'claude' && registered.get(proc.pid);
+    const current = entry && entry.startedAt >= proc.started ? entry : null;
+    const ids = new Set([resumeTarget(proc)?.id, current?.sessionId].filter(Boolean));
     const chain = lineage(proc.pid);
     const terminal = chain.map((pid) => shells.get(pid)).find(Boolean);
-    if (terminal) copies.push({ kind: 'terminal', ...target, proc, terminal });
-    else if (chain.includes(selfPid)) copies.push({ kind: 'engine', ...target, proc });
-    else copies.push({ kind: 'process', ...target, proc });
+    const kind = terminal ? 'terminal' : chain.includes(selfPid) ? 'engine' : 'process';
+    for (const id of ids) {
+      copies.push({ kind, tool: found.tool, id, proc, ...(terminal && { terminal }), busy: current?.sessionId === id && current.status === 'busy' });
+    }
   }
   return copies;
 }
@@ -184,11 +212,11 @@ function where(copies) {
   return 'in a Pocket Dev chat';
 }
 
-// `terminals()` lists Pocket Dev's running shells as { id, title, cwd, pid, activeAt }; `endTerminal(id, note)` ends one.
+// `claudeSessions()` returns readClaudeSessions() for the Claude config folder in use. `terminals()` lists Pocket Dev's running shells as { id, title, cwd, pid, activeAt }; `endTerminal(id, note)` ends one.
 // `chats()` lists chats whose engine is awake as { id, title, tool, sessionId, cwd, updatedAt }; `releaseChat(id, note)`
 // stops one's engine. `log(type, fields)` writes the security log.
 export function createTakeover({
-  listProcesses: list = listProcesses, kill: send = kill, isAlive, sleep = sleepFor, now = Date.now,
+  listProcesses: list = listProcesses, claudeSessions = () => [], kill: send = kill, isAlive, sleep = sleepFor, now = Date.now,
   uid = process.getuid(), selfPid = process.pid, log = () => {},
   terminals = () => [], endTerminal = () => false, chats = () => [], releaseChat = async () => false,
 }) {
@@ -198,7 +226,7 @@ export function createTakeover({
   };
 
   async function survey() {
-    const copies = findCopies({ processes: await list(), uid, selfPid, terminals: terminals() });
+    const copies = findCopies({ processes: await list(), uid, selfPid, terminals: terminals(), sessions: claudeSessions() });
     for (const chat of chats()) if (chat.sessionId) copies.push({ kind: 'chat', tool: chat.tool, id: chat.sessionId, chat });
     return copies;
   }
@@ -206,11 +234,11 @@ export function createTakeover({
   const refuse = (body) => ({ status: 409, body });
 
   // `scope` 'all' closes every copy; 'pocket-dev' closes only Pocket Dev's own, for a Mac terminal that resumes the
-  // conversation itself. `note` is what the closed Pocket Dev terminal or chat shows. `by` names who asked, for the log.
-  async function takeOver({ tool, id, mtimeMs, force = false, confirmBusy = false, scope = 'all', note, by }) {
+  // conversation itself. `note` is what the closed Pocket Dev terminal or chat shows. `who` names who asked, for the log.
+  async function takeOver({ tool, id, mtimeMs, force = false, confirmBusy = false, scope = 'all', note, who = {} }) {
     const ours = (c) => c.tool === tool && c.id === id && (scope === 'all' || c.kind !== 'process');
     const found = (await survey()).filter(ours);
-    const busy = now() - mtimeMs < BUSY_MS;
+    const busy = now() - mtimeMs < BUSY_MS || found.some((c) => c.busy);
     if (!found.length) {
       if (scope === 'all' && now() - mtimeMs < LIVE_MS) return refuse({ code: 'not-found', busy, error: NOT_FOUND });
       return { status: 200, body: { stopped: [], busy } };
@@ -238,7 +266,7 @@ export function createTakeover({
     }
     const pids = found.filter((c) => c.proc).map((c) => c.proc.pid);
     if (left.length) {
-      log('conversation-takeover-failed', { tool, conversationId: id, pids, remaining: left.filter((c) => c.proc).map((c) => c.proc.pid), force, by });
+      log('conversation-takeover-failed', { tool, conversationId: id, pids, remaining: left.filter((c) => c.proc).map((c) => c.proc.pid), force, ...who });
       const canForce = !force && left.every((c) => c.kind === 'process');
       const names = left.map((c) => copyView(c).label).join(', ');
       return refuse({
@@ -248,7 +276,7 @@ export function createTakeover({
           : `${names} did not close. Close it on the Mac, then try again.`,
       });
     }
-    log('conversation-taken-over', { tool, conversationId: id, pids, stopped: stopped.map((s) => s.kind), force, by });
+    log('conversation-taken-over', { tool, conversationId: id, pids, stopped: stopped.map((s) => s.kind), force, ...who });
     return { status: 200, body: { stopped, busy } };
   }
 

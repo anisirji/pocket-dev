@@ -50,6 +50,8 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     POCKET_DEV_STATE_DIR: state, POCKET_DEV_NO_OPEN: '1', POCKET_DEV_CLAUDE: '/nonexistent/claude',
     POCKET_DEV_CODEX: '/nonexistent/codex', POCKET_DEV_PMSET: stub, POCKET_DEV_IOREG: stub, POCKET_DEV_TOP: stub, POCKET_DEV_MEMORY_PRESSURE: stub,
     POCKET_DEV_UPDATE_CHECK: stub, POCKET_DEV_OSASCRIPT: stub,
+    // No process table: Resume's take over can neither list nor signal anything on this Mac.
+    POCKET_DEV_PROCESS_FIXTURE: path.join(root, 'no-processes.json'),
   }, stdio: ['ignore', 'pipe', 'pipe'] });
   let logs = '';
   proc.stdout.on('data', (d) => { logs += d; });
@@ -418,6 +420,8 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
       assert.equal((await request('GET', endpoint, { cookie: G })).status, 403, endpoint);
     }
     assert.equal((await request('POST', '/api/settings/password', { cookie: G, body: { current: 'test-password', next: 'changed-password' } })).status, 403);
+    assert.equal((await request('POST', '/api/history/claude/7d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6/takeover', { cookie: G, body: {} })).status, 403, 'a collaborator never takes over a conversation');
+    assert.equal((await request('POST', '/api/history/claude/7d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6/takeover', { cookie: `${G}; ${A.cookie}`, body: {} })).status, 403, 'not even with an owner cookie alongside');
     await assert.rejects(socket(`/ws/chat/${chat.id}`, G), /HTTP 403/);
     assert.equal((await request('GET', '/chat.js', { cookie: G })).status, 403);
     assert.match((await request('GET', '/', { cookie: G })).data, /Shared project/);

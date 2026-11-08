@@ -344,19 +344,31 @@ async function createSession(cwd, base = folderName(cwd), command) {
   return session;
 }
 
-function destroySession(session) {
-  if (session.remote) {
-    session.pty.kill();
-    terminalHost?.forget(session.id);
-  } else {
-    try {
-      process.kill(-session.pty.pid, 'SIGHUP');
-    } catch {
-      try { session.pty.kill(); } catch {}
-    }
+function killShell(session) {
+  if (session.remote) return session.pty.kill();
+  try {
+    process.kill(-session.pty.pid, 'SIGHUP');
+  } catch {
+    try { session.pty.kill(); } catch {}
   }
+}
+
+function destroySession(session) {
+  killShell(session);
+  if (session.remote) terminalHost?.forget(session.id);
   for (const ws of session.clients) ws.close(1000, 'session closed');
   sessions.delete(session.id);
+}
+
+// Resume's take over moved this terminal's conversation elsewhere. The shell ends and the tab stays, saying why.
+function endSession(id, note) {
+  const session = sessions.get(id);
+  if (!session || session.exitCode !== null) return false;
+  const line = `\r\n\x1b[2m[${note}]\x1b[0m\r\n`;
+  appendScrollback(session, line);
+  broadcast(session, { t: 'out', d: line });
+  killShell(session);
+  return true;
 }
 
 // `persistent` tells the phone whether this terminal keeps running through an update.
@@ -653,7 +665,15 @@ async function handleApi(req, res, url) {
 }
 
 const handleGit = createGitApi({ config });
-const handleHistory = createHistoryApi({ createSession, sessionView, sendJson });
+const handleHistory = createHistoryApi({
+  createSession, sessionView, sendJson, readJson, deviceFor: auth.deviceFor, log: auth.admin.log,
+  own: {
+    terminals: () => [...sessions.values()].filter((s) => s.exitCode === null).map((s) => ({ id: s.id, title: s.title, cwd: s.cwd, pid: s.pty.pid, activeAt: s.activeAt })),
+    endTerminal: endSession,
+    chats: () => chatApi.bound(),
+    releaseChat: (id, note) => chatApi.release(id, note),
+  },
+});
 const handleApps = createAppsApi({ sendJson });
 const handleFiles = createFilesApi({ sendJson, readJson, config });
 
@@ -824,6 +844,7 @@ const adminSections = {
     })),
     act: (id) => chatApi.stop(id),
   },
+  conversations: handleHistory.openHere,
 };
 
 const access = createPhoneAccess({

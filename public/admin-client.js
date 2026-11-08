@@ -305,6 +305,8 @@ const EVENT_TEXT = {
   'service-installed': () => 'Installed as a launchd service',
   'server-stopped': () => 'Pocket Dev stopped from this page',
   'server-restarted': (e) => `Pocket Dev restarted from ${e.by === 'phone' ? 'a phone' : 'this page'}`,
+  'conversation-taken-over': (e) => `${e.by === 'phone' ? e.name : 'A Mac terminal'} took over ${e.tool} conversation ${e.conversationId.slice(0, 8)}${e.pids.length ? `, closing pid ${e.pids.join(', ')}` : ''}${e.force ? ' (force quit)' : ''}`,
+  'conversation-takeover-failed': (e) => `${e.by === 'phone' ? e.name : 'A Mac terminal'} could not take over ${e.tool} conversation ${e.conversationId.slice(0, 8)}: pid ${e.remaining.join(', ') || '?'} kept running`,
 };
 
 function renderLog(entries) {

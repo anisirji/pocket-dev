@@ -36,6 +36,8 @@ export const EVENT_KINDS = {
   'service-installed': 'change',
   'server-stopped': 'change',
   'server-restarted': 'change',
+  'conversation-taken-over': 'change',
+  'conversation-takeover-failed': 'failure',
 };
 
 const FILTERS = {
