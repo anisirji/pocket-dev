@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -249,6 +249,29 @@ test('Messages between the Mac, owner devices and guests', { timeout: 120000 }, 
     assert.equal((await local('POST', `/api/devices/${B.id}/revoke`)).status, 200);
     await Promise.race([sB.closed, pause(3000).then(() => assert.fail('revoked socket stayed open'))]);
     assert.equal((await request('GET', '/api/messages', { cookie: B.cookie })).status, 401);
+  });
+
+  await t.test('the CLI sends as the Mac from an argument, piped stdin or --file, by name or device code', async () => {
+    const cli = (args, input) => spawnSync(process.execPath, [path.join(REPO, 'bin', 'pocket-dev.js'), 'message', ...args], { env, input, encoding: 'utf8' });
+    const byName = cli(['hello', 'Pixel', '--to', 'pixel']);
+    assert.equal(byName.status, 0, byName.stderr);
+    assert.equal(byName.stdout.trim(), 'Sent to Pixel.');
+    await until(() => texts(sA).includes('hello Pixel'));
+    const got = sA.inbox.findLast((m) => m.t === 'message').message;
+    assert.deepEqual([got.from.kind, got.chat], ['mac', await idOf(A.cookie, 'Mac')]);
+    assert.equal(cli(['to the laptop', '--to', C.id.slice(-4)]).stdout.trim(), 'Sent to Laptop.');
+    assert.equal(cli([], 'piped text\n').status, 0);
+    await until(() => texts(sA).includes('piped text'));
+    const file = path.join(root, 'report.txt');
+    fs.writeFileSync(file, 'report body');
+    assert.equal(cli(['--file', file]).status, 0);
+    await until(() => sA.inbox.some((m) => m.t === 'message' && m.message.files[0]?.name === 'report.txt'));
+    const sentFile = sA.inbox.findLast((m) => m.t === 'message').message.files[0];
+    assert.equal((await request('GET', `/api/messages/files/${sentFile.id}`, { cookie: A.cookie })).data, 'report body');
+    const empty = cli([], '');
+    assert.equal(empty.status, 2);
+    assert.match(empty.stderr, /^usage: pocket-dev message/);
+    assert.match(cli(['x', '--to', 'nobody']).stderr, /Nobody in Messages matches "nobody"/);
   });
 
   await t.test('guests see group history from their grant on, never others\' direct chats, and only display names', async () => {

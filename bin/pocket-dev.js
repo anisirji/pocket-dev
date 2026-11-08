@@ -25,6 +25,7 @@ Usage: pocket-dev <command>
   qr                                               Print a one-time login QR code
   admin                                            Open the admin page (this Mac only)
   connect | disconnect                             Open or close phone access
+  message [text] [--to NAME] [--file PATH]         Send to Messages as the Mac (text or piped stdin)
   awake on|plugged|off|status                      Keep the Mac awake
   version | help
 
@@ -116,6 +117,7 @@ switch (command) {
   case 'admin': runScript('admin.js', ['open']); break;
   case 'connect': case 'disconnect': runScript('admin.js', [command]); break;
   case 'awake': runScript('awake.js', args); break;
+  case 'message': runScript('message.js', args); break;
   case 'version': case '--version': case '-v': console.log(VERSION); break;
   case undefined: case 'help': case '--help': case '-h': console.log(HELP); break;
   default: fail(`Unknown command "${command}".\n\n${HELP}`, 2);
