@@ -105,6 +105,15 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
   const A = await login();
   assert.equal(A.status, 200);
   assert.match(A.cookie, /^pd_token=/);
+  await t.test('port forwards refuse Pocket Dev’s own listeners, so the Mac-only Admin page never reaches the LAN', async () => {
+    const own = await request('POST', '/api/forwards', { cookie: A.cookie, body: { port } });
+    assert.equal(own.status, 400);
+    assert.match(own.data.error, /Pocket Dev itself/);
+    const adminForward = await request('POST', '/api/forwards', { cookie: A.cookie, body: { port: adminPort } });
+    assert.equal(adminForward.status, 400, JSON.stringify(adminForward.data));
+    assert.match(adminForward.data.error, /Admin/);
+    assert.deepEqual((await request('GET', '/api/forwards', { cookie: A.cookie })).data, [], 'nothing was opened');
+  });
   await t.test('logged-in pages can load every script and stylesheet, including bundled terminal assets', async () => {
     for (const endpoint of assets) {
       const res = await request('GET', endpoint, { cookie: A.cookie });

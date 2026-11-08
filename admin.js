@@ -391,6 +391,7 @@ export async function startAdmin({ auth, collaborators, access, tunnel, config, 
 
   return {
     url,
+    port,
     line: `Admin (this Mac only): ${url}`,
     openPage() {
       if (process.env.POCKET_DEV_NO_OPEN) return;

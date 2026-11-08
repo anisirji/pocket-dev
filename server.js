@@ -550,6 +550,8 @@ function parsePort(value) {
   const port = Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65535) return { error: 'Port must be a whole number from 1 to 65535.' };
   if (port === PORT) return { error: `Port ${port} is Pocket Dev itself.` };
+  // A forward connects from loopback with any Host the client chooses, which is all the Admin page checks.
+  if (port === admin.port) return { error: `Port ${port} is Pocket Dev’s Admin page, which only this Mac may open.` };
   return { port };
 }
 
