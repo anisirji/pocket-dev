@@ -167,7 +167,8 @@ const lockedMessage = (ip, ms) => `Too many wrong passwords from ${ip}. Try agai
 
 // `config` is the server's config store (config.js): read() at use time, update() writes only the keys auth owns
 // (undefined removes a key). `urls()` returns the current { lan, local } base URLs; lan is null while the Mac has no network.
-export function createAuth({ config, port, urls, localNote, extraActiveCount = () => 0, onLockdown = () => {} }) {
+// `onPending` is told when a login starts waiting while phones may approve, so the server can tell them.
+export function createAuth({ config, port, urls, localNote, extraActiveCount = () => 0, onLockdown = () => {}, onPending = () => {} }) {
   const envPassword = process.env.POCKET_DEV_PASSWORD;
   let passwordLine = envPassword ? `Password: ${envPassword} (from POCKET_DEV_PASSWORD)` : 'Password: (set; change it in Settings)';
   const boot = config.read();
@@ -194,6 +195,9 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
   };
   const requireApproval = () => config.read().requireApproval === true;
   const rolesEnabled = () => config.read().roleAccessEnabled === true;
+  // Off by default. Only the Mac turns it on; a phone may turn it off. With roles on, only Admin devices approve.
+  const approveFromDevices = () => config.read().approveFromDevices === true;
+  const mayApprove = (device) => approveFromDevices() && isActive(device) && (!rolesEnabled() || device.role === 'admin');
 
   const devices = loadDevices();
   const sockets = new Map();
@@ -434,6 +438,12 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     if (from !== n) log('limit-changed', { from, to: n, by });
   }
 
+  function setApproveFromDevices(on, by) {
+    if (on === approveFromDevices()) return;
+    config.update({ approveFromDevices: on });
+    log('device-approval-changed', { on, by });
+  }
+
   // Blocked devices stay blocked: logging them out would let them try the password again.
   function changePassword(next, { logoutAll, keep, by }) {
     if (logoutAll) onLockdown();
@@ -477,6 +487,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       const status = requireApproval() || rolesEnabled() ? 'pending' : 'active';
       const { cookie, device } = addDevice(req, 'password', status);
       log(status === 'pending' ? 'login-pending' : 'login', { via: 'password', ...about(device), ua });
+      if (status === 'pending' && approveFromDevices()) onPending({ kind: deviceName(ua), code: device.id.slice(-4) });
       return reply(200, { ok: true, ...(status === 'pending' && { pending: true }) }, { 'set-cookie': cookie });
     },
     'GET /api/status'({ req }) {
@@ -492,7 +503,23 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       return reply(204, undefined, { 'set-cookie': CLEAR_COOKIE });
     },
     'GET /api/settings'({ device }) {
-      return reply(200, { maxDevices: maxDevices(), currentDeviceId: device.id, devices: listDevices(isActive), urls: { ...urls(), localNote }, roleAccessEnabled: rolesEnabled(), role: device.role || 'owner', collaboratorSessions: extraActiveCount() });
+      return reply(200, {
+        maxDevices: maxDevices(), currentDeviceId: device.id, devices: listDevices(isActive), urls: { ...urls(), localNote },
+        roleAccessEnabled: rolesEnabled(), role: device.role || 'owner', collaboratorSessions: extraActiveCount(),
+        approveFromDevices: approveFromDevices(), waiting: mayApprove(device) ? listDevices((d) => d.status === 'pending') : [],
+      });
+    },
+    // The same path as approval on the Mac, so the limit, roles and the log behave the same; `by` names the phone.
+    'POST /api/devices/:id/:action'({ device, id, action }) {
+      if (!approveFromDevices()) return reply(403, { error: 'Approving from a phone is off. Turn it on in Admin on the Mac.' });
+      if (!mayApprove(device)) return reply(403, { error: 'Only an Admin device may approve logins.' });
+      return admin.deviceAction(id, action, `device ${device.name} (${device.id.slice(-4)})`);
+    },
+    async 'PUT /api/settings/approve-from-devices'({ body }) {
+      const { on } = await body();
+      if (on !== false) return reply(403, { error: 'Only the Mac can turn this on. Use Admin on the Mac or pocket-dev config set approveFromDevices true.' });
+      setApproveFromDevices(false, 'phone');
+      return reply(200, { approveFromDevices: false });
     },
     async 'PUT /api/settings/max-devices'({ body }) {
       const { maxDevices: n } = await body();
@@ -535,8 +562,8 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
   // Returns null for paths it does not own, so the server can route them. Pending and blocked devices get a 403 on
   // every route, owned or not, so the page can show why.
   async function handleApi(req, pathname, readBody) {
-    const deviceRoute = /^\/api\/devices\/([^/]+)$/.exec(pathname);
-    const route = `${req.method} ${deviceRoute ? '/api/devices/:id' : pathname}`;
+    const deviceRoute = /^\/api\/devices\/([^/]+)(?:\/(approve|deny))?$/.exec(pathname);
+    const route = `${req.method} ${deviceRoute ? `/api/devices/:id${deviceRoute[2] ? '/:action' : ''}` : pathname}`;
     const handler = routes[route];
     const body = async () => asObject(await readBody());
     if (PUBLIC_ROUTES.has(route)) return handler({ req, body });
@@ -544,7 +571,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     if (device && !isActive(device) && !(route === 'POST /api/logout' && device.status === 'pending')) return reply(403, REFUSALS[device.status] || { error: 'Review this device in Admin on the Mac before giving it Admin access.', pending: true });
     if (!handler) return null;
     if (!device) return reply(401, { error: 'Not logged in' });
-    return handler({ req, body, device, id: deviceRoute?.[1] });
+    return handler({ req, body, device, id: deviceRoute?.[1], action: deviceRoute?.[2] });
   }
 
   // Each action names the statuses it applies to; approve and unblock make a device active, so they respect the limit.
@@ -576,6 +603,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
         qrTtlMin: QR_TTL_MIN,
         roleAccessEnabled: rolesEnabled(),
         collaboratorSessions: extraActiveCount(),
+        approveFromDevices: approveFromDevices(),
       };
     },
     enableRoles(ids) {
@@ -591,7 +619,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       log('role-access-enabled', { adminDeviceIds: ids });
       return reply(200, { ok: true });
     },
-    deviceAction(id, action) {
+    deviceAction(id, action, by = 'admin') {
       const spec = Object.hasOwn(DEVICE_ACTIONS, action) ? DEVICE_ACTIONS[action] : null;
       if (!spec) return reply(404, { error: `Unknown action: ${action}` });
       const d = findDevice(id);
@@ -606,7 +634,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       } else {
         spec.apply(d);
       }
-      log(spec.event, { ...about(d), by: 'admin' });
+      log(spec.event, { ...about(d), by });
       return reply(200, deviceView(d, Date.now()));
     },
     rename(id, name) {
@@ -620,16 +648,18 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       if (invalid) return reply(400, { error: invalid });
       return reply(200, { loggedOut: changePassword(next, { logoutAll, by: 'admin' }) });
     },
-    updateSettings({ maxDevices: n, requireApproval: on }) {
-      if (n === undefined && on === undefined) return reply(400, { error: 'Send maxDevices or requireApproval.' });
+    updateSettings({ maxDevices: n, requireApproval: on, approveFromDevices: fromDevices }) {
+      if (n === undefined && on === undefined && fromDevices === undefined) return reply(400, { error: 'Send maxDevices, requireApproval or approveFromDevices.' });
       if (n !== undefined && !isMaxDevices(n)) return reply(400, { error: 'The device limit must be a whole number from 1 to 20.' });
       if (on !== undefined && typeof on !== 'boolean') return reply(400, { error: 'requireApproval must be true or false.' });
+      if (fromDevices !== undefined && typeof fromDevices !== 'boolean') return reply(400, { error: 'approveFromDevices must be true or false.' });
       if (n !== undefined) setMaxDevices(n, 'admin');
       if (on !== undefined && on !== requireApproval()) {
         config.update({ requireApproval: on });
         log('approval-changed', { on, by: 'admin' });
       }
-      return reply(200, { maxDevices: maxDevices(), requireApproval: requireApproval() });
+      if (fromDevices !== undefined) setApproveFromDevices(fromDevices, 'admin');
+      return reply(200, { maxDevices: maxDevices(), requireApproval: requireApproval(), approveFromDevices: approveFromDevices() });
     },
     async mintQr() {
       const url = mintQrUrl();

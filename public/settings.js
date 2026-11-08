@@ -43,7 +43,9 @@
       <section>
         <h3>Devices</h3>
         <p class="st-summary"></p>
+        <div class="st-waiting"></div>
         <ul class="st-devices"></ul>
+        <div class="st-approve"></div>
         <p class="st-err" data-for="devices"></p>
       </section>
       <section>
@@ -114,7 +116,71 @@
     const online = devices.filter((d) => d.online).length;
     $('.st-summary').textContent = `${devices.length} logged in · ${online} online now`;
     $('.st-devices').replaceChildren(...devices.map((d) => deviceItem(d, d.id === currentDeviceId)));
+    renderWaiting();
   }
+
+  // Logins waiting for approval. The server lists them only when the Mac lets phones approve and this device may.
+  function renderWaiting() {
+    $('.st-waiting').replaceChildren(...(settings.waiting ?? []).map((d) => {
+      const card = el('li', 'st-device st-pending');
+      const top = el('div', 'st-dev-top');
+      top.append(el('span', 'st-name', d.kind ?? d.name), el('span', 'st-badge', 'Waiting'));
+      const actions = el('div', 'st-actions');
+      const approve = el('button', 'st-primary', 'Approve');
+      approve.onclick = () => decide(d, 'approve');
+      const deny = el('button', 'st-btn st-danger', 'Deny');
+      deny.onclick = () => decide(d, 'deny');
+      actions.append(approve, deny);
+      card.append(top, el('div', 'st-code', d.code), el('p', 'st-note', 'Approve only if this matches the code on the other device.'),
+        el('div', 'st-meta', `${d.ip} · asked ${ago(d.createdAt)}`), actions);
+      return card;
+    }));
+    const box = $('.st-approve');
+    if (!settings.approveFromDevices) return box.replaceChildren();
+    const off = el('button', 'st-btn', 'Turn off approving from phones');
+    off.onclick = async () => {
+      if (!confirm('Turn off approving logins from phones? Only the Mac can turn it back on.')) return;
+      try {
+        await api('PUT', '/api/settings/approve-from-devices', { on: false });
+        await refresh();
+      } catch (err) {
+        msg('err', 'devices', err.message);
+      }
+    };
+    box.replaceChildren(el('p', 'st-note', 'Logged-in phones can approve waiting logins. If a phone is lost, log it out from the Mac or run Lockdown there.'), off);
+  }
+
+  async function decide(d, action) {
+    if (action === 'deny' && !confirm(`Deny ${d.kind ?? d.name} (code ${d.code})? It goes back to the login page.`)) return;
+    try {
+      await api('POST', `/api/devices/${d.id}/${action}`);
+      msg('err', 'devices', '');
+      await refresh();
+    } catch (err) {
+      msg('err', 'devices', err.message);
+    }
+  }
+
+  // The server tells every open page when a login starts waiting; each terminal socket hears it, so one code shows once.
+  const notice = el('aside', 'st-notice');
+  notice.hidden = true;
+  notice.setAttribute('role', 'status');
+  document.getElementById('clientError').after(notice);
+  let noticedCode = '';
+  window.pocketDevSettings = {
+    waiting({ kind, code }) {
+      if (code === noticedCode) return;
+      noticedCode = code;
+      const review = el('button', 'st-primary', 'Review');
+      review.onclick = () => { notice.hidden = true; open(); };
+      const dismiss = el('button', 'st-btn', 'Dismiss');
+      dismiss.onclick = () => { notice.hidden = true; };
+      const actions = el('span', 'st-notice-actions');
+      actions.append(review, dismiss);
+      notice.replaceChildren(el('span', 'st-notice-text', `Someone is waiting to log in: ${kind}, code ${code}`), actions);
+      notice.hidden = false;
+    },
+  };
 
   function deviceItem(d, isCurrent) {
     const li = el('li', `st-device${d.online ? ' online' : ''}`);

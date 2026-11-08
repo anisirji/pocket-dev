@@ -32,6 +32,7 @@ export const EVENT_KINDS = {
   'password-changed': 'change',
   'limit-changed': 'change',
   'approval-changed': 'change',
+  'device-approval-changed': 'change',
   'lockdown': 'change',
   'access-connected': 'change',
   'access-disconnected': 'change',

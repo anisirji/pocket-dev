@@ -101,6 +101,11 @@ let collaborators;
 const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE,
   extraActiveCount: () => collaborators?.sessionCount() || 0,
   onLockdown: () => collaborators?.lockdown(),
+  // Every open socket belongs to a logged-in owner device, so each of their pages hears about a waiting login.
+  onPending(notice) {
+    const data = JSON.stringify({ t: 'waiting', ...notice });
+    for (const ws of wss.clients) if (ws.readyState === ws.OPEN) ws.send(data);
+  },
 });
 collaborators = createCollaborators({ config, auth, urls });
 

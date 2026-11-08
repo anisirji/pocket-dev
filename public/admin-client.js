@@ -391,8 +391,9 @@ const EVENT_TEXT = {
   'device-revoked': (e) => `${e.name} logged out ${REVOKED_BY[e.by] ?? ''}`.trim(),
   'device-blocked': (e) => `${e.name} blocked`,
   'device-unblocked': (e) => `${e.name} unblocked`,
-  'device-approved': (e) => `${e.name} approved${e.by === 'qr' ? ' by scanning a QR code' : ''}`,
-  'device-denied': (e) => `${e.name} denied`,
+  'device-approved': (e) => `${e.name} approved${e.by === 'qr' ? ' by scanning a QR code' : e.by?.startsWith('device ') ? ` from ${e.by.slice(7)}` : ''}`,
+  'device-denied': (e) => `${e.name} denied${e.by?.startsWith('device ') ? ` from ${e.by.slice(7)}` : ''}`,
+  'device-approval-changed': (e) => (e.on ? 'Logged-in phones may now approve waiting logins' : `Phones may no longer approve logins${byText(e)}`),
   'device-removed': (e) => `${e.name} removed while blocked`,
   'device-renamed': (e) => `${e.from} renamed to ${e.name}${byText(e)}`,
   'pending-expired': (e) => `${e.name} stopped waiting: nobody approved it in time`,
@@ -468,6 +469,7 @@ function renderSettings() {
     : 'Password logins stop at this many devices. QR logins always work and replace the device used least recently.';
   if (state.roleAccessEnabled) $('limitNote').textContent = `The device limit includes ${plural(overview.loggedIn, 'Admin device')} and ${plural(state.collaboratorSessions || 0, 'active collaborator session')}. Invitations never log out an Admin. New password logins always require Mac approval.`;
   $('approval').checked = requireApproval;
+  $('approveFrom').checked = state.approveFromDevices === true;
   const copy = (text) => h('button', { class: 'btn btn-sm', type: 'button', onclick: () => copyLink(text) }, 'Copy');
   $('urls').replaceChildren(
     h('dt', {}, 'Wi-Fi IP'), ...(urls.lan ? [h('dd', {}, urls.lan), copy(urls.lan)] : [h('dd', {}, state.network.wifi ? 'No network' : 'Wi-Fi access off'), h('span')]),
@@ -492,6 +494,8 @@ async function setApproval(on) {
   await act(() => api('PUT', '/api/settings', { requireApproval: on }), on ? 'New password logins now wait for approval' : 'Approval turned off');
 }
 $('approval').addEventListener('change', (e) => setApproval(e.target.checked));
+$('approveFrom').addEventListener('change', (e) => act(() => api('PUT', '/api/settings', { approveFromDevices: e.target.checked }),
+  e.target.checked ? 'Logged-in phones can now approve waiting logins' : 'Phones can no longer approve logins'));
 
 // ---- Share and login QR codes
 

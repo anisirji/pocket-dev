@@ -327,7 +327,7 @@ function connect(view) {
         view.exitCode = msg.code;
         view.term.write(`\r\n\x1b[2m[process exited ${msg.code}]\x1b[0m\r\n`);
         renderTabs();
-      }
+      } else if (msg.t === 'waiting') window.pocketDevSettings?.waiting(msg);
     },
     onClose(e) {
       if (POWER_REASONS.has(e.reason)) { showPower(e.reason); return false; }

@@ -113,5 +113,5 @@ test('unknown commands fail with usage; help lists every settable key', (t) => {
   assert.equal(cli('nope').status, 2);
   const help = cli('help');
   assert.equal(help.status, 0);
-  for (const key of ['port', 'adminPort', 'awake', 'requireApproval', 'maxDevices', 'chatIdleMinutes', 'allowedHosts', 'internet']) assert.match(help.stdout, new RegExp(`\\b${key}\\b`));
+  for (const key of ['port', 'adminPort', 'awake', 'requireApproval', 'maxDevices', 'approveFromDevices', 'chatIdleMinutes', 'allowedHosts', 'internet']) assert.match(help.stdout, new RegExp(`\\b${key}\\b`));
 });

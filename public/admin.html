@@ -138,7 +138,7 @@
 
     <section id="pending" class="panel" hidden>
       <div class="panel-head"><h2>Waiting for approval</h2></div>
-      <p class="note">These browsers typed the right password. Check the code on the phone matches before you approve it. Requests expire after <span id="pendingTtl">10</span> minutes.</p>
+      <p class="note">These browsers typed the right password. Check the code on the phone matches before you approve it. Requests expire after <span id="pendingTtl">10</span> minutes. With <a href="#settings">Approve from a logged-in phone</a> on, your other phones see this list too.</p>
       <div class="rows" id="pendingRows"></div>
     </section>
 
@@ -190,6 +190,10 @@
         <div class="setting">
           <label class="setting-text switch-label" for="approval"><b>Approve new devices</b><small>A password login waits here until you approve it. QR logins skip this: scanning a code from this Mac proves you're here.</small></label>
           <input type="checkbox" role="switch" class="switch" id="approval">
+        </div>
+        <div class="setting">
+          <label class="setting-text switch-label" for="approveFrom"><b>Approve from a logged-in phone</b><small>Your logged-in phones see who is waiting (Settings → Devices) and can approve or deny with the same code check, so you can let someone in while away. A logged-in phone already has full shell access, so this adds no power it did not have; if that phone is lost, log it out here or run Lockdown. Only this page turns it on; a phone can turn it off. Collaborator invitations already work from a logged-in owner phone once sharing is enabled.</small></label>
+          <input type="checkbox" role="switch" class="switch" id="approveFrom">
         </div>
         <div class="setting setting-col">
           <div class="setting-text"><b>Addresses</b><small>Phones on the same Wi-Fi can use either. Each address logs in separately.</small></div>
