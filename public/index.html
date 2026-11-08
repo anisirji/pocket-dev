@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#0b0e14">
 <title>Pocket Dev</title>
+<link rel="stylesheet" href="/folder-picker.css">
+<script src="/folder-picker.js"></script>
 <link rel="stylesheet" href="/vendor/xterm/xterm.css">
 <script src="/vendor/xterm/xterm.js"></script>
 <script src="/vendor/xterm/addon-fit.js"></script>
@@ -742,7 +744,14 @@ let folders = null;
 let folderNote = '';
 const otherPath = sheetForm('Other path, e.g. ~/app', 'Open', (value) => openFolder(value));
 
+let browsingFolders = false;
+const terminalFolderBrowser = window.PocketDevFolderPicker?.create({
+  api, title: 'Choose a folder for the terminal', selectLabel: 'Open terminal here',
+  onSelect: openFolder, onCancel: () => { browsingFolders = false; renderFolders(); },
+});
+
 async function openFolders() {
+  browsingFolders = false; terminalFolderBrowser?.close();
   folderNote = '';
   showLayer('folders');
   try { folders = await api('GET', '/api/folders'); } catch (err) { folderNote = err.message; }
@@ -752,15 +761,17 @@ async function openFolders() {
 // A double tap on a row must open one terminal, not two.
 let openingFolder = false;
 async function openFolder(dir) {
-  if (openingFolder) return;
+  if (openingFolder) return false;
   openingFolder = true;
   try {
     await newSession(dir);
     otherPath.querySelector('input').value = '';
     hideLayer();
+    return true;
   } catch (err) {
     folderNote = err.message;
     renderFolders();
+    return false;
   } finally {
     openingFolder = false;
   }
@@ -772,7 +783,15 @@ async function togglePin(dir, pinned) {
 }
 
 function renderFolders() {
-  if (!folders) return setSheet({ title: 'New terminal', note: folderNote || 'Loading…', error: !!folderNote });
+  if (browsingFolders) return setSheet({ title: 'New terminal', rows: [terminalFolderBrowser.element], note: folderNote, error: !!folderNote });
+  const browse = h('button', 'primary', 'Browse folders');
+  browse.type = 'button';
+  browse.onclick = () => {
+    if (!terminalFolderBrowser) { folderNote = CLIENT_UPDATE_MESSAGE; renderFolders(); return; }
+    browsingFolders = true; renderFolders();
+    terminalFolderBrowser.open(otherPath.querySelector('input').value || folders?.home, browse);
+  };
+  if (!folders) return setSheet({ title: 'New terminal', action: browse, note: folderNote || 'Loading…', error: !!folderNote });
   const { home, pinned, recent, projects } = folders;
   const tilde = (p) => (p === home ? '~' : p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p);
   const pinnedPaths = new Set(pinned.map((f) => f.path));
@@ -798,6 +817,7 @@ function renderFolders() {
   };
   setSheet({
     title: 'New terminal',
+    action: browse,
     rows: [row('Home', home, false), ...section('Pinned', pinned), ...section('Recent', recent), ...section('Projects', projects)],
     form: otherPath,
     note: folderNote,

@@ -170,3 +170,15 @@ Validation in this session:
 - The original Internet access exploit script also requires local listeners and was not rerun. Cookie isolation and handoff checks ran directly against production Auth; HTTPS redirects, port-forward refusals and invitation-address guards were reviewed in code and retain their server regressions.
 
 Before release, run `npm test` and the responsive browser harness where local listeners are permitted. Real Cloudflare, physical phones and process takeover of disposable real conversations remain manual checks. This combined branch has not been deployed or pushed.
+
+## Shared folder browser, 2026-11-08
+
+The owner identified typed folder paths as a blocker throughout the application. Chat working folders, Terminal's New terminal sheet, collaborator repositories and related folders now share a directory browser; collaborator setup uses it on both phone Settings and Mac Admin. Home, Desktop, Documents, Downloads, pinned folders and external drives are shortcuts. Breadcrumbs, Back, Up, directory-name search and a hidden-folder switch support nested navigation. Selecting an empty directory is allowed. Manual paths remain optional.
+
+The new `GET /api/folders/browse` route lists only directories and directory symlinks, resolves the chosen path, omits broken links, sorts names naturally and limits each response to 2,000 matches. Search can find directories beyond that first page. It is mounted after owner authentication and the guest refusal on the phone listener, and after the existing Mac-only guard on Admin. Selecting a folder does not grant access: collaborator creation still validates the scope through its existing policy.
+
+The production browser and form code passed model-free checks for click-only selection into Chat, Terminal and collaborator setup on both surfaces, retaining a Terminal browser after a failed creation, cancellation, stale responses, Back/Up, search, hidden folders, permission-error recovery, independent related-folder fields and markup in directory names. Filesystem checks cover tilde paths, links, empty folders, deleted paths and bounded listing/search. A production-dispatcher check verifies that unauthenticated callers and guests cannot reach the listing operation.
+
+All 148 tests across the 21 files that do not require listeners passed. Syntax passed for 96 JavaScript files and four inline scripts; `git diff --check` passed. Server integration checks now cover both authenticated routes, private assets and mixed guest/owner cookies. The responsive harness now selects Chat and collaborator folders by clicking, and exercises the Terminal browser at its 14 viewport sizes. Those listener-dependent checks were not run in this sandbox. Playwright is unavailable, and an isolated headless Chrome preview exited with signal 6 before producing a screenshot. Visual layout and physical-phone behavior remain unverified.
+
+This change is committed only in the integration worktree. The live checkout and running service were not updated; the backend must be loaded and the page refreshed before the browser is available there.

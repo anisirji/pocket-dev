@@ -26,6 +26,7 @@ import { captureScreen } from './screen.js';
 import { collectHealth } from './health.js';
 import { createTunnel } from './tunnel.js';
 import { createMessages } from './messages.js';
+import { createFolderBrowser } from './folder-browser.js';
 import { readNetwork, readToken, createSameNetwork } from './network.js';
 import { sameOrigin, fromConnector, clientIp, cookieHost } from './transport.js';
 
@@ -68,6 +69,7 @@ const urls = () => ({
   remote: tunnel?.view().url ?? null,
 });
 const LOCAL_NOTE = 'same Wi-Fi only; some Android phones cannot open .local names';
+const browseFolders = createFolderBrowser({ config });
 
 // A DNS-rebinding page reaches this port under its own name, so only names that mean this Mac are served: its
 // addresses and .local name on PORT, loopback, the tunnel's hostname on https, and config.json "allowedHosts" (any
@@ -609,6 +611,7 @@ async function handleApi(req, res, url) {
     return handlePowerApi(req, res, url.pathname.split('/')[4], { readJson, sendJson, wss, sessions });
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  if (req.method === 'GET' && url.pathname === '/api/folders/browse') return sendJson(res, 200, await browseFolders(url));
   // Switching between addresses exists only once internet access is on; before that these routes are not there.
   if ((resource === 'handoff' || resource === 'connection') && !internetOn()) return sendJson(res, 404, { error: 'Not found' });
   if (resource === 'collaborators') {
@@ -760,6 +763,7 @@ const PAGES = {
   '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
   '/connection.js': 'connection.js', '/network.js': 'network.js',
+  '/folder-picker.js': 'folder-picker.js', '/folder-picker.css': 'folder-picker.css',
   '/messages.js': 'messages.js', '/messages.css': 'messages.css',
   '/collaborators.js': 'collaborators.js', '/collaborators.css': 'collaborators.css',
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',

@@ -95,8 +95,8 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); ws.once('unexpected-response', (_, response) => { ws.terminate(); reject(new Error(`HTTP ${response.statusCode}`)); }); });
     return ws;
   }
-  const apis = ['/api/sessions', '/api/folders', '/api/shortcuts', '/api/forwards', '/api/info', '/api/history', '/api/git/repos', '/api/settings', '/api/service', '/api/power', '/api/apps', '/api/chat', `/api/files/list?path=${encodeURIComponent(home)}`];
-  const assets = ['/vendor/xterm/xterm.js', '/vendor/xterm/xterm.css', '/vendor/xterm/addon-fit.js', '/connection.js', '/network.js', '/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/collaborators.js', '/collaborators.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
+  const apis = ['/api/sessions', '/api/folders', '/api/folders/browse', '/api/shortcuts', '/api/forwards', '/api/info', '/api/history', '/api/git/repos', '/api/settings', '/api/service', '/api/power', '/api/apps', '/api/chat', `/api/files/list?path=${encodeURIComponent(home)}`];
+  const assets = ['/vendor/xterm/xterm.js', '/vendor/xterm/xterm.css', '/vendor/xterm/addon-fit.js', '/connection.js', '/network.js', '/folder-picker.js', '/folder-picker.css', '/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/collaborators.js', '/collaborators.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
   await t.test('every feature requires authentication; private source stays private', async () => {
     assert.equal((await request('GET', '/')).status, 302);
     for (const endpoint of [...apis, ...assets]) assert.equal((await request('GET', endpoint)).status, 401, endpoint);
@@ -121,6 +121,15 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
       const res = await request('GET', endpoint, { cookie: A.cookie });
       assert.equal(res.status, 200, endpoint);
       assert.match(res.headers.get('content-type'), endpoint.endsWith('.css') ? /text\/css/ : /javascript/, endpoint);
+    }
+  });
+  await t.test('owner and Mac Admin can browse folders without typing a path', async () => {
+    for (const result of [await request('GET', '/api/folders/browse', { cookie: A.cookie }), await local('GET', '/api/folders/browse')]) {
+      assert.equal(result.status, 200);
+      assert.equal(result.data.path, fs.realpathSync(home));
+      assert.ok(result.data.entries.some((entry) => entry.name === 'Desktop'));
+      assert.ok(result.data.shortcuts.some((entry) => entry.name === 'Home'));
+      assert.ok(result.data.breadcrumbs.length > 0);
     }
   });
   let chat, session;
@@ -411,6 +420,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     const accepted = await request('POST', '/api/invitations/accept', { body: { token } });
     assert.equal(accepted.status, 200, JSON.stringify(accepted.data));
     const G = accepted.cookie;
+    assert.equal((await request('GET', '/api/folders/browse', { cookie: `${G}; ${A.cookie}` })).status, 403, 'a guest cookie cannot borrow owner folder navigation');
     assert.match(G, /^pd_collaborator=/);
     assert.equal((await request('POST', '/api/invitations/accept', { body: { token } })).status, 410, 'one-use invitation');
     const access = await request('GET', '/api/current-access', { cookie: G });
@@ -425,7 +435,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
       assert.equal((await request('GET', `/api/files/download?path=${encodeURIComponent(forbidden)}`, { cookie: G })).status, 403, forbidden);
     }
     assert.equal((await request('POST', '/api/files/mkdir', { cookie: G, body: { dir: repo, name: 'denied' } })).status, 403);
-    for (const endpoint of ['/api/chat', '/api/sessions', '/api/history', '/api/settings', '/api/power', '/api/apps', '/api/collaborators', '/api/files/pin']) {
+    for (const endpoint of ['/api/folders/browse', '/api/chat', '/api/sessions', '/api/history', '/api/settings', '/api/power', '/api/apps', '/api/collaborators', '/api/files/pin']) {
       assert.equal((await request('GET', endpoint, { cookie: G })).status, 403, endpoint);
     }
     assert.equal((await request('POST', '/api/settings/password', { cookie: G, body: { current: 'test-password', next: 'changed-password' } })).status, 403);

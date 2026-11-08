@@ -31,6 +31,11 @@ const chatCreates = [];
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const json = (data) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(data)); };
+  if (url.pathname === '/api/folders/browse') {
+    const dir = url.searchParams.get('path') || '/tmp';
+    const names = dir === '/tmp' ? ['website-project', 'Downloads'] : dir === '/tmp/Downloads' ? ['project-assets'] : [];
+    return json({ path: dir, parent: dir === '/tmp' ? null : '/tmp', breadcrumbs: [{ name: 'Home', path: '/tmp' }, ...(dir === '/tmp' ? [] : [{ name: dir.split('/').at(-1), path: dir }])], shortcuts: [{ name: 'Home', path: '/tmp' }], entries: names.map((name) => ({ name, path: dir + '/' + name })) });
+  }
   if (url.pathname === '/api/files/download') {
     if (url.searchParams.get('path') !== '/tmp/ROLE_ACCESS_PLAN.md') { res.writeHead(403); return res.end(); }
     const content = '# Role access plan\n\nScoped repository access.\n';
@@ -144,6 +149,20 @@ try {
   }
   await page.evaluate(() => setTestViewport({}));
   await page.locator('#cmd').evaluate((node) => node.blur());
+  await page.locator('#new').click();
+  await page.locator('#sheetAction').getByRole('button', { name: 'Browse folders', exact: true }).click();
+  await page.locator('#sheetBody').getByRole('button', { name: 'Open folder website-project', exact: true }).click();
+  assert.equal(await page.locator('#sheetBody .fp-selected').textContent(), '/tmp/website-project');
+  assert.equal(await page.locator('#sheetBody').getByRole('button', { name: 'Open terminal here', exact: true }).isEnabled(), true);
+  for (const [width, height] of sizes) {
+    await page.setViewportSize({ width, height });
+    await page.locator('#sheetBody .fp-primary').scrollIntoViewIfNeeded();
+    await inViewport('#sheetBody .fp-primary');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  }
+  await page.locator('#sheetBody').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.locator('#sheetClose').click();
+  await page.setViewportSize({ width: 393, height: 852 });
   await page.locator('#settingsBtn').click();
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
   await settle();
@@ -151,11 +170,20 @@ try {
   const collaborators = page.locator('[data-mount="collaborators"]');
   await collaborators.getByRole('button', { name: 'Invite someone', exact: true }).click();
   await collaborators.getByLabel('Name', { exact: true }).fill('Website developer');
-  await collaborators.getByLabel('Repository', { exact: true }).fill('/tmp/website-project');
+  const repoField = collaborators.locator('.fp-field').filter({ has: page.getByLabel('Repository', { exact: true }) });
+  await repoField.getByRole('button', { name: 'Browse folders', exact: true }).click();
+  await repoField.getByRole('button', { name: 'Open folder website-project', exact: true }).click();
+  await repoField.getByRole('button', { name: 'Select this folder', exact: true }).click();
+  assert.equal(await collaborators.getByLabel('Repository', { exact: true }).inputValue(), '/tmp/website-project');
   await collaborators.getByLabel('Role', { exact: true }).selectOption('developer');
   assert.equal(await collaborators.getByLabel('AI access', { exact: true }).isDisabled(), true);
   await collaborators.getByRole('button', { name: 'Add related folder', exact: true }).click();
-  await collaborators.getByLabel('Related folder path', { exact: true }).fill('/tmp/Downloads/project-assets');
+  const relatedField = collaborators.locator('.fp-field').filter({ has: page.getByLabel('Related folder', { exact: true }) });
+  await relatedField.getByRole('button', { name: 'Browse folders', exact: true }).click();
+  await relatedField.getByRole('button', { name: 'Open folder Downloads', exact: true }).click();
+  await relatedField.getByRole('button', { name: 'Open folder project-assets', exact: true }).click();
+  await relatedField.getByRole('button', { name: 'Select this folder', exact: true }).click();
+  assert.equal(await collaborators.getByLabel('Related folder', { exact: true }).inputValue(), '/tmp/Downloads/project-assets');
   assert.equal(await collaborators.getByLabel('Related folder access', { exact: true }).inputValue(), 'read');
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
@@ -209,6 +237,12 @@ try {
   await page.locator('[data-view="chat"]').click();
   await page.locator('.chat-new-btn').click();
   await page.waitForSelector('.chat-start');
+  const chatFolder = page.locator('.chat .fp-field').filter({ has: page.getByLabel('Folder', { exact: true }) });
+  await chatFolder.getByRole('button', { name: 'Browse folders', exact: true }).click();
+  await chatFolder.locator('.fp-locations').getByRole('button', { name: 'Home', exact: true }).click();
+  await chatFolder.getByRole('button', { name: 'Open folder website-project', exact: true }).click();
+  await chatFolder.getByRole('button', { name: 'Select this folder', exact: true }).click();
+  assert.equal(await chatFolder.getByLabel('Folder', { exact: true }).inputValue(), '/tmp/website-project');
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
   await settle();
   await inViewport('.chat');

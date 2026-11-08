@@ -39,6 +39,15 @@ These points came from the remote-access discussion. They record requirements an
 
 Still to verify: local reachability checks on the user's phone/browser; permission and HTTPS behavior; recovery when a local URL is reloaded after leaving Wi-Fi; and state transfer during a route switch. The domain currently uses GoDaddy nameservers, so the Cloudflare DNS setup also remains unresolved. None of these points has been validated as working yet.
 
+## Choosing folders without typing paths
+
+| Challenge | What happened | How we solved it |
+| --- | --- | --- |
+| Folder selection blocked everyday tasks | Chat, Terminal and Collaborator access relied on typed paths or short project suggestions. The owner could not choose another folder from the phone without knowing its full location. | Added one shared Mac folder browser to Chat, Terminal, the collaborator repository and each related folder, including Mac Admin. Navigate with Home, Desktop, Documents, Downloads, external drives, breadcrumbs, Back and Up, then select the folder. |
+| Finding less obvious locations | Hidden folders, nested projects and large directory lists were hard to reach from suggestions. | Include hidden-folder controls and name search within the current directory. A bounded list can be narrowed with search. Directory links work; broken links and ordinary files are omitted. |
+| Browsing must not widen collaborator access | A folder chooser for owners could otherwise expose the Mac's directory layout to guests. | Put directory navigation behind owner authentication or Mac Admin. Guest sessions, including mixed guest/owner cookies, are refused; the existing grant validation still decides what may be shared. |
+| A stale selection after navigation | Responses can arrive after Cancel or after a newer folder request. | Discard obsolete responses, disable selection while loading or after an error, and provide Home recovery for missing or inaccessible folders. |
+
 ## Terminal on a phone
 
 | Challenge                | What happened                                                                                                                                        | How we solved it                                                                                        |

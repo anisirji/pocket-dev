@@ -14,8 +14,9 @@ The live checkout remains on `live` at `0010a82`. Its stopgap Remote quick link 
 - Recheck sender access after asynchronous work and upload completion. Revocation prevents the write and removes partial uploads.
 - Restrict waiting-login notices to eligible owner sockets, excluding guest Messages sockets.
 - Apply test-history isolation to the newly merged server fixtures.
+- Add a shared folder browser for Chat, Terminal and Collaborator setup, including Mac Admin; manual paths remain optional.
 
-Results and limits are recorded in the final section of [VALIDATION.md](VALIDATION.md). The combined branch passed 134 model-free checks. Full-suite and browser execution remain pending because this sandbox denies TCP listeners and Unix sockets.
+Results and limits are recorded in the final section of [VALIDATION.md](VALIDATION.md). The original combined branch passed 134 model-free checks; see VALIDATION.md for the later folder-browser results. Full-suite and browser execution remain pending because this sandbox denies TCP listeners and Unix sockets.
 
 The isolated branch `admin-port-fix`, in `.claude/worktrees/codex-admin-port-fix`, contains only the Admin-port forwarding fix on top of `0c71403` (commit `c453473`). It is prepared separately for review and has not been applied to the live checkout or main.
 
@@ -25,7 +26,7 @@ The isolated branch `admin-port-fix`, in `.claude/worktrees/codex-admin-port-fix
 2. Run `scripts/check-responsive.mjs` with Playwright and Chrome available.
 3. Use a separate test server and state directory for the phone checks below.
 4. Fix any issues, then obtain the owner's explicit instruction before merging into the live checkout or restarting its service.
-5. Fix Collaborators after the owner describes the problem. The earlier session recorded that request without a reproduction; a clarification was requested during this session.
+5. The owner identified typed folder paths as the blocking Collaborators problem. The shared folder browser now covers repository and related-folder selection on phone and Admin, as well as Chat and Terminal. Verify it on a real phone before release.
 
 ## Phone and Mac checks
 

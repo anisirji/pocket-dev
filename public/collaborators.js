@@ -55,12 +55,14 @@ export function mountCollaborators(container, { api, local = false, devices = ()
     confirm.disabled = !devices().some((d) => d.status === 'active');
     enable.append(confirm);
   }
+  const chooseFolder = (input, label) => window.PocketDevFolderPicker?.field(input, { api, label }) ?? field(label, input);
   function folderRow(parent, value = {}) {
     const row = el('div', 'co-folder'), input = el('input');
     input.placeholder = '~/Downloads/project-assets'; input.value = value.given || value.path || ''; input.required = true; input.setAttribute('aria-label', 'Related folder path');
     const mode = select([['read', 'Read-only'], ['write', 'Read/write copy']]); mode.value = value.mode || 'read'; mode.setAttribute('aria-label', 'Related folder access');
     const remove = button('Remove', () => row.remove());
-    row.append(input, mode, remove); parent.append(row);
+    row.pathInput = input; row.accessMode = mode;
+    row.append(chooseFolder(input, 'Related folder'), mode, remove); parent.append(row);
     return row;
   }
   function edit(grant) {
@@ -74,19 +76,19 @@ export function mountCollaborators(container, { api, local = false, devices = ()
     const duration = select([['3600', '1 hour'], ['86400', '1 day'], ['604800', '7 days']]); duration.value = String(grant?.duration || 86400);
     const related = el('div');
     for (const extra of grant?.extraFolders || []) folderRow(related, extra);
-    const addFolder = button('Add related folder', () => { if (related.childElementCount < 5) folderRow(related).children[1].disabled = role.value === 'viewer'; });
+    const addFolder = button('Add related folder', () => { if (related.childElementCount < 5) folderRow(related).accessMode.disabled = role.value === 'viewer'; });
     const ai = el('input'); ai.type = 'checkbox'; ai.disabled = true;
     const aiLabel = el('label', 'co-check'); aiLabel.append(ai, 'AI access');
     const aiNote = el('p', 'co-note', state.ai.reason);
     const scopeNote = el('p', 'co-note');
     const syncRole = () => {
       scopeNote.textContent = role.value === 'developer' ? 'Developer changes stay in a separate project copy for your review. Credentials, Git metadata, dependencies, environment files and symlinks are excluded from the copy. AI is currently unavailable.' : 'Viewers can only view, preview and download permitted files.';
-      for (const row of related.children) { row.children[1].disabled = role.value === 'viewer'; if (role.value === 'viewer') row.children[1].value = 'read'; }
+      for (const row of related.children) { row.accessMode.disabled = role.value === 'viewer'; if (role.value === 'viewer') row.accessMode.value = 'read'; }
     };
     role.onchange = syncRole; syncRole();
     const footer = el('div', 'co-actions'), save = el('button', 'co-primary', grant ? 'Save access' : 'Create collaborator'); save.type = 'submit';
     footer.append(save, button('Cancel', () => { if (!busy) form.hidden = true; }));
-    form.append(field('Name', label), field('Role', role), field('Repository', repo), repos, scopeNote, aiLabel, aiNote, el('h4', '', 'Related folders'), related, addFolder, field('Access duration', duration), el('p', 'co-note', grant ? 'Changing access ends current transfers and invalidates outstanding invitations. Developer changes will start in a fresh project copy; the old copy remains on the Mac for review.' : 'The invitation works once within 10 minutes. Access duration starts when it is accepted.'), footer);
+    form.append(field('Name', label), field('Role', role), chooseFolder(repo, 'Repository'), repos, scopeNote, aiLabel, aiNote, el('h4', '', 'Related folders'), related, addFolder, field('Access duration', duration), el('p', 'co-note', grant ? 'Changing access ends current transfers and invalidates outstanding invitations. Developer changes will start in a fresh project copy; the old copy remains on the Mac for review.' : 'The invitation works once within 10 minutes. Access duration starts when it is accepted.'), footer);
     form.onsubmit = (event) => {
       event.preventDefault();
       if (!form.reportValidity()) return;
@@ -96,7 +98,7 @@ export function mountCollaborators(container, { api, local = false, devices = ()
         save.textContent = role.value === 'developer' ? 'Preparing copy…' : 'Saving…';
         form.setAttribute('aria-busy', 'true');
         try {
-          const body = { label: label.value, role: role.value, repository: repo.value, ai: false, duration: Number(duration.value), extraFolders: [...related.children].map((row) => ({ path: row.children[0].value, mode: role.value === 'viewer' ? 'read' : row.children[1].value })) };
+          const body = { label: label.value, role: role.value, repository: repo.value, ai: false, duration: Number(duration.value), extraFolders: [...related.children].map((row) => ({ path: row.pathInput.value, mode: role.value === 'viewer' ? 'read' : row.accessMode.value })) };
           const saved = await api(grant ? 'PATCH' : 'POST', `/api/collaborators${grant ? `/${grant.id}` : ''}`, body);
           form.hidden = true;
           if (!grant) await showInvite(saved);

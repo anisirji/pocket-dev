@@ -706,7 +706,8 @@
     renderDraftChips();
     renderFolders();
     const body = el('div', 'chat-sheet-body');
-    body.append(seg, chips, field('Folder', folders), path);
+    const folderField = window.PocketDevFolderPicker?.field(path, { api, label: 'Folder', onSelect: () => { draft.cwd = path.value; renderFolders(); } }) ?? field('Folder', path);
+    body.append(seg, chips, folderField, folders);
     const foot = el('div', 'chat-sheet-foot');
     foot.append(start);
     sheet.replaceChildren(sheetHead('New chat'), body, foot);

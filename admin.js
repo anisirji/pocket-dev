@@ -10,6 +10,7 @@ import { checkPermissions, openPane } from './permissions.js';
 import { captureScreen } from './screen.js';
 import { svgQr } from './qr.js';
 import { readNetwork, networkError, isToken, hasToken, writeToken, findCloudflared } from './network.js';
+import { createFolderBrowser } from './folder-browser.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 export const ADMIN_URL_PATH = path.join(STATE_DIR, 'admin.json');
@@ -27,6 +28,8 @@ const FILES = {
   '/collaborators.css': ['collaborators.css', 'text/css; charset=utf-8'],
   '/messages.js': ['messages.js', 'text/javascript; charset=utf-8'],
   '/messages.css': ['messages.css', 'text/css; charset=utf-8'],
+  '/folder-picker.js': ['folder-picker.js', 'text/javascript; charset=utf-8'],
+  '/folder-picker.css': ['folder-picker.css', 'text/css; charset=utf-8'],
 };
 const HEADERS = {
   'cache-control': 'no-store',
@@ -104,6 +107,7 @@ function failedLogins(entries) {
 // A section without act() is read-only. Lockdown closes 'always' sections and the 'optional' ones it is asked to.
 // `urls()` returns the phone listener's current { lan, local, remote } base URLs.
 export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections }) {
+  const browseFolders = createFolderBrowser({ config });
   const port = Number(process.env.POCKET_DEV_ADMIN_PORT) || config.read().adminPort || mainPort + 1;
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
   const origins = new Set([...hosts].map((h) => `http://${h}`));
@@ -338,6 +342,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
     if (why) return send(403, { error: why });
     const { pathname, searchParams } = new URL(req.url, 'http://localhost');
     try {
+      if (req.method === 'GET' && pathname === '/api/folders/browse') return send(200, await browseFolders(new URL(req.url, 'http://localhost')));
       if (pathname === '/api/messages' || pathname.startsWith('/api/messages/')) return messages.handleApi(req, res, { mac: true, headers: HEADERS });
       if (pathname === '/api/collaborators' || pathname.startsWith('/api/collaborators/')) {
         const r = await collaborators.ownerApi(req.method, pathname, SAFE_METHODS.has(req.method) ? {} : await readJson(req), true);

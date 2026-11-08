@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
+const pickerSource = fs.readFileSync(new URL('../public/folder-picker.js', import.meta.url), 'utf8');
 const source = fs.readFileSync(new URL('../public/collaborators.js', import.meta.url), 'utf8').replace('export function mountCollaborators', 'function mountCollaborators');
 class Element {
   constructor(tag) { this.tag = tag; this.children = []; this.textContent = ''; this.className = ''; this.attrs = {}; this.classList = { add: (name) => { this.className += ` ${name}`; } }; }
@@ -11,6 +12,7 @@ class Element {
   setAttribute(k, v) { this.attrs[k] = v; }
   get childElementCount() { return this.children.length; }
   focus() { this.focused = true; }
+  dispatchEvent(event) { this[`on${event.type}`]?.(event); }
   remove() { this.parent.children = this.parent.children.filter((n) => n !== this); }
   reportValidity() { return true; }
   querySelectorAll(tag) { return this.children.flatMap((n) => [...(n.tag === tag ? [n] : []), ...n.querySelectorAll(tag)]); }
@@ -21,6 +23,10 @@ function fixture({ local = false, enabled = true } = {}) {
   const state = { enabled, ai: { available: false, reason: 'Isolated AI is unavailable' }, collaborators: [] };
   const api = async (method, url, body) => {
     calls.push({ method, url, body });
+    if (method === 'GET' && url.startsWith('/api/folders/browse')) {
+      const dir = new URL(url, 'http://fixture').searchParams.get('path') || '/projects';
+      return { path: dir, parent: '/', breadcrumbs: [{ name: 'Projects', path: '/projects' }], shortcuts: [{ name: 'Home', path: '/projects' }], entries: dir === '/projects' ? [{ name: 'website', path: '/projects/website' }, { name: 'assets', path: '/projects/assets' }] : [] };
+    }
     if (method === 'GET') return state;
     if (url.endsWith('/enable')) { state.enabled = true; return state; }
     if (url.endsWith('/invite')) return { url: 'http://fixture/invite#token=opaque-token', svg: '<svg/>', expiresAt: Date.now() + 600000 };
@@ -29,12 +35,13 @@ function fixture({ local = false, enabled = true } = {}) {
       state.collaborators.push(grant); return grant;
     }
   };
-  const runtime = { document: { createElement: (tag) => new Element(tag) }, navigator: {}, window: {}, setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout: () => {} };
+  const runtime = { document: { createElement: (tag) => new Element(tag) }, navigator: {}, window: {}, URLSearchParams, Event: class { constructor(type) { this.type = type; } }, setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout: () => {} };
   vm.createContext(runtime);
+  vm.runInContext(pickerSource, runtime);
   vm.runInContext(`${source}\nthis.mount = mountCollaborators;`, runtime);
   const ui = runtime.mount(root, { api, local, devices: () => [{ id: 'owner-1', code: '0001', name: 'My phone', status: 'active' }, { id: 'other-2', code: '0002', name: 'Other phone', status: 'active' }] });
   const find = (text) => root.querySelectorAll('button').find((b) => b.textContent === text);
-  const field = (name) => root.querySelectorAll('label').find((l) => l.textContent === name)?.children[0];
+  const field = (name) => [...root.querySelectorAll('input'), ...root.querySelectorAll('select')].find((n) => n.attrs['aria-label'] === name) ?? root.querySelectorAll('label').find((l) => l.textContent === name)?.children[0];
   return { root, calls, state, ui, find, field, runtime, timers };
 }
 
@@ -59,7 +66,7 @@ test('Developer invitation submits the selected scope, defaults extra folders to
   f.field('Repository').value = '/projects/website'; f.field('Access duration').value = '86400';
   f.find('Add related folder').onclick();
   const form = f.root.querySelectorAll('form')[0], rows = form.querySelectorAll('div').filter((n) => n.className === 'co-folder');
-  rows[0].children[0].value = '/Downloads/assets'; rows[0].children[1].value = 'read';
+  rows[0].pathInput.value = '/Downloads/assets'; rows[0].children[1].value = 'read';
   assert.equal(f.field('AI access').disabled, true);
   form.onsubmit({ preventDefault() {} });
   form.onsubmit({ preventDefault() {} });
@@ -86,3 +93,26 @@ test('Viewer selection removes write mode and phone Settings cannot perform Mac 
   assert.equal(phone.find('Enable role-based sharing'), undefined);
   assert.equal(phone.find('Invite someone').disabled, true);
 });
+
+for (const local of [false, true]) {
+  test(`folder browsers populate collaborator access on ${local ? 'Admin' : 'phone'} without typing paths`, async () => {
+    const f = fixture({ local }); await settle(); f.find('Invite someone').onclick();
+    f.field('Name').value = 'Reviewer';
+    const fields = () => f.root.querySelectorAll('div').filter((n) => n.className === 'fp-field');
+    const choose = async (field, name) => {
+      const browse = field.querySelectorAll('button').find((b) => b.textContent === 'Browse folders');
+      await browse.onclick();
+      await field.querySelectorAll('button').find((b) => b.attrs['aria-label'] === `Open folder ${name}`).onclick();
+      await field.querySelectorAll('button').find((b) => b.textContent === 'Select this folder').onclick();
+    };
+    await choose(fields()[0], 'website');
+    f.find('Add related folder').onclick();
+    await choose(fields()[1], 'assets');
+    const form = f.root.querySelectorAll('form')[0];
+    form.onsubmit({ preventDefault() {} }); await settle();
+    const created = f.calls.find((c) => c.method === 'POST' && c.url === '/api/collaborators');
+    assert.equal(created.body.repository, '/projects/website');
+    assert.equal(created.body.extraFolders[0].path, '/projects/assets');
+    assert.equal(created.body.extraFolders[0].mode, 'read');
+  });
+}
