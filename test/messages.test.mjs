@@ -9,6 +9,7 @@ import net from 'node:net';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
+import { isolatedEnv } from './isolated-env.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MB = 1024 * 1024;
@@ -38,12 +39,13 @@ test('Messages between the Mac, owner devices and guests', { timeout: 120000 }, 
   const base = `http://127.0.0.1:${port}`, admin = `http://127.0.0.1:${adminPort}`;
   const stub = path.join(root, 'stub');
   fs.writeFileSync(stub, '#!/bin/sh\nprintf "No\\n"\n', { mode: 0o700 });
-  const env = {
-    ...process.env, HOME: home, SHELL: '/bin/zsh', PORT: String(port), POCKET_DEV_ADMIN_PORT: String(adminPort), POCKET_DEV_CONFIG: config,
+  const env = isolatedEnv(home, {
+    SHELL: '/bin/zsh', PORT: String(port), POCKET_DEV_ADMIN_PORT: String(adminPort), POCKET_DEV_CONFIG: config,
     POCKET_DEV_STATE_DIR: state, POCKET_DEV_NO_OPEN: '1', POCKET_DEV_TERMINAL_HOST: 'off', POCKET_DEV_CLAUDE: '/nonexistent/claude', POCKET_DEV_CODEX: '/nonexistent/codex',
     POCKET_DEV_PMSET: stub, POCKET_DEV_IOREG: stub, POCKET_DEV_TOP: stub, POCKET_DEV_MEMORY_PRESSURE: stub, POCKET_DEV_UPDATE_CHECK: stub, POCKET_DEV_OSASCRIPT: stub, POCKET_DEV_SIPS: stub,
-  };
-  const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    POCKET_DEV_PROCESS_FIXTURE: path.join(root, 'no-processes.json'),
+  });
+  const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: isolatedEnv(home, env), stdio: ['ignore', 'pipe', 'pipe'] });
   let logs = '';
   proc.stdout.on('data', (d) => { logs += d; });
   proc.stderr.on('data', (d) => { logs += d; });

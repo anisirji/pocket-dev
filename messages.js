@@ -121,8 +121,8 @@ function openStore(file) {
     add(fields) {
       const now = Date.now();
       const m = { seq: Math.max((list.at(-1)?.seq ?? 0) + 1, now), at: now, ...fields };
-      list.push(m);
       fs.appendFileSync(file, JSON.stringify(m) + '\n', { mode: 0o600 });
+      list.push(m);
       return m;
     },
     remove(gone) {
@@ -266,21 +266,32 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
     throw httpError(404, `Nobody in Messages matches "${query}".`);
   }
 
+  // Reading a body, resolving a recipient or streaming an upload yields to revocation and lockdown.
+  function assertActive(req, v, mac) {
+    if (mac) return;
+    const guest = collaborators.guest(req);
+    const current = guest ? (guest.active && grantParticipant(guest.grant)) : auth.deviceFor(req);
+    const key = guest ? current?.key : current && deviceParticipant(current).key;
+    if (key !== v.key) throw httpError(403, 'Your access ended. This message was not saved.');
+  }
+
   async function send({ v, req, mac }) {
     const body = await readBody(req);
     const { text = '', files: ids = [] } = body;
     if (typeof text !== 'string') throw httpError(400, 'text must be a string.');
     if (Buffer.byteLength(text) > TEXT_MAX) throw httpError(413, 'A message can hold at most 64 KB of text. Send longer text as a file.');
     if (!Array.isArray(ids) || ids.length > FILES_PER_MESSAGE) throw httpError(400, `Attach up to ${FILES_PER_MESSAGE} files to one message.`);
+    const to = body.to == null || body.to === 'everyone' ? null : await findPerson(v, body.to, mac);
+    assertActive(req, v, mac);
+    // Validate and consume attachments without yielding, so two sends cannot claim the same pending upload.
     const files = [...new Set(ids)].map((id) => {
       const p = pending.get(id);
       if (p?.owner !== v.key) throw httpError(400, 'An attachment is missing. Attach it again.');
       return p.meta;
     });
     if (!text.trim() && !files.length) throw httpError(400, 'Write a message or attach a file.');
-    const to = body.to == null || body.to === 'everyone' ? null : await findPerson(v, body.to, mac);
-    for (const f of files) pending.delete(f.id);
     const m = store.add({ from: identity(v), to: to && identity(to), text, files });
+    for (const f of files) pending.delete(f.id);
     deliver(m);
     return [201, messageView(m, v)];
   }
@@ -319,6 +330,7 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
           else yield chunk;
         }
       }, handle.createWriteStream());
+      assertActive(req, v, mac);
     } catch (err) {
       await fsp.rm(part, { force: true });
       if (refusal) return refuse(...refusal);
