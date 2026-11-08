@@ -389,6 +389,7 @@ const EVENT_TEXT = {
   'login-locked': (e) => `Password logins from ${e.ip} locked for ${e.minutes} min after 10 wrong passwords`,
   'qr-expired': (e) => `Used or expired QR code opened${e.kind ? ` on ${e.kind}` : ''}`,
   'device-revoked': (e) => `${e.name} logged out ${REVOKED_BY[e.by] ?? ''}`.trim(),
+  'device-merged': (e) => `${e.name} switched address; its duplicate login ${e.mergedName} (${e.mergedDeviceId.slice(-4)}) was logged out`,
   'device-blocked': (e) => `${e.name} blocked`,
   'device-unblocked': (e) => `${e.name} unblocked`,
   'device-approved': (e) => `${e.name} approved${e.by === 'qr' ? ' by scanning a QR code' : e.by?.startsWith('device ') ? ` from ${e.by.slice(7)}` : ''}`,

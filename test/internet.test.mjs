@@ -291,6 +291,39 @@ test('a switch link minted through the internet link still works on Wi-Fi after 
   assert.equal((await s.request('POST', '/api/handoff', { cookie: landed.cookie, body: {} })).status, 404, 'no new switch links while internet access is off');
 });
 
+test('a switch link redeemed by a browser holding another device’s cookie folds that duplicate into the switching device', { timeout: 60000 }, async (t) => {
+  const s = await startServer(t, { network: { internet: { kind: 'domain', hostname: HOSTNAME } }, token: TOKEN });
+  await s.tunnelStatus('connected');
+  const devices = async () => (await s.status()).devices;
+  // One phone that typed the password on both addresses before it linked: two device entries.
+  const D = await s.login({ via: 'tunnel' });
+  const remoteId = (await s.request('GET', '/api/settings', { cookie: D.cookie, via: 'tunnel' })).data.currentDeviceId;
+  const L = await s.login();
+  const lanId = (await s.request('GET', '/api/settings', { cookie: L.cookie })).data.currentDeviceId;
+  assert.equal((await devices()).length, 2);
+  const mint = async () => {
+    const link = new URL((await s.request('POST', '/api/handoff', { cookie: D.cookie, body: {}, via: 'tunnel' })).data.url);
+    return link.pathname + link.search;
+  };
+  const landed = await s.request('GET', await mint(), { cookie: L.cookie });
+  assert.equal(landed.status, 200);
+  assert.equal((await s.request('GET', '/api/settings', { cookie: landed.cookie })).data.currentDeviceId, remoteId, 'the browser is now the switching device on Wi-Fi');
+  assert.equal((await s.request('GET', '/api/settings', { cookie: L.cookie })).status, 401, 'the duplicate’s cookie is dead');
+  assert.deepEqual((await devices()).map((d) => d.id), [remoteId], 'one device, not two');
+  const merged = (await s.local('GET', '/api/log')).data.filter((e) => e.type === 'device-merged');
+  assert.equal(merged.length, 1);
+  assert.deepEqual([merged[0].deviceId, merged[0].mergedDeviceId], [remoteId, lanId], 'the log names both');
+  // A blocked duplicate still refuses the switch and stays blocked.
+  const B = await s.login();
+  const blockedId = (await s.request('GET', '/api/settings', { cookie: B.cookie })).data.currentDeviceId;
+  assert.equal((await s.local('POST', `/api/devices/${blockedId}/block`, {})).status, 200);
+  const refused = await s.request('GET', await mint(), { cookie: B.cookie });
+  assert.equal(refused.status, 302);
+  assert.equal(refused.headers.get('location'), '/login.html?e=handoff');
+  assert.equal(refused.cookie, undefined);
+  assert.equal((await devices()).find((d) => d.id === blockedId)?.status, 'blocked');
+});
+
 test('a cookie works only on the address it was issued for', { timeout: 60000 }, async (t) => {
   const s = await startServer(t, { network: { internet: { kind: 'domain', hostname: HOSTNAME } }, token: TOKEN });
   await s.tunnelStatus('connected');

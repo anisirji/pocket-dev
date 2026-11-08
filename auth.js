@@ -424,6 +424,12 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     if (!device || !isActive(device)) return refuse('device');
     const existing = lookup(req);
     if (existing && existing !== device && existing.status === 'blocked') return refuse('blocked');
+    // The browser sending another device's cookie is this device: that entry came from a password login on this
+    // address, so it is folded into the one being switched instead of living on as a second login.
+    if (existing && existing !== device) {
+      drop(existing);
+      log('device-merged', { ...about(device), mergedDeviceId: existing.id, mergedName: existing.name });
+    }
     log('handoff-redeemed', { ...about(device), direction: entry.direction, host: entry.host });
     return bounceHome(addCookie(req, device, entry.host), entry.direction === 'to-remote' ? '?linked=1' : '');
   }

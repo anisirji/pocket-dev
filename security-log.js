@@ -28,6 +28,7 @@ export const EVENT_KINDS = {
   'device-denied': 'change',
   'device-removed': 'change',
   'device-renamed': 'change',
+  'device-merged': 'change',
   'pending-expired': 'change',
   'password-changed': 'change',
   'limit-changed': 'change',
