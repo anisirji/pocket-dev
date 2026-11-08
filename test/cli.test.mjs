@@ -14,14 +14,49 @@ function fixture(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const pkg = path.join(root, 'pkg');
   fs.mkdirSync(path.join(pkg, 'bin'), { recursive: true });
-  for (const file of ['paths.js', 'config.js', 'config-keys.js', 'package.json']) fs.copyFileSync(path.join(REPO, file), path.join(pkg, file));
+  for (const file of ['paths.js', 'config.js', 'config-keys.js', 'network.js', 'package.json']) fs.copyFileSync(path.join(REPO, file), path.join(pkg, file));
   fs.copyFileSync(path.join(REPO, 'bin', 'pocket-dev.js'), path.join(pkg, 'bin', 'pocket-dev.js'));
   const state = path.join(root, 'state');
   const env = { ...process.env, POCKET_DEV_STATE_DIR: state };
   delete env.POCKET_DEV_CONFIG;
-  const cli = (...args) => spawnSync(process.execPath, [path.join(pkg, 'bin', 'pocket-dev.js'), ...args], { env, encoding: 'utf8' });
-  return { pkg, state, cli, configFile: path.join(state, 'config.json') };
+  const cli = (...args) => spawnSync(process.execPath, [path.join(pkg, 'bin', 'pocket-dev.js'), ...args], { env, encoding: 'utf8', input: '' });
+  return { root, pkg, state, cli, env, configFile: path.join(state, 'config.json') };
 }
+
+const TOKEN = 'eyJhIjoiMDEyMzQ1Njc4OSIsInQiOiJmYWtlLXR1bm5lbC10b2tlbiIsInMiOiJzZWNyZXQifQ';
+
+test('internet: saved without a running server, the token from stdin or a file only, never printed', (t) => {
+  const { root, cli, env, state, configFile } = fixture(t);
+  const network = () => JSON.parse(fs.readFileSync(configFile, 'utf8')).network;
+  assert.equal(cli('internet', 'quick').status, 0);
+  assert.deepEqual(network(), { wifi: true, internet: { kind: 'quick', hostname: null } });
+  const status = cli('internet', 'status');
+  assert.match(status.stdout, /Internet access: quick\n/);
+  assert.match(status.stdout, /not running/);
+
+  assert.equal(cli('internet', 'domain', '--hostname', 'pocket.example.com').status, 2, 'a domain needs its token');
+  assert.equal(cli('internet', 'domain', '--hostname', 'pocket.example.com', '--token', TOKEN).status, 2, 'never as an argument');
+  assert.equal(network().internet.kind, 'quick', 'a refused command changes nothing');
+  const piped = spawnSync(process.execPath, [path.join(root, 'pkg', 'bin', 'pocket-dev.js'), 'internet', 'domain', '--hostname', 'Pocket.Example.com', '--token-stdin'], { env, encoding: 'utf8', input: `${TOKEN}\n` });
+  assert.equal(piped.status, 0, piped.stderr);
+  assert.deepEqual(network(), { wifi: true, internet: { kind: 'domain', hostname: 'pocket.example.com' } });
+  const tokenFile = path.join(state, 'tunnel-token');
+  assert.equal(fs.readFileSync(tokenFile, 'utf8'), `${TOKEN}\n`);
+  assert.equal(fs.statSync(tokenFile).mode & 0o777, 0o600);
+  assert.equal(piped.stdout.includes(TOKEN), false);
+  assert.match(piped.stdout, /Tunnel token: saved/);
+  assert.equal(cli('internet', 'status').stdout.includes(TOKEN), false);
+
+  const other = path.join(root, 'other-token');
+  fs.writeFileSync(other, `${TOKEN}xyz\n`);
+  assert.equal(cli('internet', 'domain', '--token-file', other).status, 0, 'the saved hostname is kept');
+  assert.equal(fs.readFileSync(tokenFile, 'utf8'), `${TOKEN}xyz\n`);
+  assert.equal(cli('internet', 'domain', '--hostname', 'nodots', '--token-file', other).status, 2);
+  assert.equal(cli('internet', 'off').status, 0);
+  assert.equal(network().internet.kind, 'off');
+  assert.ok(fs.existsSync(tokenFile), 'turning off keeps the token for next time');
+  assert.equal(cli('internet', 'auto').status, 2);
+});
 
 test('config set validates, saves privately, and unset restores the default', (t) => {
   const { cli, configFile } = fixture(t);
@@ -78,5 +113,5 @@ test('unknown commands fail with usage; help lists every settable key', (t) => {
   assert.equal(cli('nope').status, 2);
   const help = cli('help');
   assert.equal(help.status, 0);
-  for (const key of ['port', 'adminPort', 'awake', 'requireApproval', 'maxDevices', 'chatIdleMinutes', 'allowedHosts']) assert.match(help.stdout, new RegExp(`\\b${key}\\b`));
+  for (const key of ['port', 'adminPort', 'awake', 'requireApproval', 'maxDevices', 'chatIdleMinutes', 'allowedHosts', 'internet']) assert.match(help.stdout, new RegExp(`\\b${key}\\b`));
 });

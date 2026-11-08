@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -227,7 +227,16 @@ test('Quick link: on demand from Admin, a random address, and off again', { time
   assert.equal(s.recorded('argv').trim().split('\n').slice(0, 3).join(' '), 'tunnel --no-autoupdate --url');
   assert.doesNotMatch(s.recorded('env'), /^TUNNEL_TOKEN=/m);
   assert.equal((await s.request('GET', '/api/status', { headers: { host: 'quick-fixture-words.trycloudflare.com' } })).status, 200);
+  // The CLI talks to the running server through its admin page.
+  const cli = (...args) => spawnSync(process.execPath, [path.join(REPO, 'bin', 'pocket-dev.js'), 'internet', ...args], { env: { ...process.env, POCKET_DEV_STATE_DIR: s.stateDir, POCKET_DEV_CONFIG: s.config }, encoding: 'utf8', input: '' });
+  assert.match(cli('status').stdout, /Link: connected at https:\/\/quick-fixture-words\.trycloudflare\.com/);
   const offAgain = await s.local('PUT', '/api/remote', { on: false });
   assert.equal(offAgain.data.status, 'off');
   assert.equal((await s.request('GET', '/api/status', { headers: { host: 'quick-fixture-words.trycloudflare.com' } })).status, 421);
+  const viaCli = cli('off');
+  assert.equal(viaCli.status, 0, viaCli.stderr);
+  assert.match(viaCli.stdout, /Internet access: off/);
+  assert.equal((await s.status()).network.internet.kind, 'off');
+  const changed = (await s.local('GET', '/api/log?filter=changes')).data.find((e) => e.type === 'network-changed');
+  assert.equal(changed.by, 'cli');
 });

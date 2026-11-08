@@ -129,6 +129,15 @@ input:disabled { opacity: .5; }
 .log-row.failure .what::before { background: var(--danger); }
 .log-row.change .what::before { background: var(--accent); }
 
+/* Internet access */
+.net-kinds { margin: 4px 0 12px; }
+.net-kind > .note:first-child { margin-top: 0; }
+.steps { margin: 0 0 12px; padding-left: 20px; color: var(--muted); font-size: 13px; max-width: 75ch; }
+.steps li { margin: 4px 0; }
+.steps b { color: var(--text); }
+.net-link { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.net-link code { overflow-wrap: anywhere; }
+
 /* Forms and settings */
 .form { display: grid; gap: 10px; }
 .form .note { margin: 0 0 2px; }
