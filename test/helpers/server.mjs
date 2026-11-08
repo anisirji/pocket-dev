@@ -56,7 +56,7 @@ exec sleep 300
   return file;
 }
 
-export async function startServer(t, { network, devices, token, lanIpFile = true, traceUrl } = {}) {
+export async function startServer(t, { network, devices, token, lanIpFile = true, traceUrl, env: extraEnv } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-internet-'));
   const home = path.join(root, 'home'), state = path.join(root, 'state'), record = path.join(root, 'cloudflared-record');
   fs.mkdirSync(home);
@@ -82,6 +82,7 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
     POCKET_DEV_PROCESS_FIXTURE: path.join(root, 'no-processes.json'),
     POCKET_DEV_TRACE_URL: traceUrl ?? 'http://127.0.0.1:9/trace', POCKET_DEV_HANDOFF_TTL_MS: '1500',
     ...(lanIpFile && { POCKET_DEV_LAN_IP_FILE: lanIp }),
+    ...extraEnv,
   }), stdio: ['ignore', 'pipe', 'pipe'] });
   let logs = '';
   proc.stdout.on('data', (d) => { logs += d; });

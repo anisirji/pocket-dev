@@ -296,6 +296,11 @@ export function createClaudeEngine(chat) {
 
   function onMessage(m) {
     if (m.parent_tool_use_id) return;
+    // Claude can work without being asked: a background helper finishing wakes it, and a message sent mid-turn
+    // interrupts the old turn and begins another. Work that arrives with no turn counted is a turn, so the chat shows
+    // Stop and the list says running for as long as Claude is actually working.
+    const working = m.type === 'assistant' || m.type === 'stream_event' || (m.type === 'user' && Array.isArray(m.message?.content));
+    if (working && !chat.turn) chat.startTurn();
     switch (m.type) {
       case 'system':
         if (m.subtype === 'init') chat.setSession(m.session_id);
