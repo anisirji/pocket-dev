@@ -30,9 +30,10 @@ const INTERRUPT_GRACE_MS = 5000;
 const RECENT_MAX = 8;
 
 class BadRequest extends Error {
-  constructor(message, status = 400) {
+  constructor(message, status = 400, code) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -359,6 +360,17 @@ export function createChatApi({ sendJson, readJson, config, wss }) {
       runTurn(chat, prepareInput(text, files));
       return [202, chat.view()];
     },
+    'PATCH :id/queue': async (req, chat) => {
+      const { eventId, text, expectedText } = await readJson(req);
+      if (typeof eventId !== 'string' || typeof text !== 'string' || text.length > TEXT_MAX || typeof expectedText !== 'string' || expectedText.length > TEXT_MAX) {
+        throw new BadRequest(`eventId and expectedText are required; text must be up to ${TEXT_MAX} characters`);
+      }
+      const result = chat.editQueued(eventId, text, expectedText);
+      if (result === 'missing') throw new BadRequest('That message is not waiting any more. Your edit has not been sent.', 404, 'QUEUE_MESSAGE_GONE');
+      if (result === 'conflict') throw new BadRequest('That queued message changed on another device. Your edit has not been saved.', 409);
+      if (result === 'empty') throw new BadRequest('Type a message or keep an attachment');
+      return [200, chat.view()];
+    },
     'DELETE :id/queue': async (req, chat) => {
       const { eventId } = await readJson(req);
       if (typeof eventId !== 'string' || !chat.unqueue(eventId)) throw new BadRequest('That message is not waiting any more', 404);
@@ -426,7 +438,7 @@ export function createChatApi({ sendJson, readJson, config, wss }) {
       const [status, body] = await route(req, chat);
       return sendJson(res, status, body);
     } catch (err) {
-      return sendJson(res, err.status ?? 400, { error: err.message });
+      return sendJson(res, err.status ?? 400, { error: err.message, ...(err.code && { code: err.code }) });
     }
   }
 

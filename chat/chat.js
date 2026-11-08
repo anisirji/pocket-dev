@@ -69,6 +69,7 @@ export class Chat {
     return {
       id, tool, title, cwd, settings, sessionId, createdAt, updatedAt, waking,
       queued: this.queue.length, status: this.status, runningSince: this.turn?.startedAt ?? null, pending: pendingId !== null, pendingId,
+      capabilities: { queueEdit: true },
     };
   }
 
@@ -176,6 +177,18 @@ export class Chat {
     this.update(eventId, { queued: false, removed: true });
     this.changed();
     return true;
+  }
+
+  // The queued input and its visible event change together, without changing order or attachments.
+  editQueued(eventId, text, expectedText) {
+    const next = this.queue.find((q) => q.eventId === eventId);
+    if (!next) return 'missing';
+    if (next.text !== expectedText && next.text !== text) return 'conflict';
+    if (!text.trim() && !next.files.length) return 'empty';
+    next.text = text;
+    this.update(eventId, { text });
+    this.changed();
+    return 'saved';
   }
 
   // After a failed turn the rest are not sent on their own: they stay in the chat marked not sent.

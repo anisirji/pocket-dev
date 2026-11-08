@@ -221,6 +221,10 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     assert.equal((await request('PATCH', `/api/chat/${chat.id}`, { cookie: A.cookie, body: { settings: { mode: 'bypassPermissions' } } })).status, 400);
     assert.equal((await request('POST', '/api/chat', { cookie: A.cookie, body: { tool: 'claude', cwd: home, resume: { sessionId: '../../escape' } } })).status, 400);
     assert.equal((await request('POST', `/api/chat/${chat.id}/answer`, { cookie: A.cookie, body: { requestId: 'unknown', decision: 'allow' } })).status, 400);
+    assert.equal((await request('GET', `/api/chat/${chat.id}`, { cookie: A.cookie })).data.capabilities.queueEdit, true);
+    const noLongerQueued = await request('PATCH', `/api/chat/${chat.id}/queue`, { cookie: A.cookie, body: { eventId: 'already-picked-up', text: 'Revised text', expectedText: 'Original text' } });
+    assert.equal(noLongerQueued.status, 404);
+    assert.equal(noLongerQueued.data.code, 'QUEUE_MESSAGE_GONE', 'the real Save endpoint must distinguish a picked-up message from a missing route');
   });
   await t.test('an unavailable Codex binary falls back without hanging Chat options', async () => {
     const options = await request('GET', '/api/chat/options', { cookie: A.cookie });

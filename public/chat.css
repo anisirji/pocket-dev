@@ -210,8 +210,14 @@
 .chat-queue-row + .chat-queue-row { border-top: 1px solid var(--line); }
 .chat-queue-label { flex: none; color: var(--chat-warn); font-size: 11.5px; }
 .chat-queue-preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.chat-queue-remove { flex: none; min-width: 44px; height: 44px; padding: 0 10px; color: var(--muted); font-size: 12px; }
-.chat-queue-remove:active { background: var(--panel-2); }
+.chat-queue-remove, .chat-queue-edit-button, .chat-queue-cancel { flex: none; min-width: 44px; height: 44px; padding: 0 10px; color: var(--muted); font-size: 12px; }
+.chat-queue-edit-button { color: var(--accent); }
+.chat-queue-remove:active, .chat-queue-edit-button:active, .chat-queue-cancel:active { background: var(--panel-2); }
+.chat-queue-edit { flex: none; display: flex; align-items: center; gap: 8px; margin: 0 8px; font-size: 12px; color: var(--chat-warn); }
+.chat-queue-edit-label { flex: 1; min-width: 0; }
+.chat-queue-cancel { color: var(--text); }
+.chat-queue-edit-button:focus-visible, .chat-queue-remove:focus-visible, .chat-queue-cancel:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.chat-queue-edit:not([hidden]) ~ .chat-composer .chat-input { max-height: clamp(42px, calc(var(--chat-h, 100dvh) * .22), 140px); overflow-y: auto !important; }
 .chat-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px 0; }
 .chat-file { display: flex; align-items: center; max-width: 100%; border-radius: 19px; background: var(--panel-2); border: 1px solid var(--line); }
 .chat-file-name { min-width: 0; padding-left: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; }

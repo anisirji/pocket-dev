@@ -12,7 +12,7 @@ const root = fileURLToPath(new URL('../public/', import.meta.url));
 const session = { id: 'aaaaaaaaaaaa', title: 'Responsive fixture', cwd: '/tmp', startedAt: Date.now(), activeAt: Date.now() };
 const folders = Array.from({ length: 16 }, (_, i) => ({ name: `Project ${i}`, path: `/tmp/project-${i}` }));
 const choices = Array.from({ length: 18 }, (_, i) => ({ value: `model-${i}`, label: `Model ${i}`, description: 'A longer option description that should wrap on narrow screens.' }));
-const chat = { id: 'fixture-chat', tool: 'codex', title: 'Question fixture', cwd: '/tmp', updatedAt: Date.now(), settings: { model: 'model-0' }, status: 'waiting-answer', pending: true, pendingId: 'question-1' };
+const chat = { id: 'fixture-chat', tool: 'codex', title: 'Question fixture', cwd: '/tmp', updatedAt: Date.now(), settings: { model: 'model-0' }, status: 'waiting-answer', pending: true, pendingId: 'question-1', capabilities: { queueEdit: true } };
 const question = { id: 'event-1', seq: 1, type: 'question', requestId: 'question-1', questions: [{ id: 'q1', question: 'Which option should we use?', options: choices.map((c) => ({ label: c.label, description: c.description })) }] };
 const chatEvents = [{ id: 'plan-link', seq: 0, type: 'assistant-text', text: '[Fixture plan](/tmp/ROLE_ACCESS_PLAN.md)' }, question];
 const claudeChat = { ...chat, id: 'claude-fixture', tool: 'claude', title: 'Claude fixture', status: 'idle', pending: false, pendingId: null };
@@ -42,6 +42,15 @@ const server = http.createServer(async (req, res) => {
     '/api/files/list': { path: '/tmp', parent: '/', breadcrumbs: [{ name: 'tmp', path: '/tmp' }], entries: [], total: 0 },
   };
   if (url.pathname.startsWith('/api/')) {
+    if (req.method === 'PATCH' && url.pathname === '/api/chat/fixture-chat/queue') {
+      let body = ''; for await (const chunk of req) body += chunk;
+      const { eventId, text, expectedText } = JSON.parse(body);
+      const ev = chatEvents.find((e) => e.id === eventId && e.queued);
+      if (!ev || ev.text !== expectedText) { res.writeHead(409); return json({ error: 'Message is no longer waiting or has changed' }); }
+      ev.text = text;
+      for (const ws of wss.clients) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ t: 'event', event: ev }));
+      return json(chat);
+    }
     if (req.method === 'POST' && url.pathname === '/api/chat') {
       let body = ''; for await (const chunk of req) body += chunk;
       chatCreates.push(JSON.parse(body));
@@ -213,6 +222,31 @@ try {
   await settle();
   assert.equal((await page.locator('.chat-queue').boundingBox()).y, queueTop, 'queued messages stay pinned while the conversation scrolls');
   assert.ok(await page.locator('.chat-queue-preview').evaluate((node) => node.scrollWidth > node.clientWidth && getComputedStyle(node).textOverflow === 'ellipsis'), 'long previews are visually truncated');
+  // Edit reuses the bottom composer and preserves its separate unsent draft.
+  await page.locator('.chat-queue-edit-button').click();
+  assert.equal(await page.locator('.chat-send').textContent(), 'Save');
+  assert.equal(await page.locator('.chat-input').inputValue(), chatEvents.at(-1).text);
+  await inViewport('.chat-queue-edit');
+  await inViewport('.chat-composer');
+  await page.locator('.chat-input').fill('Edited follow-up\nKeep these revised details.');
+  await page.locator('.chat-send').click();
+  await page.waitForFunction(() => document.querySelector('.chat-input').value === 'Keep my Codex draft');
+  assert.equal(chatEvents.at(-1).text, 'Edited follow-up\nKeep these revised details.');
+  assert.equal(messagePosts, 0, 'saving edits must not post another message');
+  // Small phones, landscape, tablets and desktop keep Edit, Save and Cancel visible.
+  for (const [width, height] of sizes) {
+    await page.evaluate(() => setTestViewport({}));
+    await page.setViewportSize({ width, height });
+    await page.locator('.chat-queue-edit-button').click();
+    await page.locator('.chat-input').fill('A long edited draft. '.repeat(150));
+    await settle();
+    await inViewport('.chat-queue');
+    await inViewport('.chat-queue-edit');
+    await inViewport('.chat-composer');
+    await page.locator('.chat-queue-cancel').click();
+    assert.equal(await page.locator('.chat-input').inputValue(), 'Keep my Codex draft');
+  }
+  await page.setViewportSize({ width: 393, height: 852 });
   await page.evaluate(() => setTestViewport({}));
   await context.setOffline(true);
   await page.waitForFunction(() => !document.querySelector('.chat-conn').hidden);

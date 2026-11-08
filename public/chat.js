@@ -26,6 +26,7 @@
   const POLL_MS = 3000;
   const MAX_INPUT_PX = 140;
   const TOAST_MS = 2600;
+  const QUEUE_UPDATE_MESSAGE = 'Queued-message editing needs a Pocket Dev update. Let active chats and queued messages finish, then restart Pocket Dev from Settings → This Mac and refresh. Your edit stays in this tab.';
 
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
@@ -67,6 +68,7 @@
     if (!res.ok) {
       const err = new Error(data?.error || `HTTP ${res.status}`);
       err.status = res.status;
+      err.code = data?.code;
       throw err;
     }
     return data;
@@ -336,6 +338,7 @@
         <div class="chat-statusline" hidden></div>
         <div class="chat-notice" hidden></div>
         <div class="chat-queue" role="list" aria-label="Queued messages" hidden></div>
+        <div class="chat-queue-edit" hidden><span class="chat-queue-edit-label" role="status"></span><button type="button" class="chat-queue-cancel">Cancel</button></div>
         <div class="chat-files" hidden></div>
         <form class="chat-composer">
           <button type="button" class="chat-attach" aria-label="Attach a file">📎</button>
@@ -927,9 +930,31 @@
   const drafts = new window.PocketDevDrafts(draftStorage);
   const pendingSends = new Set();
   const removingQueued = new Set();
+  const queueEdits = new Map();
   let queueKey = '';
+  function persistQueueEdit(id) {
+    try {
+      const edit = queueEdits.get(id);
+      const key = `pd.chat.queue-edit.${id}`;
+      if (edit) draftStorage.setItem(key, JSON.stringify({ ...edit, saving: false }));
+      else draftStorage.removeItem(key);
+    } catch {}
+  }
+  function restoreQueueEdit(id) {
+    if (!queueEdits.has(id)) {
+      try {
+        const saved = JSON.parse(draftStorage.getItem(`pd.chat.queue-edit.${id}`));
+        if (saved && typeof saved.eventId === 'string' && typeof saved.text === 'string' && typeof saved.expectedText === 'string' && Array.isArray(saved.files) && saved.files.every((f) => typeof f.path === 'string' && typeof f.name === 'string')) {
+          queueEdits.set(id, { ...saved, saving: false });
+        }
+      } catch {}
+    }
+    return queueEdits.get(id);
+  }
   function saveDraft(id = convo.id, text = ui.input.value, files = convo.files) {
     if (!id) return;
+    const edit = queueEdits.get(id);
+    if (edit) { edit.text = text; persistQueueEdit(id); return; }
     drafts.save(id, text, files);
   }
 
@@ -942,7 +967,7 @@
   }
 
   function enterConvo(id) {
-    const draft = drafts.get(id);
+    const draft = restoreQueueEdit(id) || drafts.get(id);
     Object.assign(convo, { id, chat: seed?.id === id ? seed : null, stick: true, online: false, everOnline: false, leaving: false, files: draft.files, sending: pendingSends.has(id) });
     convo.expanded = new Set();
     seed = null;
@@ -1031,6 +1056,7 @@
       resetLog();
       for (const ev of msg.events) upsert(ev);
       setChat(msg.chat);
+      reconcileQueueEdit();
     } else if (msg.t === 'event') {
       upsert(msg.event);
     } else if (msg.t === 'delta') {
@@ -1166,9 +1192,11 @@
   }
 
   function renderQueue() {
+    renderComposer();
     const waiting = convo.events.filter((ev) => ev.type === 'user-text' && ev.queued && !ev.removed && !ev.notSent);
     const tool = TOOLS[convo.chat?.tool] || 'Agent';
-    const key = JSON.stringify([convo.id, tool, convo.online, waiting.map((ev) => [ev.id, ev.text, ev.attachments, removingQueued.has(ev.id)])]);
+    const editing = queueEdits.get(convo.id);
+    const key = JSON.stringify([convo.id, tool, convo.online, supportsQueueEdit(), editing?.eventId, waiting.map((ev) => [ev.id, ev.text, ev.attachments, removingQueued.has(ev.id)])]);
     if (key === queueKey) return;
     queueKey = key;
     ui.queue.hidden = !waiting.length;
@@ -1185,11 +1213,95 @@
       const remove = button('chat-queue-remove', 'Remove', () => removeQueued(ev.id));
       remove.setAttribute('aria-label', `Remove queued message ${index + 1}`);
       remove.disabled = !convo.online || removingQueued.has(ev.id);
-      keepFocus(remove);
-      row.append(label, preview, remove);
+      const edit = button('chat-queue-edit-button', editing?.eventId === ev.id ? 'Editing' : 'Edit', () => editQueued(ev.id));
+      edit.setAttribute('aria-label', `Edit queued message ${index + 1}`);
+      edit.disabled = !convo.online || removingQueued.has(ev.id) || !!editing;
+      row.append(label, preview, edit, remove);
       return row;
     }));
     ui.queue.scrollTop = scroll;
+  }
+
+  function editQueued(eventId) {
+    if (!convo.online || queueEdits.has(convo.id) || removingQueued.has(eventId)) return;
+    if (!supportsQueueEdit()) return notice(QUEUE_UPDATE_MESSAGE, { persistent: true });
+    if (convo.sending || convo.files.some((f) => !f.path)) return notice('Wait for sending or uploading to finish before editing.');
+    const ev = convo.events.find((ev) => ev.id === eventId && ev.queued && !ev.removed && !ev.notSent);
+    if (!ev) return notice('That message is not waiting any more.');
+    saveDraft();
+    const edit = { eventId, text: ev.text, expectedText: ev.text, files: (ev.attachments || []).map((path) => ({ path, name: baseName(path) })), saving: false };
+    queueEdits.set(convo.id, edit);
+    persistQueueEdit(convo.id);
+    ui.input.value = edit.text;
+    convo.files = edit.files;
+    growInput();
+    renderFiles();
+    renderQueue();
+    ui.input.focus();
+  }
+
+  function supportsQueueEdit() {
+    return convo.chat?.capabilities?.queueEdit === true;
+  }
+
+  function reconcileQueueEdit() {
+    if (supportsQueueEdit() && ui.notice?.textContent === QUEUE_UPDATE_MESSAGE) ui.notice.hidden = true;
+    const edit = queueEdits.get(convo.id);
+    if (!edit) return;
+    // A fresh snapshot can recover drafts that older clients wrongly marked
+    // unavailable after receiving a generic missing-route 404.
+    if (convo.events.some((ev) => ev.id === edit.eventId && ev.queued && !ev.removed && !ev.notSent)) edit.unavailable = false;
+    edit.serverUpdateRequired = !supportsQueueEdit();
+    persistQueueEdit(convo.id);
+  }
+
+  function finishQueueEdit(id, edit, keep = false) {
+    if (queueEdits.get(id) !== edit) return;
+    queueEdits.delete(id);
+    persistQueueEdit(id);
+    let draft = drafts.get(id);
+    if (keep) {
+      const files = [...draft.files];
+      for (const file of edit.files) if (!files.some((f) => f.path === file.path)) files.push(file);
+      draft = drafts.save(id, [draft.text, edit.text].filter(Boolean).join('\n\n'), files);
+    }
+    if (convo.id !== id) return;
+    ui.input.value = draft.text;
+    convo.files = draft.files;
+    growInput();
+    renderFiles();
+    renderQueue();
+  }
+
+  async function saveQueuedEdit() {
+    const id = convo.id, edit = queueEdits.get(id);
+    if (!edit || edit.saving || !convo.online) return;
+    saveDraft();
+    const waiting = !edit.unavailable && convo.events.find((ev) => ev.id === edit.eventId && ev.queued && !ev.removed && !ev.notSent);
+    if (!waiting) return finishQueueEdit(id, edit, true);
+    if (!supportsQueueEdit() || edit.serverUpdateRequired) return notice(QUEUE_UPDATE_MESSAGE, { persistent: true });
+    const text = edit.text;
+    if (!text.trim() && !edit.files.length) return;
+    edit.saving = true;
+    renderComposer();
+    try {
+      const chat = await sendWithTimeout(`/api/chat/${id}/queue`, { eventId: edit.eventId, text, expectedText: edit.expectedText }, 'PATCH');
+      if (chat?.id !== id) throw new Error('The server did not confirm the edit. Your changes are still here.');
+      // Keep any text typed while the request was in flight.
+      if (convo.id === id) saveDraft();
+      if (edit.text === text) finishQueueEdit(id, edit);
+      else { edit.expectedText = text; persistQueueEdit(id); }
+      if (convo.id === id) setChat(chat);
+    } catch (err) {
+      const unsupported = err.status === 404 && ['Not found', 'HTTP 404'].includes(err.message);
+      if (err.status === 404 && (err.code === 'QUEUE_MESSAGE_GONE' || err.message.startsWith('That message is not waiting any more'))) edit.unavailable = true;
+      if (unsupported) edit.serverUpdateRequired = true;
+      persistQueueEdit(id);
+      if (convo.id === id) notice(unsupported ? QUEUE_UPDATE_MESSAGE : err.name === 'AbortError' || err instanceof TypeError ? 'Could not confirm the edit. Your changes are still here; you can retry.' : err.message, { persistent: unsupported });
+    } finally {
+      edit.saving = false;
+      if (convo.id === id) renderComposer();
+    }
   }
 
   async function removeQueued(eventId) {
@@ -1596,11 +1708,11 @@
   }
 
   let noticeTimer = 0;
-  function notice(text) {
+  function notice(text, { persistent = false } = {}) {
     ui.notice.textContent = text;
     ui.notice.hidden = false;
     clearTimeout(noticeTimer);
-    noticeTimer = setTimeout(() => { ui.notice.hidden = true; }, 5000);
+    if (!persistent) noticeTimer = setTimeout(() => { ui.notice.hidden = true; }, 5000);
   }
 
   function growInput() {
@@ -1610,19 +1722,27 @@
   }
 
   function renderComposer() {
+    const edit = queueEdits.get(convo.id);
+    const waiting = edit && !edit.unavailable && convo.events.some((ev) => ev.id === edit.eventId && ev.queued && !ev.removed && !ev.notSent);
+    const updateRequired = waiting && (!supportsQueueEdit() || edit.serverUpdateRequired);
+    const editBar = q('.chat-queue-edit');
+    editBar.hidden = !edit;
+    if (edit) q('.chat-queue-edit-label').textContent = updateRequired ? 'Update Pocket Dev to save this edit' : waiting ? `Editing queued message${edit.files.length ? ` · ${edit.files.length} attached` : ''}` : 'No longer queued. Keep your edit as a draft.';
+    q('.chat-queue-cancel').disabled = !!edit?.saving;
     const busy = convo.chat && isBusy(convo.chat);
     const uploading = convo.files.some((f) => !f.path);
     const hasInput = !!ui.input.value.trim() || convo.files.length > 0;
     // While the agent works, text in the box is queued. Stop lives in the status line, so there is never a second one here.
-    ui.send.textContent = busy ? 'Queue' : 'Send';
+    ui.send.textContent = edit ? (edit.saving ? 'Saving…' : waiting ? 'Save' : 'Keep draft') : busy ? 'Queue' : 'Send';
     ui.send.classList.remove('chat-stop');
-    ui.send.disabled = !convo.online || convo.sending || uploading || !hasInput;
-    ui.attach.disabled = !convo.online || convo.uploadsOff;
+    ui.send.disabled = !convo.online || convo.sending || uploading || !hasInput || !!edit?.saving || !!updateRequired;
+    ui.input.setAttribute('aria-label', edit ? 'Edit queued message' : 'Message');
+    ui.attach.disabled = !!edit || !convo.online || convo.uploadsOff;
     ui.attach.title = convo.uploadsOff ? 'Attachments are not available on this server' : 'Attach a file';
   }
 
   function renderFiles() {
-    ui.files.hidden = !convo.files.length;
+    ui.files.hidden = queueEdits.has(convo.id) || !convo.files.length;
     ui.files.replaceChildren(...convo.files.map((f) => {
       const chip = el('span', `chat-file${f.path ? '' : ' chat-file-up'}`);
       chip.append(el('span', 'chat-file-name', f.path ? f.name : `${f.name} (uploading…)`));
@@ -1632,6 +1752,7 @@
         renderFiles();
       });
       x.setAttribute('aria-label', `Remove ${f.name}`);
+      x.hidden = queueEdits.has(convo.id);
       chip.append(x);
       return chip;
     }));
@@ -1644,8 +1765,13 @@
     renderComposer();
   });
   keepFocus(ui.send);
+  q('.chat-queue-cancel').onclick = () => {
+    const edit = queueEdits.get(convo.id);
+    if (edit && !edit.saving) finishQueueEdit(convo.id, edit);
+  };
   ui.composer.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (queueEdits.has(convo.id)) return saveQueuedEdit();
     if (!convo.id || !convo.online || convo.sending || convo.files.some((f) => !f.path)) return;
     const id = convo.id;
     const text = ui.input.value.trim();
@@ -1681,6 +1807,7 @@
 
   ui.attach.onclick = () => ui.fileInput.click();
   ui.fileInput.onchange = async () => {
+    if (queueEdits.has(convo.id)) { ui.fileInput.value = ''; return; }
     const picked = [...ui.fileInput.files];
     const id = convo.id;
     const files = convo.files;
