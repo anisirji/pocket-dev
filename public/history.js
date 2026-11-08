@@ -1,7 +1,7 @@
 (() => {
   const TOOLS = { claude: 'Claude', codex: 'Codex' };
   const FILTERS = [['all', 'All'], ['claude', 'Claude'], ['codex', 'Codex']];
-  const LIVE_WARNING = 'This conversation may still be open on your laptop. Close it there first, or both will write to it.';
+  const OPEN_BADGE = { mac: 'open on Mac', 'pocket-dev': 'open in Pocket Dev' };
 
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
@@ -50,7 +50,9 @@
     <div class="hist-list hist-scroll"></div>
     <div class="hist-detail hist-scroll" hidden></div>
     <div class="hist-foot" hidden>
-      <p class="hist-warn" hidden></p>
+      <div class="hist-open" hidden><strong class="hist-open-title"></strong><span class="hist-open-where"></span></div>
+      <p class="hist-warn" role="alert" hidden></p>
+      <button class="hist-fix" hidden></button>
       <div class="hist-actions">
         <button class="hist-continue hist-in-terminal">Continue in terminal</button>
         <button class="hist-continue hist-in-chat">Continue in chat</button>
@@ -61,7 +63,8 @@
   const ui = {
     back: q('.hist-back'), heading: q('.hist-heading'), refresh: q('.hist-refresh'), close: q('.hist-close'),
     chips: q('.hist-chips'), list: q('.hist-list'), detail: q('.hist-detail'), foot: q('.hist-foot'),
-    warn: q('.hist-warn'), go: q('.hist-in-terminal'), chat: q('.hist-in-chat'),
+    open: q('.hist-open'), openTitle: q('.hist-open-title'), openWhere: q('.hist-open-where'),
+    warn: q('.hist-warn'), fix: q('.hist-fix'), actions: q('.hist-actions'), go: q('.hist-in-terminal'), chat: q('.hist-in-chat'),
   };
 
   let filter = 'all';
@@ -113,7 +116,7 @@
     const node = el('button', 'hist-card');
     const top = el('div', 'hist-card-top');
     top.append(badge(item.tool), el('span', 'hist-project', item.project || '—'));
-    if (item.live) top.append(el('span', 'hist-live', 'open on laptop?'));
+    if (item.live) top.append(el('span', 'hist-live', OPEN_BADGE[item.openIn] ?? 'open on Mac?'));
     node.append(top, el('div', 'hist-title', item.title), el('div', 'hist-meta', `${ago(item.lastActive)} · ${msgs(item.messageCount)}`));
     node.onclick = () => openDetail(item);
     return node;
@@ -148,13 +151,12 @@
   async function loadDetail(item) {
     const seq = ++detailSeq;
     status(ui.detail, 'Loading conversation…');
-    ui.warn.hidden = !item.live;
-    ui.warn.textContent = LIVE_WARNING;
+    renderOpen();
     try {
       const data = await api('GET', `/api/history/${item.tool}/${encodeURIComponent(item.id)}`);
       if (seq !== detailSeq) return;
       current = { ...item, ...data };
-      ui.warn.hidden = !current.live;
+      renderOpen();
       const title = el('div', 'hist-detail-title', current.title);
       const meta = el('div', 'hist-meta', [current.cwd && shortPath(current.cwd), ago(current.lastActive), msgs(current.messageCount)].filter(Boolean).join(' · '));
       const shown = current.messages.filter((m) => m.role !== 'tool').length;
@@ -182,12 +184,47 @@
     loadList();
   }
 
+  // A live conversation has a writer somewhere else. The buttons take it over: that copy closes first, so only one
+  // program ever writes the conversation's file.
+  function renderOpen() {
+    const live = Boolean(current?.live);
+    ui.open.hidden = !live;
+    ui.actions.classList.toggle('stacked', live);
+    if (!ui.go.disabled) setLabels();
+    if (!live) return;
+    const tool = TOOLS[current.tool];
+    ui.openTitle.textContent = current.openIn === 'pocket-dev' ? 'Open in Pocket Dev' : 'Open on your Mac';
+    const where = current.copies?.length ? current.copies.map((c) => c.label).join(', ')
+      : current.copies ? 'Changed in the last 2 minutes' : '';
+    ui.openWhere.textContent = [where, current.busy && `${tool} is working on it now`].filter(Boolean).join(' · ');
+  }
+
+  function setLabels() {
+    const verb = current?.live ? 'Take over and continue' : 'Continue';
+    ui.go.textContent = `${verb} in terminal`;
+    ui.chat.textContent = `${verb} in chat`;
+  }
+
+  function clearFailure() {
+    ui.warn.hidden = ui.fix.hidden = true;
+    ui.fix.onclick = null;
+  }
+
+  function lock(button, text) {
+    ui.go.disabled = ui.chat.disabled = ui.fix.disabled = true;
+    button.textContent = text;
+  }
+
+  function unlock() {
+    ui.go.disabled = ui.chat.disabled = ui.fix.disabled = false;
+    setLabels();
+  }
+
   function openDetail(item) {
     current = item;
     overlays.open('resume-detail', () => setMode('list'));
-    ui.go.disabled = ui.chat.disabled = false;
-    ui.go.textContent = 'Continue in terminal';
-    ui.chat.textContent = 'Continue in chat';
+    clearFailure();
+    unlock();
     setMode('detail');
     loadDetail(item);
   }
@@ -202,35 +239,103 @@
 
   // Both buttons leave the sheet for the new terminal or chat; `start` resolves to a toast note or nothing.
   // `leaveFirst` closes the sheet before `start`, for a start that opens its own overlays: closing the sheet later
-  // would close them too.
-  async function continueWith(button, start, leaveFirst = false) {
+  // would close them too. `done` is said first in the toast, for a take over that closed another copy.
+  async function continueWith(button, start, leaveFirst = false, done = '') {
     if (!current) return;
-    const label = button.textContent;
-    ui.go.disabled = ui.chat.disabled = true;
-    button.textContent = 'Starting…';
+    clearFailure();
+    lock(button, done ? 'Continuing…' : 'Starting…');
     if (leaveFirst) leave();
     try {
       const note = await start(current);
       if (!leaveFirst) leave();
       document.activeElement?.blur();
-      if (note) toast(note);
+      if (done || note) toast([done, note].filter(Boolean).join(' '));
     } catch (err) {
-      ui.go.disabled = ui.chat.disabled = false;
-      button.textContent = label;
-      toast(`Could not resume: ${err.message}`);
+      unlock();
+      toast(`${done ? `${done} ` : ''}Could not resume: ${err.message}`);
     }
   }
 
-  ui.go.onclick = () => continueWith(ui.go, async (item) => {
-    const view = await api('POST', `/api/history/${item.tool}/${encodeURIComponent(item.id)}/resume`);
-    window.pocketDev.openSession(view);
-    return view.note;
-  });
-  ui.chat.onclick = () => continueWith(ui.chat, async (item) => {
-    if (!item.cwd) throw new Error('this conversation has no folder on record');
-    await window.pocketDevChat.startFromSession({ tool: item.tool, id: item.id, cwd: item.cwd, title: item.title });
-  }, true);
+  // The take over route answers 409 with a reason (`code`) the sheet acts on, so it is read here rather than through
+  // api(), which keeps only the message.
+  async function takeoverRequest(item, body) {
+    const res = await fetch(`/api/history/${item.tool}/${encodeURIComponent(item.id)}/takeover`, {
+      method: 'POST', headers: { 'x-pocket-dev': '1', 'content-type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401 || data.blocked || data.pending) {
+      location.replace('/login.html');
+      throw new Error(data.error || 'Not logged in');
+    }
+    return { ok: res.ok, data };
+  }
 
+  const START = {
+    async terminal(item) {
+      const view = await api('POST', `/api/history/${item.tool}/${encodeURIComponent(item.id)}/resume`);
+      window.pocketDev.openSession(view);
+      return view.note;
+    },
+    async chat(item) {
+      if (!item.cwd) throw new Error('this conversation has no folder on record');
+      await window.pocketDevChat.startFromSession({ tool: item.tool, id: item.id, cwd: item.cwd, title: item.title });
+    },
+  };
+  const buttonFor = (where) => (where === 'chat' ? ui.chat : ui.go);
+  const continueIn = (where, done) => continueWith(buttonFor(where), START[where], where === 'chat', done);
+
+  // A fix the server's answer allows: force quit a program that ignored the request to stop, or continue without a take
+  // over when no program could be found. Each warns before it acts.
+  function offerFix(label, warning, action) {
+    ui.fix.textContent = label;
+    ui.fix.hidden = false;
+    ui.fix.onclick = () => { if (confirm(warning)) action(); };
+  }
+
+  async function takeOver(where, body = {}) {
+    const button = buttonFor(where);
+    clearFailure();
+    lock(button, 'Stopping…');
+    let r;
+    try {
+      r = await takeoverRequest(current, body);
+    } catch (err) {
+      r = { ok: false, data: { error: err.message } };
+    }
+    if (r.ok) {
+      // Nothing else has it open now, so if continuing fails, trying again just continues.
+      current = { ...current, live: false, copies: [] };
+      renderOpen();
+      const closed = r.data.stopped.map((s) => s.label).join(', ');
+      return continueIn(where, closed && `Closed ${closed}.`);
+    }
+    unlock();
+    if (r.data.code === 'busy' && !body.confirmBusy) {
+      if (confirm(r.data.error)) takeOver(where, { ...body, confirmBusy: true });
+      return;
+    }
+    ui.warn.textContent = r.data.error || 'Could not take over this conversation.';
+    ui.warn.hidden = false;
+    if (r.data.code === 'still-running' && r.data.canForce) {
+      offerFix(`Force quit and continue in ${where}`, 'Force quit ends it at once. Anything it has not saved, including a reply it is writing, is lost.',
+        () => takeOver(where, { ...body, confirmBusy: true, force: true }));
+    } else if (r.data.code === 'not-found') {
+      offerFix(`Continue in ${where} anyway`, 'If it is still open on the Mac, both copies write to this conversation and can damage it.',
+        () => continueIn(where));
+    }
+  }
+
+  function choose(where) {
+    if (!current) return;
+    if (!current.live) return continueIn(where);
+    const question = current.openIn === 'pocket-dev'
+      ? 'This conversation is open in another Pocket Dev terminal or chat. Take it over? That copy will close.'
+      : "This conversation is open on your Mac. Take it over? The Mac's copy will close.";
+    if (confirm(question)) takeOver(where);
+  }
+
+  ui.go.onclick = () => choose('terminal');
+  ui.chat.onclick = () => choose('chat');
   ui.back.onclick = () => overlays.close('resume-detail');
   ui.close.onclick = leave;
   ui.refresh.onclick = loadList;
