@@ -37,3 +37,15 @@ The isolated branch `admin-port-fix`, in `.claude/worktrees/codex-admin-port-fix
 - Confirm that a guest Messages socket receives no waiting-login code while an eligible owner device receives the notice.
 
 - Live monitoring: check CPU/storage updates on a physical phone, high-load and low-space alerts, background/wake, offline/online, and whether the status strip leaves controls usable with the keyboard open. Network loss cannot prove the Mac is frozen.
+
+## Release authorization and remote-access check
+
+The owner has authorized merging, pushing and updating the server **after all tests are complete**, and asked for an explanation of the effect on the existing remote connection before proceeding. That conditional authorization supersedes the earlier instruction to leave the live checkout untouched once its test condition is met. Do not ask for the same authorization again; do not deploy while the full-suite/browser checks remain blocked or failing.
+
+Read-only checks found a separate launchd job running the live `server.js` on port 7777 with KeepAlive, connected access with keepOpen enabled, an allowed hostname for a manually started Quick Tunnel, no saved managed-network setting, role-based access enabled and one active legacy-cookie device. No secret, cookie hash or tunnel token was printed.
+
+Restarting only Pocket Dev briefly drops its HTTP/WebSocket service. Leave the external cloudflared process, its port target, its allowed hostname and its terminal alive. The existing Quick URL is tied to that cloudflared process; do not replace it with a newly started managed Quick Tunnel during this release. An origin outage can return 502 while the Cloudflare connector itself stays connected.
+
+The login migration needs special handling: Auth loads legacy cookies as LAN-only, so the current remote browser's legacy cookie will not authenticate through its public hostname after this upgrade. Role-based access also means a password login needs Mac approval. A fresh remote login/pairing path must be ready, with working local management access and rollback, before the restart. A login key minted by the old server is in memory and will not survive the restart; generate recovery keys through the new server, and verify the same remote origin after pairing. Do not weaken cookie-host validation to avoid this migration.
+
+Before any live change: complete the outstanding tests; back up configuration and device state privately; verify local management access, the external tunnel's lifetime and target, and persistent terminals; wait for active chat turns/queues to finish; retain the old code and state for rollback. Restart only Pocket Dev, then check local health, the existing remote URL and authenticated access. The current session still cannot run listener-dependent tests or browser checks, and no merge, push or restart has happened.
