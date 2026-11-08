@@ -313,10 +313,13 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
   function mintQrUrl(address) {
     const now = Date.now();
     for (const [key, expiresAt] of qrKeys) if (expiresAt <= now) qrKeys.delete(key);
+    const { lan, local, remote } = urls();
+    // A phone's first login should happen on the internet address when there is one; Wi-Fi then comes by handoff.
+    const base = address ?? remote ?? lan ?? local;
+    if (!base) throw Object.assign(new Error('No address to share yet. Turn on Wi-Fi access, or wait for the internet link to connect.'), { status: 409 });
     const key = crypto.randomBytes(32).toString('hex');
     qrKeys.set(key, now + QR_TTL_MS);
-    const { lan, local } = urls();
-    return `${address ?? lan ?? local}/?k=${key}`;
+    return `${base}/?k=${key}`;
   }
 
   function redeemQrKey(req, key) {

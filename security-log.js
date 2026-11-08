@@ -5,6 +5,7 @@ export const EVENT_KINDS = {
   'remote-started': 'change',
   'remote-stopped': 'change',
   'remote-error': 'failure',
+  'network-changed': 'change',
   'role-access-enabled': 'change',
   'collaborator-created': 'change',
   'collaborator-updated': 'change',

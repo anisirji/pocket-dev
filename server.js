@@ -25,6 +25,7 @@ import { createCollaborators } from './collaborators.js';
 import { captureScreen } from './screen.js';
 import { collectHealth } from './health.js';
 import { createTunnel } from './tunnel.js';
+import { readNetwork, readToken } from './network.js';
 import { sameOrigin } from './transport.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +35,10 @@ const UPLOAD_MAX = 25 * 1024 * 1024;
 
 const config = openConfig(resolveConfigPath());
 const PORT = Number(process.env.PORT) || config.read().port || 7777;
+const network = () => readNetwork(config);
+const internetOn = () => network().internet.kind !== 'off';
+// Wi-Fi access is read once: the listener's bind address only changes with a restart.
+const WIFI = network().wifi;
 
 // Every IPv4 address the Mac has on a network, en0 first. POCKET_DEV_LAN_IP_FILE replaces the interface lookup in
 // tests: the file holds one address, empty means no network.
@@ -54,18 +59,24 @@ const localName = () => {
   return name.endsWith('.local') ? name : `${name}.local`;
 };
 let tunnel;
-const urls = () => ({ lan: lanIp() && `http://${lanIp()}:${PORT}`, local: `http://${localName()}:${PORT}`, remote: tunnel?.view().url ?? null });
+// With Wi-Fi access off the listener is on loopback, so the LAN and .local addresses reach nothing.
+const urls = () => ({
+  lan: WIFI && lanIp() ? `http://${lanIp()}:${PORT}` : null,
+  local: WIFI ? `http://${localName()}:${PORT}` : null,
+  remote: tunnel?.view().url ?? null,
+});
 const LOCAL_NOTE = 'same Wi-Fi only; some Android phones cannot open .local names';
 
 // A DNS-rebinding page reaches this port under its own name, so only names that mean this Mac are served: its
-// addresses and .local name on PORT, loopback, and config.json "allowedHosts" (a tunnel's domain, any port). The
-// addresses are read per request because the network can change.
+// addresses and .local name on PORT, loopback, the tunnel's hostname on https, and config.json "allowedHosts" (any
+// port). The addresses are read per request because the network can change.
 const LOOPBACK_NAMES = ['localhost', '127.0.0.1', '[::1]'];
 function hostAllowed(host) {
   const m = /^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/.exec((host ?? '').toLowerCase());
   if (!m) return false;
   const name = m[1].replace(/\.$/, '');
-  if (urls().remote && name === new URL(urls().remote).hostname && (m[2] === undefined || Number(m[2]) === 443)) return true;
+  const remoteNames = [urls().remote && new URL(urls().remote).hostname, network().internet.hostname].filter(Boolean);
+  if (remoteNames.includes(name) && (m[2] === undefined || Number(m[2]) === 443)) return true;
   const extra = config.read().allowedHosts;
   if (Array.isArray(extra) && extra.some((h) => typeof h === 'string' && h.toLowerCase() === name)) return true;
   const port = m[2] === undefined ? 80 : Number(m[2]);
@@ -826,12 +837,17 @@ const adminSections = {
   },
 };
 
+// The domain link is the permanent address, so it comes up with phone access; a Quick link is turned on by hand.
+const publishDomain = async () => {
+  if (network().internet.kind === 'domain' && readToken()) await tunnel.start();
+};
 const access = createPhoneAccess({
-  server, wss, port: PORT, config, log: auth.admin.log,
+  server, wss, port: PORT, host: WIFI ? '0.0.0.0' : '127.0.0.1', config, log: auth.admin.log,
+  onOpen: publishDomain,
   onClose: () => tunnel.stop(),
   forwards: { ports: () => [...forwards.keys()], open: openForward, close: closeForward },
 });
-tunnel = createTunnel({ port: PORT, isConnected: () => access.view().connected, log: auth.admin.log });
+tunnel = createTunnel({ port: PORT, isConnected: () => access.view().connected, network, token: readToken, log: auth.admin.log });
 process.once('exit', () => tunnel.dispose());
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { tunnel.dispose(); process.exit(0); });
 const admin = await startAdmin({ auth, collaborators, access, tunnel, config, mainPort: PORT, urls, sections: adminSections }).catch((err) => {
@@ -842,14 +858,19 @@ const opened = await access.start();
 if (opened.error) {
   console.error(`${opened.error} Phone access stays off until then.`);
 } else if (access.view().connected) {
-  console.log(await terminalQr(auth.mintQrUrl()));
   const { lan, local } = urls();
-  console.log(`Pocket Dev running at ${lan ?? local}`);
-  if (lan) console.log(`Also at ${local} (${LOCAL_NOTE})`);
+  const { internet } = network();
+  if (lan ?? local) {
+    console.log(await terminalQr(auth.mintQrUrl()));
+    console.log(`Pocket Dev running at ${lan ?? local}`);
+    if (lan) console.log(`Also at ${local} (${LOCAL_NOTE})`);
+  }
+  if (internet.kind === 'domain') console.log(`Internet link: https://${internet.hostname} (${tunnel.view().status})`);
+  if (internet.kind === 'quick') console.log('Internet link: Quick link, turn it on in Admin.');
 } else {
   console.log('Phone access is off. Press Connect on the admin page to let your phone in.');
 }
 console.log(auth.passwordLine);
-if (access.view().connected) console.log(qrNote(QR_TTL_MIN));
+if (access.view().connected && (urls().lan ?? urls().local)) console.log(qrNote(QR_TTL_MIN));
 console.log(admin.line);
 if (!access.view().connected || !access.view().keepOpen) admin.openPage();
