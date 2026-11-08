@@ -8,6 +8,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
+import { takeoverCommand } from '../takeover-cli.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -27,7 +28,7 @@ async function freePort() {
 
 // The server reads its process table from POCKET_DEV_PROCESS_FIXTURE and records signals there, so take over never
 // lists or signals a real process. Only the server's own test shell ends, through the terminal API.
-test('take over through the real server: owner only, CSRF header, security log, and a Pocket Dev terminal closed by its API', { timeout: 60000 }, async (t) => {
+test('take over through the real server: owner only, CSRF header, security log; pocket-dev takeover --last closes the phone terminal by its API', { timeout: 60000 }, async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-takeover-server-'));
   const home = path.join(root, 'home');
   const state = path.join(root, 'state');
@@ -124,11 +125,19 @@ test('take over through the real server: owner only, CSRF header, security log, 
   assert.deepEqual(section.items.map((i) => [i.id, i.cwd]), [[`claude:${ID}`, app]]);
   assert.ok(section.items[0].details.includes(`On the Mac, run: pocket-dev takeover ${ID}`));
 
-  // The fixture's program goes when its terminal does, as a real one would.
+  // `pocket-dev takeover --last` on the Mac, against this server's Admin API. The fixture's program goes when its
+  // terminal does, as a real one would; claude itself is a fake.
   const ended = until(() => exited).then(() => writeTable({ ...readTable(), processes: [] }));
-  const closed = await request('POST', `/api/sections/conversations/${encodeURIComponent(`claude:${ID}`)}`, { adminRequest: true, body: {} });
+  const runs = [];
+  const printed = [];
+  const code = await takeoverCommand(['--last'], {
+    adminUrl: () => admin, listProcesses: async () => readTable().processes, claudeSessions: () => [], uid, selfPid: process.pid,
+    run: (bin, args, opts) => { runs.push([bin, args, opts]); return { status: 0 }; },
+    out: (line) => printed.push(line), err: (line) => printed.push(line),
+  });
   await ended;
-  assert.equal(closed.status, 200, JSON.stringify(closed.data));
+  assert.equal(code, 0, printed.join('\n'));
+  assert.deepEqual(runs, [['claude', ['--resume', ID], { cwd: app, stdio: 'inherit' }]]);
   assert.match(output, /\[Continued on your Mac\]/);
   assert.equal(readTable().signals, undefined, 'take over sent no signal; the terminal ended its own shell');
   const tab = (await request('GET', '/api/sessions', { cookie })).data.find((s) => s.id === session.id);

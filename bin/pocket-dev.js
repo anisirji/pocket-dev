@@ -26,6 +26,7 @@ Usage: pocket-dev <command>
   admin                                            Open the admin page (this Mac only)
   connect | disconnect                             Open or close phone access
   awake on|plugged|off|status                      Keep the Mac awake
+  takeover <id> | --last                           Continue a phone conversation in this terminal
   version | help
 
 Settings you can change with config set:
@@ -116,6 +117,7 @@ switch (command) {
   case 'admin': runScript('admin.js', ['open']); break;
   case 'connect': case 'disconnect': runScript('admin.js', [command]); break;
   case 'awake': runScript('awake.js', args); break;
+  case 'takeover': process.exit(await (await import('../takeover-cli.js')).takeoverCommand(args)); break;
   case 'version': case '--version': case '-v': console.log(VERSION); break;
   case undefined: case 'help': case '--help': case '-h': console.log(HELP); break;
   default: fail(`Unknown command "${command}".\n\n${HELP}`, 2);
