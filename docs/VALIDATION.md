@@ -94,3 +94,20 @@ The repository suite passed all 114 tests again. The responsive browser harness 
 The browser rerun passed all 14 phone, landscape, tablet and desktop sizes, including the Collaborators invitation form and related-folder controls, queue tray pinning and truncation, queue Edit/Save/Cancel, simulated keyboard resize/pan, file-link previews, reconnect and draft restoration, History-to-chat resume, and missing-asset recovery. No page errors occurred. This supersedes the earlier sandbox-blocked browser status above; physical-phone interaction, native sharing and QR scanning remain unverified.
 
 Read-only live checks confirmed that the background service is reachable and has newer code waiting, with one persistent terminal and no active chat turns. No live update, access migration, commit or push was performed during this verification. Docker Desktop is installed, but its engine socket remains absent; collaborator AI is still disabled pending a validated isolated runner.
+
+## Messages
+
+Validation date: 2026-11-08. Environment: macOS 14.5, Node.js 22, headless Chrome through Playwright, with disposable servers, ports and state folders.
+
+| Check | Result |
+| --- | --- |
+| `test/messages-store.test.mjs`: magic-byte types, private file modes, the low-space rules and the 500 MB floor (injected `statfs`), an aborted upload, and no child process except `sips` | 7 tests passed |
+| `test/messages.test.mjs` on a real server: group and direct delivery, CSRF and Origin, Range on video, SVG, HTML and mismatched files forced to download, attachment access, delete and hide, reconnect catch-up, the 100 MB connector limit, a 150 MB Wi-Fi upload, revoke, guests, the CLI, Clear and lockdown | 14 subtests passed |
+| Repository suite (`npm test`) | 135 tests passed |
+| `scripts/check-responsive.mjs`, with Messages at all 14 sizes, the keyboard pan and the action menu | Passed, no page errors |
+
+Mutation checks confirmed that the tests fail when the guest history cutoff is removed, when direct messages go to everyone, when device sockets are not tracked, when every file is served inline, when the connector limit is removed, when deleting keeps the files, and when uploads are held in memory. The memory check samples the server's RSS with `ps` during a 150 MB upload and allows 60 MB of growth.
+
+A real server was also driven in Chrome at 360 × 740 with two owner phones, a guest and the Admin page: send and receive, the toast and badge, three attachments with progress, a thumbnail, inline video, a file card, the image viewer, a direct chat with an unread count, Delete for everyone from the action menu, a 101 MB file refused before upload on the connector route, the Admin page sending as the Mac, a guest sending to the group, and the guest view removed after its grant was revoked. There were no page errors. At 360 px the Admin page overflows sideways because of the existing Permissions buttons, not Messages.
+
+Not verified here: a physical phone (Android or iOS long-press, the native keyboard, video playback of real files), HEIC photos from an iPhone, a real Cloudflare Tunnel, and a Mac that is actually low on disk space.

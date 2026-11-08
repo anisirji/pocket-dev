@@ -107,6 +107,16 @@ Working principle: understand the user's concrete workflow, test alternative arc
 | Cleaning up old worktrees | Eight worktree folders used about 660 MB, and one held private notes that git does not track. | Copied the private notes into the main folder, where they stay ignored, and checked each copy. Then removed the folders and kept their branches. |
 | Tests failing after committing work in progress | Seven collaborator tests crashed reading `req.socket.encrypted`, because the test helper built a fake request with no socket. | The helper's fake request now includes a socket. All 114 tests pass. |
 
+## Messages
+
+| Challenge | What happened | How we solved it |
+| --- | --- | --- |
+| Clipboard access | The first design read and wrote the Mac clipboard with `pbpaste` and `pbcopy`. The owner did not want Pocket Dev touching the clipboard at all. | Messages never reads or writes the clipboard. Copy runs only when you tap it, on your own device. `pbpaste \| pocket-dev message` stays your choice. |
+| Test suite hung | A refused upload was answered before its body was read. The client could get a connection reset instead of the answer, and the test ignored that error and waited forever. | A refused upload of up to 200 MB is read and dropped, so the answer arrives. The test now fails on a reset instead of waiting. |
+| Broken thumbnails | Two pages asking for the same new image at once could read the JPEG while `sips` was still writing it. | Requests for the same image wait on one thumbnail job. |
+| Admin layout | The two-pane layout used a container query on the same element that declared the container, which CSS ignores, so the panes overlapped on the Admin page. | The query now styles an inner element. |
+| New people missing | A phone learned who was in Messages only when its socket connected, so someone who logged in later did not appear. | The list refreshes when Messages opens and every 15 s while it is open. |
+
 ## Building it with several agents at once
 
 | Challenge                          | What happened                                                                                   | How we solved it                                                |
