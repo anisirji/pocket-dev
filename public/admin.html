@@ -84,6 +84,7 @@
           <li>In the Cloudflare dashboard, open Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared, and name it.</li>
           <li>From the install command it shows, copy only the token (the long code after <code>--token</code>). Do not run that command: Pocket Dev runs cloudflared for you.</li>
           <li>Add a public hostname, such as <code>pocket.example.com</code>, pointing to <b>HTTP</b> <code id="domainPort">localhost:7777</code>. The domain must use Cloudflare DNS.</li>
+          <li>Turn on <b>Always Use HTTPS</b> for the domain (SSL/TLS → Edge Certificates), so a phone that types the address without https is sent there before it logs in.</li>
           <li>Paste the hostname and the token here.</li>
         </ol>
         <p class="note">One fixed address, so each phone links to it once: on Wi-Fi, Settings → Connection → Link this phone. After that it opens the address without the password, even with Approve new devices on.</p>

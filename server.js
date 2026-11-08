@@ -76,16 +76,21 @@ function parseHost(host) {
   const m = /^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/.exec((host ?? '').toLowerCase());
   return m && { name: m[1].replace(/\.$/, ''), port: m[2] === undefined ? null : Number(m[2]) };
 }
+// The link's hostname while it is up, and the domain hostname from the setting even while the link is down.
+const remoteNames = () => [urls().remote && new URL(urls().remote).hostname, network().internet.hostname].filter(Boolean);
 function hostAllowed(host) {
   const parsed = parseHost(host);
   if (!parsed) return false;
   const { name, port } = parsed;
-  const remoteNames = [urls().remote && new URL(urls().remote).hostname, network().internet.hostname].filter(Boolean);
-  if (remoteNames.includes(name) && (port === null || port === 443)) return true;
+  if (remoteNames().includes(name) && (port === null || port === 443)) return true;
   const extra = config.read().allowedHosts;
   if (Array.isArray(extra) && extra.some((h) => typeof h === 'string' && h.toLowerCase() === name)) return true;
   return (port ?? 80) === PORT && [...LOOPBACK_NAMES, localName(), ...lanIps()].includes(name);
 }
+// The internet hostname is served only through the connector on https. Anything else naming it (Cloudflare relaying a
+// plain-http visit, a LAN client choosing that Host) would otherwise run as a Wi-Fi request and get a Wi-Fi cookie.
+const insecureRemote = (req) => !fromConnector(req) && remoteNames().includes(parseHost(req.headers.host)?.name);
+const HSTS = 'max-age=31536000';
 // How a handoff token arrived: through the tunnel on its hostname, directly on the Mac's own Wi-Fi address or .local
 // name, or neither.
 function handoffArrival(req) {
@@ -757,10 +762,15 @@ function servePage(req, res, pathname) {
 }
 
 const server = http.createServer(async (req, res) => {
+  if (insecureRemote(req)) {
+    res.writeHead(308, { location: `https://${parseHost(req.headers.host).name}${req.url}`, 'cache-control': 'no-store', connection: 'close' });
+    return res.end();
+  }
   if (!hostAllowed(req.headers.host)) {
     res.writeHead(421, { 'content-type': 'text/plain; charset=utf-8', connection: 'close' });
     return res.end(MISDIRECTED);
   }
+  if (fromConnector(req)) res.setHeader('strict-transport-security', HSTS);
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname === '/' && url.searchParams.has('k')) {
@@ -789,7 +799,7 @@ const rejectUpgrade = (socket, status, text) => {
 };
 
 server.on('upgrade', (req, socket, head) => {
-  if (!hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
+  if (insecureRemote(req) || !hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
   if (collaborators.guest(req)) return rejectUpgrade(socket, 403, 'Forbidden');
   const { pathname } = new URL(req.url, 'http://localhost');
   const match = /^\/ws\/([0-9a-f]+)$/.exec(pathname);

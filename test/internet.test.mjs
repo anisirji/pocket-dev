@@ -198,8 +198,9 @@ test('domain tunnel: token in the environment only, never in argv, responses or 
   const everything = JSON.stringify(st) + JSON.stringify((await s.local('GET', '/api/log')).data) + fs.readFileSync(path.join(s.stateDir, 'security.log'), 'utf8') + s.logs() + fs.readFileSync(s.config, 'utf8');
   assert.equal(everything.includes(TOKEN), false, 'the token never appears in a response, a log or config.json');
   assert.equal((await s.request('GET', '/api/status', { via: 'tunnel' })).status, 200, 'the domain hostname is accepted on https');
-  assert.equal((await s.request('GET', '/api/status', { headers: { host: `${HOSTNAME}:443` } })).status, 200);
-  assert.equal((await s.request('GET', '/api/status', { headers: { host: `${HOSTNAME}:8080` } })).status, 421);
+  assert.equal((await s.request('GET', '/api/status', { via: 'tunnel', headers: { host: `${HOSTNAME}:443` } })).status, 200);
+  assert.equal((await s.request('GET', '/api/status', { via: 'tunnel', headers: { host: `${HOSTNAME}:8080` } })).status, 421);
+  assert.equal((await s.request('GET', '/api/status', { headers: { host: `${HOSTNAME}:443` } })).status, 308, 'without the connector the hostname is only ever sent to https');
   // The connection hint: the phone's public address matches the Mac's, so they share a network.
   const T = await s.login({ via: 'tunnel' });
   assert.equal(T.status, 200);
@@ -238,6 +239,26 @@ test('domain tunnel: token in the environment only, never in argv, responses or 
   assert.equal(off.data.hasToken, true, 'the token stays for the next time');
   assert.equal((await s.request('GET', '/api/status', { via: 'tunnel' })).status, 421);
   assert.equal((await s.request('PUT', '/api/network', { cookie: A.cookie, body: { internet: { kind: 'off' } } })).status, 404);
+});
+
+test('the internet hostname is served over https only: plain http is sent on, and https responses carry HSTS', { timeout: 60000 }, async (t) => {
+  const s = await startServer(t, { network: { internet: { kind: 'domain', hostname: HOSTNAME } }, token: TOKEN });
+  await s.tunnelStatus('connected');
+  // What Cloudflare relays for http://pocket.example.test while Always Use HTTPS is off.
+  const plain = { host: HOSTNAME, 'x-forwarded-proto': 'http', 'cf-connecting-ip': PHONE_IP };
+  const page = await s.request('GET', '/?h=abc', { headers: plain });
+  assert.equal(page.status, 308);
+  assert.equal(page.headers.get('location'), `https://${HOSTNAME}/?h=abc`);
+  assert.equal(page.headers.get('set-cookie'), null);
+  const login = await s.login({ headers: plain });
+  assert.equal(login.status, 308, 'a password sent over plain http logs nothing in');
+  assert.equal(login.cookie, undefined);
+  assert.equal((await s.request('GET', '/api/status', { headers: { host: HOSTNAME } })).status, 308, 'a direct request naming the hostname is not a Wi-Fi request either');
+  assert.equal((await s.status()).devices.length, 0, 'no device was created over http');
+  const secure = await s.request('GET', '/api/status', { via: 'tunnel' });
+  assert.equal(secure.status, 200);
+  assert.equal(secure.headers.get('strict-transport-security'), 'max-age=31536000');
+  assert.equal((await s.request('GET', '/api/status')).headers.get('strict-transport-security'), null, 'Wi-Fi is http, so no HSTS there');
 });
 
 test('a cookie works only on the address it was issued for', { timeout: 60000 }, async (t) => {
@@ -289,10 +310,10 @@ test('Quick link: on demand from Admin, a random address, and off again', { time
   assert.equal(st.urls.remote, st.network.tunnel.url);
   assert.equal(s.recorded('argv').trim().split('\n').slice(0, 3).join(' '), 'tunnel --no-autoupdate --url');
   assert.doesNotMatch(s.recorded('env'), /^TUNNEL_TOKEN=/m);
-  assert.equal((await s.request('GET', '/api/status', { headers: { host: 'quick-fixture-1.trycloudflare.com' } })).status, 200);
+  const quick = (host, cookie) => ({ host, 'x-forwarded-proto': 'https', 'cf-connecting-ip': PHONE_IP, ...(cookie && { cookie }) });
+  assert.equal((await s.request('GET', '/api/status', { headers: quick('quick-fixture-1.trycloudflare.com') })).status, 200);
   // Linking to a Quick link: the token is bound to that start's hostname, so the next start needs a new link.
   const A = await s.login();
-  const quick = (host, cookie) => ({ host, 'x-forwarded-proto': 'https', 'cf-connecting-ip': PHONE_IP, ...(cookie && { cookie }) });
   const linkUrl = (await s.request('POST', '/api/handoff', { cookie: A.cookie, body: { direction: 'to-remote' } })).data.url;
   assert.equal(new URL(linkUrl).origin, 'https://quick-fixture-1.trycloudflare.com');
   assert.equal((await s.request('GET', '/api/connection', { cookie: A.cookie })).data.linked, false);
