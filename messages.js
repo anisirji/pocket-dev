@@ -375,11 +375,17 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
     return stream(req, res, path.join(filesDir, f.id), inline ? f.type : 'application/octet-stream', disposition(inline ? 'inline' : 'attachment', f.name), headers);
   }
 
+  // thumbnailOf treats an existing file as done, so a second request during sips would read a half-written JPEG.
+  const thumbs = new Map();
   async function serveThumb({ v, req, res, match, headers }) {
     const f = attachment(v, match[1]);
     if (f?.kind !== 'image') throw httpError(404, 'Not found');
     const source = path.join(filesDir, f.id);
-    const thumb = f.type === 'image/gif' ? null : await thumbnailOf(thumbsDir, f.id, source);
+    let thumb = null;
+    if (f.type !== 'image/gif') {
+      if (!thumbs.has(f.id)) thumbs.set(f.id, thumbnailOf(thumbsDir, f.id, source).finally(() => thumbs.delete(f.id)));
+      thumb = await thumbs.get(f.id);
+    }
     if (thumb) {
       fs.chmodSync(thumb, 0o600);
       return stream(req, res, thumb, 'image/jpeg', 'inline', headers);
