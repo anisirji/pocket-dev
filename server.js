@@ -24,6 +24,7 @@ import { createFilesApi } from './files.js';
 import { createCollaborators } from './collaborators.js';
 import { captureScreen } from './screen.js';
 import { collectHealth } from './health.js';
+import { collectPerformance } from './performance.js';
 import { createTunnel } from './tunnel.js';
 import { createMessages } from './messages.js';
 import { createFolderBrowser } from './folder-browser.js';
@@ -633,6 +634,8 @@ async function handleApi(req, res, url) {
   if (resource === 'messages') return messages.handleApi(req, res);
 
   switch (route) {
+    case 'GET performance':
+      return sendJson(res, 200, await collectPerformance());
     case 'GET health':
       return sendJson(res, 200, await collectHealth());
     case 'GET screen': {

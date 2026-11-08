@@ -15,8 +15,9 @@ The live checkout remains on `live` at `0010a82`. Its stopgap Remote quick link 
 - Restrict waiting-login notices to eligible owner sockets, excluding guest Messages sockets.
 - Apply test-history isolation to the newly merged server fixtures.
 - Add a shared folder browser for Chat, Terminal and Collaborator setup, including Mac Admin; manual paths remain optional.
+- Keep CPU usage, available storage, load state and reading age in the phone status strip, with offline and timeout recovery.
 
-Results and limits are recorded in the final section of [VALIDATION.md](VALIDATION.md). The original combined branch passed 134 model-free checks; see VALIDATION.md for the later folder-browser results. Full-suite and browser execution remain pending because this sandbox denies TCP listeners and Unix sockets.
+Results and limits are recorded in the final section of [VALIDATION.md](VALIDATION.md). The original combined branch passed 134 model-free checks; see VALIDATION.md for the later folder-browser and monitoring results. Full-suite and browser execution remain pending because this sandbox denies TCP listeners and Unix sockets.
 
 The isolated branch `admin-port-fix`, in `.claude/worktrees/codex-admin-port-fix`, contains only the Admin-port forwarding fix on top of `0c71403` (commit `c453473`). It is prepared separately for review and has not been applied to the live checkout or main.
 
@@ -34,3 +35,5 @@ The isolated branch `admin-port-fix`, in `.claude/worktrees/codex-admin-port-fix
 - Messages: Everyone and direct delivery between owner, guest and Mac; guest history cutoff; attachments, download and hide/delete; long press, keyboard, real video and iPhone HEIC; Wi-Fi and internet size rules.
 - Internet access: real Quick link and domain tunnel; link the phone on Wi-Fi; switch both directions with the same conversation; turn internet off from the remote route; verify HTTPS and approval from another owner device.
 - Confirm that a guest Messages socket receives no waiting-login code while an eligible owner device receives the notice.
+
+- Live monitoring: check CPU/storage updates on a physical phone, high-load and low-space alerts, background/wake, offline/online, and whether the status strip leaves controls usable with the keyboard open. Network loss cannot prove the Mac is frozen.

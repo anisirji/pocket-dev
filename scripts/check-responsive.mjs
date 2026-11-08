@@ -50,6 +50,7 @@ const server = http.createServer(async (req, res) => {
     '/api/chat/fixture-chat': chat,
     '/api/settings': { devices: [], maxDevices: 2 },
     '/api/collaborators': { enabled: true, ai: { available: false, reason: 'Collaborator AI needs an isolated runner.' }, collaborators: [], repositories: [] },
+    '/api/performance': { sampledAt: Date.now(), cpu: { usedPercent: 14, cores: 8 }, memory: { freePercent: 40 }, disk: { freeGB: 85.2, totalGB: 256 }, eventLoopDelayMs: 15, status: 'normal', level: 'ok', alerts: [] },
     '/api/power': { awake: 'off', temperature: {}, shutdown: {}, lidClosed: false, lidSleepDisabled: false },
     '/api/power/vitals': { battery: 59, onAC: true, temperature: { batteryC: 30.7 }, limits: { batteryPercent: 20, temperatureC: 45 }, alerts: [] },
     '/api/chat/options': { home: '/tmp', defaultTool: 'codex', tools: { codex: { label: 'Codex', defaults: { model: 'model-0' }, settings: [{ key: 'model', label: 'Model', default: 'model-0', choices }] } } },
@@ -122,11 +123,14 @@ try {
     assert.ok(box.x >= -1 && box.x + box.width <= bounds.width + 1 && box.y >= bounds.top - 1 && box.y + box.height <= bounds.bottom + 1,
       `${selector} is clipped: ${JSON.stringify({ box, bounds })}`);
   }
+  await page.waitForFunction(() => document.querySelector('.ms-cpu')?.textContent === 'CPU 14%');
+  assert.equal(await page.locator('.ms-storage').textContent(), '85.2 GB free');
   const sizes = [[320, 568], [360, 640], [375, 667], [390, 844], [393, 852], [412, 915], [430, 932], [568, 320], [844, 390], [768, 1024], [1024, 768], [1280, 720], [1440, 900], [1920, 1080]];
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
     await page.evaluate(() => setTestViewport({}));
     await settle();
+    await inViewport('#macStatus', { aboveStatus: true });
     for (const selector of ['#app', '#inputBar', '#keyNav', '#terms']) await inViewport(selector);
     await page.locator('#keyMore').click();
     await inViewport('#keyTools');

@@ -2,9 +2,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { powerStatus, vitals } from './power.js';
+import { collectPerformance, PERFORMANCE_LIMITS } from './performance.js';
+export { parseMemoryFree } from './performance.js';
 
 const TOP = process.env.POCKET_DEV_TOP || '/usr/bin/top';
-const MEMORY_PRESSURE = process.env.POCKET_DEV_MEMORY_PRESSURE || '/usr/bin/memory_pressure';
 const IOREG = process.env.POCKET_DEV_IOREG || '/usr/sbin/ioreg';
 const PACKAGE = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
@@ -26,12 +27,6 @@ export function parseTop(text) {
   };
 }
 
-// "System-wide memory free percentage: 40%". Used memory alone misleads, because macOS fills spare RAM with cache.
-export function parseMemoryFree(text) {
-  const free = /free percentage: (\d+)%/.exec(text)?.[1];
-  return free === undefined ? null : Number(free);
-}
-
 // How worn the battery is: its full-charge capacity against what it was built with, and cycles against its rated life.
 export function parseBatteryCondition(text) {
   const number = (key) => Number(new RegExp(`"${key}" = (\\d+)`).exec(text)?.[1]);
@@ -40,13 +35,8 @@ export function parseBatteryCondition(text) {
   return { cycles, designCycles: Number.isFinite(designCycles) ? designCycles : null, capacityPercent: Math.min(100, Math.round((current / design) * 100)) };
 }
 
-const GB = 1024 ** 3;
 const WORN_BELOW = 80;
-const CPU_BUSY = 90;
-const MEMORY_TIGHT = 10;
-const MEMORY_CRITICAL = 5;
-const DISK_LOW_GB = 10;
-const DISK_CRITICAL_GB = 3;
+const { cpuBusy: CPU_BUSY, memoryLow: MEMORY_TIGHT, memoryCritical: MEMORY_CRITICAL, diskLowGB: DISK_LOW_GB, diskCriticalGB: DISK_CRITICAL_GB } = PERFORMANCE_LIMITS;
 
 // One verdict for the whole panel, from the same alert rules the phone banner uses plus the load and wear checks.
 export function judge({ alerts, condition, cpuUsedPercent, memoryFreePercent, diskFreeGB }) {
@@ -61,31 +51,26 @@ export function judge({ alerts, condition, cpuUsedPercent, memoryFreePercent, di
   return { status, issues };
 }
 
-function diskSpace() {
-  try {
-    const s = fs.statfsSync('/');
-    return { freeGB: Math.round((s.bavail * s.bsize / GB) * 10) / 10, totalGB: Math.round(s.blocks * s.bsize / GB) };
-  } catch {
-    return { freeGB: null, totalGB: null };
-  }
-}
-
 export async function collectHealth() {
-  const [power, readings, top, pressure, ioreg] = await Promise.all([
-    powerStatus(), vitals(), run(TOP, ['-l', '2', '-n', '0', '-s', '1']), run(MEMORY_PRESSURE), run(IOREG, ['-r', '-n', 'AppleSmartBattery']),
+  const [power, readings, top, performance, ioreg] = await Promise.all([
+    powerStatus(), vitals(), run(TOP, ['-l', '2', '-n', '0', '-s', '1']), collectPerformance(), run(IOREG, ['-r', '-n', 'AppleSmartBattery']),
   ]);
-  const { cpuUsedPercent, memory } = parseTop(top);
-  const memoryFreePercent = parseMemoryFree(pressure);
+  const parsed = parseTop(top);
+  const cpuUsedPercent = performance.cpu.usedPercent ?? parsed.cpuUsedPercent;
+  const memory = parsed.memory;
+  const memoryFreePercent = performance.memory.freePercent;
   const condition = parseBatteryCondition(ioreg);
-  const disk = diskSpace();
+  const disk = performance.disk;
   return {
-    ...judge({ alerts: readings.alerts, condition, cpuUsedPercent, memoryFreePercent, diskFreeGB: disk.freeGB }),
+    ...judge({ alerts: [...readings.alerts, ...performance.alerts.filter((a) => a.key === 'response')], condition, cpuUsedPercent, memoryFreePercent, diskFreeGB: disk.freeGB }),
     battery: { percent: power.battery, charging: power.charging, onAC: power.onAC, timeRemaining: power.timeRemaining, condition },
     temperature: readings.temperature,
     limits: readings.limits,
     cpu: { usedPercent: cpuUsedPercent, load: Math.round(os.loadavg()[0] * 100) / 100, cores: os.cpus().length },
     memory: memory && { ...memory, freePercent: memoryFreePercent },
+    memoryFreePercent,
     disk,
+    eventLoopDelayMs: performance.eventLoopDelayMs,
     power: { awake: power.awake, stayingAwake: power.stayingAwake, lidClosed: power.lidClosed, lidSleepDisabled: power.lidSleepDisabled },
     mac: { name: os.hostname(), uptimeSec: Math.round(os.uptime()) },
     network: Object.values(os.networkInterfaces()).flat().filter((i) => i?.family === 'IPv4' && !i.internal).map((i) => i.address),

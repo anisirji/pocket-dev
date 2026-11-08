@@ -95,7 +95,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); ws.once('unexpected-response', (_, response) => { ws.terminate(); reject(new Error(`HTTP ${response.statusCode}`)); }); });
     return ws;
   }
-  const apis = ['/api/sessions', '/api/folders', '/api/folders/browse', '/api/shortcuts', '/api/forwards', '/api/info', '/api/history', '/api/git/repos', '/api/settings', '/api/service', '/api/power', '/api/apps', '/api/chat', `/api/files/list?path=${encodeURIComponent(home)}`];
+  const apis = ['/api/sessions', '/api/folders', '/api/folders/browse', '/api/shortcuts', '/api/forwards', '/api/info', '/api/performance', '/api/history', '/api/git/repos', '/api/settings', '/api/service', '/api/power', '/api/apps', '/api/chat', `/api/files/list?path=${encodeURIComponent(home)}`];
   const assets = ['/vendor/xterm/xterm.js', '/vendor/xterm/xterm.css', '/vendor/xterm/addon-fit.js', '/connection.js', '/network.js', '/folder-picker.js', '/folder-picker.css', '/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/collaborators.js', '/collaborators.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
   await t.test('every feature requires authentication; private source stays private', async () => {
     assert.equal((await request('GET', '/')).status, 302);
@@ -131,6 +131,16 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
       assert.ok(result.data.shortcuts.some((entry) => entry.name === 'Home'));
       assert.ok(result.data.breadcrumbs.length > 0);
     }
+  });
+  await t.test('performance readings are numeric or explicitly unknown, with no process details', async () => {
+    const result = await request('GET', '/api/performance', { cookie: A.cookie });
+    assert.equal(result.status, 200);
+    for (const value of [result.data.cpu.usedPercent, result.data.memory.freePercent, result.data.disk.freeGB]) {
+      assert.ok(value === null || Number.isFinite(value));
+    }
+    assert.equal(typeof result.data.sampledAt, 'number');
+    assert.ok(Array.isArray(result.data.alerts));
+    assert.equal(result.data.processes, undefined);
   });
   let chat, session;
   await t.test('restart needs a login and refuses when this copy is not the launchd service', async () => {
@@ -180,8 +190,9 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     assert.equal(res.status, 200);
     for (const key of ['status', 'issues', 'battery', 'temperature', 'limits', 'cpu', 'disk', 'power', 'mac', 'network', 'pocketDev']) assert.ok(key in res.data, key);
     assert.ok(['good', 'watch', 'attention'].includes(res.data.status));
-    assert.equal(res.data.cpu.usedPercent, null, 'a stubbed top gives no reading, not zero');
+    assert.ok(res.data.cpu.usedPercent === null || (res.data.cpu.usedPercent >= 0 && res.data.cpu.usedPercent <= 100), 'CPU counters remain available independently of top');
     assert.equal(res.data.memory, null);
+    assert.equal(res.data.memoryFreePercent, null, 'unreadable memory pressure is unknown, not zero');
     assert.equal(res.data.pocketDev.version, '1.0.0');
   });
   await t.test('vitals: a light reading with limits and alerts, behind login', async () => {
@@ -435,7 +446,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
       assert.equal((await request('GET', `/api/files/download?path=${encodeURIComponent(forbidden)}`, { cookie: G })).status, 403, forbidden);
     }
     assert.equal((await request('POST', '/api/files/mkdir', { cookie: G, body: { dir: repo, name: 'denied' } })).status, 403);
-    for (const endpoint of ['/api/folders/browse', '/api/chat', '/api/sessions', '/api/history', '/api/settings', '/api/power', '/api/apps', '/api/collaborators', '/api/files/pin']) {
+    for (const endpoint of ['/api/performance', '/api/folders/browse', '/api/chat', '/api/sessions', '/api/history', '/api/settings', '/api/power', '/api/apps', '/api/collaborators', '/api/files/pin']) {
       assert.equal((await request('GET', endpoint, { cookie: G })).status, 403, endpoint);
     }
     assert.equal((await request('POST', '/api/settings/password', { cookie: G, body: { current: 'test-password', next: 'changed-password' } })).status, 403);

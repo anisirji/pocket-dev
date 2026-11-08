@@ -139,19 +139,25 @@ It does not quit protected apps (Finder, Dock, SystemUIServer, loginwindow, Wind
 
 ### Mac health
 
-**Settings → Mac health**, or a tap on the strip at the top of any screen, opens one panel with a verdict (**Healthy**, **Worth a look**, **Needs attention**) and the readings behind it, refreshed every 10 s while open:
+**Settings → Mac health**, or a tap on the strip at the top of any screen, opens one panel with a verdict (**Healthy**, **Worth a look**, **Needs attention**, or **Some readings unavailable**) and the readings behind it, refreshed every 10 s while open:
 
 - **Battery:** charge, time left or to full, condition (full-charge capacity as a percent of the original, from `AppleRawMaxCapacity` over `DesignCapacity`), and charge cycles against the rated life.
 - **Temperature:** battery temperature and macOS thermal state, with your alert limits.
-- **Performance:** processor use (from `top`, sampled twice because the first sample averages since boot), memory free (from `memory_pressure`, because used memory alone misleads while macOS caches), memory used, and free disk space.
+- **Performance:** processor use from CPU counter differences between readings, memory free from `memory_pressure`, memory used from `top`, available space on the Mac’s home disk, and Pocket Dev’s event-loop delay. `top` supplies a fallback CPU sample while the counter sampler warms up.
 - **Staying awake:** the Keep awake mode, whether the Mac is staying awake now, and the lid.
 - **This Mac and Pocket Dev:** name, uptime, network address, version, Node.
 
 The verdict reuses the battery and heat alert rules and adds: battery worn below 80% of its original capacity, processor at 90% or more, memory under 10% free (red under 5%), and disk under 10 GB (red under 3 GB). A reading the Mac cannot give shows **No reading** and never counts as healthy or as a problem. `GET /api/health` needs a login and is on the phone listener only.
 
-### Battery, temperature, and alerts
+### Live Mac status and alerts
 
-A strip at the top of every phone screen shows the Mac's battery (with ⚡ when plugged in) and temperature, refreshed every 30 s. The temperature is the battery's, in °C, plus macOS's thermal pressure (warm, hot, very hot) when it is above normal. A Mac cannot report its chip temperature to a normal user without `sudo` (`powermetrics`) or a third-party tool, so Pocket Dev does not show one.
+A strip at the top of every phone screen shows **CPU usage**, **free storage**, battery and temperature. Performance checks run about every five seconds while the page is visible; battery and temperature refresh every 30 seconds. Memory pressure is sampled every 20 seconds. Connected pages share cached performance readings rather than launching separate `top` processes.
+
+The strip reports **Normal**, **Busy**, **Memory tight**, **Storage low**, **Slow response**, or **Partial readings**. CPU at 90% shows Busy; sustained load for 15 seconds also raises a banner. Memory and storage use the health-panel limits above. Alerts for CPU, memory or slow response offer **Open apps** so you can inspect what is running. They never quit apps automatically.
+
+An eight-second request deadline marks **Mac not responding**, retaining the last CPU/storage numbers visibly as old with their age. **Phone offline** is separate. The banner explains that the Mac may be busy, asleep or disconnected; it cannot prove a frozen Mac or desktop. A server error shows **Readings unavailable**, and an older server without monitoring shows **Monitoring needs update**. Checking pauses in the background and resumes immediately when the page returns or the phone reconnects.
+
+The battery and temperature remain visible alongside performance. The temperature is the battery's, in °C, plus macOS's thermal pressure (warm, hot, very hot) when it is above normal. A Mac cannot report its chip temperature to a normal user without `sudo` (`powermetrics`) or a third-party tool, so Pocket Dev does not show one.
 
 An amber or red banner appears under the strip, and the phone vibrates once, when:
 

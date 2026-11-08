@@ -79,6 +79,17 @@ Still to verify: local reachability checks on the user's phone/browser; permissi
 | A PID is reused with the same command | Comparing only command text could signal a new process after the original exits. | Recheck process start time, executable and user before each signal. |
 | Guest sockets receive owner login notices | Internet access assumed every shared WebSocket belonged to an owner, while Messages also adds guests. | Auth delivers approval notices only to its tracked sockets for eligible owner devices. |
 
+## Knowing when the Mac is overloaded or stops responding
+
+| Challenge | What happened | How we solved it |
+| --- | --- | --- |
+| Performance was hidden in a panel | The persistent strip showed battery and temperature, so the owner could not keep an eye on CPU usage and storage left while working. | Add CPU percentage, available storage, load state and reading age to the strip above every phone screen. Tap it for health details. |
+| Monitoring could add its own load | Repeated full health checks launch several system commands, including `top`. | Use CPU counter differences and filesystem statistics for a shared five-second sample. Sample memory pressure every 20 seconds and keep battery/temperature on their existing 30-second schedule. Bound sensor reads and share in-flight requests across clients. |
+| Old values looked current after a stall | Failed requests silently retained the previous battery and temperature. | Bound the entire response, including JSON parsing, to eight seconds. Mark retained readings as old, show their age and offer Check again. Cancel obsolete requests on background/offline transitions and ignore late replies. |
+| A lost connection looked like a frozen Mac | A sleeping Mac, an offline phone and a hung Mac can all stop a request. | Separate Phone offline, Mac not responding and Readings unavailable. Explain that a nonresponding Mac may be busy, asleep or disconnected; never claim a freeze is proven. |
+| Short CPU bursts caused noisy warnings | A brief CPU spike can be normal work. | Show Busy immediately at 90% CPU, but raise its banner only after 15 seconds of continuous high readings. Tight memory, low storage and server delays have their own labels and alerts. |
+| Missing sensors looked healthy | Unknown readings could be confused with zero usage or a positive health verdict. | Show dashes and Partial readings. The detail panel shows Some readings unavailable when it cannot support a healthy verdict. |
+
 ## Power and Mac safety
 
 | Challenge                                | What happened                                                                                                                     | How we solved it                                                                                                |

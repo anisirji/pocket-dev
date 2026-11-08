@@ -59,8 +59,9 @@
   const unknown = 'No reading';
 
   function render(h) {
-    const [title, sub] = VERDICT[h.status];
-    const verdict = el('div', `health-verdict ${h.status}`);
+    const incomplete = h.cpu.usedPercent === null || h.disk.freeGB === null || (h.memory?.freePercent ?? h.memoryFreePercent ?? null) === null;
+    const [title, sub] = h.status === 'good' && incomplete ? ['Some readings unavailable', 'The Mac responded, but some health checks have no reading.'] : VERDICT[h.status];
+    const verdict = el('div', `health-verdict ${h.status === 'good' && incomplete ? 'unknown' : h.status}`);
     verdict.append(el('b', null, title), el('span', null, sub));
     const issues = h.issues.map((i) => el('p', `health-issue ${i.level}`, i.text));
 
@@ -69,6 +70,7 @@
     const heat = h.temperature;
     const hot = heat.thermal === 'serious' || heat.thermal === 'critical' || (heat.batteryC !== null && heat.batteryC >= h.limits.temperatureC);
     const m = h.memory;
+    const memoryFreePercent = m?.freePercent ?? h.memoryFreePercent ?? null;
     const cond = b.condition;
 
     ui.scroll.replaceChildren(
@@ -85,8 +87,9 @@
         row('Alert at', `${h.limits.temperatureC} °C or ${h.limits.batteryPercent}% battery`)),
       group('Performance',
         row('Processor', h.cpu.usedPercent === null ? unknown : `${h.cpu.usedPercent}% in use of ${h.cpu.cores} cores`, h.cpu.usedPercent >= 90 ? 'warn' : ''),
-        row('Memory free', m && m.freePercent !== null ? `${m.freePercent}%` : unknown, m && m.freePercent !== null && m.freePercent < 10 ? 'warn' : ''),
+        row('Memory free', memoryFreePercent !== null ? `${memoryFreePercent}%` : unknown, memoryFreePercent !== null && memoryFreePercent < 10 ? 'warn' : ''),
         m && row('Memory used', `${gb(m.usedMB)} (${gb(m.compressedMB)} compressed)`),
+        h.eventLoopDelayMs != null && row('Pocket Dev delay', `${h.eventLoopDelayMs} ms`, h.eventLoopDelayMs >= 1000 ? 'warn' : ''),
         row('Disk free', h.disk.freeGB === null ? unknown : `${h.disk.freeGB} GB of ${h.disk.totalGB} GB`, h.disk.freeGB !== null && h.disk.freeGB < 10 ? 'warn' : '')),
       group('Staying awake',
         row('Keep awake', { always: 'Always', plugged: 'When plugged in', off: 'Off' }[h.power.awake] ?? h.power.awake),
