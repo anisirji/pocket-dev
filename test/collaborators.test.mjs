@@ -30,7 +30,7 @@ function fixture(t) {
     return new URLSearchParams(new URL(body.url).hash.slice(1)).get('token');
   };
   const accept = (token) => {
-    const result = manager.accept({ headers: {} }, { token });
+    const result = manager.accept({ headers: {}, socket: {} }, { token });
     return { headers: { cookie: result.headers['set-cookie'].split(';')[0] } };
   };
   return { root, repo, manager, body, args, events, settings, create, invite, accept,
