@@ -75,6 +75,22 @@ for (const as of ['aaaa1111', 'guest']) {
     const inbox = await f.call('GET', '/api/messages', undefined, { as: 'bbbb2222' });
     assert.deepEqual(inbox.data.messages, []);
   });
+
+  test(`revoking ${as} during an upload removes the unfinished attachment`, async (t) => {
+    const f = fixture(t);
+    const { req, done } = f.begin('POST', '/api/messages/files', { as, raw: true });
+    const filesDir = path.join(f.stateDir, 'messages', 'files');
+    req.write('partial file');
+    for (let i = 0; i < 100 && !fs.readdirSync(filesDir).length; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(fs.readdirSync(filesDir).length, 1, 'the upload has started');
+    if (as === 'guest') f.grant.status = 'revoked';
+    else f.devices[0].status = 'blocked';
+    req.end(' remainder');
+    assert.equal((await done).status, 403);
+    assert.deepEqual(fs.readdirSync(filesDir), []);
+  });
 }
 
 test('a failed disk append leaves no delivered message and preserves its pending attachment for retry', async (t) => {
@@ -103,4 +119,18 @@ test('direct messages and attachments stay private; HTML always downloads sandbo
   assert.match(download.headers['content-disposition'], /^attachment/);
   assert.equal(download.headers['content-security-policy'], 'sandbox');
   assert.equal(download.headers['x-content-type-options'], 'nosniff');
+});
+
+test('guests see only group history since their grant; developers participate under their own role', async (t) => {
+  const f = fixture(t);
+  const old = await f.call('POST', '/api/messages', { text: 'before invitation' });
+  f.grant.createdAt = old.data.at + 1;
+  while (Date.now() < f.grant.createdAt) await new Promise((resolve) => setImmediate(resolve));
+  await f.call('POST', '/api/messages', { text: 'after invitation' });
+  const inbox = await f.call('GET', '/api/messages', undefined, { as: 'guest' });
+  assert.deepEqual(inbox.data.messages.map((m) => m.text), ['after invitation']);
+  f.grant.role = 'developer';
+  const sent = await f.call('POST', '/api/messages', { text: 'from developer' }, { as: 'guest' });
+  assert.equal(sent.status, 201);
+  assert.equal(sent.data.from.kind, 'collaborator');
 });

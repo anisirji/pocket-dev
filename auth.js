@@ -168,8 +168,7 @@ const lockedMessage = (ip, ms) => `Too many wrong passwords from ${ip}. Try agai
 
 // `config` is the server's config store (config.js): read() at use time, update() writes only the keys auth owns
 // (undefined removes a key). `urls()` returns the current { lan, local } base URLs; lan is null while the Mac has no network.
-// `onPending` is told when a login starts waiting while phones may approve, so the server can tell them.
-export function createAuth({ config, port, urls, localNote, extraActiveCount = () => 0, onLockdown = () => {}, onPending = () => {} }) {
+export function createAuth({ config, port, urls, localNote, extraActiveCount = () => 0, onLockdown = () => {} }) {
   const envPassword = process.env.POCKET_DEV_PASSWORD;
   let passwordLine = envPassword ? `Password: ${envPassword} (from POCKET_DEV_PASSWORD)` : 'Password: (set; change it in Settings)';
   const boot = config.read();
@@ -330,6 +329,16 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       device.lastSeen = Date.now();
       saveDevicesSoon();
     });
+  }
+
+  function notifyPending(notice) {
+    const data = JSON.stringify({ t: 'waiting', ...notice });
+    // The shared WebSocket server also serves guests. Only sockets tracked for eligible owner devices hear this.
+    for (const [id, clients] of sockets) {
+      const device = devices.get(id);
+      if (!device || !mayApprove(device)) continue;
+      for (const ws of clients) if (ws.readyState === ws.OPEN) ws.send(data);
+    }
   }
 
   function deviceView(d, now) {
@@ -495,7 +504,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       const status = requireApproval() || rolesEnabled() ? 'pending' : 'active';
       const { cookie, device } = addDevice(req, 'password', status);
       log(status === 'pending' ? 'login-pending' : 'login', { via: 'password', ...about(device), ua });
-      if (status === 'pending' && approveFromDevices()) onPending({ kind: deviceName(ua), code: device.id.slice(-4) });
+      if (status === 'pending' && approveFromDevices()) notifyPending({ kind: deviceName(ua), code: device.id.slice(-4) });
       return reply(200, { ok: true, ...(status === 'pending' && { pending: true }) }, { 'set-cookie': cookie });
     },
     'GET /api/status'({ req }) {

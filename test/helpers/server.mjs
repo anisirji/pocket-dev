@@ -7,6 +7,7 @@ import path from 'node:path';
 import net from 'node:net';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
+import { isolatedEnv } from '../isolated-env.mjs';
 
 // Starts a real Pocket Dev server in a throwaway HOME and state folder, with stubs for everything that would touch
 // this Mac: power commands, model binaries, and cloudflared. Shared by the internet-access and approval suites.
@@ -71,16 +72,17 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
   const port = await freePort(), adminPort = await freePort();
   const stub = path.join(root, 'read-only-stub');
   fs.writeFileSync(stub, '#!/bin/sh\nprintf "No\\n"\n', { mode: 0o700 });
-  const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: {
-    ...process.env, HOME: home, SHELL: '/bin/zsh', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8',
+  const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: isolatedEnv(home, {
+    SHELL: '/bin/zsh', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8',
     PORT: String(port), POCKET_DEV_ADMIN_PORT: String(adminPort), POCKET_DEV_CONFIG: config,
     POCKET_DEV_STATE_DIR: state, POCKET_DEV_NO_OPEN: '1', POCKET_DEV_CLAUDE: '/nonexistent/claude',
     POCKET_DEV_CODEX: '/nonexistent/codex', POCKET_DEV_PMSET: stub, POCKET_DEV_IOREG: stub, POCKET_DEV_TOP: stub, POCKET_DEV_MEMORY_PRESSURE: stub,
     POCKET_DEV_UPDATE_CHECK: stub, POCKET_DEV_OSASCRIPT: stub, POCKET_DEV_TERMINAL_HOST: 'off',
     POCKET_DEV_CLOUDFLARED: fakeCloudflared(root), POCKET_DEV_FAKE_CF: record,
+    POCKET_DEV_PROCESS_FIXTURE: path.join(root, 'no-processes.json'),
     POCKET_DEV_TRACE_URL: traceUrl ?? 'http://127.0.0.1:9/trace', POCKET_DEV_HANDOFF_TTL_MS: '1500',
     ...(lanIpFile && { POCKET_DEV_LAN_IP_FILE: lanIp }),
-  }, stdio: ['ignore', 'pipe', 'pipe'] });
+  }), stdio: ['ignore', 'pipe', 'pipe'] });
   let logs = '';
   proc.stdout.on('data', (d) => { logs += d; });
   proc.stderr.on('data', (d) => { logs += d; });

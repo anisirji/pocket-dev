@@ -60,6 +60,18 @@ Still to verify: local reachability checks on the user's phone/browser; permissi
 | Attacks from your own dev servers | A web page on an opened port (like `:3000`) counts as the same site and could send requests to Pocket Dev.                              | Every change needs a special header and JSON content type, which such pages can't send.                           |
 | Settings being wiped              | One bad entry in a list could replace your saved shortcuts with the defaults, permanently. Hand edits were overwritten.                 | Settings are read fresh, and only the setting you changed is written back.                                        |
 | Password storage                  | The first version kept the password as plain text in `config.json`.                                                                     | Stored as a scrambled hash (scrypt). Device logins are saved as hashes too.                                       |
+| Cookies worked on every address   | A Wi-Fi cookie (sent over plain http) also worked through the internet link.                                                            | Each cookie now works only on the address it was issued for; linking a phone creates its internet cookie.         |
+| Forwarding the Admin port         | A port forward connects from the Mac itself with whatever Host the client sends, which is all the Admin page checks, so forwarding its port opened Admin to the whole Wi-Fi. | Forwards refuse Pocket Dev's own ports, the Admin port included.                                                  |
+
+## Combining Take over, Messages and Internet access
+
+| Challenge | What happened | How we solved it |
+| --- | --- | --- |
+| A PID is reused with the same command | Comparing only command text could signal a new process after the original exits. | Recheck process start time, executable and user before each signal. |
+| Two sends claim one attachment | Recipient lookup yielded after attachment validation, so concurrent sends could reference the same file; deleting either then broke the other. | Resolve the recipient first, then validate attachments and persist the message without yielding. |
+| Access ends while a message or upload arrives | The sender was authenticated before waiting for data, allowing a later write after revocation. | Recheck access before persistence and remove partial uploads on refusal. |
+| A failed append leaves a message in memory | The store added the message and consumed pending attachments before disk persistence succeeded. | Append first, then update memory and consume attachments. |
+| Guest sockets receive owner login notices | Internet access assumed every shared WebSocket belonged to an owner, while Messages also adds guests. | Auth delivers approval notices only to its tracked sockets for eligible owner devices. |
 
 ## Power and Mac safety
 

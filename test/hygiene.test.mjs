@@ -10,7 +10,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // A release smoke run once wrote real sessions into the owner's ~/.claude/projects. A server started by a test has real
 // terminals and chat engines, so a claude or codex it starts must have its history isolated.
 test('every test or script that starts server.js gives it an isolated environment', () => {
-  const files = ['test', 'scripts'].flatMap((dir) => fs.readdirSync(path.join(REPO, dir))
+  const files = ['test', 'test/helpers', 'scripts'].flatMap((dir) => fs.readdirSync(path.join(REPO, dir))
     .filter((f) => /\.(mjs|js)$/.test(f)).map((f) => path.join(dir, f)));
   const offenders = files.filter((file) => {
     const text = fs.readFileSync(path.join(REPO, file), 'utf8');

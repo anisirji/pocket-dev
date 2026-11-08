@@ -76,6 +76,17 @@ test('approving a waiting login from a logged-in phone: off by default, Mac-only
   const G = (await s.request('POST', '/api/invitations/accept', { body: { token } })).cookie;
   assert.equal((await s.request('POST', `/api/devices/${bId}/approve`, { cookie: G, body: {} })).status, 403);
   assert.equal((await s.request('GET', '/api/settings', { cookie: G })).status, 403, 'a collaborator never sees the waiting list');
+  const guestSocket = new WebSocket(`${s.base.replace('http', 'ws')}/ws/messages`, { headers: { cookie: G, origin: s.base } });
+  const guestNotices = [];
+  guestSocket.on('message', (raw) => { const m = JSON.parse(raw); if (m.t === 'waiting') guestNotices.push(m); });
+  await new Promise((resolve, reject) => { guestSocket.once('open', resolve); guestSocket.once('error', reject); });
+  t.after(() => guestSocket.terminate());
+  const knownIds = new Set((await s.status()).devices.map((d) => d.id));
+  assert.equal((await s.login()).data.pending, true);
+  await pause(100);
+  assert.deepEqual(guestNotices, [], 'guest Messages sockets never receive owner login-approval codes');
+  const extraPending = (await s.status()).devices.find((d) => !knownIds.has(d.id));
+  assert.equal((await s.local('POST', `/api/devices/${extraPending.id}/deny`, {})).status, 200);
   assert.equal((await s.request('POST', `/api/devices/${bId}/approve`, { cookie: `${G}; ${A.cookie}`, body: {} })).status, 403, 'a guest cookie never falls through to the owner');
   assert.equal(await statusOf(B.cookie), 'pending');
   const asAdmin = await s.request('POST', `/api/devices/${bId}/approve`, { cookie: A.cookie, body: {} });
