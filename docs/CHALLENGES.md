@@ -68,9 +68,6 @@ Still to verify: local reachability checks on the user's phone/browser; permissi
 | Challenge | What happened | How we solved it |
 | --- | --- | --- |
 | A PID is reused with the same command | Comparing only command text could signal a new process after the original exits. | Recheck process start time, executable and user before each signal. |
-| Two sends claim one attachment | Recipient lookup yielded after attachment validation, so concurrent sends could reference the same file; deleting either then broke the other. | Resolve the recipient first, then validate attachments and persist the message without yielding. |
-| Access ends while a message or upload arrives | The sender was authenticated before waiting for data, allowing a later write after revocation. | Recheck access before persistence and remove partial uploads on refusal. |
-| A failed append leaves a message in memory | The store added the message and consumed pending attachments before disk persistence succeeded. | Append first, then update memory and consume attachments. |
 | Guest sockets receive owner login notices | Internet access assumed every shared WebSocket belonged to an owner, while Messages also adds guests. | Auth delivers approval notices only to its tracked sockets for eligible owner devices. |
 
 ## Power and Mac safety
@@ -126,13 +123,25 @@ Working principle: understand the user's concrete workflow, test alternative arc
 
 ## Messages
 
+Messages provides an Everyone group and direct conversations between the Mac, owner devices, collaborators and guests. Text and attachments stay in Pocket Dev so people can copy or download them themselves.
+
 | Challenge | What happened | How we solved it |
 | --- | --- | --- |
-| Clipboard access | The first design read and wrote the Mac clipboard with `pbpaste` and `pbcopy`. The owner did not want Pocket Dev touching the clipboard at all. | Messages never reads or writes the clipboard. Copy runs only when you tap it, on your own device. `pbpaste \| pocket-dev message` stays your choice. |
+| Sharing needed a conversation | The first proposal focused on transferring clipboard text, but the owner wanted a chat application for text, images, videos and other files. | Built Messages with an Everyone group, direct conversations, attachments and a Mac CLI command. |
+| Clipboard access | The first design proposed reading and writing the Mac clipboard with `pbpaste` and `pbcopy`. The owner rejected automatic clipboard access. | Messages stores shared content in its own view. Copy runs only when you tap it on your device; sending and receiving never reads or changes a system clipboard automatically. |
+| Every role needs to participate | Restricting sharing to owner devices would leave collaborators and guests out of the conversation. | The Mac, owner devices, Developers and Viewers can send and receive. Guests see history only from when their grant was created; direct messages and attachments are visible only to their participants. |
+| Different file limits by connection | The owner wanted no fixed file-size limit on Wi-Fi, while internet uploads need a limit. | Wi-Fi uploads stream to disk without a fixed size cap. Internet uploads are capped at 100 MB, with a client check before uploading and server enforcement. |
+| Low disk space without losing small messages | Refusing every upload when space is low would also block small images and files. | Below the default 5 GB reserve, files over 50 MB wait while text and smaller files remain available. A separate 500 MB floor protects against uploads filling the disk; space is checked during streaming too. |
+| Uploaded files could execute on the app's origin | Every role can attach files, including HTML or SVG disguised with an image filename. | Detect types from file bytes, allow only supported image, video and audio formats inline, force other files to download, and send sandbox and nosniff headers. |
 | Test suite hung | A refused upload was answered before its body was read. The client could get a connection reset instead of the answer, and the test ignored that error and waited forever. | A refused upload of up to 200 MB is read and dropped, so the answer arrives. The test now fails on a reset instead of waiting. |
 | Broken thumbnails | Two pages asking for the same new image at once could read the JPEG while `sips` was still writing it. | Requests for the same image wait on one thumbnail job. |
 | Admin layout | The two-pane layout used a container query on the same element that declared the container, which CSS ignores, so the panes overlapped on the Admin page. | The query now styles an inner element. |
 | New people missing | A phone learned who was in Messages only when its socket connected, so someone who logged in later did not appear. | The list refreshes when Messages opens and every 15 s while it is open. |
+| Two sends claim one attachment | Recipient lookup yielded after attachment validation, so concurrent sends could reference the same file; deleting either then broke the other. | Resolve the recipient first, then validate attachments and persist the message without yielding. |
+| Access ends while a message or upload arrives | The sender was authenticated before waiting for data, allowing a later write after revocation. | Recheck access before persistence and remove partial uploads on refusal. |
+| A failed append leaves a message in memory | The store added the message and consumed pending attachments before disk persistence succeeded. | Append first, then update memory and consume attachments. |
+
+The latest Messages fixes have passing model-free regressions. The combined branch has not been deployed; full server, browser and physical-phone checks remain pending as recorded in [VALIDATION.md](VALIDATION.md#combined-feature-review-2026-11-08).
 
 ## Building it with several agents at once
 
