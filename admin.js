@@ -259,11 +259,12 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   }
 
   // Only the launchd job restarts itself: a copy started with `npm start` that exits would just be gone.
-  async function restart(by) {
+  async function restart(by, req) {
     const svc = await serviceStatus();
     if (!svc.isThisServer) {
       return reply(409, { error: 'This copy is not the background service, so it cannot restart itself. Stop it and run pocket-dev start, or install the service from the admin page on the Mac.' });
     }
+    if (req) auth.noteRestart(req);
     auth.admin.log('server-restarted', { by, updateReady: svc.updateReady });
     // Let this reply reach the caller before the process exits.
     setTimeout(restartThisServer, 300);
@@ -305,6 +306,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
     'PATCH /api/devices/:id': ({ params, body }) => auth.admin.rename(params.id, body.name),
     'PUT /api/settings': ({ body }) => auth.admin.updateSettings(body),
     'POST /api/password': ({ body }) => auth.admin.setPassword(body),
+    'POST /api/recovery-code': () => auth.admin.createRecoveryCode(),
     'POST /api/qr': async ({ body }) => {
       const kind = body.kind ?? 'login';
       if (!['share', 'login'].includes(kind)) return reply(400, { error: 'kind must be share or login.' });
@@ -410,7 +412,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   const phoneRoute = router({
     'GET /api/service': async () => ok(await serviceStatus()),
     'PUT /api/service/autostart': ({ body }) => changeAutostart(body, 'phone'),
-    'POST /api/service/restart': () => restart('phone'),
+    'POST /api/service/restart': ({ req }) => restart('phone', req),
     'POST /api/access/disconnect': () => {
       // Let this reply reach the phone before its connection closes.
       setTimeout(() => access.close('phone'), 200);
@@ -436,7 +438,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
       const found = phoneRoute(req.method, pathname);
       if (!found) return null;
       const body = SAFE_METHODS.has(req.method) ? {} : await readBody();
-      return found.handler({ params: found.params, body: body && typeof body === 'object' ? body : {} });
+      return found.handler({ req, params: found.params, body: body && typeof body === 'object' ? body : {} });
     },
   };
 }

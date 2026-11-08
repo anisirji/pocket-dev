@@ -31,6 +31,7 @@ export const EVENT_KINDS = {
   'device-merged': 'change',
   'pending-expired': 'change',
   'password-changed': 'change',
+  'recovery-code-created': 'change',
   'limit-changed': 'change',
   'approval-changed': 'change',
   'device-approval-changed': 'change',

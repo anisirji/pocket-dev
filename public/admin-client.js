@@ -394,7 +394,8 @@ const EVENT_TEXT = {
   'device-merged': (e) => `${e.name} switched address; its duplicate login ${e.mergedName} (${e.mergedDeviceId.slice(-4)}) was logged out`,
   'device-blocked': (e) => `${e.name} blocked`,
   'device-unblocked': (e) => `${e.name} unblocked`,
-  'device-approved': (e) => `${e.name} approved${e.by === 'qr' ? ' by scanning a QR code' : e.by?.startsWith('device ') ? ` from ${e.by.slice(7)}` : ''}`,
+  'device-approved': (e) => `${e.name} approved${e.by === 'qr' ? ' by scanning a QR code' : e.by === 'update-grace' ? ' because it asked for the update that restarted Pocket Dev' : e.by === 'recovery-code' ? ' with the recovery code' : e.by?.startsWith('device ') ? ` from ${e.by.slice(7)}` : ''}`,
+  'recovery-code-created': () => 'Recovery code created',
   'device-denied': (e) => `${e.name} denied${e.by?.startsWith('device ') ? ` from ${e.by.slice(7)}` : ''}`,
   'device-approval-changed': (e) => (e.on ? 'Logged-in phones may now approve waiting logins' : `Phones may no longer approve logins${byText(e)}`),
   'device-removed': (e) => `${e.name} removed while blocked`,
@@ -458,6 +459,26 @@ $('pwForm').addEventListener('submit', async (e) => {
     $('pwErr').textContent = err.message;
   }
   refresh(true);
+});
+
+// ---- Recovery code
+
+function renderRecovery() {
+  $('recoveryNote').textContent = state.recoveryCode
+    ? 'A recovery code is set. Typing it with the password at login approves a new device from anywhere, once. Creating a new code replaces it.'
+    : 'No recovery code. Create one and keep it somewhere safe. With it, a login from far away needs no approval at this Mac.';
+}
+
+$('recoveryBtn').addEventListener('click', async () => {
+  $('recoveryErr').textContent = '';
+  try {
+    const { code } = await api('POST', '/api/recovery-code');
+    $('recoveryCode').textContent = code;
+    $('recoveryCode').hidden = false;
+    $('recoveryNote').textContent = 'Save this code now. It is shown once and works once.';
+  } catch (err) {
+    $('recoveryErr').textContent = err.message;
+  }
 });
 
 // ---- Settings
@@ -789,6 +810,7 @@ async function refresh(force = false) {
     renderDevices();
     renderLog(log);
     renderPassword();
+    if ($('recoveryCode').hidden) renderRecovery();
     renderSettings();
     renderSharing();
     renderLive();
