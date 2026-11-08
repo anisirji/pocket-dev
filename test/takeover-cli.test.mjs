@@ -7,6 +7,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isolatedEnv } from './isolated-env.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-takeover-cli-'));
@@ -134,7 +135,7 @@ test('a conversation Pocket Dev does not have open resumes from its own record; 
 });
 
 test('the pocket-dev command validates its arguments and finds no unknown conversation', () => {
-  const cli = (...args) => spawnSync(process.execPath, [path.join(REPO, 'bin', 'pocket-dev.js'), ...args], { env: { ...process.env, ...isolated }, encoding: 'utf8' });
+  const cli = (...args) => spawnSync(process.execPath, [path.join(REPO, 'bin', 'pocket-dev.js'), ...args], { env: isolatedEnv(root, isolated), encoding: 'utf8' });
   const usage = cli('takeover');
   assert.equal(usage.status, 2);
   assert.match(usage.stderr, /usage: pocket-dev takeover <conversation id> \| --last/);

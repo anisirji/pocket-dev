@@ -9,6 +9,7 @@ import net from 'node:net';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
+import { isolatedEnv } from './isolated-env.mjs';
 
 const REPO = process.env.TEST_REPO || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -43,16 +44,15 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
   fs.writeFileSync(shot, '#!/bin/sh\nfor last; do :; done\nprintf "\\377\\330\\377stub" > "$last"\n', { mode: 0o700 });
   const resize = path.join(root, 'sips-stub');
   fs.writeFileSync(resize, '#!/bin/sh\n[ "$1" = "-g" ] && { echo "pixelWidth: 800"; echo "pixelHeight: 600"; exit 0; }\nfor a; do case "$prev" in --out) out="$a";; esac; prev="$a"; done\nfor a; do [ -f "$a" ] && raw="$a"; done\ncp "$raw" "$out"\n', { mode: 0o700 });
-  const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: {
-    POCKET_DEV_SCREENCAPTURE: shot, POCKET_DEV_SIPS: resize,
-    ...process.env, HOME: home, SHELL: '/bin/zsh', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8',
+  const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: isolatedEnv(home, {
+    POCKET_DEV_SCREENCAPTURE: shot, POCKET_DEV_SIPS: resize, SHELL: '/bin/zsh', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8',
     PORT: String(port), POCKET_DEV_ADMIN_PORT: String(adminPort), POCKET_DEV_CONFIG: config,
     POCKET_DEV_STATE_DIR: state, POCKET_DEV_NO_OPEN: '1', POCKET_DEV_CLAUDE: '/nonexistent/claude',
     POCKET_DEV_CODEX: '/nonexistent/codex', POCKET_DEV_PMSET: stub, POCKET_DEV_IOREG: stub, POCKET_DEV_TOP: stub, POCKET_DEV_MEMORY_PRESSURE: stub,
     POCKET_DEV_UPDATE_CHECK: stub, POCKET_DEV_OSASCRIPT: stub,
     // No process table: Resume's take over can neither list nor signal anything on this Mac.
     POCKET_DEV_PROCESS_FIXTURE: path.join(root, 'no-processes.json'),
-  }, stdio: ['ignore', 'pipe', 'pipe'] });
+  }), stdio: ['ignore', 'pipe', 'pipe'] });
   let logs = '';
   proc.stdout.on('data', (d) => { logs += d; });
   proc.stderr.on('data', (d) => { logs += d; });

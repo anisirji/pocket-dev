@@ -8,6 +8,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
+import { isolatedEnv } from './isolated-env.mjs';
 import { takeoverCommand } from '../takeover-cli.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -54,12 +55,12 @@ test('take over through the real server: owner only, CSRF header, security log; 
   fs.writeFileSync(stub, '#!/bin/sh\nprintf "No\\n"\n', { mode: 0o700 });
   const port = await freePort(), adminPort = await freePort();
   const base = `http://127.0.0.1:${port}`, admin = `http://127.0.0.1:${adminPort}`;
-  const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: {
-    ...process.env, HOME: home, SHELL: '/bin/zsh', PORT: String(port), POCKET_DEV_ADMIN_PORT: String(adminPort), POCKET_DEV_CONFIG: config,
+  const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: isolatedEnv(home, {
+    SHELL: '/bin/zsh', PORT: String(port), POCKET_DEV_ADMIN_PORT: String(adminPort), POCKET_DEV_CONFIG: config,
     POCKET_DEV_STATE_DIR: state, POCKET_DEV_NO_OPEN: '1', POCKET_DEV_TERMINAL_HOST: 'off', POCKET_DEV_PROCESS_FIXTURE: fixture,
-    POCKET_DEV_CLAUDE: '/nonexistent/claude', POCKET_DEV_CODEX: '/nonexistent/codex', POCKET_DEV_CLAUDE_DIR: '', POCKET_DEV_CODEX_DIR: '',
+    POCKET_DEV_CLAUDE: '/nonexistent/claude', POCKET_DEV_CODEX: '/nonexistent/codex',
     POCKET_DEV_PMSET: stub, POCKET_DEV_IOREG: stub, POCKET_DEV_TOP: stub, POCKET_DEV_MEMORY_PRESSURE: stub, POCKET_DEV_UPDATE_CHECK: stub, POCKET_DEV_OSASCRIPT: stub,
-  }, stdio: ['ignore', 'pipe', 'pipe'] });
+  }), stdio: ['ignore', 'pipe', 'pipe'] });
   let logs = '';
   proc.stdout.on('data', (d) => { logs += d; });
   proc.stderr.on('data', (d) => { logs += d; });

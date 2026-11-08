@@ -99,7 +99,7 @@ Read-only live checks confirmed that the background service is reachable and has
 
 Take over was built and verified without any real conversation being stopped. Every test lists and signals made-up processes. The server reads them from `POCKET_DEV_PROCESS_FIXTURE`, which records each signal instead of sending it. The main integration server points that variable at a missing file, so its take over route can neither list nor signal anything.
 
-The repository suite passed all 144 tests. The new checks cover the following:
+The repository suite passed all 146 tests. The new checks cover the following:
 
 - `test/takeover.test.mjs` covers process matching. The VS Code native binary with `--resume=<id>`, `claude --resume`, `-r`, the node CLI scripts, `codex resume`, and the Claude session registry all match. `grep`, `tail`, editors, shells, another id with the same prefix, another user's process, zombies, Pocket Dev's server, and any program it runs under never match. The tests also cover the SIGINT, wait, SIGTERM sequence, SIGKILL only with force, a reused pid, the busy flag, the refusal when no program is found, and the Mac-terminal scope.
 - `test/takeover-api.test.mjs` covers the history route (detail, list, take over, device check, flag validation), the Admin section, and the chat API release (turn interrupted, engine stopped, queue held, no wake-up afterwards).
@@ -113,3 +113,9 @@ A read-only listing of this Mac's processes, with no signal function loaded, mat
 A Playwright drive in Chrome at 360 × 740, against a throwaway server with fixture processes, passed 21 checks. They cover the list badges, the **Open on your Mac** panel, both confirmations with the exact wording, Stopping… progress, the toast that names the closed program, the force-quit offer and its warning, **Continue anyway** for an unidentified copy, and no horizontal scroll. `scripts/check-responsive.mjs` still passes at all 14 sizes.
 
 Not verified, because no real take over may run during development: how real `claude`, the VS Code extension, the Claude desktop app, and `codex` respond to SIGINT and SIGTERM; whether the VS Code panel restarts its process after it exits; and a real `pocket-dev takeover` that hands a live terminal to `claude --resume`. Run the manual plan with the owner before relying on take over.
+
+## Test history isolation
+
+An earlier release smoke run wrote real sessions into the owner's `~/.claude/projects`, in folders that end in `real-smoke-fixture-1794032458696` and `chat-fixture`. The script behind that run is not in this repository, and those folders were left in place. In the repository, `test/integration.test.mjs` and `test/takeover-server.test.mjs` start `server.js` with a temporary `HOME`, but they passed through the parent's `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `POCKET_DEV_CLAUDE_DIR`, `POCKET_DEV_CODEX_DIR`, `POCKET_DEV_CODEX_SOCKET`, and `POCKET_DEV_CHAT_DIR`. With any of these exported, a claude or codex started by the test server would have written to the owner's history or used the owner's Codex daemon. Such a program could come from a resumed terminal, a chat engine, or a typed shortcut.
+
+Both tests now start the server with `isolatedEnv()` from `test/isolated-env.mjs`, which points all of these inside the test home. `test/hygiene.test.mjs` fails for any test or script that starts `server.js` without it. Before the migration, the check failed on both files. Both tests still pass with owner-style paths exported in the parent shell.
