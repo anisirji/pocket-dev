@@ -22,6 +22,8 @@ const FILES = {
   '/admin-client.js': ['admin-client.js', 'text/javascript; charset=utf-8'],
   '/admin-heartbeat.js': ['admin-heartbeat.js', 'text/javascript; charset=utf-8'],
   '/admin-permissions.js': ['admin-permissions.js', 'text/javascript; charset=utf-8'],
+  '/collaborators.js': ['collaborators.js', 'text/javascript; charset=utf-8'],
+  '/collaborators.css': ['collaborators.css', 'text/css; charset=utf-8'],
 };
 const HEADERS = {
   'cache-control': 'no-store',
@@ -98,7 +100,7 @@ function failedLogins(entries) {
 //     action?, warning?, act?(id) -> bool, lockdown?: 'always' | 'optional' }
 // A section without act() is read-only. Lockdown closes 'always' sections and the 'optional' ones it is asked to.
 // `urls()` returns the phone listener's current { lan, local } base URLs.
-export async function startAdmin({ auth, access, config, mainPort, urls, sections }) {
+export async function startAdmin({ auth, collaborators, access, config, mainPort, urls, sections }) {
   const port = Number(process.env.POCKET_DEV_ADMIN_PORT) || config.read().adminPort || mainPort + 1;
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
   const origins = new Set([...hosts].map((h) => `http://${h}`));
@@ -291,6 +293,10 @@ export async function startAdmin({ auth, access, config, mainPort, urls, section
     if (why) return send(403, { error: why });
     const { pathname, searchParams } = new URL(req.url, 'http://localhost');
     try {
+      if (pathname === '/api/collaborators' || pathname.startsWith('/api/collaborators/')) {
+        const r = await collaborators.ownerApi(req.method, pathname, SAFE_METHODS.has(req.method) ? {} : await readJson(req), true);
+        return send(r.status, r.body);
+      }
       const file = FILES[pathname];
       if (file && req.method === 'GET') {
         const text = fs.readFileSync(path.join(ROOT, 'public', file[0]));
@@ -303,7 +309,7 @@ export async function startAdmin({ auth, access, config, mainPort, urls, section
       const r = await found.handler({ params: found.params, query: searchParams, body });
       send(r.status, r.body);
     } catch (err) {
-      if (!res.headersSent) send(400, { error: err.message });
+      if (!res.headersSent) send(err.status || 400, { error: err.message });
     }
   }
 

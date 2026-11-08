@@ -28,7 +28,7 @@ async function listenError(err, port) {
 // Phone access is the listener on 0.0.0.0:<port>. Disconnected means that port is closed, so nothing on the network
 // reaches Pocket Dev; terminals keep running. With keepOpen off, access lasts only while the admin page sends heartbeats.
 // `forwards` reopens the port forwards that were open at the last disconnect.
-export function createPhoneAccess({ server, wss, port, host = '0.0.0.0', config, forwards, log }) {
+export function createPhoneAccess({ server, wss, port, host = '0.0.0.0', config, forwards, log, onClose = async () => {} }) {
   const saved = savedAccess(config.read().access);
   let connected = false;
   let keepOpen = saved.keepOpen;
@@ -77,6 +77,7 @@ export function createPhoneAccess({ server, wss, port, host = '0.0.0.0', config,
   const close = serial(async (by) => {
     if (!connected) return { ok: true };
     connected = false;
+    await onClose();
     reopen = forwards.ports();
     for (const p of reopen) forwards.close(p);
     const closed = new Promise((resolve) => server.close(resolve));

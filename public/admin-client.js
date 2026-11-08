@@ -83,6 +83,10 @@ async function act(fn, done) {
 }
 
 let state = null;
+let collaborators;
+import('/collaborators.js').then((m) => {
+  collaborators = m.mountCollaborators($('collaborators'), { api, local: true, devices: () => state?.devices || [] });
+}).catch((err) => { $('collaborators').textContent = `Could not load Collaborators: ${err.message}`; });
 let logFilter = 'all';
 let editingId = null;
 let limitDraft = null;
@@ -180,6 +184,7 @@ function deviceCell(d) {
   }
   return h('div', { class: 'cell' },
     h('span', { class: 'dev-name' }, d.name),
+    d.role === 'admin' ? h('span', { class: 'tag' }, 'Admin') : null,
     d.status === 'blocked' ? h('span', { class: 'tag tag-blocked' }, 'Blocked') : null,
     h('small', {}, d.kind && d.kind !== d.name ? d.kind : `id ${d.id}`));
 }
@@ -252,7 +257,7 @@ function renderPending() {
     h('div', { class: 'cell' }, d.ip, h('small', {}, 'IP address')),
     h('div', { class: 'cell' }, `Asked ${ago(d.createdAt)}`, h('small', {}, `expires in ${Math.max(1, Math.ceil((d.expiresAt - Date.now()) / 60000))} min`)),
     h('div', { class: 'actions' },
-      h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: () => deviceAction(d, 'approve') }, 'Approve'),
+      h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: () => deviceAction(d, 'approve') }, state.roleAccessEnabled ? 'Approve as Admin' : 'Approve'),
       h('button', { class: 'btn btn-sm', type: 'button', onclick: () => deviceAction(d, 'deny') }, 'Deny'),
       h('button', { class: 'btn btn-sm btn-danger', type: 'button', onclick: () => deviceAction(d, 'block') }, 'Block')),
   )) : [h('p', { class: 'empty' }, 'Nobody is waiting. New password logins show up here.')]));
@@ -269,6 +274,13 @@ const REVOKED_BY = {
 const closedText = (closed = {}) => Object.entries(closed).map(([id, n]) => `${n} ${id}`).join(', ');
 
 const EVENT_TEXT = {
+  'role-access-enabled': () => 'Role-based sharing enabled after trusted Admin device review',
+  'collaborator-created': (e) => `Collaborator ${e.grantId} created as ${e.role}`,
+  'collaborator-updated': (e) => `Collaborator ${e.grantId} access updated`,
+  'collaborator-revoked': (e) => `Collaborator ${e.grantId} access revoked`,
+  'collaborator-invited': (e) => `One-time invitation created for collaborator ${e.grantId}`,
+  'collaborator-joined': (e) => `Collaborator ${e.grantId} accepted access as ${e.role}`,
+  'collaborator-expired': (e) => `Collaborator ${e.grantId} access expired`,
   'login': (e) => `${e.name} logged in with ${e.via === 'qr' ? 'a QR code' : 'the password'}`,
   'login-pending': (e) => `${e.name} typed the password and is waiting for approval (code ${e.deviceId?.slice(-4)})`,
   'login-failed': (e) => `Wrong password${e.kind ? ` from ${e.kind}` : ''}`,
@@ -352,6 +364,7 @@ function renderSettings() {
   $('limitNote').textContent = limit < overview.loggedIn
     ? `${plural(overview.loggedIn, 'device is', 'devices are')} logged in, so new password logins stay refused until you log some out. Lowering the limit logs nobody out.`
     : 'Password logins stop at this many devices. QR logins always work and replace the device used least recently.';
+  if (state.roleAccessEnabled) $('limitNote').textContent = `The device limit includes ${plural(overview.loggedIn, 'Admin device')} and ${plural(state.collaboratorSessions || 0, 'active collaborator session')}. Invitations never log out an Admin. New password logins always require Mac approval.`;
   $('approval').checked = requireApproval;
   const copy = (text) => h('button', { class: 'btn btn-sm', type: 'button', onclick: () => copyLink(text) }, 'Copy');
   $('urls').replaceChildren(
@@ -652,6 +665,7 @@ async function refresh(force = false) {
   try {
     const [fresh, log] = await Promise.all([api('GET', '/api/state'), api('GET', `/api/log?filter=${logFilter}`)]);
     state = fresh;
+    collaborators?.refresh();
     lastOk = Date.now();
     $('offline').hidden = true;
     renderConnection();

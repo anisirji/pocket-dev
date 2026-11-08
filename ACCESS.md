@@ -1,6 +1,6 @@
 # Access and permissions
 
-Pocket Dev runs on your Mac as the user who starts it. A logged-in phone can use that user’s shell, files, configured Claude/Codex logins, and GitHub CLI permissions.
+Pocket Dev runs on your Mac as the user who starts it. An owner/Admin phone can use that user’s shell, files, configured Claude/Codex logins, and GitHub CLI permissions. Restricted collaborator sessions use a separate default-deny policy: Viewer sees only selected project files; Developer can edit a project copy and explicitly writable related-folder copies. Collaborators cannot use the host shell, owner AI, credentials, Mac controls or other repositories. Collaborator AI is currently disabled pending a validated isolated execution runner.
 
 ## Capabilities
 
@@ -20,7 +20,7 @@ Lid-closed changes and force shutdown open a terminal for an interactive sudo co
 
 ## Data stored locally
 
-`config.json` stores settings and a password hash. By default `~/.pocket-dev` stores hashed device records, a local secret, security logs, uploads, and chat history. Claude Code and Codex also maintain their own normal session files. These files are not part of the repository.
+`config.json` stores settings and a password hash. By default `~/.pocket-dev` stores hashed device records, a local secret, security logs, uploads, and chat history. `collaborators.json` stores grants and hashed guest sessions; `collaborator-workspaces` stores Developer project copies for owner review. Copies are retained after access changes/revocation and are never executed automatically. Invitation tokens live only in memory and expire within 10 minutes. Claude Code and Codex also maintain their own normal session files. These files are not part of the repository.
 
 `POCKET_DEV_STATE_DIR` relocates authentication, security logs, Admin metadata, and chats; `POCKET_DEV_CHAT_DIR` can override chat storage separately. Terminal uploads remain under `~/.pocket-dev/uploads`.
 

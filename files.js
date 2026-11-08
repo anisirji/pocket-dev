@@ -171,17 +171,24 @@ export function createFilesApi({ sendJson, readJson, config }) {
     settings = { roots, uploadMax: positive(fileUploadMax) ?? DEFAULT_UPLOAD_MAX, zipMax: positive(fileZipMax) ?? DEFAULT_ZIP_MAX };
     return settings;
   }
-  let { roots, uploadMax, zipMax } = loadSettings();
+  // Each request owns its roots. Concurrent guests and owner requests must
+  // never mutate a shared roots array while another filesystem operation waits.
+  return async function handleFiles(req, res, url, scope = null) {
+  const { roots, uploadMax, zipMax } = scope ? { ...loadSettings(), roots: scope.roots } : loadSettings();
+  const assertActive = () => scope?.assertActive();
 
   const within = (p, root) => p === root || p.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
   const rootOf = (real) => roots.find((r) => within(real, r.real))?.real;
   const isRoot = (p) => roots.some((r) => r.real === p);
 
   function absolute(given) {
+    assertActive();
+    if (!roots.length) fail(403, 'No folders are available for this access grant.');
     if (given == null || given === '') return roots[0].real;
     if (typeof given !== 'string') fail(400, 'Path must be a string.');
     if (given.includes('\0')) fail(400, 'Path contains a NUL byte.');
     const abs = path.resolve(home, expandHome(given, home));
+    if (scope?.blocked(abs)) fail(403, 'That path is outside the shared project.');
     // Checking the lexical path first keeps a 404 from revealing what exists outside the roots.
     if (!roots.some((r) => within(abs, r.given) || within(abs, r.real))) fail(403, 'That path is outside the folders Files may show.');
     return abs;
@@ -190,8 +197,14 @@ export function createFilesApi({ sendJson, readJson, config }) {
   // Follows every symlink: the real path is what gets read, so it is what must stay inside a root.
   async function resolve(given) {
     const real = await fsp.realpath(absolute(given));
-    if (!rootOf(real)) fail(403, 'That path is outside the folders Files may show.');
+    assertActive();
+    if (!rootOf(real) || scope?.blocked(real)) fail(403, 'That path is outside the folders Files may show.');
     return real;
+  }
+
+  function requireWrite(p) {
+    assertActive();
+    if (scope && (scope.role !== 'developer' || !roots.some((r) => !r.readOnly && within(p, r.real)) || roots.some((r) => r.readOnly && within(p, r.real)) || scope.blocked(p))) fail(403, 'This folder is read-only.');
   }
 
   async function resolveDir(given) {
@@ -210,13 +223,14 @@ export function createFilesApi({ sendJson, readJson, config }) {
 
   async function entryOf(dir, name) {
     const full = path.join(dir, name);
+    if (scope?.blocked(full)) return null;
     let st;
     try { st = await fsp.lstat(full); } catch { return null; }
     const base = { name, path: full, mtime: Math.round(st.mtimeMs) };
     if (st.isDirectory()) return { ...base, type: 'dir', size: 0, mime: null };
     if (st.isFile()) return { ...base, type: 'file', size: st.size, mime: mimeOf(name) };
     if (!st.isSymbolicLink()) return null;
-    const target = await fsp.realpath(full).then((real) => (rootOf(real) ? fsp.stat(real) : null)).catch(() => null);
+    const target = await fsp.realpath(full).then((real) => (rootOf(real) && !scope?.blocked(real) ? fsp.stat(real) : null)).catch(() => null);
     const linkType = target?.isDirectory() ? 'dir' : target?.isFile() ? 'file' : null;
     return { ...base, type: 'symlink', linkType, size: linkType === 'file' ? target.size : 0, mime: linkType === 'file' ? mimeOf(name) : null };
   }
@@ -242,6 +256,7 @@ export function createFilesApi({ sendJson, readJson, config }) {
   }
 
   async function places() {
+    if (scope) return { home: roots[0]?.real, roots: roots.map((r) => r.real), quick: [], pinned: [], uploadMax, zipMax, readOnly: scope.role !== 'developer', scoped: true };
     const quick = (await Promise.all([home, ...QUICK.map((n) => path.join(home, n))].map(folderView))).filter(Boolean);
     const pinned = (await Promise.all(rawFolders().filter((p) => typeof p === 'string').map(folderView))).filter(Boolean);
     return { home, roots: roots.map((r) => r.real), quick, pinned, uploadMax, zipMax };
@@ -261,6 +276,7 @@ export function createFilesApi({ sendJson, readJson, config }) {
       entries: entries.slice(0, LIST_MAX),
       truncated: entries.length > LIST_MAX,
       total: entries.length,
+      ...(scope && { readOnly: roots.some((r) => r.readOnly && within(dir, r.real)), scoped: true }),
     };
   }
 
@@ -289,7 +305,9 @@ export function createFilesApi({ sendJson, readJson, config }) {
     headers['content-length'] = st.size === 0 ? 0 : range.end - range.start + 1;
     res.writeHead(range.status, headers);
     if (req.method === 'HEAD' || st.size === 0) return res.end();
-    await pipeline(fs.createReadStream(file, { start: range.start, end: range.end }), res);
+    await pipeline(fs.createReadStream(file, { start: range.start, end: range.end }), async function* (chunks) {
+      for await (const chunk of chunks) { assertActive(); yield chunk; }
+    }, res);
   }
 
   // zip cannot write a symlink entry to a pipe ("zip -0 not supported for I/O on pipes"), and without -y it would
@@ -304,10 +322,12 @@ export function createFilesApi({ sendJson, readJson, config }) {
       if (Date.now() > deadline || names.length > ZIP_MAX_ENTRIES) return { names, bytes, skipped, complete: false };
       const rel = stack.pop();
       const full = path.join(parent, rel);
+      assertActive();
+      if (scope?.blocked(full)) { skipped++; continue; }
       let st = await fsp.lstat(full).catch(() => null);
       if (st?.isSymbolicLink()) {
         const real = await fsp.realpath(full).catch(() => null);
-        st = real && rootOf(real) ? await fsp.stat(real).catch(() => null) : null;
+        st = real && rootOf(real) && !scope?.blocked(real) ? await fsp.stat(real).catch(() => null) : null;
         if (!st?.isFile()) st = null;
       }
       // zip -@ reads one name per line.
@@ -326,7 +346,7 @@ export function createFilesApi({ sendJson, readJson, config }) {
   async function zip({ res, q }) {
     const given = q.getAll('path');
     if (!given.length) fail(400, 'Pick something to zip.');
-    const targets = await Promise.all(given.map((p) => resolveEntry(p).then((e) => e.full)));
+    const targets = await Promise.all(given.map(resolve));
     const parent = path.dirname(targets[0]);
     if (targets.some((t) => path.dirname(t) !== parent)) fail(400, 'Zip items from one folder at a time.');
     const { names, bytes, skipped, complete } = await collect(parent, targets);
@@ -358,6 +378,7 @@ export function createFilesApi({ sendJson, readJson, config }) {
       'x-content-type-options': 'nosniff',
     });
     res.write(first);
+    if (scope) child.stdout.on('data', () => { try { assertActive(); } catch { child.kill(); res.destroy(); } });
     child.stdout.pipe(res, { end: false });
     // Exit 18 means some files could not be read; the archive is still valid, so it is sent.
     const code = await exited;
@@ -367,7 +388,9 @@ export function createFilesApi({ sendJson, readJson, config }) {
 
   async function upload({ req, res, q }) {
     const dir = await resolveDir(q.get('dir'));
+    requireWrite(dir);
     const name = checkName(q.get('name'));
+    requireWrite(path.join(dir, name));
     const tooLarge = () => {
       res.setHeader('connection', 'close');
       fail(413, `Files can be at most ${(uploadMax / GB).toFixed(1)} GB.`);
@@ -380,10 +403,12 @@ export function createFilesApi({ sendJson, readJson, config }) {
       await pipeline(req, async function* (chunks) {
         for await (const chunk of chunks) {
           size += chunk.length;
+          assertActive();
           if (size > uploadMax) tooLarge();
           yield chunk;
         }
       }, handle.createWriteStream());
+      requireWrite(dir);
       const dest = await claimName(dir, name, tmp);
       res.statusCode = 201;
       return { path: dest, name: path.basename(dest) };
@@ -395,6 +420,7 @@ export function createFilesApi({ sendJson, readJson, config }) {
 
   async function mkdir({ body, res }) {
     const dir = path.join(await resolveDir(body.dir), checkName(body.name));
+    requireWrite(dir);
     try {
       await fsp.mkdir(dir);
     } catch (err) {
@@ -407,7 +433,9 @@ export function createFilesApi({ sendJson, readJson, config }) {
 
   async function rename({ body }) {
     const { full, stat } = await resolveEntry(body.path);
+    requireWrite(full);
     const dest = path.join(path.dirname(full), checkName(body.newName));
+    requireWrite(dest);
     if (dest === full) return { path: dest, name: body.newName };
     const other = await fsp.lstat(dest).catch(() => null);
     // A case-only rename on a case-insensitive volume finds the entry itself at the new name.
@@ -423,12 +451,14 @@ export function createFilesApi({ sendJson, readJson, config }) {
     const valid = [];
     for (const p of paths) {
       try {
-        valid.push((await resolveEntry(p)).full);
+        const full = (await resolveEntry(p)).full;
+        requireWrite(full);
+        valid.push(full);
       } catch (err) {
         errors.push({ path: p, error: describe(err)[1] });
       }
     }
-    const results = valid.length ? await moveToTrash(valid) : [];
+    const results = scope ? await Promise.all(valid.map(async (p) => { assertActive(); await fsp.rm(p, { recursive: true }); return { trashPath: null }; })) : valid.length ? await moveToTrash(valid) : [];
     const trashed = [];
     results.forEach((r, i) => (r.error ? errors.push({ path: valid[i], error: r.error }) : trashed.push({ path: valid[i], trashPath: r.trashPath })));
     return { trashed, errors };
@@ -449,6 +479,8 @@ export function createFilesApi({ sendJson, readJson, config }) {
       const dirents = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
       for (const d of dirents) {
         if (SEARCH_SKIP.has(d.name) || (!showHidden && d.name.startsWith('.'))) continue;
+        assertActive();
+        if (scope?.blocked(path.join(dir, d.name))) continue;
         if (d.name.normalize('NFC').toLowerCase().includes(needle)) {
           const entry = await entryOf(dir, d.name);
           if (entry) results.push({ ...entry, dir });
@@ -500,14 +532,16 @@ export function createFilesApi({ sendJson, readJson, config }) {
     return [500, err.message];
   }
 
-  return async function handleFiles(req, res, url) {
     const route = ROUTES[`${req.method} ${url.pathname.split('/')[3]}`];
     try {
-      ({ roots, uploadMax, zipMax } = loadSettings());
+      assertActive();
+      if (scope && (!roots.length || (route?.body && scope.role !== 'developer') || url.pathname.endsWith('/pin'))) fail(403, 'This action is not allowed for your role.');
       if (!route) fail(404, 'Not found');
       if (route.body) guardWrite(req, route.body);
       const body = route.body === 'json' ? await readJson(req).catch((err) => fail(400, err.message)) : undefined;
+      assertActive();
       const result = await route.run({ req, res, q: url.searchParams, body });
+      assertActive();
       if (result !== undefined) sendJson(res, res.statusCode, result);
     } catch (err) {
       if (res.headersSent) return res.destroy();

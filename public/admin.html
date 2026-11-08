@@ -6,6 +6,7 @@
 <meta name="color-scheme" content="dark">
 <title>Pocket Dev Admin</title>
 <link rel="stylesheet" href="/admin.css">
+<link rel="stylesheet" href="/collaborators.css">
 <script src="/admin-client.js" defer></script>
 <script src="/admin-permissions.js" defer></script>
 </head>
@@ -28,6 +29,7 @@
     <a href="#sharing">Share &amp; login</a>
     <a href="#pending" data-nav="pending">Waiting <b id="navPending"></b></a>
     <a href="#devices">Devices</a>
+    <a href="#collaborators">Collaborators</a>
     <a href="#log">Security log</a>
     <a href="#password">Password</a>
     <a href="#settings">Settings</a>
@@ -150,6 +152,8 @@
         <p class="err" id="settingsErr"></p>
       </section>
     </div>
+
+    <section id="collaborators" class="panel"></section>
 
     <section id="live" class="panel">
       <div class="panel-head"><h2>Live</h2></div>

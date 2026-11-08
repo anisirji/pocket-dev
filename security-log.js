@@ -2,6 +2,16 @@ import fs from 'node:fs';
 
 // Every event type and the filter it falls under. Appending an unknown type throws, so a typo fails loudly.
 export const EVENT_KINDS = {
+  'remote-started': 'change',
+  'remote-stopped': 'change',
+  'remote-error': 'failure',
+  'role-access-enabled': 'change',
+  'collaborator-created': 'change',
+  'collaborator-updated': 'change',
+  'collaborator-revoked': 'change',
+  'collaborator-invited': 'change',
+  'collaborator-joined': 'access',
+  'collaborator-expired': 'change',
   'login': 'access',
   'login-pending': 'access',
   'login-failed': 'failure',

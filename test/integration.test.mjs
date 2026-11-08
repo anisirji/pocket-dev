@@ -94,7 +94,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     return ws;
   }
   const apis = ['/api/sessions', '/api/folders', '/api/shortcuts', '/api/forwards', '/api/info', '/api/history', '/api/git/repos', '/api/settings', '/api/service', '/api/power', '/api/apps', '/api/chat', `/api/files/list?path=${encodeURIComponent(home)}`];
-  const assets = ['/vendor/xterm/xterm.js', '/vendor/xterm/xterm.css', '/vendor/xterm/addon-fit.js', '/connection.js', '/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
+  const assets = ['/vendor/xterm/xterm.js', '/vendor/xterm/xterm.css', '/vendor/xterm/addon-fit.js', '/connection.js', '/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/collaborators.js', '/collaborators.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
   await t.test('every feature requires authentication; private source stays private', async () => {
     assert.equal((await request('GET', '/')).status, 302);
     for (const endpoint of [...apis, ...assets]) assert.equal((await request('GET', endpoint)).status, 401, endpoint);
@@ -360,6 +360,97 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     const legacy = await local('POST', '/api/qr', {});
     assert.equal(legacy.status, 200, 'existing login QR callers keep working');
     assert.ok(new URL(legacy.data.url).searchParams.has('k'));
+  });
+  await t.test('collaborator invitations enforce roles, folders, migration, expiry boundaries and revocation', async () => {
+    const repo = path.join(home, 'project'), other = path.join(home, 'other-project'), extra = path.join(home, 'project-assets');
+    for (const dir of [repo, other, extra]) fs.mkdirSync(dir);
+    fs.mkdirSync(path.join(repo, '.git'));
+    fs.writeFileSync(path.join(repo, 'README.md'), 'Shared project');
+    fs.writeFileSync(path.join(repo, '.env'), 'PRIVATE=secret');
+    fs.writeFileSync(path.join(repo, '.git', 'config'), 'private git configuration');
+    fs.writeFileSync(path.join(other, 'secret.txt'), 'Other project');
+    fs.writeFileSync(path.join(extra, 'asset.txt'), 'Shared asset');
+    fs.symlinkSync(other, path.join(repo, 'outside'));
+    const settings = await request('GET', '/api/settings', { cookie: A.cookie });
+    const currentId = settings.data.currentDeviceId;
+    const draft = { label: 'Reviewer', role: 'viewer', repository: repo, extraFolders: [{ path: extra, mode: 'read' }], ai: false, duration: 86400 };
+    assert.equal((await local('POST', '/api/collaborators', draft)).status, 409, 'invites require an explicit Mac migration');
+    assert.equal((await request('POST', '/api/collaborators/enable', { cookie: A.cookie, body: { adminDeviceIds: [currentId] } })).status, 403);
+    assert.equal((await local('POST', '/api/collaborators/enable', { adminDeviceIds: [] })).status, 400);
+    assert.equal((await local('POST', '/api/collaborators/enable', { adminDeviceIds: [currentId] })).status, 200);
+    const migrated = (await local('GET', '/api/state')).data;
+    assert.equal(migrated.devices.find((d) => d.id === currentId).role, 'admin');
+    assert.ok(migrated.devices.filter((d) => d.id !== currentId && d.status !== 'blocked').every((d) => d.status === 'pending'));
+    assert.equal((await request('POST', '/api/settings/qr-key', { cookie: A.cookie, body: {} })).status, 403, 'Admin pairing stays Mac-local');
+    const passwordLogin = await login();
+    assert.equal(passwordLogin.data.pending, true, 'the password never bypasses local Admin review');
+    const created = await request('POST', '/api/collaborators', { cookie: A.cookie, body: draft });
+    assert.equal(created.status, 201, JSON.stringify(created.data));
+    const grantId = created.data.id;
+    const invite = await request('POST', `/api/collaborators/${grantId}/invite`, { cookie: A.cookie, body: {} });
+    assert.equal(invite.status, 200);
+    const link = new URL(invite.data.url), token = new URLSearchParams(link.hash.slice(1)).get('token');
+    assert.equal(link.search, '', 'tokens use the URL fragment, never the HTTP path');
+    const preview = await request('GET', link.pathname);
+    assert.equal(preview.status, 200);
+    assert.equal(preview.cookie, undefined);
+    assert.equal(preview.data.includes(repo), false, 'link previews expose no private folder information');
+    assert.equal((await request('POST', '/api/invitations/accept', { cookie: A.cookie, body: { token } })).status, 409, 'never merge an owner and guest session');
+    assert.equal((await request('POST', '/api/invitations/accept', { body: { token }, csrf: false })).status, 403);
+    const accepted = await request('POST', '/api/invitations/accept', { body: { token } });
+    assert.equal(accepted.status, 200, JSON.stringify(accepted.data));
+    const G = accepted.cookie;
+    assert.match(G, /^pd_collaborator=/);
+    assert.equal((await request('POST', '/api/invitations/accept', { body: { token } })).status, 410, 'one-use invitation');
+    const access = await request('GET', '/api/current-access', { cookie: G });
+    assert.equal(access.data.role, 'viewer');
+    assert.equal(access.data.ai, false);
+    const listed = await request('GET', `/api/files/list?path=${encodeURIComponent(repo)}&showHidden=1`, { cookie: G });
+    assert.equal(listed.status, 200);
+    assert.equal(listed.data.readOnly, true);
+    assert.deepEqual(listed.data.entries.filter((e) => e.name.startsWith('.')).map((e) => e.name), []);
+    assert.equal((await request('GET', `/api/files/download?path=${encodeURIComponent(path.join(extra, 'asset.txt'))}`, { cookie: G })).data, 'Shared asset');
+    for (const forbidden of [path.join(other, 'secret.txt'), path.join(repo, '.git', 'config'), path.join(repo, '.env'), path.join(repo, 'outside', 'secret.txt')]) {
+      assert.equal((await request('GET', `/api/files/download?path=${encodeURIComponent(forbidden)}`, { cookie: G })).status, 403, forbidden);
+    }
+    assert.equal((await request('POST', '/api/files/mkdir', { cookie: G, body: { dir: repo, name: 'denied' } })).status, 403);
+    for (const endpoint of ['/api/chat', '/api/sessions', '/api/history', '/api/settings', '/api/power', '/api/apps', '/api/collaborators', '/api/files/pin']) {
+      assert.equal((await request('GET', endpoint, { cookie: G })).status, 403, endpoint);
+    }
+    assert.equal((await request('POST', '/api/settings/password', { cookie: G, body: { current: 'test-password', next: 'changed-password' } })).status, 403);
+    await assert.rejects(socket(`/ws/chat/${chat.id}`, G), /HTTP 403/);
+    assert.equal((await request('GET', '/chat.js', { cookie: G })).status, 403);
+    assert.match((await request('GET', '/', { cookie: G })).data, /Shared project/);
+    assert.equal((await request('GET', '/', { cookie: `${G}; ${A.cookie}` })).data.includes('Shared project'), true, 'guest credentials never fall through to owner capabilities');
+    // Concurrent owner and guest requests must use immutable request-local roots.
+    const parallel = await Promise.all(Array.from({ length: 8 }, (_, i) => request('GET', `/api/files/list?path=${encodeURIComponent(i % 2 ? repo : home)}`, { cookie: i % 2 ? G : A.cookie })));
+    assert.ok(parallel.every((r) => r.status === 200));
+    assert.equal((await request('GET', `/api/files/list?path=${encodeURIComponent(home)}`, { cookie: G })).status, 403);
+    // A Developer gets writable copies and read-only assets, never host AI.
+    const developer = await request('POST', '/api/collaborators', { cookie: A.cookie, body: { ...draft, label: 'Developer', role: 'developer' } });
+    assert.equal(developer.status, 201, JSON.stringify(developer.data));
+    assert.ok(fs.existsSync(path.join(developer.data.workspace, 'project', 'README.md')));
+    assert.equal(fs.existsSync(path.join(developer.data.workspace, 'project', '.env')), false);
+    assert.equal(fs.existsSync(path.join(developer.data.workspace, 'project', 'outside')), false);
+    const devInvite = await request('POST', `/api/collaborators/${developer.data.id}/invite`, { cookie: A.cookie, body: {} });
+    const devToken = new URLSearchParams(new URL(devInvite.data.url).hash.slice(1)).get('token');
+    const D = (await request('POST', '/api/invitations/accept', { body: { token: devToken } })).cookie;
+    const project = path.join(developer.data.workspace, 'project');
+    assert.equal((await request('POST', '/api/files/mkdir', { cookie: D, body: { dir: project, name: 'allowed' } })).status, 201);
+    assert.equal(fs.existsSync(path.join(repo, 'allowed')), false);
+    assert.equal((await request('POST', '/api/files/mkdir', { cookie: D, body: { dir: extra, name: 'denied' } })).status, 403);
+    assert.equal((await request('POST', '/api/chat', { cookie: D, body: { tool: 'codex', cwd: repo } })).status, 403);
+    assert.equal((await request('PATCH', `/api/collaborators/${developer.data.id}`, { cookie: A.cookie, body: { ...draft, role: 'developer', ai: true } })).status, 409);
+    const oldInvite = await request('POST', `/api/collaborators/${grantId}/invite`, { cookie: A.cookie, body: {} });
+    assert.equal((await request('DELETE', `/api/collaborators/${grantId}`, { cookie: A.cookie })).status, 204);
+    assert.equal((await request('GET', `/api/files/list?path=${encodeURIComponent(repo)}`, { cookie: G })).status, 403);
+    assert.equal((await request('GET', '/api/settings', { cookie: `${G}; ${A.cookie}` })).status, 403);
+    assert.equal((await request('POST', '/api/invitations/accept', { body: { token: new URLSearchParams(new URL(oldInvite.data.url).hash.slice(1)).get('token') } })).status, 410);
+    assert.equal((await request('PATCH', `/api/collaborators/${grantId}`, { cookie: A.cookie, body: draft })).status, 200);
+    assert.equal((await request('GET', '/api/current-access', { cookie: G })).status, 403, 'revoked tokens never revive when a grant is reused');
+    const stored = fs.readFileSync(path.join(state, 'collaborators.json'), 'utf8');
+    assert.equal(stored.includes(token), false);
+    assert.equal(fs.readFileSync(path.join(state, 'security.log'), 'utf8').includes(token), false);
   });
   await t.test('lockdown closes chat and terminal sockets, disconnects phones, and keeps admin available', async () => {
     const ws = await socket(`/ws/chat/${chat.id}`, A.cookie);

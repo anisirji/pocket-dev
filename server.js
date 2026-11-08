@@ -21,8 +21,11 @@ import { startAdmin } from './admin.js';
 import { createPhoneAccess } from './access.js';
 import { createChatApi } from './chat/index.js';
 import { createFilesApi } from './files.js';
+import { createCollaborators } from './collaborators.js';
 import { captureScreen } from './screen.js';
 import { collectHealth } from './health.js';
+import { createTunnel } from './tunnel.js';
+import { sameOrigin } from './transport.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SCROLLBACK_MAX = 500_000;
@@ -50,7 +53,8 @@ const localName = () => {
   const name = os.hostname().toLowerCase();
   return name.endsWith('.local') ? name : `${name}.local`;
 };
-const urls = () => ({ lan: lanIp() && `http://${lanIp()}:${PORT}`, local: `http://${localName()}:${PORT}` });
+let tunnel;
+const urls = () => ({ lan: lanIp() && `http://${lanIp()}:${PORT}`, local: `http://${localName()}:${PORT}`, remote: tunnel?.view().url ?? null });
 const LOCAL_NOTE = 'same Wi-Fi only; some Android phones cannot open .local names';
 
 // A DNS-rebinding page reaches this port under its own name, so only names that mean this Mac are served: its
@@ -61,6 +65,7 @@ function hostAllowed(host) {
   const m = /^(\[[^\]]+\]|[^:]+)(?::(\d+))?$/.exec((host ?? '').toLowerCase());
   if (!m) return false;
   const name = m[1].replace(/\.$/, '');
+  if (urls().remote && name === new URL(urls().remote).hostname && (m[2] === undefined || Number(m[2]) === 443)) return true;
   const extra = config.read().allowedHosts;
   if (Array.isArray(extra) && extra.some((h) => typeof h === 'string' && h.toLowerCase() === name)) return true;
   const port = m[2] === undefined ? 80 : Number(m[2]);
@@ -68,7 +73,12 @@ function hostAllowed(host) {
 }
 const MISDIRECTED = 'Misdirected Request: this server answers only to its own addresses.';
 
-const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE });
+let collaborators;
+const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE,
+  extraActiveCount: () => collaborators?.sessionCount() || 0,
+  onLockdown: () => collaborators?.lockdown(),
+});
+collaborators = createCollaborators({ config, auth, urls });
 
 const HOME = os.homedir();
 const RECENT_MAX = 5;
@@ -525,6 +535,25 @@ async function handleApi(req, res, url) {
   if (MUTATING.has(req.method) && req.headers[CSRF_HEADER] !== '1') {
     return sendJson(res, 403, { error: 'This page is older than the server. Reload Pocket Dev and try again.' });
   }
+  if (MUTATING.has(req.method) && !sameOrigin(req)) return sendJson(res, 403, { error: 'Cross-origin request refused.' });
+
+  if (url.pathname === '/api/invitations/accept' && req.method === 'POST') {
+    const r = collaborators.accept(req, await readJson(req));
+    return sendJson(res, r.status, r.body, r.headers);
+  }
+  // This policy runs before auth-owned settings and phone-admin routes too.
+  // Even an expired guest cookie must not fall through into an owner session.
+  const guest = collaborators.guest(req);
+  if (guest) {
+    if (req.method === 'POST' && url.pathname === '/api/logout') {
+      const r = collaborators.logout(req);
+      return sendJson(res, r.status, r.body, r.headers);
+    }
+    if (req.method === 'GET' && url.pathname === '/api/status') return sendJson(res, 200, { status: guest.active ? 'active' : 'expired', role: guest.grant?.role || 'guest' });
+    if (req.method === 'GET' && url.pathname === '/api/current-access') return sendJson(res, 200, collaborators.currentAccess(req));
+    if (/^\/api\/files\/(places|list|download|zip|search|upload|mkdir|rename|trash)$/.test(url.pathname)) return handleFiles(req, res, url, collaborators.scope(req, res));
+    return sendJson(res, 403, { error: 'Your role does not allow this action.' });
+  }
 
   const authReply = await auth.handleApi(req, url.pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
@@ -533,6 +562,11 @@ async function handleApi(req, res, url) {
     return handlePowerApi(req, res, url.pathname.split('/')[4], { readJson, sendJson, wss, sessions });
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  if (resource === 'collaborators') {
+    if (!auth.isTrustedAdmin(req) && !(req.method === 'GET' && url.pathname === '/api/collaborators' && config.read().roleAccessEnabled !== true)) return sendJson(res, 403, { error: 'Only a reviewed Admin device may manage collaborators. Enable access from Admin on the Mac.' });
+    const r = await collaborators.ownerApi(req.method, url.pathname, ['POST', 'PUT', 'PATCH'].includes(req.method) ? await readJson(req) : {});
+    return sendJson(res, r.status, r.body);
+  }
   const adminReply = await admin.phoneApi(req, url.pathname, () => readJson(req));
   if (adminReply) return sendJson(res, adminReply.status, adminReply.body);
   if (resource === 'git') {
@@ -633,19 +667,23 @@ const PAGES = {
   '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
   '/connection.js': 'connection.js',
+  '/collaborators.js': 'collaborators.js', '/collaborators.css': 'collaborators.css',
+  '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
 };
-const PUBLIC_PAGES = new Set(['login.html']);
+const PUBLIC_PAGES = new Set(['login.html', 'invite.html', 'invite.js', 'guest.css']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 
 function servePage(req, res, pathname) {
-  const file = PAGES[pathname];
+  const guest = collaborators.guest(req);
+  const file = guest && pathname === '/' ? 'guest.html' : PAGES[pathname];
   if (!file || req.method !== 'GET') return sendJson(res, 404, { error: 'Not found' });
-  if (!PUBLIC_PAGES.has(file) && !auth.deviceFor(req)) {
+  if (guest && !new Set(['guest.html', 'guest.js', 'guest.css', 'files.js', 'files.css', 'invite.html', 'invite.js']).has(file)) return sendJson(res, 403, { error: 'Your role does not allow this page.' });
+  if (!guest && !PUBLIC_PAGES.has(file) && !auth.deviceFor(req)) {
     if (!file.endsWith('.html')) return sendJson(res, 401, { error: 'Not logged in' });
     res.writeHead(302, { location: '/login.html' });
     return res.end();
   }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store' });
+  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY' });
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
@@ -657,6 +695,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname === '/' && url.searchParams.has('k')) {
+      if (collaborators.guest(req)) return sendJson(res, 403, { error: 'Log out collaborator access before pairing an Admin device on the Mac.' });
       const { status, headers, body } = auth.redeemQrKey(req, url.searchParams.get('k'));
       res.writeHead(status, { 'cache-control': 'no-store', ...headers });
       res.end(body);
@@ -677,13 +716,13 @@ const rejectUpgrade = (socket, status, text) => {
 
 server.on('upgrade', (req, socket, head) => {
   if (!hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
+  if (collaborators.guest(req)) return rejectUpgrade(socket, 403, 'Forbidden');
   const { pathname } = new URL(req.url, 'http://localhost');
   const match = /^\/ws\/([0-9a-f]+)$/.exec(pathname);
   const device = auth.deviceFor(req);
   if (!device) return rejectUpgrade(socket, 401, 'Unauthorized');
   // SameSite=Strict should already block cross-site upgrades; the Origin check is the backstop.
-  const origin = req.headers.origin;
-  if (origin && origin !== `http://${req.headers.host}`) return rejectUpgrade(socket, 403, 'Forbidden');
+  if (!sameOrigin(req)) return rejectUpgrade(socket, 403, 'Forbidden');
   const chatMatch = /^\/ws\/chat\/([0-9a-f]{12})$/.exec(pathname);
   if (chatMatch) return chatApi.handleUpgrade(req, socket, head, chatMatch[1], (ws) => auth.trackSocket(device, ws));
   const session = match && sessions.get(match[1]);
@@ -789,9 +828,13 @@ const adminSections = {
 
 const access = createPhoneAccess({
   server, wss, port: PORT, config, log: auth.admin.log,
+  onClose: () => tunnel.stop(),
   forwards: { ports: () => [...forwards.keys()], open: openForward, close: closeForward },
 });
-const admin = await startAdmin({ auth, access, config, mainPort: PORT, urls, sections: adminSections }).catch((err) => {
+tunnel = createTunnel({ port: PORT, isConnected: () => access.view().connected, log: auth.admin.log });
+process.once('exit', () => tunnel.dispose());
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { tunnel.dispose(); process.exit(0); });
+const admin = await startAdmin({ auth, collaborators, access, tunnel, config, mainPort: PORT, urls, sections: adminSections }).catch((err) => {
   console.error(err.message);
   process.exit(1);
 });

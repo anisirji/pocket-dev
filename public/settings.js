@@ -38,6 +38,7 @@
     </header>
     <div class="st-body">
       <section data-mount="service"></section>
+      <section data-mount="collaborators"></section>
       <section>
         <h3>Devices</h3>
         <p class="st-summary"></p>
@@ -105,6 +106,7 @@
   let limit = 2;
   let editingId = null;
   let timer = 0;
+  let collaborators;
 
   function renderDevices() {
     const { devices, currentDeviceId } = settings;
@@ -182,11 +184,11 @@
     $('.st-stepper output').textContent = limit;
     $('[data-step="-1"]').disabled = limit <= MIN_DEVICES;
     $('[data-step="1"]').disabled = limit >= MAX_DEVICES;
-    const count = settings.devices.length;
+    const count = settings.devices.length + (settings.collaboratorSessions || 0);
     const over = limit < count
       ? ` ${plural(count, 'device')} are logged in now, so new password logins stay blocked until you log some out.`
       : '';
-    $('[data-note="limit"]').textContent = `Password logins stop at this many devices. Lowering the limit logs nobody out; it only blocks new password logins.${over} QR logins always work and replace the device used least recently.`;
+    $('[data-note="limit"]').textContent = settings.roleAccessEnabled ? `The limit includes Admin devices and active collaborator sessions (${count} total). New invitations never log out an Admin. Lowering the limit does not end current sessions.` : `Password logins stop at this many devices. Lowering the limit logs nobody out; it only blocks new password logins.${over} QR logins always work and replace the device used least recently.`;
   }
 
   function renderAddress() {
@@ -220,11 +222,13 @@
   $('[data-act="screen"]').addEventListener('click', () => window.openScreenSheet());
 
   async function refresh() {
+    collaborators?.refresh();
     refreshApps();
     try {
       const fresh = await api('GET', '/api/settings');
       const stepperUntouched = !settings || settings.maxDevices === limit;
       settings = fresh;
+      $('.st-head h2').textContent = fresh.roleAccessEnabled ? 'Settings · Admin' : 'Settings';
       if (stepperUntouched) limit = fresh.maxDevices;
       if (editingId === null) renderDevices();
       renderLimit();
@@ -319,6 +323,10 @@
     clearInterval(timer);
     timer = setInterval(refresh, REFRESH_MS);
     import('/service.js').then((m) => m.renderServiceSection($('[data-mount="service"]'), api)).catch(() => {});
+    import('/collaborators.js').then((m) => {
+      collaborators ||= m.mountCollaborators($('[data-mount="collaborators"]'), { api });
+      collaborators.refresh();
+    }).catch((err) => { $('[data-mount="collaborators"]').textContent = `Could not load Collaborators: ${err.message}. Restart Pocket Dev and reload.`; });
     mountPower();
     await refresh();
   }

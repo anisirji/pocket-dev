@@ -1,6 +1,17 @@
 # Role-based sharing: proposed first release
 
-Status: planning only. No application behavior changes are authorized by this document.
+Status: implementation in progress, authorized by the owner on 2026-11-08. The access and file-sharing foundation is implemented; repository-scoped AI is not implemented or enabled. The target design below remains the requirement for completing AI collaboration.
+
+## Current implementation
+
+- Collaborators appears in Mac Admin and phone Settings. The Mac owner must explicitly select the trusted devices retained as Admin before enabling sharing. Other active devices become pending; later password logins require Mac review, and new Admin pairing stays Mac-local.
+- Viewer access is read-only for one repository and explicitly selected related folders. Developer file access uses a separate project copy; writable related folders are copied too. Read-only related folders stay read-only. Copies omit Git metadata, dependencies, symlinks and common credential files. Owners must review shared contents because secrets can have arbitrary names.
+- Invitations use a separate guest cookie, one-use random tokens with a 10-minute lifetime, explicit acceptance, and access durations of 1 hour, 1 day or 7 days. Tokens are in the URL fragment, so preview GETs do not send or consume them. Existing sessions must log out before acceptance. Guest admission never evicts an Admin.
+- Guest requests are denied by default before owner/auth routes and all WebSocket upgrades. Only scoped Files, the current-access summary, status and logout are available. File operations use request-local roots and check symlinks, source availability, owner sharing policy, write modes, expiry and revocation. Grant changes invalidate outstanding invitations and existing transfer scopes. Revoked/expired guest sessions cannot regain access when a grant is renewed.
+- Redeemed grants and hashed sessions live in private `collaborators.json`; unused invitation tokens are memory-only. Developer copies live under `collaborator-workspaces` in the state directory and remain available to the owner for review. There is no automatic apply or host execution.
+- **AI is deliberately unavailable to every guest.** On this Mac, the Docker CLI is present but its engine socket is unavailable. A project copy is not an execution sandbox. A validated isolated runner, supported AI authentication, network restrictions, per-grant Chat, resource controls and escape tests are still required. The full original AI-collaboration feature is incomplete until those are delivered.
+
+No live migration, invitation, or service restart was performed during implementation. Enabling access requires the owner's trusted-device review in Mac Admin. HTTP remains suitable only for a trusted private connection; roles do not encrypt traffic.
 
 ## Purpose
 

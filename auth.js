@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import { svgQr } from './qr.js';
 import { createSecurityLog } from './security-log.js';
 import { STATE_DIR } from './paths.js';
+import { clientIp, secureCookie } from './transport.js';
 
 export { STATE_DIR };
 const DEVICES_PATH = path.join(STATE_DIR, 'devices.json');
@@ -75,7 +76,6 @@ export function deviceName(ua = '') {
   return [pick(OS_NAMES), pick(BROWSER_NAMES)].filter(Boolean).join(' · ') || 'Unknown device';
 }
 
-const clientIp = (req) => (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '');
 
 function cookieToken(req) {
   for (const part of (req.headers.cookie ?? '').split(';')) {
@@ -156,7 +156,7 @@ const lockedMessage = (ip, ms) => `Too many wrong passwords from ${ip}. Try agai
 
 // `config` is the server's config store (config.js): read() at use time, update() writes only the keys auth owns
 // (undefined removes a key). `urls()` returns the current { lan, local } base URLs; lan is null while the Mac has no network.
-export function createAuth({ config, port, urls, localNote }) {
+export function createAuth({ config, port, urls, localNote, extraActiveCount = () => 0, onLockdown = () => {} }) {
   const envPassword = process.env.POCKET_DEV_PASSWORD;
   let passwordLine = envPassword ? `Password: ${envPassword} (from POCKET_DEV_PASSWORD)` : 'Password: (set; change it in Settings)';
   const boot = config.read();
@@ -182,6 +182,7 @@ export function createAuth({ config, port, urls, localNote }) {
     return isMaxDevices(n) ? n : DEFAULT_MAX_DEVICES;
   };
   const requireApproval = () => config.read().requireApproval === true;
+  const rolesEnabled = () => config.read().roleAccessEnabled === true;
 
   const devices = loadDevices();
   const sockets = new Map();
@@ -205,8 +206,9 @@ export function createAuth({ config, port, urls, localNote }) {
 
   const requestInfo = (req) => ({ ip: clientIp(req), ua: String(req.headers['user-agent'] ?? '').slice(0, UA_MAX) });
   const about = (d) => ({ deviceId: d.id, name: d.name, ip: d.ip });
-  const isActive = (d) => d.status === 'active';
+  const isActive = (d) => d.status === 'active' && (!rolesEnabled() || d.role === 'admin');
   const activeCount = () => [...devices.values()].filter(isActive).length;
+  const totalActiveCount = () => activeCount() + extraActiveCount();
 
   function expirePending() {
     const now = Date.now();
@@ -239,10 +241,10 @@ export function createAuth({ config, port, urls, localNote }) {
     const token = crypto.randomBytes(32).toString('hex');
     const now = Date.now();
     const { ip, ua } = requestInfo(req);
-    const device = { id: crypto.randomBytes(4).toString('hex'), name: deviceName(ua), ua, createdAt: now, lastSeen: now, ip, via, status };
+    const device = { id: crypto.randomBytes(4).toString('hex'), name: deviceName(ua), ua, createdAt: now, lastSeen: now, ip, via, status, ...(rolesEnabled() && status === 'active' && { role: 'admin' }) };
     devices.set(tokenHash(token), device);
     saveDevices();
-    return { cookie: setCookie(token), device };
+    return { cookie: secureCookie(req, setCookie(token)), device };
   }
 
   const findDevice = (id) => [...devices].find(([, d]) => d.id === id);
@@ -292,6 +294,7 @@ export function createAuth({ config, port, urls, localNote }) {
     const { id, name, createdAt, lastSeen, ip, via, status } = d;
     return {
       id, name, createdAt, lastSeen, ip, via, status,
+      role: d.role || 'unreviewed',
       kind: d.ua ? deviceName(d.ua) : null,
       code: id.slice(-4),
       connections: n,
@@ -307,13 +310,13 @@ export function createAuth({ config, port, urls, localNote }) {
       .sort((a, b) => b.online - a.online || b.lastSeen - a.lastSeen);
   }
 
-  function mintQrUrl() {
+  function mintQrUrl(address) {
     const now = Date.now();
     for (const [key, expiresAt] of qrKeys) if (expiresAt <= now) qrKeys.delete(key);
     const key = crypto.randomBytes(32).toString('hex');
     qrKeys.set(key, now + QR_TTL_MS);
     const { lan, local } = urls();
-    return `${lan ?? local}/?k=${key}`;
+    return `${address ?? lan ?? local}/?k=${key}`;
   }
 
   function redeemQrKey(req, key) {
@@ -326,10 +329,14 @@ export function createAuth({ config, port, urls, localNote }) {
       log('qr-expired', requestInfo(req));
       return redirect('/login.html?e=qr');
     }
-    if (activeCount() >= maxDevices()) evictLeastRecent();
+    if (totalActiveCount() >= maxDevices()) {
+      if (!activeCount()) return redirect('/login.html?e=limit');
+      evictLeastRecent();
+    }
     // Scanning a code from the Mac proves physical access, so it approves a waiting device.
     if (existing) {
       existing.status = 'active';
+      if (rolesEnabled()) existing.role = 'admin';
       existing.via = 'qr';
       saveDevices();
       log('device-approved', { ...about(existing), by: 'qr' });
@@ -354,6 +361,7 @@ export function createAuth({ config, port, urls, localNote }) {
 
   // Blocked devices stay blocked: logging them out would let them try the password again.
   function changePassword(next, { logoutAll, keep, by }) {
+    if (logoutAll) onLockdown();
     config.update({ passwordHash: hashPassword(next) });
     const out = logoutAll ? [...devices.values()].filter((d) => d.status !== 'blocked' && d.id !== keep) : [];
     for (const d of out) revoke(d.id, 'password-change');
@@ -388,10 +396,10 @@ export function createAuth({ config, port, urls, localNote }) {
       limiter.succeed(ip);
       if (existing?.status === 'pending') return reply(200, { ok: true, pending: true });
       const max = maxDevices();
-      if (activeCount() >= max) {
+      if (totalActiveCount() >= max) {
         return reply(403, { error: `Device limit reached (${max}). Log out a device in Settings on a logged-in device, or scan the QR code from the Mac.` });
       }
-      const status = requireApproval() ? 'pending' : 'active';
+      const status = requireApproval() || rolesEnabled() ? 'pending' : 'active';
       const { cookie, device } = addDevice(req, 'password', status);
       log(status === 'pending' ? 'login-pending' : 'login', { via: 'password', ...about(device), ua });
       return reply(200, { ok: true, ...(status === 'pending' && { pending: true }) }, { 'set-cookie': cookie });
@@ -409,7 +417,7 @@ export function createAuth({ config, port, urls, localNote }) {
       return reply(204, undefined, { 'set-cookie': CLEAR_COOKIE });
     },
     'GET /api/settings'({ device }) {
-      return reply(200, { maxDevices: maxDevices(), currentDeviceId: device.id, devices: listDevices(isActive), urls: { ...urls(), localNote } });
+      return reply(200, { maxDevices: maxDevices(), currentDeviceId: device.id, devices: listDevices(isActive), urls: { ...urls(), localNote }, roleAccessEnabled: rolesEnabled(), role: device.role || 'owner', collaboratorSessions: extraActiveCount() });
     },
     async 'PUT /api/settings/max-devices'({ body }) {
       const { maxDevices: n } = await body();
@@ -442,6 +450,7 @@ export function createAuth({ config, port, urls, localNote }) {
       return reply(200, { ok: true, loggedOut });
     },
     async 'POST /api/settings/qr-key'() {
+      if (rolesEnabled()) return reply(403, { error: 'Pair another Admin device from Admin on the Mac. Use Collaborators for restricted invitations.' });
       const url = mintQrUrl();
       return reply(200, { url, svg: await svgQr(url), expiresInMin: QR_TTL_MIN });
     },
@@ -457,7 +466,7 @@ export function createAuth({ config, port, urls, localNote }) {
     const body = async () => asObject(await readBody());
     if (PUBLIC_ROUTES.has(route)) return handler({ req, body });
     const device = lookup(req);
-    if (device && !isActive(device)) return reply(403, REFUSALS[device.status]);
+    if (device && !isActive(device) && !(route === 'POST /api/logout' && device.status === 'pending')) return reply(403, REFUSALS[device.status] || { error: 'Review this device in Admin on the Mac before giving it Admin access.', pending: true });
     if (!handler) return null;
     if (!device) return reply(401, { error: 'Not logged in' });
     return handler({ req, body, device, id: deviceRoute?.[1] });
@@ -490,7 +499,22 @@ export function createAuth({ config, port, urls, localNote }) {
         passwordFromEnv: Boolean(envPassword),
         pendingTtlMin: minutes(PENDING_TTL_MS),
         qrTtlMin: QR_TTL_MIN,
+        roleAccessEnabled: rolesEnabled(),
+        collaboratorSessions: extraActiveCount(),
       };
+    },
+    enableRoles(ids) {
+      if (!Array.isArray(ids) || !ids.length || ids.some((id) => typeof id !== 'string' || !findDevice(id) || findDevice(id)[1].status !== 'active')) return reply(400, { error: 'Select at least one active, trusted owner device to retain as Admin.' });
+      for (const d of devices.values()) {
+        if (d.status !== 'active') continue;
+        if (ids.includes(d.id)) d.role = 'admin';
+        else { d.status = 'pending'; d.createdAt = Date.now(); delete d.role; closeSockets(d.id); }
+      }
+      saveDevices();
+      config.update({ roleAccessEnabled: true });
+      qrKeys.clear();
+      log('role-access-enabled', { adminDeviceIds: ids });
+      return reply(200, { ok: true });
     },
     deviceAction(id, action) {
       const spec = Object.hasOwn(DEVICE_ACTIONS, action) ? DEVICE_ACTIONS[action] : null;
@@ -501,8 +525,9 @@ export function createAuth({ config, port, urls, localNote }) {
       if (!spec.from.includes(d.status)) return reply(409, { error: `Cannot ${action} a device that is ${d.status}.` });
       if (spec.activates) {
         const max = maxDevices();
-        if (activeCount() >= max) return reply(409, { error: `The device limit (${max}) is reached. Log out a device or raise the limit first.` });
+        if (totalActiveCount() >= max) return reply(409, { error: `The device limit (${max}) is reached. Log out a device or raise the limit first.` });
         d.status = 'active';
+        if (rolesEnabled()) d.role = 'admin';
         saveDevices();
       } else {
         spec.apply(entry);
@@ -541,6 +566,7 @@ export function createAuth({ config, port, urls, localNote }) {
     // Logs out every device that is not blocked, cancels every login code, and sets `next` as the password when given.
     // Returns how many devices it logged out.
     lockdown(next) {
+      onLockdown();
       const out = [...devices.values()].filter((d) => d.status !== 'blocked');
       for (const d of out) revoke(d.id, 'lockdown');
       qrKeys.clear();
@@ -549,5 +575,6 @@ export function createAuth({ config, port, urls, localNote }) {
     },
   };
 
-  return { passwordLine, lookup, deviceFor, trackSocket, mintQrUrl, redeemQrKey, isLocalRequest, handleApi, admin };
+  return { passwordLine, lookup, deviceFor, trackSocket, mintQrUrl, redeemQrKey, isLocalRequest, handleApi, admin, activeCount,
+    isTrustedAdmin: (req) => deviceFor(req)?.role === 'admin' };
 }

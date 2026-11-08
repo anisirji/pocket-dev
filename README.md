@@ -126,6 +126,10 @@ It needs **Screen Recording** for the program that runs Pocket Dev. Without it t
 
 ### Login and security
 
+**Collaborators:** Admin and phone Settings include a Collaborators section for one-repository access, optional related folders, 1-hour/1-day/7-day expiry, QR invitations, native sharing, WhatsApp sharing, editing access and revocation. First enable sharing from Mac Admin, explicitly selecting your own trusted devices as Admin. Other devices need review, subsequent password logins require Mac approval, and Admin pairing stays on the Mac. Invitations work once within 10 minutes; opening a link preview never accepts one, and admission never evicts an Admin.
+
+Viewer can preview and download scoped files. Developer can change a separate project copy and explicitly writable copies of related folders; the owner's live checkout stays unchanged. Common credentials, Git metadata, dependencies and symlinks are excluded from copies. Review shared contents for project-specific secrets. Guest sessions cannot access owner chats, terminals, settings, apps, screen, power or other repositories. **Collaborator AI is currently unavailable** until an isolated execution runner and authentication are implemented and validated. The current file-sharing foundation does not complete the scoped-AI feature. See [implementation status and remaining plan](docs/ROLE_ACCESS_PLAN.md).
+
 | Feature | What it does |
 | --- | --- |
 | Password | scrypt hash (N=16384, r=8, p=1) in `config.json` as `passwordHash`. A random 12-character password is printed on the first start only. A plaintext `password` key is converted at start. Wrong passwords wait 1 s. New passwords need 6 to 200 characters. |

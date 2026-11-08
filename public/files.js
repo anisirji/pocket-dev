@@ -285,14 +285,15 @@
     state.els = { up, crumbs, more, input, clear, sortBtn, chips, list, fabs, selbar, selCount, selRename, selZip, selTrash, uploads, picker };
   }
 
+  const readOnly = () => !!(state.dir?.readOnly || state.places?.readOnly || (state.places?.scoped && state.error));
   function moreItems() {
     const dir = state.dir?.path;
     const pinned = state.places?.pinned.some((p) => p.path === dir);
     const items = [
-      { label: 'New folder', icon: 'newfolder', run: newFolder },
+      ...(!readOnly() ? [{ label: 'New folder', icon: 'newfolder', run: newFolder }] : []),
       { label: 'Select', icon: 'select', run: () => enterSelect(null) },
       { label: 'Show hidden files', icon: 'eye', checked: state.showHidden, run: () => { state.showHidden = !state.showHidden; store.set('hidden', state.showHidden ? '1' : '0'); refresh(); } },
-      { label: pinned ? 'Unpin folder' : 'Pin folder', icon: 'pin', run: () => setPinned(dir, !pinned) },
+      ...(!state.places?.scoped ? [{ label: pinned ? 'Unpin folder' : 'Pin folder', icon: 'pin', run: () => setPinned(dir, !pinned) }] : []),
     ];
     const openTerminal = window.pocketDev?.openTerminalAt;
     if (typeof openTerminal === 'function') {
@@ -464,7 +465,7 @@
     const { up, crumbs, chips, sortBtn, input } = state.els;
     const dir = state.dir;
     up.disabled = !dir?.parent;
-    const isHome = (p) => p === state.places?.home;
+    const isHome = (p) => !state.places?.scoped && p === state.places?.home;
     crumbs.replaceChildren(...(dir?.breadcrumbs ?? []).flatMap((c, i) => {
       const b = h('button', 'fx-crumb', isHome(c.path) ? 'Home' : c.name);
       b.type = 'button';
@@ -612,11 +613,12 @@
     selCount.textContent = n ? `${n} selected` : 'Tap to select';
     selZip.disabled = selTrash.disabled = !n;
     selRename.disabled = n !== 1;
+    selRename.hidden = selTrash.hidden = readOnly();
   }
 
   function renderBottom() {
     const { fabs, selbar } = state.els;
-    fabs.hidden = state.selecting;
+    fabs.hidden = state.selecting || readOnly();
     selbar.hidden = !state.selecting;
     renderUploads();
   }
@@ -648,12 +650,13 @@
 
   async function trashPaths(paths) {
     const label = paths.length === 1 ? `“${baseName(paths[0])}”` : `${paths.length} items`;
-    const ok = await ask({ title: `Move ${label} to the Trash?`, message: 'It goes to the Trash on the Mac. To get it back, open the Trash in Finder.', okLabel: 'Move to Trash', danger: true });
+    const scoped = state.places?.scoped;
+    const ok = await ask({ title: scoped ? `Delete ${label}?` : `Move ${label} to the Trash?`, message: scoped ? 'Deletes the selected files from your project copy. The owner’s original files stay unchanged.' : 'It goes to the Trash on the Mac. To get it back, open the Trash in Finder.', okLabel: scoped ? 'Delete' : 'Move to Trash', danger: true });
     if (!ok) return;
     try {
       const { trashed, errors } = await api('POST', '/api/files/trash', { paths });
       if (errors.length) toast(errors[0].error, true);
-      else toast(trashed.length === 1 ? 'Moved to the Trash' : `Moved ${trashed.length} items to the Trash`);
+      else toast(scoped ? `Deleted ${trashed.length} item${trashed.length === 1 ? '' : 's'}` : trashed.length === 1 ? 'Moved to the Trash' : `Moved ${trashed.length} items to the Trash`);
     } catch (err) {
       toast(err.message, true);
     }
@@ -777,6 +780,7 @@
     Object.assign(download, { href: fileUrl(e.path, false), download: e.name });
     const rename = labeled('rename', 'Rename');
     const trash = labeled('trash', 'Trash', 'fx-danger');
+    rename.hidden = trash.hidden = readOnly();
     const copy = labeled('copy', 'Copy path');
     acts.append(download, rename, trash, copy);
     panel.append(head, body, info, acts);

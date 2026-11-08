@@ -35,6 +35,7 @@ const server = http.createServer(async (req, res) => {
     [`/api/history/codex/${historyItem.id}`]: { ...historyItem, messages: [{ role: 'user', text: 'A previous message' }] },
     '/api/chat/fixture-chat': chat,
     '/api/settings': { devices: [], maxDevices: 2 },
+    '/api/collaborators': { enabled: true, ai: { available: false, reason: 'Collaborator AI needs an isolated runner.' }, collaborators: [], repositories: [] },
     '/api/power': { awake: 'off', temperature: {}, shutdown: {}, lidClosed: false, lidSleepDisabled: false },
     '/api/power/vitals': { battery: 59, onAC: true, temperature: { batteryC: 30.7 }, limits: { batteryPercent: 20, temperatureC: 45 }, alerts: [] },
     '/api/chat/options': { home: '/tmp', defaultTool: 'codex', tools: { codex: { label: 'Codex', defaults: { model: 'model-0' }, settings: [{ key: 'model', label: 'Model', default: 'model-0', choices }] } } },
@@ -136,6 +137,26 @@ try {
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
   await settle();
   await inViewport('.st-sheet');
+  const collaborators = page.locator('[data-mount="collaborators"]');
+  await collaborators.getByRole('button', { name: 'Invite someone', exact: true }).click();
+  await collaborators.getByLabel('Name', { exact: true }).fill('Website developer');
+  await collaborators.getByLabel('Repository', { exact: true }).fill('/tmp/website-project');
+  await collaborators.getByLabel('Role', { exact: true }).selectOption('developer');
+  assert.equal(await collaborators.getByLabel('AI access', { exact: true }).isDisabled(), true);
+  await collaborators.getByRole('button', { name: 'Add related folder', exact: true }).click();
+  await collaborators.getByLabel('Related folder path', { exact: true }).fill('/tmp/Downloads/project-assets');
+  assert.equal(await collaborators.getByLabel('Related folder access', { exact: true }).inputValue(), 'read');
+  for (const [width, height] of sizes) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => setTestViewport({}));
+    await collaborators.getByRole('button', { name: 'Create collaborator', exact: true }).scrollIntoViewIfNeeded();
+    await inViewport('[data-mount="collaborators"] .co-form button[type="submit"]');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  }
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
+  await collaborators.getByRole('button', { name: 'Cancel', exact: true }).scrollIntoViewIfNeeded();
+  await collaborators.getByRole('button', { name: 'Cancel', exact: true }).click();
   const logout = page.locator('[data-act="logout"]');
   await logout.scrollIntoViewIfNeeded();
   await inViewport('[data-act="logout"]');
