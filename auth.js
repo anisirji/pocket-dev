@@ -6,10 +6,16 @@ import { svgQr } from './qr.js';
 import { createSecurityLog } from './security-log.js';
 import { STATE_DIR } from './paths.js';
 import { clientIp, cookieHost, secureCookie } from './transport.js';
+import { ipv6Prefix } from './network.js';
 
 export { STATE_DIR };
 const DEVICES_PATH = path.join(STATE_DIR, 'devices.json');
 export const LOCAL_SECRET_PATH = path.join(STATE_DIR, 'local-secret');
+// After the phone asks for an update, the same browser on the same network may log in by password without waiting for
+// approval, once, for a while: the owner cannot walk to the Mac, and nobody else asked for this restart.
+const GRACE_PATH = path.join(STATE_DIR, 'restart-grace.json');
+const GRACE_MS = Number(process.env.POCKET_DEV_GRACE_MS) || 10 * 60_000;
+const RECOVERY_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const QR_TTL_MS = Number(process.env.POCKET_DEV_QR_TTL_MS) || 10 * 60_000;
 export const QR_TTL_MIN = Math.round(QR_TTL_MS / 60_000);
 const ONLINE_WINDOW_MS = Number(process.env.POCKET_DEV_ONLINE_WINDOW_MS) || 60_000;
@@ -51,6 +57,11 @@ async function verifyPassword(given, { N, r, p, salt, hash }) {
 
 const isPasswordHash = (v) => v?.algo === 'scrypt' && [v.N, v.r, v.p].every(Number.isInteger)
   && typeof v.salt === 'string' && typeof v.hash === 'string';
+
+const networkKey = (ip) => ipv6Prefix(ip) ?? ip;
+const newRecoveryCode = () => Array.from({ length: 16 }, () => RECOVERY_ALPHABET[crypto.randomInt(RECOVERY_ALPHABET.length)])
+  .join('').replace(/(.{4})(?=.)/g, '$1-');
+const normalizeRecoveryCode = (code) => code.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 const isMaxDevices = (n) => Number.isInteger(n) && n >= 1 && n <= 20;
 const newPasswordError = (next) => (typeof next !== 'string' || next.length < MIN_PASSWORD || next.length > 200
@@ -434,6 +445,27 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     return bounceHome(addCookie(req, device, entry.host), entry.direction === 'to-remote' ? '?linked=1' : '');
   }
 
+  function noteRestart(req) {
+    const { ua } = requestInfo(req);
+    writePrivate(GRACE_PATH, JSON.stringify({ at: Date.now(), ua, net: networkKey(clientIp(req)) }) + '\n');
+  }
+
+  // True once for a browser that matches the last update request and asks within the window; the note is spent either way it matches.
+  function takeGrace(req) {
+    let note;
+    try { note = JSON.parse(fs.readFileSync(GRACE_PATH, 'utf8')); } catch { return false; }
+    if (Date.now() - note.at >= GRACE_MS) return false;
+    const { ua } = requestInfo(req);
+    if (note.ua !== ua || note.net !== networkKey(clientIp(req))) return false;
+    fs.rmSync(GRACE_PATH, { force: true });
+    return true;
+  }
+
+  const recoveryCodeMatches = (given) => {
+    const stored = config.read().recoveryCodeHash;
+    return isPasswordHash(stored) && given.length >= 8 && verifyPassword(normalizeRecoveryCode(given), stored);
+  };
+
   const passwordMatches = (given) => (envPassword ? sameSecret(given, envPassword) : verifyPassword(given, config.read().passwordHash));
 
   const isLocalRequest = (req) => LOOPBACK.has(req.socket.remoteAddress)
@@ -478,23 +510,39 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       if (lockedMs) return reply(429, { error: lockedMessage(ip, lockedMs) });
       const existing = lookup(req);
       if (existing?.status === 'blocked') return reply(403, REFUSALS.blocked);
-      const { password } = await body();
-      if (typeof password !== 'string' || !(await passwordMatches(password))) {
+      const { password, code } = await body();
+      const refuse = async (error) => {
         log('login-failed', { ip, ua });
         const lockedNow = limiter.fail(ip);
         if (lockedNow) log('login-locked', { ip, minutes: minutes(LOGIN_WINDOW_MS) });
         await sleep(1000);
-        return lockedNow ? reply(429, { error: lockedMessage(ip, LOGIN_WINDOW_MS) }) : reply(401, { error: 'Wrong password' });
-      }
+        return lockedNow ? reply(429, { error: lockedMessage(ip, LOGIN_WINDOW_MS) }) : reply(401, { error });
+      };
+      if (typeof password !== 'string' || !(await passwordMatches(password))) return refuse('Wrong password');
+      // A recovery code proves the owner set this up on the Mac; a recent update request from this browser is the other way in.
+      const withCode = typeof code === 'string' && code.trim() !== '';
+      if (withCode && !(await recoveryCodeMatches(code))) return refuse('Wrong recovery code');
       limiter.succeed(ip);
-      if (existing?.status === 'pending') return reply(200, { ok: true, pending: true });
+      const by = withCode ? 'recovery-code' : !existing && takeGrace(req) ? 'update-grace' : null;
+      if (by === 'recovery-code') config.update({ recoveryCodeHash: null });
+      if (existing?.status === 'pending') {
+        if (!by) return reply(200, { ok: true, pending: true });
+        existing.status = 'active';
+        if (rolesEnabled()) existing.role = 'admin';
+        existing.via = 'password';
+        saveDevices();
+        log('device-approved', { ...about(existing), by });
+        return reply(200, { ok: true });
+      }
       const max = maxDevices();
       if (totalActiveCount() >= max) {
-        return reply(403, { error: `Device limit reached (${max}). Log out a device in Settings on a logged-in device, or scan the QR code from the Mac.` });
+        if (!by || !activeCount()) return reply(403, { error: `Device limit reached (${max}). Log out a device in Settings on a logged-in device, or scan the QR code from the Mac.` });
+        evictLeastRecent();
       }
-      const status = requireApproval() || rolesEnabled() ? 'pending' : 'active';
+      const status = by || !(requireApproval() || rolesEnabled()) ? 'active' : 'pending';
       const { cookie, device } = addDevice(req, 'password', status);
       log(status === 'pending' ? 'login-pending' : 'login', { via: 'password', ...about(device), ua });
+      if (by) log('device-approved', { ...about(device), by });
       if (status === 'pending' && approveFromDevices()) onPending({ kind: deviceName(ua), code: device.id.slice(-4) });
       return reply(200, { ok: true, ...(status === 'pending' && { pending: true }) }, { 'set-cookie': cookie });
     },
@@ -612,7 +660,15 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
         roleAccessEnabled: rolesEnabled(),
         collaboratorSessions: extraActiveCount(),
         approveFromDevices: approveFromDevices(),
+        recoveryCode: isPasswordHash(config.read().recoveryCodeHash),
       };
+    },
+    // Shown once; only a salted hash is kept. A new code replaces the old one, and using it spends it.
+    createRecoveryCode() {
+      const code = newRecoveryCode();
+      config.update({ recoveryCodeHash: hashPassword(normalizeRecoveryCode(code)) });
+      log('recovery-code-created', {});
+      return reply(200, { code });
     },
     enableRoles(ids) {
       if (!Array.isArray(ids) || !ids.length || ids.some((id) => typeof id !== 'string' || findDevice(id)?.status !== 'active')) return reply(400, { error: 'Select at least one active, trusted owner device to retain as Admin.' });
@@ -688,6 +744,6 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     },
   };
 
-  return { passwordLine, lookup, deviceFor, trackSocket, mintQrUrl, redeemQrKey, mintHandoff, redeemHandoff, hasCookieFor, isLocalRequest, handleApi, admin, activeCount,
+  return { passwordLine, noteRestart, lookup, deviceFor, trackSocket, mintQrUrl, redeemQrKey, mintHandoff, redeemHandoff, hasCookieFor, isLocalRequest, handleApi, admin, activeCount,
     isTrustedAdmin: (req) => deviceFor(req)?.role === 'admin' };
 }
