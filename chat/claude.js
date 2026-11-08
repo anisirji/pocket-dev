@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { claudeLimitNotice } from './limits.js';
 import { findBin, engineEnv, ENGINE_SETTINGS, cap, lineDiff, INPUT_MAX } from './env.js';
 import { saveToolImages, resultText } from './tool-images.js';
 
@@ -300,6 +301,11 @@ export function createClaudeEngine(chat) {
         if (m.subtype === 'init') chat.setSession(m.session_id);
         else if (m.subtype === 'compact_boundary') chat.emit({ type: 'status', text: 'Conversation compacted' });
         return;
+      case 'rate_limit_event': {
+        const notice = claudeLimitNotice(m.rate_limit_info, (chat.limitSeen ??= new Map()));
+        if (notice) chat.emit(notice);
+        return;
+      }
       case 'stream_event':
         return onStreamEvent(m);
       case 'assistant':

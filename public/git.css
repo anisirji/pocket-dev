@@ -145,3 +145,12 @@ select.g-input { height: 40px; padding: 0 8px; }
 .g-form { padding: 12px 10px; }
 .g-form > label:not(.g-check) { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
 .g-form .g-notice { margin: 0; }
+
+.g-save { display: grid; gap: 8px; }
+.g-save-note { color: var(--muted); font-size: 13px; }
+.g-save-note b { color: var(--text); font-weight: 600; }
+.g-save .g-input { width: 100%; resize: vertical; }
+.g-btnrow { display: flex; gap: 8px; }
+.g-btnrow .g-btn { flex: 1; height: 44px; margin-top: 0; }
+.g-save .g-notice { margin: 0; }
+.g-notice.warn { background: #2b2412; color: var(--warn); border: 1px solid #5c4a1a; }
