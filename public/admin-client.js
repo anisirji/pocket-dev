@@ -179,7 +179,7 @@ function renderInternet() {
     waiting: access.connected ? 'Press Try again to start the link.' : 'Starts when phone access is connected.',
     off: access.connected ? 'Press Try again to start the link.' : 'Starts when phone access is connected.',
     starting: `Pocket Dev will be at https://${internet.hostname}`,
-    connected: `Pocket Dev is at https://${internet.hostname}. Log in there once; Wi-Fi then comes by Switch to local on the phone.`,
+    connected: `Pocket Dev is at https://${internet.hostname}. Link each phone once from Wi-Fi (Settings → Connection → Link this phone), or log in there with the password.`,
     error: tunnel.error,
   }[domain];
   $('domainOpen').hidden = domain !== 'connected';
@@ -373,8 +373,8 @@ const EVENT_TEXT = {
   'remote-stopped': () => 'Internet link off',
   'remote-error': (e) => `Internet link failed: ${e.error}`,
   'network-changed': (e) => `Internet access set to ${KIND_LABEL[e.kind] ?? e.kind}${e.hostname ? ` (${e.hostname})` : ''}${e.wifi === false ? ', Wi-Fi access off' : ''}${byText(e)}`,
-  'handoff-created': (e) => `${e.name} asked to switch from the internet link to Wi-Fi`,
-  'handoff-redeemed': (e) => `${e.name} switched to the Wi-Fi address`,
+  'handoff-created': (e) => (e.direction === 'to-remote' ? `${e.name} asked to link to ${e.host}` : `${e.name} asked to switch from the internet link to Wi-Fi`),
+  'handoff-redeemed': (e) => (e.direction === 'to-remote' ? `${e.name} linked to ${e.host}` : `${e.name} switched to the Wi-Fi address`),
   'handoff-failed': (e) => `A switch link was refused (${e.reason})${e.kind ? ` from ${e.kind}` : ''}`,
   'role-access-enabled': () => 'Role-based sharing enabled after trusted Admin device review',
   'collaborator-created': (e) => `Collaborator ${e.grantId} created as ${e.role}`,

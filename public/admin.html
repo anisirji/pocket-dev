@@ -72,7 +72,7 @@
         <p class="note">Only your Wi-Fi reaches Pocket Dev. Choose Quick link or My own domain to reach it from anywhere.</p>
       </div>
       <div id="netQuick" class="net-kind" hidden>
-        <p class="note">Needs only cloudflared on this Mac, no account. Turn on gives a random <code>trycloudflare.com</code> address that lasts until you turn it off or Pocket Dev restarts.</p>
+        <p class="note">Needs only cloudflared on this Mac, no account. Turn on gives a random <code>trycloudflare.com</code> address that lasts until you turn it off or Pocket Dev restarts. Every Turn on is a new address, so each phone links to it again from Wi-Fi (Settings → Connection → Link this phone) before it can open it without the password.</p>
         <div class="setting">
           <div class="setting-text"><b id="quickStatus"></b><small id="quickDetail"></small></div>
           <button type="button" class="btn" id="quickBtn"></button>
@@ -86,6 +86,7 @@
           <li>Add a public hostname, such as <code>pocket.example.com</code>, pointing to <b>HTTP</b> <code id="domainPort">localhost:7777</code>. The domain must use Cloudflare DNS.</li>
           <li>Paste the hostname and the token here.</li>
         </ol>
+        <p class="note">One fixed address, so each phone links to it once: on Wi-Fi, Settings → Connection → Link this phone. After that it opens the address without the password, even with Approve new devices on.</p>
         <form id="domainForm" class="form" autocomplete="off">
           <input type="text" name="hostname" placeholder="pocket.example.com" aria-label="Public hostname" autocapitalize="off" spellcheck="false" required>
           <input type="password" name="token" autocomplete="off" placeholder="Tunnel token" aria-label="Tunnel token">

@@ -26,7 +26,7 @@ import { captureScreen } from './screen.js';
 import { collectHealth } from './health.js';
 import { createTunnel } from './tunnel.js';
 import { readNetwork, readToken, createSameNetwork } from './network.js';
-import { sameOrigin, fromConnector, clientIp } from './transport.js';
+import { sameOrigin, fromConnector, clientIp, cookieHost } from './transport.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SCROLLBACK_MAX = 500_000;
@@ -86,11 +86,15 @@ function hostAllowed(host) {
   if (Array.isArray(extra) && extra.some((h) => typeof h === 'string' && h.toLowerCase() === name)) return true;
   return (port ?? 80) === PORT && [...LOOPBACK_NAMES, localName(), ...lanIps()].includes(name);
 }
-// The Mac's own Wi-Fi address or .local name: where a handoff token may be used.
-function lanHost(host) {
-  const parsed = parseHost(host);
-  return Boolean(parsed) && parsed.port === PORT && [localName(), ...lanIps()].includes(parsed.name);
+// How a handoff token arrived: through the tunnel on its hostname, directly on the Mac's own Wi-Fi address or .local
+// name, or neither.
+function handoffArrival(req) {
+  if (fromConnector(req)) return { direction: 'to-remote', host: cookieHost(req) };
+  const parsed = parseHost(req.headers.host);
+  const lan = Boolean(parsed) && parsed.port === PORT && [localName(), ...lanIps()].includes(parsed.name);
+  return lan ? { direction: 'to-lan', host: 'lan' } : null;
 }
+const remoteHost = () => (urls().remote ? new URL(urls().remote).hostname : null);
 const MISDIRECTED = 'Misdirected Request: this server answers only to its own addresses.';
 
 let collaborators;
@@ -670,8 +674,9 @@ async function handleApi(req, res, url) {
       return closeForward(Number(key)) ? sendJson(res, 204) : sendJson(res, 404, { error: 'Not forwarded' });
     case 'GET info':
       return sendJson(res, 200, { lanIp: lanIp(), forwards: listForwards(), persistentTerminals: Boolean(terminalHost && !terminalHost.closed) });
-    // How this request reached the Mac, both addresses, and whether a phone on the internet link is on the Mac's own
-    // network. The page decides nothing by itself from the hint; it only offers the switch.
+    // How this request reached the Mac, both addresses, whether this device already has a cookie for the current
+    // internet hostname, and whether a phone on the internet link is on the Mac's own network. The page decides
+    // nothing by itself from the hint; it only offers the switch.
     case 'GET connection': {
       const remote = fromConnector(req);
       const ip = clientIp(req);
@@ -679,17 +684,30 @@ async function handleApi(req, res, url) {
         route: remote ? 'remote' : 'local',
         sameNetwork: remote ? await sameNetwork.hint(ip) : null,
         networkKey: remote ? sameNetwork.key(ip) : null,
+        linked: remoteHost() ? auth.hasCookieFor(auth.deviceFor(req), remoteHost()) : null,
         lanUrl: urls().lan,
         remoteUrl: urls().remote,
         wifi: network().wifi,
         internet: network().internet.kind,
       });
     }
+    // 'to-lan' is asked for through the tunnel and gives a link to the Wi-Fi address; 'to-remote' is asked for on
+    // the Wi-Fi address and gives a link to the internet hostname, so the phone never meets the password there.
     case 'POST handoff': {
-      if (!network().wifi) return sendJson(res, 403, { error: 'Wi-Fi access is off, so there is no local address to switch to.' });
-      if (!fromConnector(req)) return sendJson(res, 403, { error: 'Switch to local is only offered on the internet address.' });
-      if (!lanIp()) return sendJson(res, 409, { error: 'The Mac has no Wi-Fi address right now.' });
-      return sendJson(res, 200, { url: `http://${lanIp()}:${PORT}/?h=${auth.mintHandoff(auth.deviceFor(req))}` });
+      const { direction = 'to-lan' } = await readJson(req);
+      const device = auth.deviceFor(req);
+      if (direction === 'to-lan') {
+        if (!network().wifi) return sendJson(res, 403, { error: 'Wi-Fi access is off, so there is no local address to switch to.' });
+        if (!fromConnector(req)) return sendJson(res, 403, { error: 'Switch to local is only offered on the internet address.' });
+        if (!lanIp()) return sendJson(res, 409, { error: 'The Mac has no Wi-Fi address right now.' });
+        return sendJson(res, 200, { url: `http://${lanIp()}:${PORT}/?h=${auth.mintHandoff(device, { direction, host: 'lan' })}` });
+      }
+      if (direction === 'to-remote') {
+        if (fromConnector(req)) return sendJson(res, 403, { error: 'Link this phone from the Wi-Fi address.' });
+        if (!remoteHost()) return sendJson(res, 409, { error: 'The internet link is not connected right now.' });
+        return sendJson(res, 200, { url: `${urls().remote}/?h=${auth.mintHandoff(device, { direction, host: remoteHost() })}` });
+      }
+      return sendJson(res, 400, { error: 'direction must be to-lan or to-remote.' });
     }
     default:
       return sendJson(res, 404, { error: 'Not found' });
@@ -745,7 +763,7 @@ const server = http.createServer(async (req, res) => {
       res.end(body);
     } else if (url.pathname === '/' && url.searchParams.has('h') && internetOn()) {
       if (collaborators.guest(req)) return sendJson(res, 403, { error: 'Log out collaborator access before switching an owner device.' });
-      const { status, headers, body } = auth.redeemHandoff(req, url.searchParams.get('h'), !fromConnector(req) && lanHost(req.headers.host));
+      const { status, headers, body } = auth.redeemHandoff(req, url.searchParams.get('h'), handoffArrival(req));
       res.writeHead(status, { 'cache-control': 'no-store', ...headers });
       res.end(body);
     } else if (url.pathname.startsWith('/api/')) await handleApi(req, res, url);

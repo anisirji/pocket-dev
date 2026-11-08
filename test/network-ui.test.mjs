@@ -17,18 +17,20 @@ class Element {
 }
 
 // `responses` maps a URL to a status and body for fetch; `timers` run when the test advances them.
-function fixture({ responses, storage = new Map(), protocol = 'http:', chat = null, terminal = 'abc123' } = {}) {
+function fixture({ responses, storage = new Map(), protocol = 'http:', chat = null, terminal = 'abc123', search = '', hash = '' } = {}) {
   const head = new Element('head'), app = new Element('div'), clientError = new Element('aside'), portsBtn = new Element('button');
   app.append(clientError);
   const byId = { clientError, portsBtn };
-  const fetched = [], posted = [], timers = [], assigned = [];
+  const fetched = [], posted = [], timers = [], assigned = [], replaced = [], history = [];
   const runtime = {
     document: {
       hidden: false, head, createElement: (tag) => new Element(tag), getElementById: (id) => byId[id],
       listeners: {}, addEventListener(type, fn) { this.listeners[type] = fn; },
     },
     localStorage: { getItem: (k) => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: (k) => storage.delete(k) },
-    location: { protocol, assign: (url) => assigned.push(url) },
+    location: { protocol, search, hash, pathname: '/', assign: (url) => assigned.push(url), replace: (url) => replaced.push(url) },
+    history: { state: null, replaceState: (state, title, url) => history.push(url) },
+    URL, URLSearchParams,
     navigator: { onLine: true },
     confirm: () => true,
     fetch: async (url) => {
@@ -48,10 +50,10 @@ function fixture({ responses, storage = new Map(), protocol = 'http:', chat = nu
   vm.runInContext(source, runtime);
   const banner = app.children[1];
   const runTimers = async () => { const due = timers.splice(0); for (const t of due) t.fn?.(); await settle(); };
-  return { runtime, banner, portsBtn, storage, fetched, posted, assigned, timers, runTimers, net: runtime.window.pocketDevNetwork };
+  return { runtime, banner, portsBtn, storage, fetched, posted, assigned, replaced, history, timers, runTimers, net: runtime.window.pocketDevNetwork };
 }
 
-const connection = (over) => ({ status: 200, body: { route: 'remote', sameNetwork: true, networkKey: 'k1', lanUrl: 'http://192.168.1.20:7777', remoteUrl: 'https://pocket.example.com', wifi: true, internet: 'domain', ...over } });
+const connection = (over) => ({ status: 200, body: { route: 'remote', sameNetwork: true, networkKey: 'k1', linked: true, lanUrl: 'http://192.168.1.20:7777', remoteUrl: 'https://pocket.example.com', wifi: true, internet: 'domain', ...over } });
 
 test('with internet access off nothing is offered, and Ports stays', async () => {
   const f = fixture({ responses: { '/api/connection': { status: 404, body: { error: 'Not found' } } } });
@@ -82,7 +84,7 @@ test('on the internet link next to the Mac: the prompt, Not now per network, and
   assert.equal(f.banner.hidden, false, 'another network asks again');
   f.banner.button('Switch').onclick();
   await settle();
-  assert.equal(JSON.stringify(f.posted), JSON.stringify([{ method: 'POST', url: '/api/handoff', body: {} }]));
+  assert.equal(JSON.stringify(f.posted), JSON.stringify([{ method: 'POST', url: '/api/handoff', body: { direction: 'to-lan' } }]));
   assert.deepEqual(f.assigned, ['http://192.168.1.20:7777/?h=' + 'a'.repeat(64) + '#chat=chat42']);
   current = connection({ sameNetwork: null, networkKey: 'k3' });
   await f.net.check();
@@ -101,6 +103,7 @@ test('Settings shows both addresses; only the other route has a working Switch b
   assert.equal(section.children[1].textContent, 'Connected over the internet');
   assert.equal(section.button('Switch to local').disabled, false);
   assert.equal(section.button('Switch to remote').disabled, true);
+  assert.equal(section.button('Link this phone').disabled, true, 'a phone on the internet address already has its cookie');
   await section.button('Switch to local').onclick();
   await settle();
   assert.equal(f.assigned[0], 'http://192.168.1.20:7777/?h=' + 'a'.repeat(64) + '#terminal=abc123');
@@ -114,6 +117,7 @@ test('on Wi-Fi the internet link is remembered, and a Mac out of reach for five 
   const f = fixture({ responses: { '/api/connection': connection({ route: 'local', sameNetwork: null, networkKey: null }), '/api/status': { status: 503, body: {} } }, protocol: 'http:' });
   await settle();
   assert.equal(f.storage.get('pd.net.remoteUrl'), 'https://pocket.example.com');
+  assert.equal(f.banner.hidden, true, 'a linked phone on Wi-Fi is not prompted');
   assert.equal(f.banner.hidden, true);
   f.net.socket(false);
   for (let i = 0; i < 4; i++) {
@@ -150,4 +154,50 @@ test('Wi-Fi access off hides Ports and the Connection section', async () => {
   assert.equal(f.portsBtn.hidden, true);
   assert.equal(section.hidden, true);
   assert.equal(f.banner.hidden, true);
+});
+
+test('on Wi-Fi without a cookie for the internet address: the link prompt, Not now per hostname, and Link at tap time', async () => {
+  let current = connection({ route: 'local', sameNetwork: null, networkKey: null, linked: false });
+  const f = fixture({ responses: { '/api/connection': () => current } });
+  await settle();
+  assert.equal(f.banner.hidden, false);
+  assert.match(f.banner.children[0].textContent, /Link this phone to pocket\.example\.com/);
+  assert.equal(f.posted.length, 0);
+  f.banner.button('Not now').onclick();
+  assert.equal(f.storage.get('pd.net.linkNotNow.pocket.example.com'), '1');
+  await f.net.check();
+  assert.equal(f.banner.hidden, true, 'dismissed for this hostname');
+  current = connection({ route: 'local', sameNetwork: null, networkKey: null, linked: false, remoteUrl: 'https://new-words.trycloudflare.com' });
+  await f.net.check();
+  assert.equal(f.banner.hidden, false, 'a new Quick link hostname asks again');
+  const section = new Element('section');
+  f.net.mount(section);
+  await settle();
+  assert.match(section.children[4].children[0].children[1].textContent, /Not linked yet/);
+  assert.equal(section.button('Link this phone').disabled, false);
+  f.banner.button('Link').onclick();
+  await settle();
+  assert.equal(JSON.stringify(f.posted), JSON.stringify([{ method: 'POST', url: '/api/handoff', body: { direction: 'to-remote' } }]));
+  assert.equal(f.assigned[0], 'http://192.168.1.20:7777/?h=' + 'a'.repeat(64) + '#terminal=abc123');
+  current = connection({ route: 'local', sameNetwork: null, networkKey: null, linked: true });
+  await f.net.check();
+  assert.equal(f.banner.hidden, true);
+  assert.match(section.children[4].children[0].children[1].textContent, /Linked to pocket\.example\.com/);
+  assert.equal(section.button('Link this phone').disabled, true);
+});
+
+test('landing on the internet address right after linking goes back to Wi-Fi with the same view, once', async () => {
+  const f = fixture({ responses: { '/api/connection': connection({ sameNetwork: false }) }, search: '?linked=1', hash: '#chat=chat42' });
+  await settle();
+  assert.deepEqual(f.history, ['/#chat=chat42'], 'the marker is dropped from the address bar');
+  assert.deepEqual(f.replaced, ['http://192.168.1.20:7777#chat=chat42']);
+  assert.equal(f.banner.hidden, true);
+  const stranded = fixture({ responses: { '/api/connection': connection({ sameNetwork: false, lanUrl: null }) }, search: '?linked=1' });
+  await settle();
+  assert.deepEqual(stranded.replaced, [], 'without a Wi-Fi address there is nowhere to go back to');
+  assert.match(stranded.banner.children[0].textContent, /Linked\. This phone now opens pocket\.example\.com/);
+  stranded.banner.button('OK').onclick();
+  assert.equal(stranded.banner.hidden, true);
+  await stranded.net.check();
+  assert.equal(stranded.replaced.length, 0, 'the return happens at most once');
 });

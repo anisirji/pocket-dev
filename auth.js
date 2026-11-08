@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { svgQr } from './qr.js';
 import { createSecurityLog } from './security-log.js';
 import { STATE_DIR } from './paths.js';
-import { clientIp, secureCookie } from './transport.js';
+import { clientIp, cookieHost, secureCookie } from './transport.js';
 
 export { STATE_DIR };
 const DEVICES_PATH = path.join(STATE_DIR, 'devices.json');
@@ -99,9 +99,12 @@ function writePrivate(file, text) {
 }
 
 // A device holds one cookie per address it has used (the Wi-Fi address, the .local name, the internet link), so a
-// phone switching between them stays one device. Files from before that held a single tokenHash.
+// phone switching between them stays one device. Each cookie records the host it was issued for: a tunnel hostname,
+// 'lan', or null for cookies from before this was recorded. Files from before that held a single tokenHash.
 const MAX_COOKIES_PER_DEVICE = 8;
-const isHashList = (v) => Array.isArray(v) && v.length > 0 && v.every((h) => typeof h === 'string');
+const isCookie = (c) => typeof c === 'string' || typeof c?.hash === 'string';
+const asCookie = (c) => (typeof c === 'string' ? { hash: c, host: null } : { hash: c.hash, host: typeof c.host === 'string' ? c.host : null });
+const isHashList = (v) => Array.isArray(v) && v.length > 0 && v.every(isCookie);
 const isStoredDevice = (d) => (typeof d?.tokenHash === 'string' || isHashList(d?.tokenHashes)) && typeof d.id === 'string'
   && typeof d.name === 'string' && Number.isFinite(d.lastSeen) && (d.status === undefined || STATUSES.includes(d.status));
 
@@ -115,7 +118,7 @@ function loadDevices() {
   }
   // Devices saved before approval and blocking existed have no status; they were logged in.
   return new Map((Array.isArray(stored) ? stored : []).filter(isStoredDevice)
-    .map(({ tokenHash: hash, tokenHashes, status = 'active', ...d }) => [d.id, { ...d, status, tokenHashes: isHashList(tokenHashes) ? tokenHashes : [hash] }]));
+    .map(({ tokenHash: hash, tokenHashes, status = 'active', ...d }) => [d.id, { ...d, status, tokenHashes: (isHashList(tokenHashes) ? tokenHashes : [hash]).map(asCookie) }]));
 }
 
 const reply = (status, body, headers = {}) => ({ status, body, headers });
@@ -125,7 +128,8 @@ const redirect = (location) => reply(302, undefined, { location });
 // The fragment is kept: a handoff link carries the terminal or chat to reopen there.
 const BOUNCE_HOME = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
   + '<title>Pocket Dev</title><style>html{background:#0b0e14}</style><script>location.replace("/" + location.hash)</script>';
-const bounceHome = (cookie) => reply(200, BOUNCE_HOME, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': cookie });
+// `landing` is the query the page opens with; the phone uses ?linked=1 to know it just linked to the internet address.
+const bounceHome = (cookie, landing = '') => reply(200, BOUNCE_HOME.replace('"/"', `"/${landing}"`), { 'content-type': 'text/html; charset=utf-8', 'set-cookie': cookie });
 const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 
 function parseDeviceName(v) {
@@ -206,7 +210,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     clearTimeout(saveTimer);
     saveTimer = null;
     // tokenHash is also written so an older Pocket Dev reading this file keeps the device's most recent cookie.
-    const list = [...devices.values()].map((d) => ({ tokenHash: d.tokenHashes[d.tokenHashes.length - 1], ...d }));
+    const list = [...devices.values()].map((d) => ({ tokenHash: d.tokenHashes[d.tokenHashes.length - 1].hash, ...d }));
     writePrivate(DEVICES_PATH, JSON.stringify({ devices: list }, null, 2) + '\n');
   }
   function saveDevicesSoon() {
@@ -236,11 +240,12 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     const token = cookieToken(req);
     if (!token) return undefined;
     const hash = tokenHash(token);
-    const device = [...devices.values()].find((d) => d.tokenHashes.includes(hash));
+    const device = [...devices.values()].find((d) => d.tokenHashes.some((c) => c.hash === hash));
     if (!device) return undefined;
-    if (device.tokenHashes[device.tokenHashes.length - 1] !== hash) {
-      device.tokenHashes.splice(device.tokenHashes.indexOf(hash), 1);
-      device.tokenHashes.push(hash);
+    const used = device.tokenHashes.find((c) => c.hash === hash);
+    if (device.tokenHashes[device.tokenHashes.length - 1] !== used) {
+      device.tokenHashes.splice(device.tokenHashes.indexOf(used), 1);
+      device.tokenHashes.push(used);
     }
     device.lastSeen = Date.now();
     device.ip = clientIp(req);
@@ -248,17 +253,19 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     return device;
   }
 
-  // Gives the device one more cookie, for the address this request arrived on, or replaces the one it sent.
-  function addCookie(req, device) {
+  // Gives the device one more cookie for `host`, the address this request arrived on, or replaces the one it sent.
+  function addCookie(req, device, host = cookieHost(req)) {
     const token = crypto.randomBytes(32).toString('hex');
     const current = cookieToken(req);
-    const i = current ? device.tokenHashes.indexOf(tokenHash(current)) : -1;
-    if (i >= 0) device.tokenHashes[i] = tokenHash(token);
-    else device.tokenHashes.push(tokenHash(token));
+    const i = current ? device.tokenHashes.findIndex((c) => c.hash === tokenHash(current)) : -1;
+    const cookie = { hash: tokenHash(token), host };
+    if (i >= 0) device.tokenHashes[i] = cookie;
+    else device.tokenHashes.push(cookie);
     device.tokenHashes.splice(0, Math.max(0, device.tokenHashes.length - MAX_COOKIES_PER_DEVICE));
     saveDevices();
     return secureCookie(req, setCookie(token));
   }
+  const hasCookieFor = (device, host) => device.tokenHashes.some((c) => c.host === host);
 
   function deviceFor(req) {
     const device = lookup(req);
@@ -380,20 +387,23 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     return bounceHome(cookie);
   }
 
-  // A device logged in on the internet address asks for a handoff token, then opens the Wi-Fi address with it to get
-  // a cookie there too. Only the hash is kept, and the token works once.
-  function mintHandoff(device) {
+  // A logged-in device asks for a handoff token on one address, then opens the other address with it to get a
+  // cookie there too: 'to-lan' from the internet link to the Wi-Fi address, 'to-remote' the other way. Only the
+  // hash is kept, the token works once, and it is bound to the direction and the host it was minted for.
+  function mintHandoff(device, { direction, host }) {
     const now = Date.now();
     for (const [hash, h] of handoffs) if (h.expiresAt <= now) handoffs.delete(hash);
     const token = crypto.randomBytes(32).toString('hex');
-    handoffs.set(tokenHash(token), { deviceId: device.id, expiresAt: now + HANDOFF_TTL_MS });
-    log('handoff-created', about(device));
+    handoffs.set(tokenHash(token), { deviceId: device.id, direction, host, expiresAt: now + HANDOFF_TTL_MS });
+    log('handoff-created', { ...about(device), direction, host });
     return token;
   }
 
-  // `onLan` says the request arrived directly on the Mac's Wi-Fi address, not through the tunnel: a token that leaks
-  // through the tunnel is refused and spent. The device keeps its identity, so nothing is counted or evicted.
-  function redeemHandoff(req, token, onLan) {
+  // `arrival` is how the request came in: { direction: 'to-lan', host: 'lan' } directly on the Mac's Wi-Fi address,
+  // { direction: 'to-remote', host } through the tunnel on that hostname, or null. A token used on the wrong side,
+  // or for a hostname the link no longer has, is refused and spent. The device keeps its identity, status and role,
+  // so nothing waits for approval, is counted or evicted.
+  function redeemHandoff(req, token, arrival) {
     const hash = tokenHash(token);
     const entry = handoffs.get(hash);
     handoffs.delete(hash);
@@ -401,15 +411,15 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       log('handoff-failed', { reason, ...requestInfo(req) });
       return redirect('/login.html?e=handoff');
     };
-    if (!onLan) return refuse('route');
     if (!entry) return refuse('unknown');
+    if (!arrival || arrival.direction !== entry.direction || arrival.host !== entry.host) return refuse('route');
     if (entry.expiresAt <= Date.now()) return refuse('expired');
     const device = devices.get(entry.deviceId);
     if (!device || !isActive(device)) return refuse('device');
     const existing = lookup(req);
     if (existing && existing !== device && existing.status === 'blocked') return refuse('blocked');
-    log('handoff-redeemed', about(device));
-    return bounceHome(addCookie(req, device));
+    log('handoff-redeemed', { ...about(device), direction: entry.direction, host: entry.host });
+    return bounceHome(addCookie(req, device, entry.host), entry.direction === 'to-remote' ? '?linked=1' : '');
   }
 
   const passwordMatches = (given) => (envPassword ? sameSecret(given, envPassword) : verifyPassword(given, config.read().passwordHash));
@@ -640,6 +650,6 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     },
   };
 
-  return { passwordLine, lookup, deviceFor, trackSocket, mintQrUrl, redeemQrKey, mintHandoff, redeemHandoff, isLocalRequest, handleApi, admin, activeCount,
+  return { passwordLine, lookup, deviceFor, trackSocket, mintQrUrl, redeemQrKey, mintHandoff, redeemHandoff, hasCookieFor, isLocalRequest, handleApi, admin, activeCount,
     isTrustedAdmin: (req) => deviceFor(req)?.role === 'admin' };
 }
