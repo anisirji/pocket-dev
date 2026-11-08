@@ -36,6 +36,7 @@ export const EVENT_KINDS = {
   'service-installed': 'change',
   'server-stopped': 'change',
   'server-restarted': 'change',
+  'messages-cleared': 'change',
 };
 
 const FILTERS = {

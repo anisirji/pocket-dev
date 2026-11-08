@@ -30,4 +30,5 @@ export const KEYS = {
   temperatureAlertC: { parse: integer(30, 70), restart: false, help: 'Alert the phone when the Mac battery temperature reaches this many \u00b0C (default 40)' },
   screenView: { parse: boolean, restart: false, help: 'Let a logged-in phone see this Mac\u2019s screen: true or false (default true)' },
   allowedHosts: { parse: hostList, restart: false, help: 'Extra Host names to accept, comma separated (a tunnel domain)' },
+  messagesReserveGB: { parse: integer(0, 1000), restart: false, help: 'Refuse Messages uploads that would leave less than this many GB free on the Mac (default 5)' },
 };

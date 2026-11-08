@@ -96,7 +96,7 @@ async function claimName(dir, name, tmp) {
 }
 
 // Only one range is honored; a multi-range or malformed header gets the whole file, which RFC 9110 allows.
-function rangeOf(header, size) {
+export function rangeOf(header, size) {
   const whole = { status: 200, start: 0, end: size - 1 };
   const m = /^bytes=(\d*)-(\d*)$/.exec(header ?? '');
   if (!m || (m[1] === '' && m[2] === '')) return whole;
@@ -107,7 +107,7 @@ function rangeOf(header, size) {
 }
 
 const encode5987 = (s) => encodeURIComponent(s).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-const disposition = (kind, name) =>
+export const disposition = (kind, name) =>
   `${kind}; filename="${name.replace(/[^\x20-\x7e]|["\\]/g, '_')}"; filename*=UTF-8''${encode5987(name)}`;
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
