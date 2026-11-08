@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -213,6 +214,24 @@ test('domain tunnel: token in the environment only, never in argv, responses or 
   assert.equal(off.data.hasToken, true, 'the token stays for the next time');
   assert.equal((await s.request('GET', '/api/status', { via: 'tunnel' })).status, 421);
   assert.equal((await s.request('PUT', '/api/network', { cookie: A.cookie, body: { internet: { kind: 'off' } } })).status, 404);
+});
+
+test('a devices file from before multi-address cookies still logs its devices in', { timeout: 60000 }, async (t) => {
+  const oldToken = 'a'.repeat(64), olderToken = 'b'.repeat(64);
+  const hash = (token) => crypto.createHash('sha256').update(token).digest('hex');
+  const s = await startServer(t, { devices: [
+    { tokenHash: hash(oldToken), id: 'old00001', name: 'Old phone', ua: 'Mozilla/5.0 (Linux; Android 14) Chrome/120', createdAt: 1700000000000, lastSeen: 1700000000000, ip: '192.168.1.9', via: 'password', status: 'active' },
+    { tokenHash: hash(olderToken), id: 'old00002', name: 'Older phone', createdAt: 1690000000000, lastSeen: 1690000000000, ip: '192.168.1.8', via: 'qr' },
+  ] });
+  for (const token of [oldToken, olderToken]) assert.equal((await s.request('GET', '/api/settings', { cookie: `pd_token=${token}` })).status, 200, 'every old cookie still works');
+  const settings = (await s.request('GET', '/api/settings', { cookie: `pd_token=${oldToken}` })).data;
+  assert.deepEqual(settings.devices.map((d) => d.id).sort(), ['old00001', 'old00002']);
+  assert.equal(settings.currentDeviceId, 'old00001');
+  assert.equal(JSON.stringify(settings).includes(hash(oldToken)), false, 'cookie hashes never leave the server');
+  assert.equal((await s.request('DELETE', '/api/devices/old00002', { cookie: `pd_token=${oldToken}` })).status, 204);
+  assert.equal((await s.request('GET', '/api/settings', { cookie: `pd_token=${olderToken}` })).status, 401);
+  const saved = JSON.parse(fs.readFileSync(path.join(s.stateDir, 'devices.json'), 'utf8')).devices;
+  assert.deepEqual(saved.map((d) => [d.id, d.tokenHash, d.tokenHashes]), [['old00001', hash(oldToken), [hash(oldToken)]]], 'saved in both shapes');
 });
 
 test('Quick link: on demand from Admin, a random address, and off again', { timeout: 60000 }, async (t) => {

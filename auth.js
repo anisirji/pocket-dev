@@ -96,7 +96,11 @@ function writePrivate(file, text) {
   fs.renameSync(tmp, file);
 }
 
-const isStoredDevice = (d) => typeof d?.tokenHash === 'string' && typeof d.id === 'string'
+// A device holds one cookie per address it has used (the Wi-Fi address, the .local name, the internet link), so a
+// phone switching between them stays one device. Files from before that held a single tokenHash.
+const MAX_COOKIES_PER_DEVICE = 8;
+const isHashList = (v) => Array.isArray(v) && v.length > 0 && v.every((h) => typeof h === 'string');
+const isStoredDevice = (d) => (typeof d?.tokenHash === 'string' || isHashList(d?.tokenHashes)) && typeof d.id === 'string'
   && typeof d.name === 'string' && Number.isFinite(d.lastSeen) && (d.status === undefined || STATUSES.includes(d.status));
 
 function loadDevices() {
@@ -109,7 +113,7 @@ function loadDevices() {
   }
   // Devices saved before approval and blocking existed have no status; they were logged in.
   return new Map((Array.isArray(stored) ? stored : []).filter(isStoredDevice)
-    .map(({ tokenHash: hash, status = 'active', ...d }) => [hash, { ...d, status }]));
+    .map(({ tokenHash: hash, tokenHashes, status = 'active', ...d }) => [d.id, { ...d, status, tokenHashes: isHashList(tokenHashes) ? tokenHashes : [hash] }]));
 }
 
 const reply = (status, body, headers = {}) => ({ status, body, headers });
@@ -197,7 +201,8 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
   function saveDevices() {
     clearTimeout(saveTimer);
     saveTimer = null;
-    const list = [...devices].map(([hash, d]) => ({ tokenHash: hash, ...d }));
+    // tokenHash is also written so an older Pocket Dev reading this file keeps the device's most recent cookie.
+    const list = [...devices.values()].map((d) => ({ tokenHash: d.tokenHashes[d.tokenHashes.length - 1], ...d }));
     writePrivate(DEVICES_PATH, JSON.stringify({ devices: list }, null, 2) + '\n');
   }
   function saveDevicesSoon() {
@@ -212,24 +217,43 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
 
   function expirePending() {
     const now = Date.now();
-    const expired = [...devices].filter(([, d]) => d.status === 'pending' && now - d.createdAt >= PENDING_TTL_MS);
-    for (const [hash, d] of expired) {
-      devices.delete(hash);
+    const expired = [...devices.values()].filter((d) => d.status === 'pending' && now - d.createdAt >= PENDING_TTL_MS);
+    for (const d of expired) {
+      devices.delete(d.id);
       log('pending-expired', about(d));
     }
     if (expired.length) saveDevices();
   }
 
-  // Any status; callers decide what a pending or blocked device may do.
+  // Any status; callers decide what a pending or blocked device may do. The cookie just used moves to the end of the
+  // device's list, so the list stays in order of use and the cap drops the address used longest ago.
   function lookup(req) {
     expirePending();
     const token = cookieToken(req);
-    const device = token && devices.get(tokenHash(token));
+    if (!token) return undefined;
+    const hash = tokenHash(token);
+    const device = [...devices.values()].find((d) => d.tokenHashes.includes(hash));
     if (!device) return undefined;
+    if (device.tokenHashes[device.tokenHashes.length - 1] !== hash) {
+      device.tokenHashes.splice(device.tokenHashes.indexOf(hash), 1);
+      device.tokenHashes.push(hash);
+    }
     device.lastSeen = Date.now();
     device.ip = clientIp(req);
     saveDevicesSoon();
     return device;
+  }
+
+  // Gives the device one more cookie, for the address this request arrived on, or replaces the one it sent.
+  function addCookie(req, device) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const current = cookieToken(req);
+    const i = current ? device.tokenHashes.indexOf(tokenHash(current)) : -1;
+    if (i >= 0) device.tokenHashes[i] = tokenHash(token);
+    else device.tokenHashes.push(tokenHash(token));
+    device.tokenHashes.splice(0, Math.max(0, device.tokenHashes.length - MAX_COOKIES_PER_DEVICE));
+    saveDevices();
+    return secureCookie(req, setCookie(token));
   }
 
   function deviceFor(req) {
@@ -238,34 +262,36 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
   }
 
   function addDevice(req, via, status) {
-    const token = crypto.randomBytes(32).toString('hex');
     const now = Date.now();
     const { ip, ua } = requestInfo(req);
-    const device = { id: crypto.randomBytes(4).toString('hex'), name: deviceName(ua), ua, createdAt: now, lastSeen: now, ip, via, status, ...(rolesEnabled() && status === 'active' && { role: 'admin' }) };
-    devices.set(tokenHash(token), device);
-    saveDevices();
-    return { cookie: secureCookie(req, setCookie(token)), device };
+    const device = { id: crypto.randomBytes(4).toString('hex'), name: deviceName(ua), ua, createdAt: now, lastSeen: now, ip, via, status, tokenHashes: [], ...(rolesEnabled() && status === 'active' && { role: 'admin' }) };
+    devices.set(device.id, device);
+    return { cookie: addCookie(req, device), device };
   }
 
-  const findDevice = (id) => [...devices].find(([, d]) => d.id === id);
-  const findActive = (id) => [...devices].find(([, d]) => d.id === id && isActive(d));
+  const findDevice = (id) => devices.get(id);
+  const findActive = (id) => {
+    const d = devices.get(id);
+    return d && isActive(d) ? d : undefined;
+  };
 
   function closeSockets(id) {
     for (const ws of sockets.get(id) ?? []) ws.terminate();
     sockets.delete(id);
   }
 
-  function drop([hash, d]) {
-    devices.delete(hash);
+  // Every cookie the device holds stops working at once.
+  function drop(d) {
+    devices.delete(d.id);
     closeSockets(d.id);
     saveDevices();
   }
 
   function revoke(id, by) {
-    const entry = findDevice(id);
-    if (!entry) return false;
-    drop(entry);
-    log('device-revoked', { ...about(entry[1]), by });
+    const d = findDevice(id);
+    if (!d) return false;
+    drop(d);
+    log('device-revoked', { ...about(d), by });
     return true;
   }
 
@@ -372,7 +398,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     return out.length;
   }
 
-  function rename([, d], value, by) {
+  function rename(d, value, by) {
     const name = parseDeviceName(value);
     if (!name) return reply(400, { error: 'The name must be 1 to 40 characters on one line.' });
     if (name !== d.name) log('device-renamed', { ...about(d), name, from: d.name, by });
@@ -429,9 +455,9 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       return reply(200, { maxDevices: n });
     },
     async 'PATCH /api/devices/:id'({ id, body }) {
-      const entry = findActive(id);
-      if (!entry) return reply(404, { error: 'No such device' });
-      return rename(entry, (await body()).name, 'phone');
+      const d = findActive(id);
+      if (!d) return reply(404, { error: 'No such device' });
+      return rename(d, (await body()).name, 'phone');
     },
     'DELETE /api/devices/:id'({ id, device }) {
       if (!findActive(id) || !revoke(id, 'phone')) return reply(404, { error: 'No such device' });
@@ -483,7 +509,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     block: {
       from: ['active', 'pending'],
       event: 'device-blocked',
-      apply: ([, d]) => { d.status = 'blocked'; closeSockets(d.id); saveDevices(); },
+      apply: (d) => { d.status = 'blocked'; closeSockets(d.id); saveDevices(); },
     },
     unblock: { from: ['blocked'], event: 'device-unblocked', activates: true },
     approve: { from: ['pending'], event: 'device-approved', activates: true },
@@ -507,7 +533,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       };
     },
     enableRoles(ids) {
-      if (!Array.isArray(ids) || !ids.length || ids.some((id) => typeof id !== 'string' || !findDevice(id) || findDevice(id)[1].status !== 'active')) return reply(400, { error: 'Select at least one active, trusted owner device to retain as Admin.' });
+      if (!Array.isArray(ids) || !ids.length || ids.some((id) => typeof id !== 'string' || findDevice(id)?.status !== 'active')) return reply(400, { error: 'Select at least one active, trusted owner device to retain as Admin.' });
       for (const d of devices.values()) {
         if (d.status !== 'active') continue;
         if (ids.includes(d.id)) d.role = 'admin';
@@ -522,9 +548,8 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     deviceAction(id, action) {
       const spec = Object.hasOwn(DEVICE_ACTIONS, action) ? DEVICE_ACTIONS[action] : null;
       if (!spec) return reply(404, { error: `Unknown action: ${action}` });
-      const entry = findDevice(id);
-      if (!entry) return reply(404, { error: 'No such device' });
-      const d = entry[1];
+      const d = findDevice(id);
+      if (!d) return reply(404, { error: 'No such device' });
       if (!spec.from.includes(d.status)) return reply(409, { error: `Cannot ${action} a device that is ${d.status}.` });
       if (spec.activates) {
         const max = maxDevices();
@@ -533,14 +558,14 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
         if (rolesEnabled()) d.role = 'admin';
         saveDevices();
       } else {
-        spec.apply(entry);
+        spec.apply(d);
       }
       log(spec.event, { ...about(d), by: 'admin' });
       return reply(200, deviceView(d, Date.now()));
     },
     rename(id, name) {
-      const entry = findDevice(id);
-      return entry ? rename(entry, name, 'admin') : reply(404, { error: 'No such device' });
+      const d = findDevice(id);
+      return d ? rename(d, name, 'admin') : reply(404, { error: 'No such device' });
     },
     setPassword({ next, logoutAll }) {
       if (envPassword) return reply(409, { error: 'The password comes from POCKET_DEV_PASSWORD. Change or remove it where Pocket Dev starts.' });
