@@ -238,6 +238,48 @@ async function status({ repo }) {
   return parseStatus(await git(repo, ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all']));
 }
 
+const MESSAGE_MAX = 4000;
+
+// Never forces: a branch that moved on the remote is refused with git's own words and nothing is overwritten.
+async function pushCurrent(repo, { branch, upstream }) {
+  if (!branch) throw new HttpError(400, 'HEAD is detached. Switch to a branch before pushing.');
+  await git(repo, upstream ? ['push'] : ['push', '-u', 'origin', branch], { status: 502, timeout: PUSH_TIMEOUT_MS });
+}
+
+// Stages every change (what the card on the Changes tab says), commits it, and optionally pushes. A failed push leaves
+// the commit in place and says so, because the commit is the part that cannot be redone by tapping again.
+async function commitChanges({ repo, body }) {
+  const message = typeof body.message === 'string' ? body.message.trim() : '';
+  const before = await status({ repo });
+  if (before.files.length) {
+    if (!message) throw new HttpError(400, 'Write a commit message.');
+    if (message.length > MESSAGE_MAX) throw new HttpError(400, `The commit message is longer than ${MESSAGE_MAX} characters.`);
+    await git(repo, ['add', '-A'], { status: 409 });
+    await git(repo, ['commit', '-m', message], { status: 409 });
+  } else if (!(body.push === true && before.ahead > 0)) {
+    throw new HttpError(400, 'Nothing to commit.');
+  }
+  const after = await status({ repo });
+  const commit = (await git(repo, ['rev-parse', '--short', 'HEAD'])).trim();
+  const result = { committed: before.files.length > 0, commit, branch: after.branch, pushed: false };
+  if (body.push === true) {
+    try {
+      await pushCurrent(repo, after);
+      result.pushed = true;
+    } catch (err) {
+      result.pushError = err.message;
+    }
+  }
+  return result;
+}
+
+async function pushOnly({ repo }) {
+  const s = await status({ repo });
+  if (s.upstream && s.ahead === 0) throw new HttpError(400, 'Nothing to push.');
+  await pushCurrent(repo, s);
+  return { pushed: true, branch: s.branch };
+}
+
 async function defaultBranch(repo) {
   try {
     const { defaultBranchRef } = await ghJson(repo, ['repo', 'view', '--json', 'defaultBranchRef']);
@@ -389,6 +431,8 @@ const ROUTES = {
   'GET prs': prs,
   'GET pr': pr,
   'GET pr/diff': prDiff,
+  'POST commit': commitChanges,
+  'POST push': pushOnly,
   'POST prs': createPr,
   'POST pr/review': reviewPr,
   'POST pr/merge': mergePr,

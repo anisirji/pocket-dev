@@ -217,14 +217,61 @@ const CHANGE_GROUPS = [
   { title: 'Untracked', source: 'untracked', pick: (f) => f.untracked, code: () => '?' },
 ];
 
-async function renderChanges() {
+const plural_ = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+// One card for the common case: commit everything and push it, or push what is already committed.
+function commitCard(screen, s) {
+  const files = s.files.length;
+  if (!files && !(s.branch && (s.ahead > 0 || !s.upstream))) return null;
+  const target = s.upstream ?? `origin/${s.branch}`;
+  const message = files ? el('textarea', { class: 'g-input', rows: 2, placeholder: 'Commit message', enterkeyhint: 'done' }) : null;
+  const msg = el('div', {});
+  const buttons = [];
+  const run = async (button, route, payload) => {
+    for (const b of buttons) b.disabled = true;
+    const label = button.textContent;
+    button.textContent = 'Working…';
+    msg.replaceChildren();
+    try {
+      const r = await post(route, payload);
+      const said = r.committed
+        ? r.pushed ? `Committed ${r.commit} and pushed ${r.branch}.` : r.pushError ? '' : `Committed ${r.commit}.`
+        : `Pushed ${r.branch}.`;
+      screen.flash = r.pushError
+        ? notice('warn', `Committed ${r.commit}, but the push failed: ${r.pushError}`)
+        : notice('ok', said);
+      for (const st of stacks[state.tab]) st.stale = st !== screen;
+      refresh(screen);
+    } catch (err) {
+      for (const b of buttons) b.disabled = false;
+      button.textContent = label;
+      msg.replaceChildren(notice('error', err.message));
+    }
+  };
+  if (files) {
+    const both = el('button', { class: 'g-btn primary', onclick: (e) => run(e.currentTarget, 'commit', { message: message.value, push: true }) }, 'Commit & push');
+    const only = el('button', { class: 'g-btn', onclick: (e) => run(e.currentTarget, 'commit', { message: message.value, push: false }) }, 'Commit only');
+    buttons.push(both, only);
+  } else {
+    buttons.push(el('button', { class: 'g-btn primary', onclick: (e) => run(e.currentTarget, 'push', {}) },
+      s.upstream ? `Push ${plural_(s.ahead, 'commit')}` : 'Push branch to origin'));
+  }
+  return el('div', { class: 'g-card g-save' },
+    files ? el('div', { class: 'g-save-note' }, `All ${plural_(files, 'change')} will be committed on `, el('b', {}, s.branch ?? 'a detached HEAD'), s.branch ? `, then pushed to ${target}.` : '.') : null,
+    message, msg, el('div', { class: 'g-btnrow' }, buttons));
+}
+
+async function renderChanges(screen) {
+  const flash = screen.flash;
+  screen.flash = null;
   const s = await get('status');
   const sync = s.upstream
     ? el('span', { class: 'g-sync' }, s.upstream, ' ', el('b', { class: s.ahead ? 'ahead' : '' }, `↑${s.ahead}`), ' ', el('b', { class: s.behind ? 'behind' : '' }, `↓${s.behind}`))
     : el('span', { class: 'g-sync' }, 'no upstream');
   const head = el('div', { class: 'g-card g-branch' }, el('span', { class: 'g-ref head' }, s.branch ?? 'detached HEAD'), sync);
-  if (!s.files.length) return [head, empty('Working tree clean.')];
-  return [head, ...CHANGE_GROUPS.map((g) => {
+  const card = commitCard(screen, s);
+  if (!s.files.length) return [flash, head, card, empty('Working tree clean.')];
+  return [flash, head, card, ...CHANGE_GROUPS.map((g) => {
     const files = s.files.filter(g.pick);
     if (!files.length) return null;
     return section(`${g.title} (${files.length})`, files.map((f) => fileRow({
