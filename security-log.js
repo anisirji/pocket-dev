@@ -21,6 +21,7 @@ export const EVENT_KINDS = {
   'login-failed': 'failure',
   'login-locked': 'failure',
   'qr-expired': 'failure',
+  'qr-created': 'change',
   'device-revoked': 'change',
   'device-blocked': 'change',
   'device-unblocked': 'change',

@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { svgQr } from './qr.js';
 import { createSecurityLog } from './security-log.js';
 import { STATE_DIR } from './paths.js';
-import { clientIp, cookieHost, secureCookie } from './transport.js';
+import { clientIp, cookieHost, fromConnector, secureCookie } from './transport.js';
 import { ipv6Prefix } from './network.js';
 
 export { STATE_DIR };
@@ -567,9 +567,11 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       revoke(device.id, 'self');
       return reply(204, undefined, { 'set-cookie': CLEAR_COOKIE });
     },
-    'GET /api/settings'({ device }) {
+    'GET /api/settings'({ req, device }) {
+      const remote = fromConnector(req);
       return reply(200, {
-        maxDevices: maxDevices(), currentDeviceId: device.id, devices: listDevices(isActive), urls: { ...urls(), localNote },
+        maxDevices: maxDevices(), currentDeviceId: device.id, devices: listDevices(isActive),
+        urls: { ...urls(), ...(remote && { remote: `https://${cookieHost(req)}` }), localNote }, via: remote ? 'remote' : 'lan',
         roleAccessEnabled: rolesEnabled(), role: device.role || 'owner', collaboratorSessions: extraActiveCount(),
         approveFromDevices: approveFromDevices(), waiting: mayApprove(device) ? listDevices((d) => d.status === 'pending') : [],
       });
@@ -616,9 +618,12 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       const loggedOut = changePassword(next, { logoutAll: logoutOthers, keep: device.id, by: 'phone' });
       return reply(200, { ok: true, loggedOut });
     },
-    async 'POST /api/settings/qr-key'() {
-      if (rolesEnabled()) return reply(403, { error: 'Pair another Admin device from Admin on the Mac. Use Collaborators for restricted invitations.' });
-      const url = mintQrUrl();
+    // The code points at the address this phone is on, so a phone away from home hands out a link that works from
+    // away. Only an active device reaches this, and with role access on that is an Admin, so the new device is one too.
+    async 'POST /api/settings/qr-key'({ req, device }) {
+      const address = fromConnector(req) ? `https://${cookieHost(req)}` : undefined;
+      const url = mintQrUrl(address);
+      log('qr-created', { ...about(device), address: new URL(url).origin });
       return reply(200, { url, svg: await svgQr(url), expiresInMin: QR_TTL_MIN });
     },
   };
