@@ -227,12 +227,14 @@ export function createCollaborators({ config, auth, urls, stateDir = STATE_DIR, 
     if (grant && match[2] && method === 'POST') {
       if (grant.revoked || (grant.expiresAt && !active(grant))) fail(409, 'Update this collaborator’s access before creating another invitation.');
       checkSources(grant);
+      const base = urls().remote || urls().lan || urls().local;
+      if (!base) fail(409, 'No address to invite with: turn on Wi-Fi access or wait for the internet link.');
       invalidate(grant.id, false);
       for (const [key, value] of invitations) if (value.expiresAt <= now()) invitations.delete(key);
       const token = crypto.randomBytes(32).toString('hex');
       const expiresAt = now() + INVITE_MS;
       invitations.set(hash(token), { grantId: grant.id, expiresAt });
-      const url = `${urls().remote || urls().lan || urls().local}/invite#token=${token}`;
+      const url = `${base}/invite#token=${token}`;
       log('collaborator-invited', { grantId: grant.id });
       return { status: 200, body: { url, svg: await svgQr(url), expiresAt } };
     }

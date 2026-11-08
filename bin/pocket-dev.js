@@ -3,9 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { PACKAGE_ROOT, resolveConfigPath } from '../paths.js';
+import { PACKAGE_ROOT, STATE_DIR, resolveConfigPath } from '../paths.js';
 import { openConfig } from '../config.js';
 import { KEYS } from '../config-keys.js';
+import { INTERNET_KINDS, readNetwork, networkError, isToken, hasToken, writeToken } from '../network.js';
 
 const VERSION = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 
@@ -26,6 +27,9 @@ Usage: pocket-dev <command>
   admin                                            Open the admin page (this Mac only)
   connect | disconnect                             Open or close phone access
   message [text] [--to NAME] [--file PATH]         Send to Messages as the Mac (text or piped stdin)
+  internet status|off|quick                        Internet access: show it, turn it off, or allow a Quick link
+  internet domain --hostname <host> --token-stdin  Your own domain through a Cloudflare tunnel; the token
+                                                   comes from stdin, or from a file with --token-file <path>
   awake on|plugged|off|status                      Keep the Mac awake
   takeover <id> | --last                           Continue a phone conversation in this terminal
   version | help
@@ -34,6 +38,7 @@ Settings you can change with config set:
 ${Object.entries(KEYS).map(([key, { help }]) => `  ${key.padEnd(16)} ${help}`).join('\n')}
 
 The password is changed on the admin page (pocket-dev admin).`;
+const INTERNET_USAGE = 'usage: pocket-dev internet status|off|quick | domain --hostname <host> (--token-stdin | --token-file <path>)';
 
 function fail(message, code = 1) {
   console.error(message);
@@ -96,6 +101,62 @@ function config([action, key, ...rest]) {
   fail(`usage: pocket-dev config list|get|set|unset|path`, 2);
 }
 
+// Talks to the running server's admin page when there is one. Null means Pocket Dev is not running.
+async function adminApi(method, endpoint, body) {
+  let url;
+  try { ({ url } = JSON.parse(fs.readFileSync(path.join(STATE_DIR, 'admin.json'), 'utf8'))); } catch { return null; }
+  let res;
+  try {
+    res = await fetch(url + endpoint, {
+      method, signal: AbortSignal.timeout(5000),
+      headers: body ? { 'content-type': 'application/json', 'x-pocket-admin': '1' } : {},
+      body: body && JSON.stringify(body),
+    });
+  } catch {
+    return null;
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) fail(data.error ?? `The admin page answered ${res.status}.`);
+  return data;
+}
+
+function printInternet({ wifi, internet, hasToken: saved, tunnel }) {
+  console.log(`Internet access: ${internet.kind}${internet.hostname ? ` (${internet.hostname})` : ''}`);
+  console.log(`Tunnel token: ${saved ? 'saved' : 'none'}`);
+  console.log(`Wi-Fi access: ${wifi ? 'on' : 'off'}`);
+  if (!tunnel) return console.log('Link: Pocket Dev is not running.');
+  console.log(`Link: ${tunnel.status}${tunnel.url ? ` at ${tunnel.url}` : ''}${tunnel.error ? ` (${tunnel.error})` : ''}`);
+}
+
+// The token is a secret, so it is read from stdin or a file and never taken as an argument that would show in the
+// shell history and in ps.
+async function internet([action = 'status', ...rest]) {
+  const store = openConfig(resolveConfigPath());
+  if (action === 'status') {
+    const live = await adminApi('GET', '/api/state');
+    return printInternet(live?.network ?? { ...readNetwork(store), hasToken: hasToken(), tunnel: null });
+  }
+  if (!INTERNET_KINDS.includes(action)) fail(INTERNET_USAGE, 2);
+  if (rest.includes('--token')) fail('The token never goes on the command line. Use --token-stdin or --token-file <path>.', 2);
+  const changes = { internet: { kind: action, hostname: null } };
+  if (action === 'domain') {
+    changes.internet.hostname = flagValue(rest, '--hostname') ?? readNetwork(store).internet.hostname;
+    const file = flagValue(rest, '--token-file');
+    if (rest.includes('--token-stdin')) changes.token = fs.readFileSync(0, 'utf8').trim();
+    else if (file) changes.token = fs.readFileSync(file, 'utf8').trim();
+    if (changes.token !== undefined && !isToken(changes.token)) fail('The token is one long code without spaces. Copy only the token from the install command.', 2);
+  }
+  const live = await adminApi('PUT', '/api/network', { ...changes, by: 'cli' });
+  if (live) return printInternet(live);
+  const next = { wifi: readNetwork(store).wifi, internet: { kind: action, hostname: changes.internet.hostname?.trim().toLowerCase() || null } };
+  const invalid = networkError(next, { hasToken: hasToken() || changes.token !== undefined });
+  if (invalid) fail(invalid, 2);
+  if (changes.token !== undefined) writeToken(changes.token);
+  store.update({ network: next });
+  printInternet({ ...next, hasToken: hasToken(), tunnel: null });
+  console.log('Applies when Pocket Dev starts.');
+}
+
 function service([action = 'status', ...rest]) {
   if (action === 'install' || action === 'restart') return runScript('install-service.sh', rest);
   if (action === 'uninstall') return runScript('uninstall-service.sh');
@@ -117,6 +178,7 @@ switch (command) {
   case 'qr': runScript('qr.js'); break;
   case 'admin': runScript('admin.js', ['open']); break;
   case 'connect': case 'disconnect': runScript('admin.js', [command]); break;
+  case 'internet': await internet(args); break;
   case 'awake': runScript('awake.js', args); break;
   case 'takeover': process.exit(await (await import('../takeover-cli.js')).takeoverCommand(args)); break;
   case 'message': runScript('message.js', args); break;

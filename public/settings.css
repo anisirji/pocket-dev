@@ -28,6 +28,19 @@
 .st-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px #7ee78726; vertical-align: 1px; }
 .st-live { color: var(--ok); }
 .st-actions { display: flex; gap: 8px; margin-top: 10px; }
+.st-waiting { display: grid; gap: 8px; margin-bottom: 8px; }
+.st-waiting:empty, .st-approve:empty { display: none; }
+.st-pending { list-style: none; border-color: var(--accent); }
+.st-pending .st-badge { background: #3a2f12; color: #f0c674; }
+.st-code { margin: 8px 0 0; font: 600 30px/1.2 var(--mono, ui-monospace, Menlo, monospace); letter-spacing: .14em; }
+.st-pending .st-note { margin-top: 4px; }
+.st-approve { margin-top: 12px; }
+.st-approve .st-btn { margin-top: 8px; }
+.st-notice { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel-2); font: 13.5px/1.35 system-ui, -apple-system, Roboto, sans-serif; }
+.st-notice[hidden] { display: none; }
+.st-notice-text { flex: 1 1 180px; min-width: 0; }
+.st-notice-actions { flex: none; display: flex; gap: 8px; }
+.st-notice .st-btn, .st-notice .st-primary { height: 34px; }
 
 .st-btn, .st-primary { height: 40px; padding: 0 14px; border-radius: 8px; font-weight: 600; }
 .st-btn { background: var(--panel-2); border: 1px solid var(--line); }

@@ -53,6 +53,16 @@ test('invite expiry, capacity and existing-session conflicts never consume a usa
   assert.equal(f.manager.sessionCount(), 1);
 });
 
+test('an invitation needs an address to point at: with Wi-Fi access off and no internet link it is refused, not minted', async (t) => {
+  const f = fixture(t), grant = await f.create();
+  const dark = createCollaborators({ ...f.args, urls: () => ({ lan: null, local: null, remote: null }) });
+  t.after(() => dark.close());
+  const invited = () => f.events.filter((e) => e.type === 'collaborator-invited').length;
+  const before = invited();
+  await assert.rejects(dark.ownerApi('POST', `/api/collaborators/${grant.id}/invite`), (e) => e.status === 409 && /No address to invite with/.test(e.message));
+  assert.equal(invited(), before, 'nothing was logged as invited');
+});
+
 test('expiry and revoked grants fail closed, including after role edits and a restart', async (t) => {
   const f = fixture(t), grant = await f.create();
   const guest = f.accept(await f.invite(grant));

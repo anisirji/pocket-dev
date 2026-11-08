@@ -317,6 +317,7 @@ function connect(view) {
       view.online = state === 'connected';
       if (view.online) view.everOnline = true;
       renderBadge();
+      window.pocketDevNetwork?.socket(view.online);
     },
     onMessage(msg) {
       if (msg.t === 'out') {
@@ -327,7 +328,7 @@ function connect(view) {
         view.exitCode = msg.code;
         view.term.write(`\r\n\x1b[2m[process exited ${msg.code}]\x1b[0m\r\n`);
         renderTabs();
-      }
+      } else if (msg.t === 'waiting') window.pocketDevSettings?.waiting(msg);
     },
     onClose(e) {
       if (POWER_REASONS.has(e.reason)) { showPower(e.reason); return false; }
@@ -1178,11 +1179,15 @@ window.pocketDev = {
   async openTerminalAt(dir) {
     window.pocketDev.openSession(await api('POST', '/api/sessions', { cwd: dir }));
   },
+  activeSession: () => activeId,
 };
 
 (async () => {
   requireTerminalClient();
-  const stored = store.get('pd.active');
+  // A switch between the Mac's addresses names the terminal to reopen in the fragment; it is read once and dropped.
+  const handedOff = /^#terminal=([0-9a-f]+)$/.exec(location.hash)?.[1];
+  if (handedOff) history.replaceState(history.state, '', location.pathname + location.search);
+  const stored = handedOff ?? store.get('pd.active');
   await syncSessions();
   if (!views.size) await newSession();
   activate(views.has(stored) ? stored : activeId);
@@ -1190,6 +1195,7 @@ window.pocketDev = {
 })().catch((err) => showClientError(`Could not open terminals: ${err.message}`));
 </script>
 <script src="/history.js"></script>
+<script src="/network.js"></script>
 <script src="/settings.js"></script>
 <script type="module">import { startPhoneMessages } from '/messages.js'; startPhoneMessages({ badgeOn: document.querySelector('#viewSwitch [data-view="messages"]') });</script>
 </body>

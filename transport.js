@@ -8,6 +8,9 @@ export const fromConnector = (req) => LOOPBACK.has(req.socket.remoteAddress)
 export const clientIp = (req) => fromConnector(req) ? req.headers['cf-connecting-ip']
   : (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '');
 
+// The address a cookie is issued for: the tunnel hostname the request came in on, or 'lan' for any direct address.
+export const cookieHost = (req) => (fromConnector(req) ? (req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '') : 'lan');
+
 export const secureCookie = (req, cookie) => `${cookie}${req.socket.encrypted || fromConnector(req) ? '; Secure' : ''}`;
 
 export const sameOrigin = (req) => !req.headers.origin

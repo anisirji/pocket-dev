@@ -96,7 +96,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     return ws;
   }
   const apis = ['/api/sessions', '/api/folders', '/api/shortcuts', '/api/forwards', '/api/info', '/api/history', '/api/git/repos', '/api/settings', '/api/service', '/api/power', '/api/apps', '/api/chat', `/api/files/list?path=${encodeURIComponent(home)}`];
-  const assets = ['/vendor/xterm/xterm.js', '/vendor/xterm/xterm.css', '/vendor/xterm/addon-fit.js', '/connection.js', '/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/collaborators.js', '/collaborators.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
+  const assets = ['/vendor/xterm/xterm.js', '/vendor/xterm/xterm.css', '/vendor/xterm/addon-fit.js', '/connection.js', '/network.js', '/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/collaborators.js', '/collaborators.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
   await t.test('every feature requires authentication; private source stays private', async () => {
     assert.equal((await request('GET', '/')).status, 302);
     for (const endpoint of [...apis, ...assets]) assert.equal((await request('GET', endpoint)).status, 401, endpoint);
@@ -107,6 +107,15 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
   const A = await login();
   assert.equal(A.status, 200);
   assert.match(A.cookie, /^pd_token=/);
+  await t.test('port forwards refuse Pocket Dev’s own listeners, so the Mac-only Admin page never reaches the LAN', async () => {
+    const own = await request('POST', '/api/forwards', { cookie: A.cookie, body: { port } });
+    assert.equal(own.status, 400);
+    assert.match(own.data.error, /Pocket Dev itself/);
+    const adminForward = await request('POST', '/api/forwards', { cookie: A.cookie, body: { port: adminPort } });
+    assert.equal(adminForward.status, 400, JSON.stringify(adminForward.data));
+    assert.match(adminForward.data.error, /Admin/);
+    assert.deepEqual((await request('GET', '/api/forwards', { cookie: A.cookie })).data, [], 'nothing was opened');
+  });
   await t.test('logged-in pages can load every script and stylesheet, including bundled terminal assets', async () => {
     for (const endpoint of assets) {
       const res = await request('GET', endpoint, { cookie: A.cookie });
