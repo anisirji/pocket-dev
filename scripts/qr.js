@@ -25,6 +25,9 @@ if (!res.ok) {
   console.error(`Pocket Dev on port ${res.port} refused the request (${res.status}): ${res.data.error ?? 'no details'}`);
   process.exit(1);
 }
-console.log(await terminalQr(res.data.url));
-console.log(res.data.url);
+// --link https://name.trycloudflare.com logs the phone in on that address instead of the Wi-Fi one.
+const linkAt = process.argv.indexOf('--link');
+const url = linkAt === -1 ? res.data.url : `${new URL(process.argv[linkAt + 1]).origin}/?k=${new URL(res.data.url).searchParams.get('k')}`;
+console.log(await terminalQr(url));
+console.log(url);
 console.log(qrNote(res.data.expiresInMin));

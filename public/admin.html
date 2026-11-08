@@ -81,6 +81,20 @@
       <p class="err" id="qrErr" role="alert"></p>
     </section>
 
+    <section id="quickLink" class="panel" aria-labelledby="quickLinkTitle">
+      <div class="panel-head"><h2 id="quickLinkTitle">Remote quick link</h2></div>
+      <p class="note" id="quickLinkStatus" role="status">Checking for a running Quick link…</p>
+      <div class="setting">
+        <div class="setting-text"><b>Log in over the internet</b><small>Scan with the phone camera, on Wi-Fi or mobile data. Works once, expires in 10 minutes, and skips approval.</small></div>
+        <button type="button" class="btn" id="quickLinkBtn" disabled>Show login QR</button>
+      </div>
+      <div class="qr" id="quickLinkQr" hidden>
+        <div class="qr-code" id="quickLinkCode" role="img" aria-label="QR code for a one-time login on the Quick link"></div>
+        <div class="qr-details"><code id="quickLinkUrl"></code><p class="note" id="quickLinkExpiry"></p></div>
+      </div>
+      <p class="err" id="quickLinkErr" role="alert"></p>
+    </section>
+
     <div class="banner" id="guessing" hidden role="alert"></div>
 
     <section class="cards" aria-label="Overview">
