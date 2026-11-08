@@ -25,8 +25,8 @@ import { createCollaborators } from './collaborators.js';
 import { captureScreen } from './screen.js';
 import { collectHealth } from './health.js';
 import { createTunnel } from './tunnel.js';
-import { readNetwork, readToken } from './network.js';
-import { sameOrigin, fromConnector } from './transport.js';
+import { readNetwork, readToken, createSameNetwork } from './network.js';
+import { sameOrigin, fromConnector, clientIp } from './transport.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SCROLLBACK_MAX = 500_000;
@@ -39,6 +39,7 @@ const network = () => readNetwork(config);
 const internetOn = () => network().internet.kind !== 'off';
 // Wi-Fi access is read once: the listener's bind address only changes with a restart.
 const WIFI = network().wifi;
+const sameNetwork = createSameNetwork();
 
 // Every IPv4 address the Mac has on a network, en0 first. POCKET_DEV_LAN_IP_FILE replaces the interface lookup in
 // tests: the file holds one address, empty means no network.
@@ -505,6 +506,7 @@ function watchLanIp() {
     console.log(`LAN address changed from ${current ?? 'none'} to ${ip ?? 'none'}.${ip ? ` Pocket Dev is now at http://${ip}:${PORT}` : ' Port forwards wait for a network.'}`);
     current = ip;
     for (const [port, fwd] of forwards) moveForward(fwd, port, ip);
+    if (internetOn()) sameNetwork.refresh();
   }, IP_POLL_MS).unref();
 }
 
@@ -582,7 +584,7 @@ async function handleApi(req, res, url) {
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
   // Switching between addresses exists only once internet access is on; before that these routes are not there.
-  if (resource === 'handoff' && !internetOn()) return sendJson(res, 404, { error: 'Not found' });
+  if ((resource === 'handoff' || resource === 'connection') && !internetOn()) return sendJson(res, 404, { error: 'Not found' });
   if (resource === 'collaborators') {
     if (!auth.isTrustedAdmin(req) && !(req.method === 'GET' && url.pathname === '/api/collaborators' && config.read().roleAccessEnabled !== true)) return sendJson(res, 403, { error: 'Only a reviewed Admin device may manage collaborators. Enable access from Admin on the Mac.' });
     const r = await collaborators.ownerApi(req.method, url.pathname, ['POST', 'PUT', 'PATCH'].includes(req.method) ? await readJson(req) : {});
@@ -668,6 +670,21 @@ async function handleApi(req, res, url) {
       return closeForward(Number(key)) ? sendJson(res, 204) : sendJson(res, 404, { error: 'Not forwarded' });
     case 'GET info':
       return sendJson(res, 200, { lanIp: lanIp(), forwards: listForwards(), persistentTerminals: Boolean(terminalHost && !terminalHost.closed) });
+    // How this request reached the Mac, both addresses, and whether a phone on the internet link is on the Mac's own
+    // network. The page decides nothing by itself from the hint; it only offers the switch.
+    case 'GET connection': {
+      const remote = fromConnector(req);
+      const ip = clientIp(req);
+      return sendJson(res, 200, {
+        route: remote ? 'remote' : 'local',
+        sameNetwork: remote ? await sameNetwork.hint(ip) : null,
+        networkKey: remote ? sameNetwork.key(ip) : null,
+        lanUrl: urls().lan,
+        remoteUrl: urls().remote,
+        wifi: network().wifi,
+        internet: network().internet.kind,
+      });
+    }
     case 'POST handoff': {
       if (!network().wifi) return sendJson(res, 403, { error: 'Wi-Fi access is off, so there is no local address to switch to.' });
       if (!fromConnector(req)) return sendJson(res, 403, { error: 'Switch to local is only offered on the internet address.' });
@@ -777,6 +794,7 @@ setInterval(() => {
 await adoptTerminals();
 startPower(config);
 watchLanIp();
+if (internetOn()) sameNetwork.refresh();
 
 const CHAT_STATUS = { running: 'running', 'waiting-permission': 'waiting for you (permission)', 'waiting-answer': 'waiting for you (question)' };
 const AWAKE_LABELS = { off: 'Off', plugged: 'While plugged in', always: 'Always' };

@@ -193,6 +193,7 @@ test('handoff: a Wi-Fi cookie for the same device, minted through the tunnel and
     assert.equal(r.cookie, undefined, why);
   };
 
+  assert.equal((await s.request('GET', '/api/connection', { cookie: D.cookie, via: 'tunnel' })).data.sameNetwork, null, 'no public address could be learned, so the hint is unknown, never true');
   assert.equal((await s.request('POST', '/api/handoff', { cookie: D.cookie, body: {} })).status, 403, 'only offered through the tunnel');
   assert.equal((await s.request('POST', '/api/handoff', { body: {}, via: 'tunnel' })).status, 401);
   const leaked = await mint();
@@ -278,6 +279,19 @@ test('domain tunnel: token in the environment only, never in argv, responses or 
   assert.equal((await s.request('GET', '/api/status', { via: 'tunnel' })).status, 200, 'the domain hostname is accepted on https');
   assert.equal((await s.request('GET', '/api/status', { headers: { host: `${HOSTNAME}:443` } })).status, 200);
   assert.equal((await s.request('GET', '/api/status', { headers: { host: `${HOSTNAME}:8080` } })).status, 421);
+  // The connection hint: the phone's public address matches the Mac's, so they share a network.
+  const remote = await s.request('GET', '/api/connection', { cookie: A.cookie, via: 'tunnel' });
+  assert.equal(remote.status, 200);
+  assert.match(remote.data.networkKey, /^[0-9a-f]{12}$/);
+  assert.deepEqual(remote.data, { route: 'remote', sameNetwork: true, networkKey: remote.data.networkKey, lanUrl: s.base, remoteUrl: `https://${HOSTNAME}`, wifi: true, internet: 'domain' });
+  assert.ok(trace.server.hits >= 1, 'the public address came from the trace endpoint');
+  const elsewhere = await s.request('GET', '/api/connection', { cookie: A.cookie, via: 'tunnel', headers: { 'cf-connecting-ip': '198.51.100.7' } });
+  assert.equal(elsewhere.data.sameNetwork, false);
+  assert.notEqual(elsewhere.data.networkKey, remote.data.networkKey);
+  assert.notEqual((await s.request('GET', '/api/connection', { cookie: A.cookie, via: 'tunnel', headers: { 'cf-connecting-ip': '2001:db8::1' } })).data.sameNetwork, true, 'an IPv6 phone on a documentation prefix is a mismatch, or unknown on a Mac without global IPv6, never a match');
+  const local = (await s.request('GET', '/api/connection', { cookie: A.cookie })).data;
+  assert.deepEqual(local, { route: 'local', sameNetwork: null, networkKey: null, lanUrl: s.base, remoteUrl: `https://${HOSTNAME}`, wifi: true, internet: 'domain' });
+  assert.equal((await s.request('GET', '/api/connection')).status, 401);
   const share = await s.local('POST', '/api/qr', { kind: 'share' });
   assert.equal(share.data.url, `https://${HOSTNAME}`, 'sharing defaults to the internet address');
   assert.equal(new URL((await s.local('POST', '/api/qr', { kind: 'login' })).data.url).origin, `https://${HOSTNAME}`);
