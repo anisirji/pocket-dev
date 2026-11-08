@@ -12,6 +12,28 @@ Every real problem we met while building Pocket Dev, and what we did about it.
 | `localhost:3000` from the phone   | On the phone, "localhost" means the phone. Dev servers listen on `127.0.0.1` or `::1` depending on the tool.                                                     | The Open port feature passes the port through the Mac's Wi-Fi address and tries both `127.0.0.1` and `::1`.                                              |
 | Features that need `https`        | Chrome turns off copy-to-clipboard, fingerprint login and the Android Share menu on plain `http`.                                                                | Copy uses an older browser method plus a selectable text view. Fingerprint and Share wait for the domain.                                                |
 
+## Remote access: user corrections and agreed direction
+
+These points came from the remote-access discussion. They record requirements and proposed solutions, not completed features. The tunnel draft is unfinished; no live tunnel or domain DNS changes were applied.
+
+| Challenge | What the user clarified or corrected | Agreed direction |
+| --- | --- | --- |
+| Making local routing too complicated | The user proposed switching between the remote domain and the Mac's local URL instead of requiring split DNS. | Prefer automatic URL switching: local when the Mac is reachable directly, remote otherwise. Settings should offer Auto (default), Local and Remote. |
+| Checking the network continuously | The user proposed checking after a network change or page reload rather than constantly probing the LAN. | Use network-change signals where available, initial load/reload, connection failure and returning to the page as triggers. A manual check should use the same logic. Browser events may miss some network transitions. |
+| Finding the Mac's current local IP | The server already runs on the Mac and can discover and report its own LAN address. The phone's private IP is unnecessary for choosing a route. | Obtain the current local address from the authenticated server, then verify that the phone can reach the same Mac before switching. Knowing an address alone does not establish reachability. |
+| Treating separate cookies as a blocker | Switching addresses does not erase cookies; each origin has its own storage. The user proposed reusing the QR-login idea to establish login at the destination. | Design a short-lived, single-use login handoff token. Preserve the current device's permissions without duplicate device entries or evicting another device. Never send a password hash as the token. |
+| Continuing the same task after switching | Both addresses reach the same Pocket Dev server, so the user expects the same terminal or chat to remain open. | Keep the task running on the Mac and reconnect to its existing ID. Explicitly transfer the selected view and unsent drafts; browser state does not automatically move between origins. |
+| Treating browser permission as an impossibility | The user asked who grants local-network permission. Any such prompt is enforced by the phone's browser and answered by its user, rather than by Cloudflare or the Mac. | Verify the target browser's behavior. Separate HTTPS-to-HTTP mixed-content restrictions from local-network access permission. Local HTTPS does not guarantee prompt-free access; direct navigation differs from a background reachability check. |
+| Temporary links changing on every start | The user requested one permanent remote link and supplied the domain `theani.me`. | Use a named tunnel with a fixed subdomain, proposed as `pocket.theani.me`. Starting or stopping remote access should retain the address. Domain setup remains pending. |
+| Controlling only the remote connector | The user required same-Wi-Fi access and every connection option to be controlled through Admin. | Keep Admin local to the Mac. Provide local and remote controls, connection status and device management, with an overall Disconnect action. Both routes can be available together. |
+| Breaking existing local behavior | The user explicitly required backward compatibility for every change. | Make remote access optional and off by default. Preserve existing Wi-Fi addresses, saved settings, logins, QR behavior and CLI commands; add remote behavior without requiring migration. |
+| Polling the Mac's address | The user asked why the Mac checks its Wi-Fi address every 10 s, and proposed that the Mac push a new address to the phone over the open WebSocket only when it changes. | The phone never polls; the Mac pushes the new address when it changes. The Mac's own check was measured at 24.8 µs per call, about 0.2 s of CPU per day at 10 s. The event-based alternative, `route -n monitor`, uses about 1 MB and no idle CPU. Keep the 10 s check unless instant detection is needed. |
+| One cookie for both addresses | Claude proposed a `lan.` subdomain that points at the Mac's Wi-Fi address, with local HTTPS, so one cookie would work on both addresses. The user rejected it: the address changes, phones cache DNS answers, and certificates add setup. | Use the handoff token over the raw Wi-Fi address. A device keeps one cookie per address. The server accepts a handoff token only when it arrives on the Wi-Fi address, so a leaked token cannot be used through the tunnel. |
+| One setup for every kind of user | The user required that someone who wants only local access, and someone who wants everything, can each set Pocket Dev up their way. | One `network.mode` setting: `local`, `remote` or `auto`. Only the Mac can widen access. A phone can only narrow it to `local`. |
+| Starting work before agreeing on the approach | Implementation and a connector installation were started before the user approved the architecture. The user instructed Codex to ask first; the installation was cancelled. | Ask and wait for approval before further commands, edits, installations or configuration changes. An explicit request authorizes its stated scope. Start with the simplest workable approach and distinguish an implementation condition from an impossibility. |
+
+Still to verify: local reachability checks on the user's phone/browser; permission and HTTPS behavior; recovery when a local URL is reloaded after leaving Wi-Fi; and state transfer during a route switch. The domain currently uses GoDaddy nameservers, so the Cloudflare DNS setup also remains unresolved. None of these points has been validated as working yet.
+
 ## Terminal on a phone
 
 | Challenge                | What happened                                                                                                                                        | How we solved it                                                                                        |
@@ -57,6 +79,33 @@ Every real problem we met while building Pocket Dev, and what we did about it.
 | Old model forced                      | A startup environment can set `ANTHROPIC_MODEL` to an older Claude model.                                                        | Chat passes the model explicitly. Terminal startup files remain under the user’s control.                           |
 | Deleting a merged branch              | GitHub CLI's delete-branch option also switches your local branch, which could disturb your work.                  | Only the branch on GitHub is deleted. Your local copy is untouched.                                               |
 | Approving your own PR                 | GitHub doesn't allow it.                                                                                           | GitHub's own message is shown as is.                                                                              |
+
+## User corrections that improved the approach
+
+These are lessons from brainstorming, not claims that the proposed features have been implemented.
+
+| Challenge | What Codex assumed or proposed | How the user corrected the approach |
+| --- | --- | --- |
+| Choosing heavy infrastructure too early | Proposed Docker-based isolation for collaborator AI before establishing whether the workflow needed it. | Required Pocket Dev to stay lightweight and asked for simpler architectures before adding a runtime dependency. |
+| Expanding beyond the actual need | Turned sharing code into a general remote development system. | Explained that collaborators often only need to browse files or copy a project and work on their own laptops. Start with that job. |
+| Overlooking scoped editor access | Had not separated remote file operations from a full remote development environment. | Proposed opening selected folders in another person's VS Code and saving through scoped file APIs. Treat it as a concrete option to evaluate, with explicit write permissions and conflict handling. |
+| Implementing before validating the feature | Moved from each suggestion directly into implementation design. | Asked to pause implementation and brainstorm whether the feature is needed at all. Establish a real use case before building. |
+| Solving only one deployment provider | Focused on Vercel deploy hooks rather than the existing owner workflow. | Explained that an empty commit followed by a push triggers any configured pipeline, including Vercel, Render or AWS. Evaluate delegating that exact action while credentials remain with the owner. |
+| Treating AI and file tools as bound to one computer | Reasoned too narrowly about an AI process running on the owner's Mac and working on another laptop's files. | Proposed an authenticated server on the other laptop exposing permitted read/write operations. The AI can call those APIs through tools; process location and tool execution location can differ. Technical feasibility and permitted authentication are separate questions. |
+| Coupling two independent ideas | Let AI execution and isolation become prerequisites for simpler collaboration features. | Separated scoped folder browsing and Git Graph actions from cross-laptop AI access. Keep AI optional, and validate the two plans independently. |
+
+Working principle: understand the user's concrete workflow, test alternative architectures, and identify the smallest useful capability before declaring an idea impractical or proposing a larger system.
+
+## Running and maintaining it
+
+| Challenge | What happened | How we solved it |
+| --- | --- | --- |
+| `npm error EINVALIDTAGNAME` on install | Pasting `npm install   # first time only` into zsh passed `#` to npm, because interactive zsh does not treat `#` as a comment. | Run the command without the comment. `node_modules` already existed, so nothing was lost. |
+| Server would not start (`EADDRINUSE`) | A copy started by hand the day before still held port 7777. | Stop that exact process by its ID, then start again. |
+| Could not check out `main` | Git allows a branch in only one worktree, and `main` was checked out in a second folder. | The main folder uses a new local branch that tracks `origin/main`. |
+| Integration branch looked unmerged | It went into main as one squashed commit, so git still listed all its commits as unmerged. | A tree diff showed that only private docs differ. No merge was needed. |
+| Cleaning up old worktrees | Eight worktree folders used about 660 MB, and one held private notes that git does not track. | Copied the private notes into the main folder, where they stay ignored, and checked each copy. Then removed the folders and kept their branches. |
+| Tests failing after committing work in progress | Seven collaborator tests crashed reading `req.socket.encrypted`, because the test helper built a fake request with no socket. | The helper's fake request now includes a socket. All 114 tests pass. |
 
 ## Building it with several agents at once
 
