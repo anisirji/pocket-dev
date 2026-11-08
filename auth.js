@@ -99,11 +99,12 @@ function writePrivate(file, text) {
 }
 
 // A device holds one cookie per address it has used (the Wi-Fi address, the .local name, the internet link), so a
-// phone switching between them stays one device. Each cookie records the host it was issued for: a tunnel hostname,
-// 'lan', or null for cookies from before this was recorded. Files from before that held a single tokenHash.
+// phone switching between them stays one device. Each cookie works only on the host it was issued for: a tunnel
+// hostname, or 'lan' for every direct address. Files from before this was recorded held a single tokenHash, and a
+// cookie saved without a host is a Wi-Fi cookie, the only address there was.
 const MAX_COOKIES_PER_DEVICE = 8;
 const isCookie = (c) => typeof c === 'string' || typeof c?.hash === 'string';
-const asCookie = (c) => (typeof c === 'string' ? { hash: c, host: null } : { hash: c.hash, host: typeof c.host === 'string' ? c.host : null });
+const asCookie = (c) => (typeof c === 'string' ? { hash: c, host: 'lan' } : { hash: c.hash, host: typeof c.host === 'string' ? c.host : 'lan' });
 const isHashList = (v) => Array.isArray(v) && v.length > 0 && v.every(isCookie);
 const isStoredDevice = (d) => (typeof d?.tokenHash === 'string' || isHashList(d?.tokenHashes)) && typeof d.id === 'string'
   && typeof d.name === 'string' && Number.isFinite(d.lastSeen) && (d.status === undefined || STATUSES.includes(d.status));
@@ -237,14 +238,15 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     if (expired.length) saveDevices();
   }
 
-  // Any status; callers decide what a pending or blocked device may do. The cookie just used moves to the end of the
-  // device's list, so the list stays in order of use and the cap drops the address used longest ago.
+  // Any status; callers decide what a pending or blocked device may do. A cookie counts only on the host it was issued
+  // for, so a Wi-Fi cookie read off the network is no login on the internet address. The cookie just used moves to the
+  // end of the device's list, so the list stays in order of use and the cap drops the address used longest ago.
   function lookup(req) {
     expirePending();
     const token = cookieToken(req);
     if (!token) return undefined;
-    const hash = tokenHash(token);
-    const device = [...devices.values()].find((d) => d.tokenHashes.some((c) => c.hash === hash));
+    const hash = tokenHash(token), host = cookieHost(req);
+    const device = [...devices.values()].find((d) => d.tokenHashes.some((c) => c.hash === hash && c.host === host));
     if (!device) return undefined;
     const used = device.tokenHashes.find((c) => c.hash === hash);
     if (device.tokenHashes[device.tokenHashes.length - 1] !== used) {

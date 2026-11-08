@@ -75,7 +75,7 @@ test('handoff: a Wi-Fi cookie for the same device, minted through the tunnel and
   };
 
   assert.equal((await s.request('GET', '/api/connection', { cookie: D.cookie, via: 'tunnel' })).data.sameNetwork, null, 'no public address could be learned, so the hint is unknown, never true');
-  assert.equal((await s.request('POST', '/api/handoff', { cookie: D.cookie, body: {} })).status, 403, 'only offered through the tunnel');
+  assert.equal((await s.request('POST', '/api/handoff', { cookie: D.cookie, body: {} })).status, 401, 'the internet cookie is no login on the Wi-Fi address');
   assert.equal((await s.request('POST', '/api/handoff', { body: {}, via: 'tunnel' })).status, 401);
   const leaked = await mint();
   refused(await redeem(leaked, { via: 'tunnel' }), 'a token replayed through the tunnel is refused');
@@ -97,6 +97,7 @@ test('handoff: a Wi-Fi cookie for the same device, minted through the tunnel and
   assert.notEqual(L, D.cookie);
   assert.equal((await s.request('GET', '/api/settings', { cookie: L })).data.currentDeviceId, deviceId, 'the same device on both addresses');
   assert.deepEqual((await devices(L)).map((d) => d.id), [deviceId], 'one device, not two');
+  assert.equal((await s.request('POST', '/api/handoff', { cookie: L, body: {} })).status, 403, 'Switch to local is only offered through the tunnel');
 
   // At the device limit a handoff still succeeds and nobody is logged out.
   assert.equal((await s.local('PUT', '/api/settings', { maxDevices: 1 })).status, 200);
@@ -122,7 +123,7 @@ test('handoff: a Wi-Fi cookie for the same device, minted through the tunnel and
   const H = await s.login();
   const homeId = (await s.request('GET', '/api/settings', { cookie: H.cookie })).data.currentDeviceId;
   assert.equal((await s.request('GET', '/api/connection', { cookie: H.cookie })).data.linked, false);
-  assert.equal((await s.request('POST', '/api/handoff', { cookie: H.cookie, body: { direction: 'to-remote' }, via: 'tunnel' })).status, 403, 'linking is asked for on Wi-Fi');
+  assert.equal((await s.request('POST', '/api/handoff', { cookie: H.cookie, body: { direction: 'to-remote' }, via: 'tunnel' })).status, 401, 'the Wi-Fi cookie is no login on the internet address');
   assert.equal((await s.request('POST', '/api/handoff', { cookie: H.cookie, body: { direction: 'sideways' } })).status, 400);
   const mintLink = async () => {
     const r = await s.request('POST', '/api/handoff', { cookie: H.cookie, body: { direction: 'to-remote' } });
@@ -143,6 +144,7 @@ test('handoff: a Wi-Fi cookie for the same device, minted through the tunnel and
   const away = await s.request('GET', '/api/status', { cookie: R, via: 'tunnel' });
   assert.deepEqual([away.status, away.data.status], [200, 'active'], 'no password and no approval on the internet address');
   assert.equal((await s.request('GET', '/api/settings', { cookie: R, via: 'tunnel' })).data.currentDeviceId, homeId, 'the same device');
+  assert.equal((await s.request('POST', '/api/handoff', { cookie: R, body: { direction: 'to-remote' }, via: 'tunnel' })).status, 403, 'linking is asked for on Wi-Fi');
   assert.equal((await s.request('GET', '/api/connection', { cookie: H.cookie })).data.linked, true);
   assert.equal((await s.request('GET', '/api/connection', { cookie: R, via: 'tunnel' })).data.linked, true);
   assert.equal((await s.status()).devices.filter((d) => d.status === 'pending').length, 0, 'handoff logins never wait for approval');
@@ -199,15 +201,17 @@ test('domain tunnel: token in the environment only, never in argv, responses or 
   assert.equal((await s.request('GET', '/api/status', { headers: { host: `${HOSTNAME}:443` } })).status, 200);
   assert.equal((await s.request('GET', '/api/status', { headers: { host: `${HOSTNAME}:8080` } })).status, 421);
   // The connection hint: the phone's public address matches the Mac's, so they share a network.
-  const remote = await s.request('GET', '/api/connection', { cookie: A.cookie, via: 'tunnel' });
+  const T = await s.login({ via: 'tunnel' });
+  assert.equal(T.status, 200);
+  const remote = await s.request('GET', '/api/connection', { cookie: T.cookie, via: 'tunnel' });
   assert.equal(remote.status, 200);
   assert.match(remote.data.networkKey, /^[0-9a-f]{12}$/);
-  assert.deepEqual(remote.data, { route: 'remote', sameNetwork: true, networkKey: remote.data.networkKey, linked: false, lanUrl: s.base, remoteUrl: `https://${HOSTNAME}`, wifi: true, internet: 'domain' });
+  assert.deepEqual(remote.data, { route: 'remote', sameNetwork: true, networkKey: remote.data.networkKey, linked: true, lanUrl: s.base, remoteUrl: `https://${HOSTNAME}`, wifi: true, internet: 'domain' });
   assert.ok(trace.server.hits >= 1, 'the public address came from the trace endpoint');
-  const elsewhere = await s.request('GET', '/api/connection', { cookie: A.cookie, via: 'tunnel', headers: { 'cf-connecting-ip': '198.51.100.7' } });
+  const elsewhere = await s.request('GET', '/api/connection', { cookie: T.cookie, via: 'tunnel', headers: { 'cf-connecting-ip': '198.51.100.7' } });
   assert.equal(elsewhere.data.sameNetwork, false);
   assert.notEqual(elsewhere.data.networkKey, remote.data.networkKey);
-  assert.notEqual((await s.request('GET', '/api/connection', { cookie: A.cookie, via: 'tunnel', headers: { 'cf-connecting-ip': '2001:db8::1' } })).data.sameNetwork, true, 'an IPv6 phone on a documentation prefix is a mismatch, or unknown on a Mac without global IPv6, never a match');
+  assert.notEqual((await s.request('GET', '/api/connection', { cookie: T.cookie, via: 'tunnel', headers: { 'cf-connecting-ip': '2001:db8::1' } })).data.sameNetwork, true, 'an IPv6 phone on a documentation prefix is a mismatch, or unknown on a Mac without global IPv6, never a match');
   const local = (await s.request('GET', '/api/connection', { cookie: A.cookie })).data;
   assert.deepEqual(local, { route: 'local', sameNetwork: null, networkKey: null, linked: false, lanUrl: s.base, remoteUrl: `https://${HOSTNAME}`, wifi: true, internet: 'domain' });
   assert.equal((await s.request('GET', '/api/connection')).status, 401);
@@ -236,14 +240,34 @@ test('domain tunnel: token in the environment only, never in argv, responses or 
   assert.equal((await s.request('PUT', '/api/network', { cookie: A.cookie, body: { internet: { kind: 'off' } } })).status, 404);
 });
 
-test('a devices file from before multi-address cookies still logs its devices in', { timeout: 60000 }, async (t) => {
+test('a cookie works only on the address it was issued for', { timeout: 60000 }, async (t) => {
+  const s = await startServer(t, { network: { internet: { kind: 'domain', hostname: HOSTNAME } }, token: TOKEN });
+  await s.tunnelStatus('connected');
+  const L = await s.login();
+  assert.equal(L.status, 200);
+  const id = (await s.request('GET', '/api/settings', { cookie: L.cookie })).data.currentDeviceId;
+  assert.equal((await s.request('GET', '/api/settings', { cookie: L.cookie, via: 'tunnel' })).status, 401, 'a Wi-Fi cookie, which travels over plain http, is no login on the internet address');
+  assert.equal((await s.request('GET', '/api/status', { cookie: L.cookie, via: 'tunnel' })).data.status, 'none');
+  const link = new URL((await s.request('POST', '/api/handoff', { cookie: L.cookie, body: { direction: 'to-remote' } })).data.url);
+  const R = (await s.request('GET', link.pathname + link.search, { via: 'tunnel' })).cookie;
+  assert.match(R, /^pd_token=/);
+  assert.equal((await s.request('GET', '/api/settings', { cookie: R, via: 'tunnel' })).data.currentDeviceId, id, 'the linked cookie is the same device on the internet address');
+  assert.equal((await s.request('GET', '/api/settings', { cookie: R })).status, 401, 'and is no login on Wi-Fi');
+  assert.equal((await s.request('GET', '/api/settings', { cookie: L.cookie })).status, 200, 'the Wi-Fi cookie still works where it was issued');
+});
+
+test('a devices file from before multi-address cookies still logs its devices in, on Wi-Fi only', { timeout: 60000 }, async (t) => {
   const oldToken = 'a'.repeat(64), olderToken = 'b'.repeat(64);
   const hash = (token) => crypto.createHash('sha256').update(token).digest('hex');
-  const s = await startServer(t, { devices: [
+  const s = await startServer(t, { network: { internet: { kind: 'domain', hostname: HOSTNAME } }, token: TOKEN, devices: [
     { tokenHash: hash(oldToken), id: 'old00001', name: 'Old phone', ua: 'Mozilla/5.0 (Linux; Android 14) Chrome/120', createdAt: 1700000000000, lastSeen: 1700000000000, ip: '192.168.1.9', via: 'password', status: 'active' },
     { tokenHash: hash(olderToken), id: 'old00002', name: 'Older phone', createdAt: 1690000000000, lastSeen: 1690000000000, ip: '192.168.1.8', via: 'qr' },
   ] });
-  for (const token of [oldToken, olderToken]) assert.equal((await s.request('GET', '/api/settings', { cookie: `pd_token=${token}` })).status, 200, 'every old cookie still works');
+  await s.tunnelStatus('connected');
+  for (const token of [oldToken, olderToken]) {
+    assert.equal((await s.request('GET', '/api/settings', { cookie: `pd_token=${token}` })).status, 200, 'every old cookie still works on Wi-Fi');
+    assert.equal((await s.request('GET', '/api/settings', { cookie: `pd_token=${token}`, via: 'tunnel' })).status, 401, 'an old cookie was issued before the internet link existed, so it is a Wi-Fi cookie');
+  }
   const settings = (await s.request('GET', '/api/settings', { cookie: `pd_token=${oldToken}` })).data;
   assert.deepEqual(settings.devices.map((d) => d.id).sort(), ['old00001', 'old00002']);
   assert.equal(settings.currentDeviceId, 'old00001');
@@ -251,7 +275,7 @@ test('a devices file from before multi-address cookies still logs its devices in
   assert.equal((await s.request('DELETE', '/api/devices/old00002', { cookie: `pd_token=${oldToken}` })).status, 204);
   assert.equal((await s.request('GET', '/api/settings', { cookie: `pd_token=${olderToken}` })).status, 401);
   const saved = JSON.parse(fs.readFileSync(path.join(s.stateDir, 'devices.json'), 'utf8')).devices;
-  assert.deepEqual(saved.map((d) => [d.id, d.tokenHash, d.tokenHashes]), [['old00001', hash(oldToken), [{ hash: hash(oldToken), host: null }]]], 'saved in both shapes; an old cookie has no known host');
+  assert.deepEqual(saved.map((d) => [d.id, d.tokenHash, d.tokenHashes]), [['old00001', hash(oldToken), [{ hash: hash(oldToken), host: 'lan' }]]], 'saved in both shapes; an old cookie is recorded as the Wi-Fi cookie it was');
 });
 
 test('Quick link: on demand from Admin, a random address, and off again', { timeout: 60000 }, async (t) => {
@@ -285,7 +309,7 @@ test('Quick link: on demand from Admin, a random address, and off again', { time
   assert.equal(wrongHost.status, 302, 'a token for the old hostname is refused on the new one');
   assert.equal(wrongHost.cookie, undefined);
   assert.equal((await s.request('GET', '/api/connection', { cookie: A.cookie })).data.linked, false, 'the phone is asked to link again');
-  assert.equal((await s.request('GET', '/api/settings', { headers: quick('quick-fixture-2.trycloudflare.com', linked.cookie) })).status, 200, 'the cookie from the first link still logs in; it is just not for this hostname');
+  assert.equal((await s.request('GET', '/api/settings', { headers: quick('quick-fixture-2.trycloudflare.com', linked.cookie) })).status, 401, 'the cookie from the first link was issued for the old hostname, so the new one asks for the password or a new link');
   // The CLI talks to the running server through its admin page.
   const cli = (...args) => spawnSync(process.execPath, [path.join(REPO, 'bin', 'pocket-dev.js'), 'internet', ...args], { env: { ...process.env, POCKET_DEV_STATE_DIR: s.stateDir, POCKET_DEV_CONFIG: s.config }, encoding: 'utf8', input: '' });
   assert.match(cli('status').stdout, /Link: connected at https:\/\/quick-fixture-2\.trycloudflare\.com/);
