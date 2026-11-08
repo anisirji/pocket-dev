@@ -102,6 +102,35 @@ Browse `fileRoots` (by default your home folder), with every path checked again 
 
 Trash uses macOS’s native Trash operation. Restore items in Finder on the Mac. Files does not permanently delete, restore from its own interface, move or copy between folders, or search file contents.
 
+### Messages
+
+Messages is a chat between this Mac, your own devices, and the people you invite. Use it to move text, screenshots, videos, and files between them.
+
+- **Who takes part.** The Mac (the Messages panel on the Admin page), every logged-in owner device, and every collaborator and guest session, in all roles. A Viewer can read and send in Messages even though its Files access is read-only.
+- **Chats.** **Everyone** is the group chat. Each person also has a direct chat that only the two of you can see. Collaborators and guests see group messages from the moment their grant was created, never other people's direct chats, and only display names (no device codes or addresses).
+- **Messages.** Bubbles show the sender's name in the group, with a tag for collaborators and guests, and the time. Images show as thumbnails (a 480 px JPEG made with `sips`) and open full size when tapped. Videos and audio play in the page. Other files show as a card with a download button.
+- **Actions.** Long-press a message, right-click it, or use its **⋯** button for **Copy**, **Download**, **Delete for everyone**, or **Hide for me**. The sender and owner devices or the Mac can delete a message for everyone, which also deletes its files. Anyone else can hide it for themselves.
+- **New messages.** A toast appears in any other view, and the Messages button shows the unread count. A phone that was offline gets what it missed when it reconnects. Notifications while the phone is locked need https and a service worker, so they wait for the domain.
+- **No clipboard access.** Pocket Dev never reads or writes the system clipboard. **Copy** runs only when you tap it, on your own device.
+
+| Route | Largest file | Why |
+| --- | --- | --- |
+| Same Wi-Fi | No limit | Uploads stream to disk, so file size does not use memory. |
+| Internet (Cloudflare Tunnel) | 100 MB | Cloudflare's free plan rejects larger uploads. The page checks the size before it uploads. |
+| Either, while the Mac has less than `messagesReserveGB` free (default 5 GB) | 50 MB | Large files wait until there is space. Text and smaller files still work, down to 500 MB free. |
+
+Messages are saved in `~/.pocket-dev/messages/` (`messages.jsonl`, and attachments in `files/`), with files mode 0600 and folders 0700. They stay until someone deletes them. The Admin page shows the storage used, with **Clear** for each chat and **Clear all**.
+
+From the Mac's terminal, `pocket-dev message` sends as the Mac:
+
+```sh
+pocket-dev message "build finished"
+pocket-dev message "logs for you" --to Pixel --file ~/Desktop/server.log
+pbpaste | pocket-dev message
+```
+
+`--to` takes a name or a device code. Text comes from the argument or from piped stdin. To send the clipboard with one key, make a macOS Shortcuts shortcut with a **Run Shell Script** action that runs `pbpaste | pocket-dev message`, and give it a keyboard shortcut.
+
 ### Open apps
 
 Lists regular apps (the same set as the Force Quit window) with memory and CPU summed over each app's process tree, frontmost first, refreshed every 10 s. Shows each app's windows and document paths. **Quit** sends a normal quit and waits 8 s. **Force quit** sends SIGTERM, then SIGKILL after 3 s.
@@ -200,8 +229,9 @@ Or run `npm link` in this folder to use your working copy as `pocket-dev`.
 | `pocket-dev service autostart on\|off\|status` | Start at login or not. |
 | `pocket-dev takeover <id>\|--last` | Close Pocket Dev's copy of a conversation, then continue it in this terminal with `claude --resume` or `codex resume`. `--last` picks the conversation most recently active in Pocket Dev. |
 | `pocket-dev qr`, `admin`, `connect`, `disconnect`, `awake` | The same as the `npm run` commands below. |
+| `pocket-dev message [text] [--to NAME] [--file PATH]` | Send to Messages as the Mac. Text comes from the argument or piped stdin. |
 
-`config set` accepts `port`, `adminPort`, `awake`, `requireApproval`, `maxDevices`, `chatIdleMinutes`, `batteryAlertPercent`, `temperatureAlertC`, `screenView`, and `allowedHosts` (comma separated). Run `pocket-dev help` for the ranges. `port` and `adminPort` apply after a restart (`pocket-dev service restart`); the rest apply right away. Change the password on the Admin page (`pocket-dev admin`).
+`config set` accepts `port`, `adminPort`, `awake`, `requireApproval`, `maxDevices`, `chatIdleMinutes`, `batteryAlertPercent`, `temperatureAlertC`, `screenView`, `allowedHosts` (comma separated), and `messagesReserveGB`. Run `pocket-dev help` for the ranges. `port` and `adminPort` apply after a restart (`pocket-dev service restart`); the rest apply right away. Change the password on the Admin page (`pocket-dev admin`).
 
 The config file is `~/.pocket-dev/config.json` (mode 0600). A `config.json` left in the package folder by an older version moves there on the first run, and the old file stays as `config.json.migrated`.
 
@@ -255,6 +285,7 @@ The launchd agent writes `~/Library/LaunchAgents/dev.pocket.server.plist`, start
 | `chatIdleMinutes` | `10` | Idle minutes before a chat engine stops. |
 | `batteryAlertPercent` | `20` | Alert when the Mac battery is at or below this percent and not charging, 5 to 90. |
 | `temperatureAlertC` | `40` | Alert when the battery temperature reaches this many °C, 30 to 70. |
+| `messagesReserveGB` | `5` | While the Mac has less free space than this, Messages files over 50 MB wait. 0 to 1000. |
 | `screenView` | `true` | Whether a logged-in phone may see the Mac's screen. `false` refuses with 403. |
 | `requireApproval` | `false` | New devices wait for approval on the Mac. |
 | `fileRoots` | home folder | Folders Files may show. |
@@ -289,7 +320,7 @@ macOS grants TCC permissions to the app that started `node`: Terminal or VS Code
 - Same Wi-Fi only, plain http. Anyone who can read the Wi-Fi traffic can see the cookie and terminal contents. Use a trusted network.
 - Port 7777 listens on all interfaces (`0.0.0.0`). Forwarded ports listen on the LAN IP and have no password.
 - A logged-in device has the full rights of your user: shell, files, and your Claude, Codex, and GitHub logins (limited by the credentials and permissions you have configured).
-- Protections: hashed password and cookies, one-time QR keys only from the Mac, device limit, SameSite=Strict HttpOnly cookie, the `x-pocket-dev` header and JSON content-type for every change, WebSocket `Origin` check, a Git repository allowlist, path checks after symlink resolution in Files, and sandboxed previews.
+- Protections: hashed password and cookies, one-time QR keys only from the Mac, device limit, SameSite=Strict HttpOnly cookie, the `x-pocket-dev` header and JSON content-type for every change, WebSocket `Origin` check, a Git repository allowlist, path checks after symlink resolution in Files, and sandboxed previews. Messages attachments are typed by their first bytes, not their name: only PNG, JPEG, GIF, WebP, MP4, WebM, MOV, MP3, M4A, Ogg and WAV display in the page, and everything else, SVG and HTML included, downloads. Every attachment response has `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and a file is reachable only by someone who can see its message.
 - The Admin page on 127.0.0.1:7778 has a Host allowlist, so it resists DNS rebinding. It has no password, so any local process can use it.
 - Not protected: traffic sniffing on the LAN, forwarded ports, an unlocked logged-in phone, local processes on the Mac, or a malicious program on the Mac. Both the phone and Admin listeners check Host headers; `allowedHosts` can add a tunnel hostname.
 

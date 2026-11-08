@@ -25,6 +25,7 @@ import { createCollaborators } from './collaborators.js';
 import { captureScreen } from './screen.js';
 import { collectHealth } from './health.js';
 import { createTunnel } from './tunnel.js';
+import { createMessages } from './messages.js';
 import { sameOrigin } from './transport.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -564,6 +565,7 @@ async function handleApi(req, res, url) {
     if (req.method === 'GET' && url.pathname === '/api/status') return sendJson(res, 200, { status: guest.active ? 'active' : 'expired', role: guest.grant?.role || 'guest' });
     if (req.method === 'GET' && url.pathname === '/api/current-access') return sendJson(res, 200, collaborators.currentAccess(req));
     if (/^\/api\/files\/(places|list|download|zip|search|upload|mkdir|rename|trash)$/.test(url.pathname)) return handleFiles(req, res, url, collaborators.scope(req, res));
+    if (resource === 'messages') return messages.handleApi(req, res);
     return sendJson(res, 403, { error: 'Your role does not allow this action.' });
   }
 
@@ -590,6 +592,7 @@ async function handleApi(req, res, url) {
   if (resource === 'power') return handlePowerApi(req, res, key, { readJson, sendJson, wss, sessions });
   if (resource === 'chat') return chatApi.handleApi(req, res, url.pathname);
   if (resource === 'files') return handleFiles(req, res, url);
+  if (resource === 'messages') return messages.handleApi(req, res);
 
   switch (route) {
     case 'GET health':
@@ -686,7 +689,7 @@ const PAGES = {
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
   '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
-  '/connection.js': 'connection.js',
+  '/connection.js': 'connection.js', '/messages.js': 'messages.js', '/messages.css': 'messages.css',
   '/collaborators.js': 'collaborators.js', '/collaborators.css': 'collaborators.css',
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
 };
@@ -697,7 +700,7 @@ function servePage(req, res, pathname) {
   const guest = collaborators.guest(req);
   const file = guest && pathname === '/' ? 'guest.html' : PAGES[pathname];
   if (!file || req.method !== 'GET') return sendJson(res, 404, { error: 'Not found' });
-  if (guest && !new Set(['guest.html', 'guest.js', 'guest.css', 'files.js', 'files.css', 'invite.html', 'invite.js']).has(file)) return sendJson(res, 403, { error: 'Your role does not allow this page.' });
+  if (guest && !new Set(['guest.html', 'guest.js', 'guest.css', 'files.js', 'files.css', 'invite.html', 'invite.js', 'connection.js', 'messages.js', 'messages.css']).has(file)) return sendJson(res, 403, { error: 'Your role does not allow this page.' });
   if (!guest && !PUBLIC_PAGES.has(file) && !auth.deviceFor(req)) {
     if (!file.endsWith('.html')) return sendJson(res, 401, { error: 'Not logged in' });
     res.writeHead(302, { location: '/login.html' });
@@ -733,9 +736,11 @@ const chatApi = createChatApi({ sendJson, readJson, config, wss });
 const rejectUpgrade = (socket, status, text) => {
   socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 };
+const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade });
 
 server.on('upgrade', (req, socket, head) => {
   if (!hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
+  if (new URL(req.url, 'http://localhost').pathname === '/ws/messages') return messages.handleUpgrade(req, socket, head);
   if (collaborators.guest(req)) return rejectUpgrade(socket, 403, 'Forbidden');
   const { pathname } = new URL(req.url, 'http://localhost');
   const match = /^\/ws\/([0-9a-f]+)$/.exec(pathname);
@@ -855,7 +860,7 @@ const access = createPhoneAccess({
 tunnel = createTunnel({ port: PORT, isConnected: () => access.view().connected, log: auth.admin.log });
 process.once('exit', () => tunnel.dispose());
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { tunnel.dispose(); process.exit(0); });
-const admin = await startAdmin({ auth, collaborators, access, tunnel, config, mainPort: PORT, urls, sections: adminSections }).catch((err) => {
+const admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, sections: adminSections }).catch((err) => {
   console.error(err.message);
   process.exit(1);
 });

@@ -24,10 +24,12 @@ const FILES = {
   '/admin-permissions.js': ['admin-permissions.js', 'text/javascript; charset=utf-8'],
   '/collaborators.js': ['collaborators.js', 'text/javascript; charset=utf-8'],
   '/collaborators.css': ['collaborators.css', 'text/css; charset=utf-8'],
+  '/messages.js': ['messages.js', 'text/javascript; charset=utf-8'],
+  '/messages.css': ['messages.css', 'text/css; charset=utf-8'],
 };
 const HEADERS = {
   'cache-control': 'no-store',
-  'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   'x-frame-options': 'DENY',
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
@@ -100,7 +102,7 @@ function failedLogins(entries) {
 //     action?, warning?, act?(id) -> bool, lockdown?: 'always' | 'optional' }
 // A section without act() is read-only. Lockdown closes 'always' sections and the 'optional' ones it is asked to.
 // `urls()` returns the phone listener's current { lan, local } base URLs.
-export async function startAdmin({ auth, collaborators, access, config, mainPort, urls, sections }) {
+export async function startAdmin({ auth, collaborators, messages, access, config, mainPort, urls, sections }) {
   const port = Number(process.env.POCKET_DEV_ADMIN_PORT) || config.read().adminPort || mainPort + 1;
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
   const origins = new Set([...hosts].map((h) => `http://${h}`));
@@ -113,7 +115,8 @@ export async function startAdmin({ auth, collaborators, access, config, mainPort
     if (req.headers.origin !== undefined && !origins.has(req.headers.origin)) return 'Cross-origin requests are refused.';
     if (SAFE_METHODS.has(req.method)) return null;
     if (req.headers['x-pocket-admin'] !== '1') return 'Missing x-pocket-admin header.';
-    if (!/^application\/json\s*(;|$)/i.test(req.headers['content-type'] ?? '')) return 'Send a JSON body.';
+    const upload = req.url === '/api/messages/files' && req.headers['content-type'] === 'application/octet-stream';
+    if (!upload && !/^application\/json\s*(;|$)/i.test(req.headers['content-type'] ?? '')) return 'Send a JSON body.';
     return null;
   }
 
@@ -293,6 +296,7 @@ export async function startAdmin({ auth, collaborators, access, config, mainPort
     if (why) return send(403, { error: why });
     const { pathname, searchParams } = new URL(req.url, 'http://localhost');
     try {
+      if (pathname === '/api/messages' || pathname.startsWith('/api/messages/')) return messages.handleApi(req, res, { mac: true, headers: HEADERS });
       if (pathname === '/api/collaborators' || pathname.startsWith('/api/collaborators/')) {
         const r = await collaborators.ownerApi(req.method, pathname, SAFE_METHODS.has(req.method) ? {} : await readJson(req), true);
         return send(r.status, r.body);

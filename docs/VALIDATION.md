@@ -119,3 +119,19 @@ Not verified, because no real take over may run during development: how real `cl
 An earlier release smoke run wrote real sessions into the owner's `~/.claude/projects`, in folders that end in `real-smoke-fixture-1794032458696` and `chat-fixture`. The script behind that run is not in this repository, and those folders were left in place. In the repository, `test/integration.test.mjs` and `test/takeover-server.test.mjs` start `server.js` with a temporary `HOME`, but they passed through the parent's `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `POCKET_DEV_CLAUDE_DIR`, `POCKET_DEV_CODEX_DIR`, `POCKET_DEV_CODEX_SOCKET`, and `POCKET_DEV_CHAT_DIR`. With any of these exported, a claude or codex started by the test server would have written to the owner's history or used the owner's Codex daemon. Such a program could come from a resumed terminal, a chat engine, or a typed shortcut.
 
 Both tests now start the server with `isolatedEnv()` from `test/isolated-env.mjs`, which points all of these inside the test home. `test/hygiene.test.mjs` fails for any test or script that starts `server.js` without it. Before the migration, the check failed on both files. Both tests still pass with owner-style paths exported in the parent shell.
+## Messages
+
+Validation date: 2026-11-08. Environment: macOS 14.5, Node.js 22, headless Chrome through Playwright, with disposable servers, ports and state folders.
+
+| Check | Result |
+| --- | --- |
+| `test/messages-store.test.mjs`: magic-byte types, private file modes, the low-space rules and the 500 MB floor (injected `statfs`), an aborted upload, and no child process except `sips` | 7 tests passed |
+| `test/messages.test.mjs` on a real server: group and direct delivery, CSRF and Origin, Range on video, SVG, HTML and mismatched files forced to download, attachment access, delete and hide, reconnect catch-up, the 100 MB connector limit, a 150 MB Wi-Fi upload, revoke, guests, the CLI, Clear and lockdown | 14 subtests passed |
+| Repository suite (`npm test`) | 135 tests passed |
+| `scripts/check-responsive.mjs`, with Messages at all 14 sizes, the keyboard pan and the action menu | Passed, no page errors |
+
+Mutation checks confirmed that the tests fail when the guest history cutoff is removed, when direct messages go to everyone, when device sockets are not tracked, when every file is served inline, when the connector limit is removed, when deleting keeps the files, and when uploads are held in memory. The memory check samples the server's RSS with `ps` during a 150 MB upload and allows 60 MB of growth.
+
+A real server was also driven in Chrome at 360 × 740 with two owner phones, a guest and the Admin page: send and receive, the toast and badge, three attachments with progress, a thumbnail, inline video, a file card, the image viewer, a direct chat with an unread count, Delete for everyone from the action menu, a 101 MB file refused before upload on the connector route, the Admin page sending as the Mac, a guest sending to the group, and the guest view removed after its grant was revoked. There were no page errors. At 360 px the Admin page overflows sideways because of the existing Permissions buttons, not Messages.
+
+Not verified here: a physical phone (Android or iOS long-press, the native keyboard, video playback of real files), HEIC photos from an iPhone, a real Cloudflare Tunnel, and a Mac that is actually low on disk space.

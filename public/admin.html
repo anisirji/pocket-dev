@@ -7,6 +7,7 @@
 <title>Pocket Dev Admin</title>
 <link rel="stylesheet" href="/admin.css">
 <link rel="stylesheet" href="/collaborators.css">
+<link rel="stylesheet" href="/messages.css">
 <script src="/admin-client.js" defer></script>
 <script src="/admin-permissions.js" defer></script>
 </head>
@@ -27,6 +28,7 @@
   <nav class="side" aria-label="Sections">
     <a href="#connection">Connection</a>
     <a href="#sharing">Share &amp; login</a>
+    <a href="#messages">Messages</a>
     <a href="#pending" data-nav="pending">Waiting <b id="navPending"></b></a>
     <a href="#devices">Devices</a>
     <a href="#collaborators">Collaborators</a>
@@ -82,6 +84,8 @@
     </section>
 
     <div class="banner" id="guessing" hidden role="alert"></div>
+
+    <section id="messages" class="panel"></section>
 
     <section class="cards" aria-label="Overview">
       <div class="card"><span class="card-label">Logged in</span><b id="cLogged">–</b><small id="cLoggedSub"></small></div>

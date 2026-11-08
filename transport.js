@@ -2,7 +2,7 @@ import { isIP } from 'node:net';
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 // Only the connector on this Mac may supply proxy information. LAN clients cannot choose their rate-limit IP.
-const fromConnector = (req) => LOOPBACK.has(req.socket.remoteAddress)
+export const fromConnector = (req) => LOOPBACK.has(req.socket.remoteAddress)
   && req.headers['x-forwarded-proto'] === 'https' && isIP(req.headers['cf-connecting-ip'] ?? '') !== 0;
 
 export const clientIp = (req) => fromConnector(req) ? req.headers['cf-connecting-ip']

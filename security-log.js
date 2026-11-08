@@ -38,6 +38,7 @@ export const EVENT_KINDS = {
   'server-restarted': 'change',
   'conversation-taken-over': 'change',
   'conversation-takeover-failed': 'failure',
+  'messages-cleared': 'change',
 };
 
 const FILTERS = {
