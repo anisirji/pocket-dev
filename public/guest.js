@@ -8,7 +8,8 @@
   function loseAccess(message) {
     if (!lost) {
       lost = true; clearPrivateState();
-      document.querySelector('.fx-root')?.remove();
+      window.pocketDevMessages?.connection.dispose();
+      for (const node of document.querySelectorAll('.fx-root, .mx-screen, .mx-toast, #messagesBtn')) node.remove();
       $('roots').replaceChildren(); $('summary').textContent = ''; $('details').textContent = ''; $('ai').textContent = '';
     }
     $('project').textContent = 'Access unavailable'; $('error').textContent = message;

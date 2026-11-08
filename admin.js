@@ -24,6 +24,8 @@ const FILES = {
   '/admin-permissions.js': ['admin-permissions.js', 'text/javascript; charset=utf-8'],
   '/collaborators.js': ['collaborators.js', 'text/javascript; charset=utf-8'],
   '/collaborators.css': ['collaborators.css', 'text/css; charset=utf-8'],
+  '/messages.js': ['messages.js', 'text/javascript; charset=utf-8'],
+  '/messages.css': ['messages.css', 'text/css; charset=utf-8'],
 };
 const HEADERS = {
   'cache-control': 'no-store',

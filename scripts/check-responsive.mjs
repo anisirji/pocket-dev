@@ -16,6 +16,15 @@ const chat = { id: 'fixture-chat', tool: 'codex', title: 'Question fixture', cwd
 const question = { id: 'event-1', seq: 1, type: 'question', requestId: 'question-1', questions: [{ id: 'q1', question: 'Which option should we use?', options: choices.map((c) => ({ label: c.label, description: c.description })) }] };
 const chatEvents = [{ id: 'plan-link', seq: 0, type: 'assistant-text', text: '[Fixture plan](/tmp/ROLE_ACCESS_PLAN.md)' }, question];
 const claudeChat = { ...chat, id: 'claude-fixture', tool: 'claude', title: 'Claude fixture', status: 'idle', pending: false, pendingId: null };
+const messagesHello = {
+  t: 'hello', you: { id: 'me', name: 'Pixel', kind: 'device' }, limits: { fileMax: null, largeFile: 50 * 1024 * 1024, lowSpace: false },
+  people: [{ id: 'mac', name: 'Mac', kind: 'mac' }, { id: 'sam', name: 'Sam with a long collaborator name', kind: 'collaborator' }],
+  messages: [
+    { seq: 1, at: Date.now(), chat: 'everyone', mine: false, canDelete: true, text: 'A long line of shared text that has to wrap on a narrow phone without pushing the page sideways: https://example.com/a/very/long/path/that/does/not/break/naturally', from: { id: 'sam', name: 'Sam with a long collaborator name', kind: 'collaborator' }, to: null, files: [{ id: 'f'.repeat(24), name: 'a-very-long-file-name-for-the-quarterly-report-final-v2.pdf', size: 123456, kind: 'file' }] },
+    { seq: 2, at: Date.now(), chat: 'everyone', mine: true, canDelete: true, text: 'Thanks', from: { id: 'me', name: 'Pixel', kind: 'device' }, to: null, files: [] },
+  ],
+  keep: [1, 2],
+};
 const historyItem = { tool: 'codex', id: '00000000-0000-4000-8000-000000000001', cwd: '/tmp', title: 'Resume fixture', project: 'Fixture', lastActive: new Date().toISOString(), messageCount: 1, live: false };
 let messagePosts = 0, terminalInputs = 0, terminalCreates = 0;
 const chatCreates = [];
@@ -41,6 +50,7 @@ const server = http.createServer(async (req, res) => {
     '/api/chat/options': { home: '/tmp', defaultTool: 'codex', tools: { codex: { label: 'Codex', defaults: { model: 'model-0' }, settings: [{ key: 'model', label: 'Model', default: 'model-0', choices }] } } },
     '/api/files/places': { home: '/tmp', roots: ['/tmp'], pinned: [] },
     '/api/files/list': { path: '/tmp', parent: '/', breadcrumbs: [{ name: 'tmp', path: '/tmp' }], entries: [], total: 0 },
+    '/api/messages/people': { you: messagesHello.you, people: messagesHello.people },
   };
   if (url.pathname.startsWith('/api/')) {
     if (req.method === 'PATCH' && url.pathname === '/api/chat/fixture-chat/queue') {
@@ -74,6 +84,7 @@ wss.on('connection', (ws, req) => {
     if (msg.t === 'in') terminalInputs++;
   });
   const isClaude = req.url.endsWith('/claude-fixture');
+  if (req.url.startsWith('/ws/messages')) return ws.send(JSON.stringify(messagesHello));
   ws.send(JSON.stringify(req.url.startsWith('/ws/chat/') ? { t: 'hello', chat: isClaude ? claudeChat : chat, events: isClaude ? [] : chatEvents } : { t: 'out', d: '\x1b[2J\x1b[HQuestion\r\n\r\nChoose an option\r\n\r\n> 1. First option\r\n  2. Second option\r\n  3. Last option\r\n\r\nUp / Down to choose, Enter to confirm\r\n' }));
 });
 let browser;
@@ -168,6 +179,32 @@ try {
   await settle();
   await inViewport('.fx-root');
   await page.evaluate(() => window.pocketDev.overlays.closeAll());
+  await page.evaluate(() => setTestViewport({}));
+  await page.locator('[data-view="messages"]').click();
+  await page.waitForSelector('.mx-screen:not([hidden]) .mx-row');
+  for (const [width, height] of sizes) {
+    await page.setViewportSize({ width, height });
+    await settle();
+    await inViewport('.mx-screen');
+    await page.locator('.mx-row').first().click();
+    for (const selector of ['.mx-compose', '.mx-send', '.mx-attach', '.mx-card']) await inViewport(selector);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.mx-msg')].every((m) => m.getBoundingClientRect().right <= innerWidth + 1)), `${width}x${height}: Messages overflow`);
+    if (await page.locator('.mx-back').isVisible()) await page.locator('.mx-back').click();
+  }
+  await page.setViewportSize({ width: 393, height: 852 });
+  if (await page.locator('.mx-back').isVisible()) await page.locator('.mx-back').click();
+  await page.locator('.mx-row').first().click();
+  await page.locator('.mx-msg:not(.mine)').click({ button: 'right' });
+  await inViewport('.mx-menu-list');
+  assert.deepEqual(await page.locator('.mx-menu-item').allTextContents(), ['Copy', 'Download', 'Delete for everyone', 'Hide for me', 'Cancel']);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.mx-menu').isVisible(), false);
+  await page.locator('.mx-input').focus();
+  await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
+  await settle();
+  for (const selector of ['.mx-compose', '.mx-send']) await inViewport(selector);
+  await page.evaluate(() => window.pocketDev.overlays.closeAll());
+  await page.waitForSelector('.mx-screen[hidden]', { state: 'attached' });
   await page.evaluate(() => setTestViewport({}));
   await page.locator('[data-view="chat"]').click();
   await page.locator('.chat-new-btn').click();
