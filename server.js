@@ -485,6 +485,7 @@ function moveForward(fwd, port, host) {
 }
 
 async function openForward(port) {
+  if (!WIFI) throw new Error('Wi-Fi access is off, so nothing on the network could reach a forwarded port. Turn Wi-Fi access on in Admin on the Mac first.');
   const existing = forwards.get(port);
   if (existing) return forwardView(port, existing);
   const fwd = { server: null, host: null, sockets: new Set(), state: 'waiting', error: null, closed: false, moving: Promise.resolve() };

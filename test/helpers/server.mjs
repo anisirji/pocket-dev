@@ -20,7 +20,7 @@ export async function until(fn, timeout = 10000) {
   while (Date.now() < end) { if (await fn()) return; await pause(50); }
   assert.fail('Condition timed out');
 }
-async function freePort() {
+export async function freePort() {
   const server = net.createServer();
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');

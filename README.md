@@ -236,7 +236,7 @@ Each address has its own login cookie, so a phone that first opens the internet 
 
 Afterwards **Settings → Connection** shows both addresses with **Switch to local** and **Switch to remote**. When the phone is on the internet address but on the Mac's own network, a small prompt offers the local route; **Not now** is remembered for that network. When the Wi-Fi address stops answering for about five seconds, the phone offers the internet link. Nothing switches by itself. The open terminal or chat follows the switch.
 
-**Wi-Fi access** can be turned off on the Admin page once internet access is on. Pocket Dev then listens on the Mac itself only, so the phone reaches it through the tunnel alone. It applies after a restart and is refused while internet access is off, because nothing could reach Pocket Dev.
+**Wi-Fi access** can be turned off on the Admin page once internet access is on. Pocket Dev then listens on the Mac itself only, so the phone reaches it through the tunnel alone, and port forwards are refused, since they would listen on the Wi-Fi address. It applies after a restart and is refused while internet access is off, because nothing could reach Pocket Dev.
 
 Security notes:
 

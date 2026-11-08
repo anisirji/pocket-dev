@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { REPO, HOSTNAME, TOKEN, PHONE_IP, pause, lanAddress, traceServer, startServer } from './helpers/server.mjs';
+import { REPO, HOSTNAME, TOKEN, PHONE_IP, pause, until, lanAddress, freePort, traceServer, startServer } from './helpers/server.mjs';
 
 test('internet access off by default: nothing new answers, no tunnel starts, no outbound lookups', { timeout: 60000 }, async (t) => {
   const trace = await traceServer(t);
@@ -49,6 +49,17 @@ test('Wi-Fi access off binds loopback only, so the Mac is reached through the tu
   const refused = await s.request('POST', '/api/handoff', { cookie: D.cookie, body: {}, via: 'tunnel' });
   assert.equal(refused.status, 403);
   assert.match(refused.data.error, /Wi-Fi access is off/);
+  // A forward listens on the Wi-Fi address, which Wi-Fi access off is meant to keep closed.
+  if (lan) {
+    fs.writeFileSync(s.lanIp, lan);
+    await until(async () => (await s.request('GET', '/api/info', { cookie: D.cookie, via: 'tunnel' })).data.lanIp === lan);
+  }
+  const devPort = await freePort();
+  const forward = await s.request('POST', '/api/forwards', { cookie: D.cookie, body: { port: devPort }, via: 'tunnel' });
+  assert.equal(forward.status, 409, JSON.stringify(forward.data));
+  assert.match(forward.data.error, /Wi-Fi access is off/);
+  assert.deepEqual((await s.request('GET', '/api/info', { cookie: D.cookie, via: 'tunnel' })).data.forwards, []);
+  if (lan) await assert.rejects(fetch(`http://${lan}:${devPort}/`, { signal: AbortSignal.timeout(2000) }), 'nothing listens on the Wi-Fi address');
 });
 
 test('handoff: a Wi-Fi cookie for the same device, minted through the tunnel and usable once, on the Wi-Fi address only', { timeout: 90000 }, async (t) => {
