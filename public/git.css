@@ -154,3 +154,19 @@ select.g-input { height: 40px; padding: 0 8px; }
 .g-btnrow .g-btn { flex: 1; height: 44px; margin-top: 0; }
 .g-save .g-notice { margin: 0; }
 .g-notice.warn { background: #2b2412; color: var(--warn); border: 1px solid #5c4a1a; }
+
+.g-ref.tap { position: relative; cursor: pointer; }
+.g-ref.tap::after { content: ""; position: absolute; inset: -9px -5px; }
+.g-stash-btn { width: 100%; margin-top: 8px; }
+.g-uncommitted { display: flex; align-items: center; gap: 10px; width: calc(100% - 20px); margin: 10px; min-height: 46px; padding: 0 12px; border-radius: 10px; border: 1px dashed #6b5a2a; background: var(--panel); color: var(--text); text-align: left; }
+.g-uncommitted-dot { color: var(--warn); font-size: 18px; }
+.g-uncommitted b { font-weight: 600; }
+.g-stash-row .g-code { color: var(--warn); }
+.g-sheet { position: fixed; inset: 0; z-index: 40; display: flex; align-items: flex-end; justify-content: center; padding: 10px; background: #000a; }
+.g-sheet-box { display: grid; gap: 4px; width: min(100%, 420px); padding: 8px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 8px 30px #000a; }
+.g-sheet-title { padding: 8px 12px 6px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.g-sheet-box .g-input { margin: 0 4px 4px; width: calc(100% - 8px); }
+.g-sheet-row { min-height: 48px; padding: 0 14px; border-radius: 10px; background: none; border: 0; color: var(--text); font-size: 15px; text-align: left; }
+.g-sheet-row:active { background: var(--panel-2); }
+.g-sheet-row.danger { color: var(--danger); }
+.g-sheet-row.cancel { color: var(--muted); }
