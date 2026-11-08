@@ -412,7 +412,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     const migrated = (await local('GET', '/api/state')).data;
     assert.equal(migrated.devices.find((d) => d.id === currentId).role, 'admin');
     assert.ok(migrated.devices.filter((d) => d.id !== currentId && d.status !== 'blocked').every((d) => d.status === 'pending'));
-    assert.equal((await request('POST', '/api/settings/qr-key', { cookie: A.cookie, body: {} })).status, 403, 'Admin pairing stays Mac-local');
+    assert.equal((await request('POST', '/api/settings/qr-key', { cookie: A.cookie, body: {} })).status, 200, 'an Admin device may make a login QR');
     const passwordLogin = await login();
     assert.equal(passwordLogin.data.pending, true, 'the password never bypasses local Admin review');
     const created = await request('POST', '/api/collaborators', { cookie: A.cookie, body: draft });

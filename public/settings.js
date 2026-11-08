@@ -94,6 +94,7 @@
         <p class="st-note st-addr"></p>
         <button class="st-btn" data-act="qr">Show login QR</button>
         <div class="st-qr" hidden></div>
+        <button class="st-btn" data-act="copy-qr" hidden>Copy link</button>
         <p class="st-err" data-for="qr"></p>
       </section>
       <section>
@@ -259,7 +260,11 @@
   }
 
   function renderAddress() {
-    const { lan, local, localNote } = settings.urls;
+    const { lan, local, remote, localNote } = settings.urls;
+    if (settings.via === 'remote') {
+      $('.st-addr').textContent = `Or open ${remote} on the other phone and type the password.`;
+      return;
+    }
     $('.st-addr').textContent = lan
       ? `Or open ${lan} on the other phone and type the password. ${local} also works (${localNote}).`
       : `The Mac has no network right now. ${local} works once it is back on Wi-Fi (${localNote}).`;
@@ -329,10 +334,14 @@
   $('[data-act="qr"]').addEventListener('click', async (e) => {
     msg('err', 'qr', '');
     try {
-      const { svg } = await api('POST', '/api/settings/qr-key');
+      const { svg, url } = await api('POST', '/api/settings/qr-key');
       const box = $('.st-qr');
       box.innerHTML = svg;
       box.hidden = false;
+      const copy = $('[data-act="copy-qr"]');
+      copy.hidden = false;
+      copy.textContent = 'Copy link';
+      copy.onclick = async () => { copy.textContent = (await window.copyText?.(url)) ? 'Copied' : 'Copy failed'; };
       e.target.textContent = 'New code';
     } catch (err) {
       msg('err', 'qr', err.message);
@@ -375,6 +384,7 @@
     editingId = null;
     $('.st-qr').hidden = true;
     $('.st-qr').replaceChildren();
+    $('[data-act="copy-qr"]').hidden = true;
     $('[data-act="qr"]').textContent = 'Show login QR';
   }
 

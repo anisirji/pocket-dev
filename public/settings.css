@@ -82,3 +82,4 @@ section > .st-danger { width: 100%; }
 .st-apps-count { flex: 1; color: var(--muted); font-weight: 400; }
 .st-chev { color: var(--muted); font-size: 20px; }
 .st-body .st-power .pw-title { margin: 0; color: var(--text); font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.st-qr + .st-btn { margin-top: 10px; }
