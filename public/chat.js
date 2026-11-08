@@ -706,7 +706,8 @@
     renderDraftChips();
     renderFolders();
     const body = el('div', 'chat-sheet-body');
-    body.append(seg, chips, field('Folder', folders), path);
+    const folderField = window.PocketDevFolderPicker?.field(path, { api, label: 'Folder', onSelect: () => { draft.cwd = path.value; renderFolders(); } }) ?? field('Folder', path);
+    body.append(seg, chips, folderField, folders);
     const foot = el('div', 'chat-sheet-foot');
     foot.append(start);
     sheet.replaceChildren(sheetHead('New chat'), body, foot);
@@ -1845,6 +1846,7 @@
       if (chatId) return showChat({ id: chatId });
       if (!stack.length) push({ layer: 'list' });
     },
+    current: () => convoIdOf(stack),
     async startFromSession({ tool, id, cwd, title }) {
       const chat = await api('POST', '/api/chat', { tool, cwd, resume: { sessionId: id }, ...(title && { title: title.slice(0, 200) }) });
       showChat(chat);

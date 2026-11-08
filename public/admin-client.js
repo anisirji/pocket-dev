@@ -87,6 +87,8 @@ let collaborators;
 import('/collaborators.js').then((m) => {
   collaborators = m.mountCollaborators($('collaborators'), { api, local: true, devices: () => state?.devices || [] });
 }).catch((err) => { $('collaborators').textContent = `Could not load Collaborators: ${err.message}`; });
+import('/messages.js').then((m) => m.mountMacMessages($('messages'), { api, toast }))
+  .catch((err) => { $('messages').textContent = `Could not load Messages: ${err.message}`; });
 let logFilter = 'all';
 let editingId = null;
 let limitDraft = null;
@@ -136,6 +138,101 @@ function startHeartbeat(ms) {
   heartbeat = new Worker('/admin-heartbeat.js');
   heartbeat.postMessage(ms);
 }
+
+// ---- Internet access
+
+const KIND_LABEL = { off: 'Off', quick: 'Quick link', domain: 'My own domain' };
+// The domain choice shows its form before anything is saved; Off and Quick link save on click.
+let netDraftKind = null;
+
+function renderInternet() {
+  const { network, access } = state;
+  const { wifi, internet, tunnel, hasToken, cloudflared } = network;
+  const shown = netDraftKind ?? internet.kind;
+  for (const b of document.querySelectorAll('.net-kinds button')) b.setAttribute('aria-pressed', String(b.dataset.kind === shown));
+  for (const kind of Object.keys(KIND_LABEL)) $(`net${kind[0].toUpperCase()}${kind.slice(1)}`).hidden = kind !== shown;
+  $('netCloudflared').hidden = shown === 'off' || Boolean(cloudflared);
+  $('netCount').textContent = internet.kind === 'off' ? 'Off' : tunnel.status === 'connected' ? `On · ${tunnel.url}` : `${KIND_LABEL[internet.kind]} · ${tunnel.status === 'error' ? 'failed' : tunnel.status === 'starting' ? 'connecting' : 'not connected'}`;
+  $('domainPort').textContent = `localhost:${access.port}`;
+
+  const running = tunnel.status !== 'off';
+  $('quickStatus').textContent = tunnel.kind !== 'quick' ? 'Off' : { starting: 'Connecting to Cloudflare…', connected: 'On', error: 'Could not start' }[tunnel.status];
+  $('quickDetail').textContent = tunnel.kind === 'quick' && tunnel.status === 'error' ? tunnel.error
+    : !access.connected ? 'Press Connect above first.'
+      : tunnel.kind === 'quick' && tunnel.status === 'connected' ? 'Anyone with this link reaches the login page. Turn off when you are done.'
+        : 'Gives a random address that works until you turn it off.';
+  $('quickBtn').textContent = tunnel.kind === 'quick' && running ? 'Turn off' : 'Turn on';
+  $('quickBtn').disabled = internet.kind !== 'quick' || (!access.connected && !running);
+  $('quickLink').hidden = !(tunnel.kind === 'quick' && tunnel.url);
+  $('quickUrl').textContent = tunnel.url ?? '';
+  $('quickOpen').href = tunnel.url ?? '#';
+
+  const form = $('domainForm');
+  if (form.dataset.hostname !== (internet.hostname ?? '') && !form.contains(document.activeElement)) {
+    form.dataset.hostname = internet.hostname ?? '';
+    form.elements.hostname.value = internet.hostname ?? '';
+  }
+  form.elements.token.placeholder = hasToken ? 'Tunnel token (saved; paste a new one to replace it)' : 'Tunnel token';
+  form.elements.token.required = !hasToken;
+  const domain = internet.kind === 'domain' && tunnel.kind === 'domain' ? tunnel.status : internet.kind === 'domain' ? 'waiting' : 'unset';
+  $('domainStatus').textContent = { unset: 'Not set up yet', waiting: 'Waiting', starting: 'Connecting to Cloudflare…', connected: 'Connected', error: 'Could not connect', off: 'Waiting' }[domain];
+  $('domainDetail').textContent = {
+    unset: 'Follow the steps above, then press Save and connect.',
+    waiting: access.connected ? 'Press Try again to start the link.' : 'Starts when phone access is connected.',
+    off: access.connected ? 'Press Try again to start the link.' : 'Starts when phone access is connected.',
+    starting: `Pocket Dev will be at https://${internet.hostname}`,
+    connected: `Pocket Dev is at https://${internet.hostname}. Link each phone once from Wi-Fi (Settings → Connection → Link this phone), or log in there with the password.`,
+    error: tunnel.error,
+  }[domain];
+  $('domainOpen').hidden = domain !== 'connected';
+  $('domainOpen').href = domain === 'connected' ? tunnel.url : '#';
+  $('domainRetry').hidden = !(['error', 'waiting', 'off'].includes(domain) && access.connected);
+
+  $('wifi').checked = wifi;
+  $('wifi').disabled = internet.kind === 'off';
+  $('wifiNote').textContent = internet.kind === 'off'
+    ? 'Phones on your Wi-Fi reach this Mac directly. Turn on internet access first if you want to turn this off.'
+    : `${wifi ? 'Phones on your Wi-Fi reach this Mac directly; turn off to allow only the internet link.' : 'Off: only the internet link reaches Pocket Dev.'} A change applies after you restart Pocket Dev.`;
+}
+
+async function saveNetwork(changes, done) {
+  $('netErr').textContent = '';
+  try {
+    state.network = await api('PUT', '/api/network', changes);
+    netDraftKind = null;
+    if (done) toast(done);
+  } catch (err) {
+    $('netErr').textContent = err.message;
+  }
+  await refresh(true);
+}
+
+document.querySelector('.net-kinds').addEventListener('click', async (e) => {
+  const kind = e.target.closest('[data-kind]')?.dataset.kind;
+  if (!kind || !state) return;
+  if (kind === 'domain') {
+    netDraftKind = 'domain';
+    renderInternet();
+    return;
+  }
+  if (kind === 'off' && state.network.tunnel.status === 'connected' && !(await ask({
+    title: 'Turn internet access off?', body: 'The internet link closes now. Phones using it lose Pocket Dev until they are back on your Wi-Fi.', confirm: 'Turn off', danger: true,
+  }))) return;
+  await saveNetwork({ internet: { kind } }, kind === 'off' ? 'Internet access off' : 'Quick link allowed. Press Turn on for a link.');
+});
+
+$('quickBtn').addEventListener('click', () => act(() => api('PUT', '/api/remote', { on: state.network.tunnel.kind !== 'quick' || state.network.tunnel.status === 'off' }), (r) => (r.status === 'off' ? 'Quick link off' : 'Starting the Quick link')));
+$('quickCopy').addEventListener('click', () => copyLink($('quickUrl').textContent));
+$('domainRetry').addEventListener('click', () => act(() => api('PUT', '/api/remote', { on: true })));
+
+$('domainForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { hostname, token } = e.target.elements;
+  await saveNetwork({ internet: { kind: 'domain', hostname: hostname.value }, ...(token.value && { token: token.value }) }, 'Saved. Connecting to Cloudflare…');
+  if (!$('netErr').textContent) token.value = '';
+});
+
+$('wifi').addEventListener('change', (e) => saveNetwork({ wifi: e.target.checked }, e.target.checked ? 'Wi-Fi access on after the next restart' : 'Wi-Fi access off after the next restart'));
 
 // ---- Overview
 
@@ -274,6 +371,13 @@ const REVOKED_BY = {
 const closedText = (closed = {}) => Object.entries(closed).map(([id, n]) => `${n} ${id}`).join(', ');
 
 const EVENT_TEXT = {
+  'remote-started': (e) => `Internet link on at ${e.url}`,
+  'remote-stopped': () => 'Internet link off',
+  'remote-error': (e) => `Internet link failed: ${e.error}`,
+  'network-changed': (e) => `Internet access set to ${KIND_LABEL[e.kind] ?? e.kind}${e.hostname ? ` (${e.hostname})` : ''}${e.wifi === false ? ', Wi-Fi access off' : ''}${byText(e)}`,
+  'handoff-created': (e) => (e.direction === 'to-remote' ? `${e.name} asked to link to ${e.host}` : `${e.name} asked to switch from the internet link to Wi-Fi`),
+  'handoff-redeemed': (e) => (e.direction === 'to-remote' ? `${e.name} linked to ${e.host}` : `${e.name} switched to the Wi-Fi address`),
+  'handoff-failed': (e) => `A switch link was refused (${e.reason})${e.kind ? ` from ${e.kind}` : ''}`,
   'role-access-enabled': () => 'Role-based sharing enabled after trusted Admin device review',
   'collaborator-created': (e) => `Collaborator ${e.grantId} created as ${e.role}`,
   'collaborator-updated': (e) => `Collaborator ${e.grantId} access updated`,
@@ -287,10 +391,12 @@ const EVENT_TEXT = {
   'login-locked': (e) => `Password logins from ${e.ip} locked for ${e.minutes} min after 10 wrong passwords`,
   'qr-expired': (e) => `Used or expired QR code opened${e.kind ? ` on ${e.kind}` : ''}`,
   'device-revoked': (e) => `${e.name} logged out ${REVOKED_BY[e.by] ?? ''}`.trim(),
+  'device-merged': (e) => `${e.name} switched address; its duplicate login ${e.mergedName} (${e.mergedDeviceId.slice(-4)}) was logged out`,
   'device-blocked': (e) => `${e.name} blocked`,
   'device-unblocked': (e) => `${e.name} unblocked`,
-  'device-approved': (e) => `${e.name} approved${e.by === 'qr' ? ' by scanning a QR code' : ''}`,
-  'device-denied': (e) => `${e.name} denied`,
+  'device-approved': (e) => `${e.name} approved${e.by === 'qr' ? ' by scanning a QR code' : e.by?.startsWith('device ') ? ` from ${e.by.slice(7)}` : ''}`,
+  'device-denied': (e) => `${e.name} denied${e.by?.startsWith('device ') ? ` from ${e.by.slice(7)}` : ''}`,
+  'device-approval-changed': (e) => (e.on ? 'Logged-in phones may now approve waiting logins' : `Phones may no longer approve logins${byText(e)}`),
   'device-removed': (e) => `${e.name} removed while blocked`,
   'device-renamed': (e) => `${e.from} renamed to ${e.name}${byText(e)}`,
   'pending-expired': (e) => `${e.name} stopped waiting: nobody approved it in time`,
@@ -305,6 +411,8 @@ const EVENT_TEXT = {
   'service-installed': () => 'Installed as a launchd service',
   'server-stopped': () => 'Pocket Dev stopped from this page',
   'server-restarted': (e) => `Pocket Dev restarted from ${e.by === 'phone' ? 'a phone' : 'this page'}`,
+  'conversation-taken-over': (e) => `${e.by === 'phone' ? e.name : 'A Mac terminal'} took over ${e.tool} conversation ${e.conversationId.slice(0, 8)}${e.pids.length ? `, closing pid ${e.pids.join(', ')}` : ''}${e.force ? ' (force quit)' : ''}`,
+  'conversation-takeover-failed': (e) => `${e.by === 'phone' ? e.name : 'A Mac terminal'} could not take over ${e.tool} conversation ${e.conversationId.slice(0, 8)}: pid ${e.remaining.join(', ') || '?'} kept running`,
 };
 
 function renderLog(entries) {
@@ -366,10 +474,12 @@ function renderSettings() {
     : 'Password logins stop at this many devices. QR logins always work and replace the device used least recently.';
   if (state.roleAccessEnabled) $('limitNote').textContent = `The device limit includes ${plural(overview.loggedIn, 'Admin device')} and ${plural(state.collaboratorSessions || 0, 'active collaborator session')}. Invitations never log out an Admin. New password logins always require Mac approval.`;
   $('approval').checked = requireApproval;
+  $('approveFrom').checked = state.approveFromDevices === true;
   const copy = (text) => h('button', { class: 'btn btn-sm', type: 'button', onclick: () => copyLink(text) }, 'Copy');
   $('urls').replaceChildren(
-    h('dt', {}, 'Wi-Fi IP'), ...(urls.lan ? [h('dd', {}, urls.lan), copy(urls.lan)] : [h('dd', {}, 'No network'), h('span')]),
-    h('dt', {}, 'Name'), h('dd', {}, urls.mdns), copy(urls.mdns),
+    h('dt', {}, 'Wi-Fi IP'), ...(urls.lan ? [h('dd', {}, urls.lan), copy(urls.lan)] : [h('dd', {}, state.network.wifi ? 'No network' : 'Wi-Fi access off'), h('span')]),
+    h('dt', {}, 'Name'), ...(urls.mdns ? [h('dd', {}, urls.mdns), copy(urls.mdns)] : [h('dd', {}, 'Wi-Fi access off'), h('span')]),
+    ...(urls.remote ? [h('dt', {}, 'Internet'), h('dd', {}, urls.remote), copy(urls.remote)] : []),
   );
 }
 
@@ -389,6 +499,8 @@ async function setApproval(on) {
   await act(() => api('PUT', '/api/settings', { requireApproval: on }), on ? 'New password logins now wait for approval' : 'Approval turned off');
 }
 $('approval').addEventListener('change', (e) => setApproval(e.target.checked));
+$('approveFrom').addEventListener('change', (e) => act(() => api('PUT', '/api/settings', { approveFromDevices: e.target.checked }),
+  e.target.checked ? 'Logged-in phones can now approve waiting logins' : 'Phones can no longer approve logins'));
 
 // ---- Share and login QR codes
 
@@ -423,11 +535,13 @@ function clearQr(kind) {
   }
 }
 
+// Codes point at the internet link when there is one, so a phone's first login lands on the address that works anywhere.
 function renderSharing(online = true) {
-  const address = online && state?.access.connected ? state.urls.lan : null;
+  const address = online && state?.access.connected ? state.urls.remote ?? state.urls.lan : null;
   const reason = !online ? 'Cannot reach Pocket Dev. QR codes will be available when it reconnects.'
     : !state?.access.connected ? 'Press Connect above to share or log in a phone.'
-      : !address ? 'Connect this Mac to Wi-Fi to show a QR code.' : '';
+      : !address ? (state.network.wifi ? 'Connect this Mac to Wi-Fi to show a QR code.' : 'Wait for the internet link to connect.') : '';
+  $('sharingNote').textContent = state?.urls.remote ? 'Works from anywhere through your internet link.' : 'Scan from a phone on the same Wi-Fi as this Mac.';
   if (address !== qrAddress) {
     qrGeneration++;
     qrAddress = address;
@@ -649,7 +763,7 @@ $('lockBtn').addEventListener('click', async () => {
 // ---- Refresh loop
 
 // Typing, renaming, or an open dialog would lose input to a re-render.
-const busy = () => editingId !== null || $('ask').open
+const busy = () => editingId !== null || $('ask').open || netDraftKind !== null
   || (document.activeElement?.matches('input[type="text"], input[type="password"]') ?? false);
 
 // A refresh asked for during another one runs right after it, so an action never shows stale data.
@@ -669,6 +783,7 @@ async function refresh(force = false) {
     lastOk = Date.now();
     $('offline').hidden = true;
     renderConnection();
+    renderInternet();
     renderOverview();
     renderPending();
     renderDevices();

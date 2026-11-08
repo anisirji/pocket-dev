@@ -9,6 +9,8 @@ import { serviceStatus, setAutostart, installService, stopThisServer, restartThi
 import { checkPermissions, openPane } from './permissions.js';
 import { captureScreen } from './screen.js';
 import { svgQr } from './qr.js';
+import { readNetwork, networkError, isToken, hasToken, writeToken, findCloudflared } from './network.js';
+import { createFolderBrowser } from './folder-browser.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 export const ADMIN_URL_PATH = path.join(STATE_DIR, 'admin.json');
@@ -24,10 +26,14 @@ const FILES = {
   '/admin-permissions.js': ['admin-permissions.js', 'text/javascript; charset=utf-8'],
   '/collaborators.js': ['collaborators.js', 'text/javascript; charset=utf-8'],
   '/collaborators.css': ['collaborators.css', 'text/css; charset=utf-8'],
+  '/messages.js': ['messages.js', 'text/javascript; charset=utf-8'],
+  '/messages.css': ['messages.css', 'text/css; charset=utf-8'],
+  '/folder-picker.js': ['folder-picker.js', 'text/javascript; charset=utf-8'],
+  '/folder-picker.css': ['folder-picker.css', 'text/css; charset=utf-8'],
 };
 const HEADERS = {
   'cache-control': 'no-store',
-  'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   'x-frame-options': 'DENY',
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
@@ -99,7 +105,7 @@ function failedLogins(entries) {
 //   { title, empty, list() -> [{ id, label, details: [string], startedAt? }] (or a promise of it),
 //     action?, warning?, act?(id) -> bool, lockdown?: 'always' | 'optional' }
 // A section without act() is read-only. Lockdown closes 'always' sections and the 'optional' ones it is asked to.
-// `urls()` returns the phone listener's current { lan, local } base URLs.
+// `urls()` returns the phone listener's current { lan, local, remote } base URLs.
 // A Quick Tunnel started by hand (`cloudflared tunnel --url ...`) reports its random name on cloudflared's metrics
 // port, 20241 unless another cloudflared already holds it.
 async function quickLinkHost() {
@@ -113,7 +119,8 @@ async function quickLinkHost() {
   return null;
 }
 
-export async function startAdmin({ auth, collaborators, access, config, mainPort, urls, sections }) {
+export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections }) {
+  const browseFolders = createFolderBrowser({ config });
   const port = Number(process.env.POCKET_DEV_ADMIN_PORT) || config.read().adminPort || mainPort + 1;
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
   const origins = new Set([...hosts].map((h) => `http://${h}`));
@@ -126,7 +133,8 @@ export async function startAdmin({ auth, collaborators, access, config, mainPort
     if (req.headers.origin !== undefined && !origins.has(req.headers.origin)) return 'Cross-origin requests are refused.';
     if (SAFE_METHODS.has(req.method)) return null;
     if (req.headers['x-pocket-admin'] !== '1') return 'Missing x-pocket-admin header.';
-    if (!/^application\/json\s*(;|$)/i.test(req.headers['content-type'] ?? '')) return 'Send a JSON body.';
+    const upload = req.url === '/api/messages/files' && req.headers['content-type'] === 'application/octet-stream';
+    if (!upload && !/^application\/json\s*(;|$)/i.test(req.headers['content-type'] ?? '')) return 'Send a JSON body.';
     return null;
   }
 
@@ -159,7 +167,9 @@ export async function startAdmin({ auth, collaborators, access, config, mainPort
         lan: urls().lan,
         mdns: urls().local,
         local: `http://localhost:${mainPort}`,
+        remote: urls().remote,
       },
+      network: networkState(),
       service: await serviceStatus(),
       permissionsSetup: config.read().permissionsSetup ?? null,
       sections: await sectionViews(),
@@ -188,6 +198,43 @@ export async function startAdmin({ auth, collaborators, access, config, mainPort
     access.forgetForwards();
     auth.admin.log('lockdown', { devices, closed, passwordChanged: password !== undefined });
     return ok({ devices, closed, passwordChanged: password !== undefined, access: access.view() });
+  }
+
+  // The token itself never leaves the Mac: the page learns only whether one is saved.
+  const networkState = () => ({ ...readNetwork(config), hasToken: hasToken(), cloudflared: findCloudflared(), tunnel: tunnel.view() });
+
+  // Saves the network setting and applies it to the running tunnel: a changed kind, hostname or token restarts it, a
+  // domain link starts as soon as phone access is connected, and a Quick link waits for Turn on.
+  async function setNetwork({ wifi, internet, token }, by) {
+    const current = readNetwork(config);
+    if (token !== undefined && !isToken(token)) return reply(400, { error: 'The tunnel token is a long code without spaces. Copy only the token from the install command.' });
+    if (internet !== undefined && (!internet || typeof internet !== 'object')) return reply(400, { error: 'internet must be { kind, hostname }.' });
+    const kind = internet?.kind ?? current.internet.kind;
+    const next = {
+      wifi: wifi ?? current.wifi,
+      internet: { kind, hostname: kind === 'domain' ? String(internet?.hostname ?? current.internet.hostname ?? '').trim().toLowerCase() || null : null },
+    };
+    const invalid = networkError(next, { hasToken: hasToken() || token !== undefined });
+    if (invalid) return reply(400, { error: invalid });
+    if (token !== undefined) writeToken(token);
+    const changed = JSON.stringify(next) !== JSON.stringify(current);
+    if (changed) {
+      config.update({ network: next });
+      auth.admin.log('network-changed', { wifi: next.wifi, kind: next.internet.kind, hostname: next.internet.hostname, by });
+    }
+    const running = tunnel.view();
+    if (running.status !== 'off' && (running.kind !== next.internet.kind || changed || token !== undefined)) await tunnel.stop();
+    if (next.internet.kind === 'domain' && access.view().connected) await tunnel.start().catch(() => {});
+    return ok(networkState());
+  }
+
+  async function setRemote(on) {
+    if (typeof on !== 'boolean') return reply(400, { error: 'on must be true or false.' });
+    try {
+      return ok(on ? await tunnel.start() : await tunnel.stop());
+    } catch (err) {
+      return reply(409, { ...tunnel.view(), error: err.message });
+    }
   }
 
   async function setAccess({ connected, keepOpen }, by) {
@@ -262,8 +309,8 @@ export async function startAdmin({ auth, collaborators, access, config, mainPort
       const kind = body.kind ?? 'login';
       if (!['share', 'login'].includes(kind)) return reply(400, { error: 'kind must be share or login.' });
       if (!access.view().connected) return reply(409, { error: 'Phone access is off. Connect first, then show the code.' });
-      const address = urls().lan;
-      if (!address) return reply(409, { error: 'No Wi-Fi address. Connect this Mac to a network first.' });
+      const address = urls().remote ?? urls().lan;
+      if (!address) return reply(409, { error: readNetwork(config).wifi ? 'No Wi-Fi address. Connect this Mac to a network first.' : 'The internet link is not connected yet. Wait for it, or turn Wi-Fi access back on.' });
       if (kind === 'login') return ok(await auth.admin.mintQr());
       return ok({ url: address, svg: await svgQr(address) });
     },
@@ -287,6 +334,8 @@ export async function startAdmin({ auth, collaborators, access, config, mainPort
     },
     'POST /api/lockdown': ({ body }) => lockdown(body),
     'PUT /api/access': ({ body }) => setAccess(body, body.by === 'cli' ? 'cli' : 'admin'),
+    'PUT /api/network': ({ body }) => setNetwork(body, body.by === 'cli' ? 'cli' : 'admin'),
+    'PUT /api/remote': ({ body }) => setRemote(body.on),
     'POST /api/heartbeat': () => {
       access.heartbeat();
       return ok(access.view());
@@ -319,6 +368,8 @@ export async function startAdmin({ auth, collaborators, access, config, mainPort
     if (why) return send(403, { error: why });
     const { pathname, searchParams } = new URL(req.url, 'http://localhost');
     try {
+      if (req.method === 'GET' && pathname === '/api/folders/browse') return send(200, await browseFolders(new URL(req.url, 'http://localhost')));
+      if (pathname === '/api/messages' || pathname.startsWith('/api/messages/')) return messages.handleApi(req, res, { mac: true, headers: HEADERS });
       if (pathname === '/api/collaborators' || pathname.startsWith('/api/collaborators/')) {
         const r = await collaborators.ownerApi(req.method, pathname, SAFE_METHODS.has(req.method) ? {} : await readJson(req), true);
         return send(r.status, r.body);
@@ -365,10 +416,17 @@ export async function startAdmin({ auth, collaborators, access, config, mainPort
       setTimeout(() => access.close('phone'), 200);
       return ok({ ok: true });
     },
+    // Only the Mac can widen access; a phone may turn the internet link off.
+    'PUT /api/network': ({ body }) => {
+      if (readNetwork(config).internet.kind === 'off') return reply(404, { error: 'Not found' });
+      if (body.wifi !== undefined || body.token !== undefined || body.internet?.kind !== 'off') return reply(403, { error: 'Only the Mac can turn internet access on. Use Admin on the Mac or pocket-dev internet.' });
+      return setNetwork({ internet: { kind: 'off' } }, 'phone');
+    },
   });
 
   return {
     url,
+    port,
     line: `Admin (this Mac only): ${url}`,
     openPage() {
       if (process.env.POCKET_DEV_NO_OPEN) return;

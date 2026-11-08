@@ -99,8 +99,13 @@
     }
   }
 
-  if (new URLSearchParams(location.search).get('e') === 'qr') {
-    showForm('QR code expired, scan a new one (npm run qr) or enter the password');
+  const ERRORS = {
+    qr: 'QR code expired, scan a new one (npm run qr) or enter the password',
+    handoff: 'The switch link expired or was already used. Go back to the other address and tap Switch again, or log in here.',
+  };
+  const error = ERRORS[new URLSearchParams(location.search).get('e')];
+  if (error) {
+    showForm(error);
   } else {
     check();
   }

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { createTakeover, readClaudeSessions, copyView, LIVE_MS, BUSY_MS } from './takeover.js';
 
 const LINE_MAX = 256_000;
 const CHUNK = 4 << 20;
@@ -9,10 +9,10 @@ const PARALLEL = 8;
 const TITLE_MAX = 120;
 const TEXT_MAX = 1500;
 const DETAIL_MESSAGES = 20;
-const LIVE_MS = 2 * 60_000;
 const ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 
 const claudeDir = () => process.env.POCKET_DEV_CLAUDE_DIR || path.join(os.homedir(), '.claude', 'projects');
+export const claudeSessionsDir = () => path.join(path.dirname(claudeDir()), 'sessions');
 const codexDir = () => process.env.POCKET_DEV_CODEX_DIR || path.join(os.homedir(), '.codex');
 
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
@@ -140,7 +140,7 @@ const claude = {
     }
   },
 
-  resumeCommand: (id) => `claude --resume ${id}`,
+  resumeArgv: (id) => ['claude', ['--resume', id]],
 };
 
 const CODEX_INJECTED = /^\s*(<[A-Za-z][\w-]*[\s>/]|# (AGENTS\.md|Context from my IDE|Files (mentioned|pasted) by|Environment variables))/;
@@ -213,10 +213,16 @@ const codex = {
     if (o.payload?.source?.subagent) acc.hidden = true;
   },
 
-  resumeCommand: (id) => `codex resume ${id}`,
+  resumeArgv: (id) => ['codex', ['resume', id]],
 };
 
 const TOOLS = { claude, codex };
+const TOOL_LABELS = { claude: 'Claude', codex: 'Codex' };
+
+// [program, args] that continue a conversation in a terminal.
+export const resumeArgv = (tool, id) => TOOLS[tool].resumeArgv(id);
+// The id passed ID_RE and names a file in the store, so the command is safe to type into a shell.
+const resumeCommand = (tool, id) => resumeArgv(tool, id).flat().join(' ');
 
 // Per-file summaries, extended in place as the jsonl grows (both tools only ever append).
 const summaries = new Map();
@@ -260,18 +266,19 @@ async function extend(tool, { id, file }, st) {
   return s;
 }
 
-const runningCommands = () => new Promise((resolve) => {
-  execFile('ps', ['-axo', 'pid,command'], { maxBuffer: 8 << 20 }, (err, out) => resolve(err ? '' : out));
-});
+// Copies of each conversation that are running now, by `${tool}:${id}`, from one survey().
+function byConversation(copies) {
+  const held = new Map();
+  for (const c of copies) held.set(`${c.tool}:${c.id}`, [...(held.get(`${c.tool}:${c.id}`) ?? []), c]);
+  return held;
+}
 
-// A warning, not a lock: a session counts as live when a process mentions its id on the command line
-// (`claude --resume <id>`, the VS Code extension's `--resume=<id>` for a reopened tab, `codex resume <id>`)
-// or its file was written in the last two minutes. A brand-new session has no id on any command line,
-// so only the mtime signal catches it.
-const isLive = (s, ps) => ps.includes(s.id) || Date.now() - s.mtimeMs < LIVE_MS;
-
-function view(s, ps, names) {
+// A conversation is live while a program has it open (see takeover.js) or its file was written in the last two
+// minutes, which also covers a program the survey cannot identify. `openIn` says where: 'mac' when another program on
+// the Mac has it, 'pocket-dev' when only a Pocket Dev terminal or chat has it, null when only the file says so.
+function view(s, held, names) {
   const title = s.customTitle || names.get(s.id) || s.title || s.firstPrompt || '(untitled)';
+  const copies = held.get(`${s.tool}:${s.id}`) ?? [];
   return {
     tool: s.tool,
     id: s.id,
@@ -280,7 +287,8 @@ function view(s, ps, names) {
     title: clip(oneLine(title), TITLE_MAX),
     lastActive: s.lastActive ?? new Date(s.mtimeMs).toISOString(),
     messageCount: s.messageCount,
-    live: isLive(s, ps),
+    live: copies.length > 0 || Date.now() - s.mtimeMs < LIVE_MS,
+    openIn: copies.some((c) => c.kind === 'process') ? 'mac' : copies.length ? 'pocket-dev' : null,
   };
 }
 
@@ -294,13 +302,13 @@ async function statAll(tools) {
 
 // Walks files newest-first and stops once `limit` sessions qualify, so old multi-hundred-MB sessions
 // are never read for the list. Sorting by mtime approximates sorting by last message time.
-async function listSessions(tools, limit) {
-  const [entries, ps, names] = await Promise.all([statAll(tools), runningCommands(), codex.names()]);
+async function listSessions(tools, limit, held = new Map()) {
+  const [entries, names] = await Promise.all([statAll(tools), codex.names()]);
   const picked = [];
   for (let i = 0; i < entries.length && picked.length < limit; i += PARALLEL) {
     const batch = entries.slice(i, i + PARALLEL);
     for (const s of await Promise.all(batch.map((e) => summarize(e.tool, e, e.st)))) {
-      if (listable(s) && picked.length < limit) picked.push(view(s, ps, names));
+      if (listable(s) && picked.length < limit) picked.push(view(s, held, names));
     }
   }
   return picked.sort((a, b) => b.lastActive.localeCompare(a.lastActive));
@@ -351,10 +359,32 @@ function collapse(msgs) {
   }));
 }
 
-export function createHistoryApi({ createSession, sessionView, sendJson }) {
+// The CLI has only the id.
+export async function findConversation(id) {
+  if (!ID_RE.test(id ?? '')) return null;
+  for (const tool of Object.keys(TOOLS)) {
+    const s = await findSession(tool, id);
+    if (s) return { tool, id: s.id, cwd: s.cwd };
+  }
+  return null;
+}
+
+const toBool = (v, name) => {
+  if (v === undefined || typeof v === 'boolean') return v ?? false;
+  throw Object.assign(new Error(`${name} must be true or false`), { status: 400 });
+};
+
+// Mount after the auth check. `own` reaches Pocket Dev's own copies of a conversation, { terminals, endTerminal, chats,
+// releaseChat } as createTakeover describes them; `system` replaces process listing and signals in tests. `deviceFor`
+// and `log` name the device that takes a conversation over in the security log.
+export function createHistoryApi({ createSession, sessionView, sendJson, readJson, deviceFor, log, own = {}, system = {} }) {
+  const takeover = createTakeover({ claudeSessions: () => readClaudeSessions(claudeSessionsDir()), log, ...own, ...system });
+  // The list and the detail still load when the process table cannot be read; take over itself reports the error.
+  const survey = () => takeover.survey().catch(() => []);
   // The first scan reads a few hundred MB of jsonl; do it at startup so the phone's first list is warm.
   listSessions(Object.keys(TOOLS), 30).catch(() => {});
-  return async function handleHistory(req, res, pathname) {
+
+  async function handleHistory(req, res, pathname) {
     const [, , , tool, id, action] = pathname.split('/');
     const url = new URL(req.url, 'http://localhost');
 
@@ -362,27 +392,75 @@ export function createHistoryApi({ createSession, sessionView, sendJson }) {
       const filter = url.searchParams.get('tool') || 'all';
       if (filter !== 'all' && !Object.hasOwn(TOOLS, filter)) return sendJson(res, 400, { error: 'tool must be all, claude or codex' });
       const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get('limit'), 10) || 30));
-      return sendJson(res, 200, await listSessions(filter === 'all' ? Object.keys(TOOLS) : [filter], limit));
+      return sendJson(res, 200, await listSessions(filter === 'all' ? Object.keys(TOOLS) : [filter], limit, byConversation(await survey())));
     }
 
     if (!Object.hasOwn(TOOLS, tool)) return sendJson(res, 400, { error: 'Unknown tool' });
     if (!ID_RE.test(id ?? '')) return sendJson(res, 400, { error: 'Bad session id' });
     const route = `${req.method} ${action ?? ''}`;
-    if (route !== 'GET ' && route !== 'POST resume') return sendJson(res, 404, { error: 'Not found' });
+    if (!['GET ', 'POST resume', 'POST takeover'].includes(route)) return sendJson(res, 404, { error: 'Not found' });
 
     const s = await findSession(tool, id);
     if (!s) return sendJson(res, 404, { error: 'No such conversation' });
 
     if (route === 'GET ') {
-      const [ps, names] = await Promise.all([runningCommands(), codex.names()]);
-      return sendJson(res, 200, { ...view(s, ps, names), messages: await lastMessages(s) });
+      const [copies, names] = await Promise.all([survey(), codex.names()]);
+      const mine = copies.filter((c) => c.tool === tool && c.id === s.id);
+      const busy = Date.now() - s.mtimeMs < BUSY_MS || mine.some((c) => c.busy);
+      return sendJson(res, 200, { ...view(s, byConversation(mine), names), busy, copies: mine.map(copyView), messages: await lastMessages(s) });
+    }
+
+    // Closes every running copy, so the continue the phone sends next is the only writer.
+    if (route === 'POST takeover') {
+      const device = deviceFor(req);
+      if (!device) return sendJson(res, 403, { error: 'Only your own devices can take over a conversation.' });
+      const body = await readJson(req);
+      const r = await takeover.takeOver({
+        tool, id: s.id, mtimeMs: s.mtimeMs, force: toBool(body.force, 'force'), confirmBusy: toBool(body.confirmBusy, 'confirmBusy'),
+        note: 'Continued in another Pocket Dev tab', who: { by: 'phone', deviceId: device.id, name: device.name, ip: device.ip },
+      });
+      return sendJson(res, r.status, r.body);
     }
 
     const cwdExists = s.cwd && fs.statSync(s.cwd, { throwIfNoEntry: false })?.isDirectory();
     const project = !s.cwd ? id.slice(0, 8) : s.cwd === os.homedir() ? '~' : path.basename(s.cwd);
-    // The id passed ID_RE and names a file in the store, so it is safe to put on the shell line.
-    const session = await createSession(cwdExists ? s.cwd : os.homedir(), `${tool} · ${project}`, TOOLS[tool].resumeCommand(s.id));
+    const session = await createSession(cwdExists ? s.cwd : os.homedir(), `${tool} · ${project}`, resumeCommand(tool, s.id));
     const note = cwdExists ? undefined : `${s.cwd || 'The original folder'} no longer exists, so this terminal starts in your home folder.`;
     return sendJson(res, 201, { ...sessionView(session), note });
+  }
+
+  // The Admin page's "Open in Pocket Dev": conversations a Pocket Dev terminal or chat has open, each with the command
+  // that moves it to a terminal on the Mac. That command, `pocket-dev takeover`, calls act() to close Pocket Dev's copy.
+  // The page has no button for it, so the section has no `action`.
+  handleHistory.openHere = {
+    title: 'Open in Pocket Dev',
+    empty: 'No conversation is open in a Pocket Dev terminal or chat.',
+    async list() {
+      const held = byConversation((await takeover.survey()).filter((c) => c.kind === 'terminal' || c.kind === 'chat'));
+      const names = await codex.names();
+      const items = await Promise.all([...held.values()].map(async (copies) => {
+        const { tool, id } = copies[0];
+        const s = await findSession(tool, id);
+        const cwd = s?.cwd ?? copies[0].chat?.cwd ?? copies[0].terminal?.cwd ?? null;
+        return {
+          id: `${tool}:${id}`,
+          label: s ? view(s, held, names).title : copies[0].chat?.title || copies[0].terminal?.title || id,
+          details: [`${TOOL_LABELS[tool]} in ${copies.map((c) => copyView(c).label.replace(/^Pocket Dev /, '')).join(', ')}`, ...(cwd ? [cwd] : []), `On the Mac, run: pocket-dev takeover ${id}`],
+          tool, conversationId: id, cwd,
+          busy: Boolean(s && Date.now() - s.mtimeMs < BUSY_MS) || copies.some((c) => c.busy || c.chat?.status === 'running'),
+          activeAt: Math.max(...copies.map((c) => c.chat?.updatedAt ?? c.terminal?.activeAt ?? 0)),
+        };
+      }));
+      return items.sort((a, b) => b.activeAt - a.activeAt);
+    },
+    async act(item) {
+      const [tool, id] = item.split(':');
+      if (!Object.hasOwn(TOOLS, tool) || !ID_RE.test(id ?? '')) return false;
+      const s = await findSession(tool, id);
+      const r = await takeover.takeOver({ tool, id, mtimeMs: s?.mtimeMs ?? 0, scope: 'pocket-dev', confirmBusy: true, note: 'Continued on your Mac', who: { by: 'mac' } });
+      if (r.status !== 200) throw Object.assign(new Error(r.body.error), { status: r.status });
+      return r.body.stopped.length > 0;
+    },
   };
+  return handleHistory;
 }

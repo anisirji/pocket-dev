@@ -33,3 +33,13 @@ body :is(#app, .fx-root, .chat, .hist, .st-sheet, .apps-sheet, .screen-sheet, .h
   right: env(safe-area-inset-right, 0px);
   bottom: env(safe-area-inset-bottom, 0px);
 }
+
+.ms-state { font-weight: 600; color: var(--text); }
+.ms-state.ok { color: var(--ok, oklch(0.8 0.12 145)); }
+.ms-state.warning { color: var(--warn, oklch(0.83 0.11 86)); }
+.ms-state.critical { color: var(--danger, var(--text)); }
+.ms-state.unknown, .ms-age { color: var(--muted); }
+.ms-age { font-size: 11px; margin-inline-start: auto; white-space: nowrap; }
+.ms-stale .ms-item { color: var(--muted); }
+.ms-strip:focus-visible, .ms-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ms-btn:disabled { opacity: .5; }

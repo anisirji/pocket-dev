@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#0b0e14">
 <title>Pocket Dev</title>
+<link rel="stylesheet" href="/folder-picker.css">
+<script src="/folder-picker.js"></script>
 <link rel="stylesheet" href="/vendor/xterm/xterm.css">
 <script src="/vendor/xterm/xterm.js"></script>
 <script src="/vendor/xterm/addon-fit.js"></script>
@@ -25,6 +27,7 @@
 <link rel="stylesheet" href="/chat.css">
 <script src="/chat.js" defer></script>
 <link rel="stylesheet" href="/files.css">
+<link rel="stylesheet" href="/messages.css">
 <script src="/files.js" defer></script>
 <style>
   :root {
@@ -154,7 +157,7 @@
 <div id="app">
   <header>
     <div id="viewSwitch" role="group" aria-label="View">
-      <button data-view="terminal" title="Terminal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg><span class="sr-only">Terminal</span></button><button data-view="git" title="Git"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7"/><path d="M18 10.5c0 4-6 3.5-11 6"/></svg><span class="sr-only">Git</span></button><button data-view="chat" title="Chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></svg><span class="sr-only">Chat</span></button><button data-view="files" title="Files"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="sr-only">Files</span></button>
+      <button data-view="terminal" title="Terminal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg><span class="sr-only">Terminal</span></button><button data-view="git" title="Git"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7"/><path d="M18 10.5c0 4-6 3.5-11 6"/></svg><span class="sr-only">Git</span></button><button data-view="chat" title="Chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></svg><span class="sr-only">Chat</span></button><button data-view="files" title="Files"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="sr-only">Files</span></button><button data-view="messages" title="Messages"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg><span class="sr-only">Messages</span></button>
     </div>
     <div id="headGap"></div>
     <button id="resumeBtn" class="icon-btn glyph" aria-label="Resume a laptop conversation"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
@@ -316,6 +319,7 @@ function connect(view) {
       view.online = state === 'connected';
       if (view.online) view.everOnline = true;
       renderBadge();
+      window.pocketDevNetwork?.socket(view.online);
     },
     onMessage(msg) {
       if (msg.t === 'out') {
@@ -326,7 +330,7 @@ function connect(view) {
         view.exitCode = msg.code;
         view.term.write(`\r\n\x1b[2m[process exited ${msg.code}]\x1b[0m\r\n`);
         renderTabs();
-      }
+      } else if (msg.t === 'waiting') window.pocketDevSettings?.waiting(msg);
     },
     onClose(e) {
       if (POWER_REASONS.has(e.reason)) { showPower(e.reason); return false; }
@@ -740,7 +744,14 @@ let folders = null;
 let folderNote = '';
 const otherPath = sheetForm('Other path, e.g. ~/app', 'Open', (value) => openFolder(value));
 
+let browsingFolders = false;
+const terminalFolderBrowser = window.PocketDevFolderPicker?.create({
+  api, title: 'Choose a folder for the terminal', selectLabel: 'Open terminal here',
+  onSelect: openFolder, onCancel: () => { browsingFolders = false; renderFolders(); },
+});
+
 async function openFolders() {
+  browsingFolders = false; terminalFolderBrowser?.close();
   folderNote = '';
   showLayer('folders');
   try { folders = await api('GET', '/api/folders'); } catch (err) { folderNote = err.message; }
@@ -750,15 +761,17 @@ async function openFolders() {
 // A double tap on a row must open one terminal, not two.
 let openingFolder = false;
 async function openFolder(dir) {
-  if (openingFolder) return;
+  if (openingFolder) return false;
   openingFolder = true;
   try {
     await newSession(dir);
     otherPath.querySelector('input').value = '';
     hideLayer();
+    return true;
   } catch (err) {
     folderNote = err.message;
     renderFolders();
+    return false;
   } finally {
     openingFolder = false;
   }
@@ -770,7 +783,15 @@ async function togglePin(dir, pinned) {
 }
 
 function renderFolders() {
-  if (!folders) return setSheet({ title: 'New terminal', note: folderNote || 'Loading…', error: !!folderNote });
+  if (browsingFolders) return setSheet({ title: 'New terminal', rows: [terminalFolderBrowser.element], note: folderNote, error: !!folderNote });
+  const browse = h('button', 'primary', 'Browse folders');
+  browse.type = 'button';
+  browse.onclick = () => {
+    if (!terminalFolderBrowser) { folderNote = CLIENT_UPDATE_MESSAGE; renderFolders(); return; }
+    browsingFolders = true; renderFolders();
+    terminalFolderBrowser.open(otherPath.querySelector('input').value || folders?.home, browse);
+  };
+  if (!folders) return setSheet({ title: 'New terminal', action: browse, note: folderNote || 'Loading…', error: !!folderNote });
   const { home, pinned, recent, projects } = folders;
   const tilde = (p) => (p === home ? '~' : p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p);
   const pinnedPaths = new Set(pinned.map((f) => f.path));
@@ -796,6 +817,7 @@ function renderFolders() {
   };
   setSheet({
     title: 'New terminal',
+    action: browse,
     rows: [row('Home', home, false), ...section('Pinned', pinned), ...section('Recent', recent), ...section('Projects', projects)],
     form: otherPath,
     note: folderNote,
@@ -1096,7 +1118,7 @@ function setView(view) {
 }
 // Chat and Files are full-screen screens over the current view, with their own back and close; Terminal and Git
 // switch in place.
-const SCREENS = { chat: () => window.pocketDevChat.open(), files: () => window.openFiles() };
+const SCREENS = { chat: () => window.pocketDevChat.open(), files: () => window.openFiles(), messages: () => window.pocketDevMessages?.open() };
 for (const b of $('viewSwitch').children) {
   b.addEventListener('click', () => (SCREENS[b.dataset.view] ? SCREENS[b.dataset.view]() : setView(b.dataset.view)));
 }
@@ -1177,11 +1199,15 @@ window.pocketDev = {
   async openTerminalAt(dir) {
     window.pocketDev.openSession(await api('POST', '/api/sessions', { cwd: dir }));
   },
+  activeSession: () => activeId,
 };
 
 (async () => {
   requireTerminalClient();
-  const stored = store.get('pd.active');
+  // A switch between the Mac's addresses names the terminal to reopen in the fragment; it is read once and dropped.
+  const handedOff = /^#terminal=([0-9a-f]+)$/.exec(location.hash)?.[1];
+  if (handedOff) history.replaceState(history.state, '', location.pathname + location.search);
+  const stored = handedOff ?? store.get('pd.active');
   await syncSessions();
   if (!views.size) await newSession();
   activate(views.has(stored) ? stored : activeId);
@@ -1189,6 +1215,8 @@ window.pocketDev = {
 })().catch((err) => showClientError(`Could not open terminals: ${err.message}`));
 </script>
 <script src="/history.js"></script>
+<script src="/network.js"></script>
 <script src="/settings.js"></script>
+<script type="module">import { startPhoneMessages } from '/messages.js'; startPhoneMessages({ badgeOn: document.querySelector('#viewSwitch [data-view="messages"]') });</script>
 </body>
 </html>

@@ -16,12 +16,26 @@ const chat = { id: 'fixture-chat', tool: 'codex', title: 'Question fixture', cwd
 const question = { id: 'event-1', seq: 1, type: 'question', requestId: 'question-1', questions: [{ id: 'q1', question: 'Which option should we use?', options: choices.map((c) => ({ label: c.label, description: c.description })) }] };
 const chatEvents = [{ id: 'plan-link', seq: 0, type: 'assistant-text', text: '[Fixture plan](/tmp/ROLE_ACCESS_PLAN.md)' }, question];
 const claudeChat = { ...chat, id: 'claude-fixture', tool: 'claude', title: 'Claude fixture', status: 'idle', pending: false, pendingId: null };
+const messagesHello = {
+  t: 'hello', you: { id: 'me', name: 'Pixel', kind: 'device' }, limits: { fileMax: null, largeFile: 50 * 1024 * 1024, lowSpace: false },
+  people: [{ id: 'mac', name: 'Mac', kind: 'mac' }, { id: 'sam', name: 'Sam with a long collaborator name', kind: 'collaborator' }],
+  messages: [
+    { seq: 1, at: Date.now(), chat: 'everyone', mine: false, canDelete: true, text: 'A long line of shared text that has to wrap on a narrow phone without pushing the page sideways: https://example.com/a/very/long/path/that/does/not/break/naturally', from: { id: 'sam', name: 'Sam with a long collaborator name', kind: 'collaborator' }, to: null, files: [{ id: 'f'.repeat(24), name: 'a-very-long-file-name-for-the-quarterly-report-final-v2.pdf', size: 123456, kind: 'file' }] },
+    { seq: 2, at: Date.now(), chat: 'everyone', mine: true, canDelete: true, text: 'Thanks', from: { id: 'me', name: 'Pixel', kind: 'device' }, to: null, files: [] },
+  ],
+  keep: [1, 2],
+};
 const historyItem = { tool: 'codex', id: '00000000-0000-4000-8000-000000000001', cwd: '/tmp', title: 'Resume fixture', project: 'Fixture', lastActive: new Date().toISOString(), messageCount: 1, live: false };
 let messagePosts = 0, terminalInputs = 0, terminalCreates = 0;
 const chatCreates = [];
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const json = (data) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(data)); };
+  if (url.pathname === '/api/folders/browse') {
+    const dir = url.searchParams.get('path') || '/tmp';
+    const names = dir === '/tmp' ? ['website-project', 'Downloads'] : dir === '/tmp/Downloads' ? ['project-assets'] : [];
+    return json({ path: dir, parent: dir === '/tmp' ? null : '/tmp', breadcrumbs: [{ name: 'Home', path: '/tmp' }, ...(dir === '/tmp' ? [] : [{ name: dir.split('/').at(-1), path: dir }])], shortcuts: [{ name: 'Home', path: '/tmp' }], entries: names.map((name) => ({ name, path: dir + '/' + name })) });
+  }
   if (url.pathname === '/api/files/download') {
     if (url.searchParams.get('path') !== '/tmp/ROLE_ACCESS_PLAN.md') { res.writeHead(403); return res.end(); }
     const content = '# Role access plan\n\nScoped repository access.\n';
@@ -36,11 +50,13 @@ const server = http.createServer(async (req, res) => {
     '/api/chat/fixture-chat': chat,
     '/api/settings': { devices: [], maxDevices: 2 },
     '/api/collaborators': { enabled: true, ai: { available: false, reason: 'Collaborator AI needs an isolated runner.' }, collaborators: [], repositories: [] },
+    '/api/performance': { sampledAt: Date.now(), cpu: { usedPercent: 14, cores: 8 }, memory: { freePercent: 40 }, disk: { freeGB: 85.2, totalGB: 256 }, eventLoopDelayMs: 15, status: 'normal', level: 'ok', alerts: [] },
     '/api/power': { awake: 'off', temperature: {}, shutdown: {}, lidClosed: false, lidSleepDisabled: false },
     '/api/power/vitals': { battery: 59, onAC: true, temperature: { batteryC: 30.7 }, limits: { batteryPercent: 20, temperatureC: 45 }, alerts: [] },
     '/api/chat/options': { home: '/tmp', defaultTool: 'codex', tools: { codex: { label: 'Codex', defaults: { model: 'model-0' }, settings: [{ key: 'model', label: 'Model', default: 'model-0', choices }] } } },
     '/api/files/places': { home: '/tmp', roots: ['/tmp'], pinned: [] },
     '/api/files/list': { path: '/tmp', parent: '/', breadcrumbs: [{ name: 'tmp', path: '/tmp' }], entries: [], total: 0 },
+    '/api/messages/people': { you: messagesHello.you, people: messagesHello.people },
   };
   if (url.pathname.startsWith('/api/')) {
     if (req.method === 'PATCH' && url.pathname === '/api/chat/fixture-chat/queue') {
@@ -74,6 +90,7 @@ wss.on('connection', (ws, req) => {
     if (msg.t === 'in') terminalInputs++;
   });
   const isClaude = req.url.endsWith('/claude-fixture');
+  if (req.url.startsWith('/ws/messages')) return ws.send(JSON.stringify(messagesHello));
   ws.send(JSON.stringify(req.url.startsWith('/ws/chat/') ? { t: 'hello', chat: isClaude ? claudeChat : chat, events: isClaude ? [] : chatEvents } : { t: 'out', d: '\x1b[2J\x1b[HQuestion\r\n\r\nChoose an option\r\n\r\n> 1. First option\r\n  2. Second option\r\n  3. Last option\r\n\r\nUp / Down to choose, Enter to confirm\r\n' }));
 });
 let browser;
@@ -106,11 +123,14 @@ try {
     assert.ok(box.x >= -1 && box.x + box.width <= bounds.width + 1 && box.y >= bounds.top - 1 && box.y + box.height <= bounds.bottom + 1,
       `${selector} is clipped: ${JSON.stringify({ box, bounds })}`);
   }
+  await page.waitForFunction(() => document.querySelector('.ms-cpu')?.textContent === 'CPU 14%');
+  assert.equal(await page.locator('.ms-storage').textContent(), '85.2 GB free');
   const sizes = [[320, 568], [360, 640], [375, 667], [390, 844], [393, 852], [412, 915], [430, 932], [568, 320], [844, 390], [768, 1024], [1024, 768], [1280, 720], [1440, 900], [1920, 1080]];
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
     await page.evaluate(() => setTestViewport({}));
     await settle();
+    await inViewport('#macStatus', { aboveStatus: true });
     for (const selector of ['#app', '#inputBar', '#keyNav', '#terms']) await inViewport(selector);
     await page.locator('#keyMore').click();
     await inViewport('#keyTools');
@@ -133,6 +153,20 @@ try {
   }
   await page.evaluate(() => setTestViewport({}));
   await page.locator('#cmd').evaluate((node) => node.blur());
+  await page.locator('#new').click();
+  await page.locator('#sheetAction').getByRole('button', { name: 'Browse folders', exact: true }).click();
+  await page.locator('#sheetBody').getByRole('button', { name: 'Open folder website-project', exact: true }).click();
+  assert.equal(await page.locator('#sheetBody .fp-selected').textContent(), '/tmp/website-project');
+  assert.equal(await page.locator('#sheetBody').getByRole('button', { name: 'Open terminal here', exact: true }).isEnabled(), true);
+  for (const [width, height] of sizes) {
+    await page.setViewportSize({ width, height });
+    await page.locator('#sheetBody .fp-primary').scrollIntoViewIfNeeded();
+    await inViewport('#sheetBody .fp-primary');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  }
+  await page.locator('#sheetBody').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.locator('#sheetClose').click();
+  await page.setViewportSize({ width: 393, height: 852 });
   await page.locator('#settingsBtn').click();
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
   await settle();
@@ -140,11 +174,20 @@ try {
   const collaborators = page.locator('[data-mount="collaborators"]');
   await collaborators.getByRole('button', { name: 'Invite someone', exact: true }).click();
   await collaborators.getByLabel('Name', { exact: true }).fill('Website developer');
-  await collaborators.getByLabel('Repository', { exact: true }).fill('/tmp/website-project');
+  const repoField = collaborators.locator('.fp-field').filter({ has: page.getByLabel('Repository', { exact: true }) });
+  await repoField.getByRole('button', { name: 'Browse folders', exact: true }).click();
+  await repoField.getByRole('button', { name: 'Open folder website-project', exact: true }).click();
+  await repoField.getByRole('button', { name: 'Select this folder', exact: true }).click();
+  assert.equal(await collaborators.getByLabel('Repository', { exact: true }).inputValue(), '/tmp/website-project');
   await collaborators.getByLabel('Role', { exact: true }).selectOption('developer');
   assert.equal(await collaborators.getByLabel('AI access', { exact: true }).isDisabled(), true);
   await collaborators.getByRole('button', { name: 'Add related folder', exact: true }).click();
-  await collaborators.getByLabel('Related folder path', { exact: true }).fill('/tmp/Downloads/project-assets');
+  const relatedField = collaborators.locator('.fp-field').filter({ has: page.getByLabel('Related folder', { exact: true }) });
+  await relatedField.getByRole('button', { name: 'Browse folders', exact: true }).click();
+  await relatedField.getByRole('button', { name: 'Open folder Downloads', exact: true }).click();
+  await relatedField.getByRole('button', { name: 'Open folder project-assets', exact: true }).click();
+  await relatedField.getByRole('button', { name: 'Select this folder', exact: true }).click();
+  assert.equal(await collaborators.getByLabel('Related folder', { exact: true }).inputValue(), '/tmp/Downloads/project-assets');
   assert.equal(await collaborators.getByLabel('Related folder access', { exact: true }).inputValue(), 'read');
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
@@ -169,9 +212,41 @@ try {
   await inViewport('.fx-root');
   await page.evaluate(() => window.pocketDev.overlays.closeAll());
   await page.evaluate(() => setTestViewport({}));
+  await page.locator('[data-view="messages"]').click();
+  await page.waitForSelector('.mx-screen:not([hidden]) .mx-row');
+  for (const [width, height] of sizes) {
+    await page.setViewportSize({ width, height });
+    await settle();
+    await inViewport('.mx-screen');
+    await page.locator('.mx-row').first().click();
+    for (const selector of ['.mx-compose', '.mx-send', '.mx-attach', '.mx-card']) await inViewport(selector);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.mx-msg')].every((m) => m.getBoundingClientRect().right <= innerWidth + 1)), `${width}x${height}: Messages overflow`);
+    if (await page.locator('.mx-back').isVisible()) await page.locator('.mx-back').click();
+  }
+  await page.setViewportSize({ width: 393, height: 852 });
+  if (await page.locator('.mx-back').isVisible()) await page.locator('.mx-back').click();
+  await page.locator('.mx-row').first().click();
+  await page.locator('.mx-msg:not(.mine)').click({ button: 'right' });
+  await inViewport('.mx-menu-list');
+  assert.deepEqual(await page.locator('.mx-menu-item').allTextContents(), ['Copy', 'Download', 'Delete for everyone', 'Hide for me', 'Cancel']);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.mx-menu').isVisible(), false);
+  await page.locator('.mx-input').focus();
+  await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
+  await settle();
+  for (const selector of ['.mx-compose', '.mx-send']) await inViewport(selector);
+  await page.evaluate(() => window.pocketDev.overlays.closeAll());
+  await page.waitForSelector('.mx-screen[hidden]', { state: 'attached' });
+  await page.evaluate(() => setTestViewport({}));
   await page.locator('[data-view="chat"]').click();
   await page.locator('.chat-new-btn').click();
   await page.waitForSelector('.chat-start');
+  const chatFolder = page.locator('.chat .fp-field').filter({ has: page.getByLabel('Folder', { exact: true }) });
+  await chatFolder.getByRole('button', { name: 'Browse folders', exact: true }).click();
+  await chatFolder.locator('.fp-locations').getByRole('button', { name: 'Home', exact: true }).click();
+  await chatFolder.getByRole('button', { name: 'Open folder website-project', exact: true }).click();
+  await chatFolder.getByRole('button', { name: 'Select this folder', exact: true }).click();
+  assert.equal(await chatFolder.getByLabel('Folder', { exact: true }).inputValue(), '/tmp/website-project');
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
   await settle();
   await inViewport('.chat');

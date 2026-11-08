@@ -1,5 +1,8 @@
 (() => {
-  const POLL_MS = 30_000;
+  const POLL_MS = 5000;
+  const VITALS_MS = 30_000;
+  const REQUEST_MS = 8000;
+  const STALE_MS = 15_000;
   const SNOOZE_MS = 15 * 60_000;
   const THERMAL_WORD = { fair: 'warm', serious: 'hot', critical: 'very hot' };
   const baseTitle = document.title;
@@ -11,18 +14,23 @@
     return node;
   };
 
-  // One strip above every screen with the Mac's battery and temperature, and a banner under it when the Mac needs
-  // attention. The banner and strip are the top of the page, so every full-screen layer starts below them (--status-h).
+  // Live performance, battery and temperature stay above every screen. All full-screen layers reserve --status-h.
   const wrap = el('div');
   wrap.id = 'macStatus';
-  wrap.hidden = true;
+  wrap.hidden = false;
   const strip = el('button', 'ms-strip');
   strip.type = 'button';
   strip.title = 'Mac health';
   strip.onclick = () => window.openHealthSheet?.();
   const battery = el('span', 'ms-item');
   const temp = el('span', 'ms-item');
-  strip.append(el('span', 'ms-label', 'Mac'), battery, temp);
+  const state = el('span', 'ms-state', 'Checking Mac…');
+  state.setAttribute('role', 'status');
+  const cpu = el('span', 'ms-item ms-cpu', 'CPU —');
+  const storage = el('span', 'ms-item ms-storage', 'Free —');
+  const age = el('span', 'ms-age');
+  battery.hidden = temp.hidden = true;
+  strip.append(el('span', 'ms-label', 'Mac'), state, cpu, storage, battery, temp, age);
   const banner = el('div', 'ms-banner');
   banner.hidden = true;
   const bannerText = el('span', 'ms-text');
@@ -71,7 +79,19 @@
     if (buzz) try { navigator.vibrate?.([250, 120, 250]); } catch {}
   }
 
-  function renderAlerts(alerts) {
+  let vitalsAlerts = [], performanceAlerts = [], performance = null;
+  let connection = navigator.onLine === false ? 'offline' : 'checking';
+  let receivedAt = null, active = null, vitalsRequest = null, pollTimer = 0, authExpired = false;
+
+  function allAlerts() {
+    const alerts = [...vitalsAlerts, ...performanceAlerts];
+    if (connection === 'unreachable') alerts.unshift({ key: 'connection', level: 'warning', text: 'Mac is not responding. It may be busy, asleep, or disconnected. The displayed readings are old.' });
+    if (connection === 'unavailable') alerts.unshift({ key: 'connection', level: 'warning', text: 'The Mac replied, but its performance readings are unavailable. Try checking again.' });
+    if (connection === 'offline') alerts.unshift({ key: 'connection', level: 'warning', text: 'This phone is offline. Mac readings are out of date.' });
+    return alerts.sort((a, b) => (a.level === 'critical' ? 0 : 1) - (b.level === 'critical' ? 0 : 1));
+  }
+
+  function renderAlerts(alerts = allAlerts()) {
     const shown = visibleAlerts(alerts);
     announce(shown);
     document.title = alerts.length ? `⚠ ${baseTitle}` : baseTitle;
@@ -87,16 +107,22 @@
       renderAlerts(alerts);
     };
     const actions = [dismiss];
-    if (shown.some((a) => a.key === 'hot') && window.openAppsSheet) {
+    if (connection === 'connected' && shown.some((a) => ['hot', 'cpu', 'memory', 'response'].includes(a.key)) && window.openAppsSheet) {
       const apps = el('button', 'ms-btn', 'Open apps');
       apps.type = 'button';
       apps.onclick = () => window.openAppsSheet();
       actions.unshift(apps);
     }
+    if (shown.some((a) => a.key === 'connection')) {
+      const retry = el('button', 'ms-btn', 'Check again');
+      retry.type = 'button'; retry.disabled = navigator.onLine === false;
+      retry.onclick = () => { if (!active) { setConnection('checking'); poll(); } };
+      actions.unshift(retry);
+    }
     bannerActions.replaceChildren(...actions);
   }
 
-  function render(v) {
+  function renderVitals(v) {
     battery.hidden = v.battery === null;
     if (v.battery !== null) {
       const plugged = v.onAC || v.charging;
@@ -112,24 +138,118 @@
       temp.textContent = [batteryC !== null && `${batteryC.toFixed(1)} °C`, word].filter(Boolean).join(' · ');
       temp.className = `ms-item${thermal === 'critical' || batteryC >= v.limits.temperatureC + 5 ? ' crit' : thermal === 'serious' || batteryC >= v.limits.temperatureC ? ' warn' : ''}`;
     }
-    // A Mac with neither a battery nor a temperature reading has nothing to show.
-    wrap.hidden = battery.hidden && temp.hidden;
+    vitalsAlerts = v.alerts || [];
     setHeight();
-    renderAlerts(v.alerts);
+    renderAlerts();
   }
 
+  const WORD = { normal: 'Normal', cpu: 'Busy', memory: 'Memory tight', disk: 'Storage low', response: 'Slow response', unknown: 'Partial readings' };
+  const setText = (element, text) => { if (element.textContent !== text) element.textContent = text; };
+  function updateAge() {
+    const stale = connection !== 'connected';
+    wrap.className = stale ? 'ms-stale' : '';
+    age.textContent = receivedAt === null ? 'Waiting for readings' : `${stale ? 'Last reading' : 'Updated'} ${Math.max(0, Math.floor((Date.now() - receivedAt) / 1000))}s ago`;
+  }
+  function paintPerformance() {
+    const status = connection === 'offline' ? 'Phone offline' : connection === 'unreachable' ? 'Mac not responding'
+      : connection === 'checking' ? 'Checking Mac…' : connection === 'unavailable' ? 'Readings unavailable'
+        : connection === 'unsupported' ? 'Monitoring needs update' : WORD[performance?.status] || 'Partial readings';
+    setText(state, status);
+    state.className = `ms-state ${connection === 'connected' ? performance?.level || 'unknown' : 'unknown'}`;
+    const percent = performance?.cpu?.usedPercent;
+    cpu.textContent = Number.isFinite(percent) ? `CPU ${percent}%` : 'CPU —';
+    cpu.title = Number.isFinite(percent) ? `${percent}% of the Mac’s total CPU capacity is in use` : 'CPU reading is unavailable';
+    cpu.className = `ms-item ms-cpu${Number.isFinite(percent) && percent >= 90 ? ' warn' : ''}`;
+    const free = performance?.disk?.freeGB;
+    storage.textContent = Number.isFinite(free) ? `${free < 1 ? `${Math.round(free * 1024)} MB` : `${free.toFixed(1)} GB`} free` : 'Free —';
+    storage.title = Number.isFinite(free) ? `Available on the Mac’s home disk: ${free.toFixed(1)} GB${Number.isFinite(performance.disk.totalGB) ? ` of ${performance.disk.totalGB} GB` : ''}` : 'Storage reading is unavailable';
+    storage.className = `ms-item ms-storage${Number.isFinite(free) && free < 3 ? ' crit' : Number.isFinite(free) && free < 10 ? ' warn' : ''}`;
+    updateAge(); setHeight();
+  }
+  function setConnection(next) {
+    if (connection === next) return;
+    connection = next;
+    paintPerformance(); renderAlerts();
+  }
+
+  // The deadline includes the JSON body, not just response headers. Cancellation also ends mocked or stuck reads,
+  // and each caller checks request identity so a response after wake/retry cannot replace newer readings.
+  function requestJson(url) {
+    const controller = new AbortController();
+    let rejectDeadline;
+    const deadline = new Promise((resolve, reject) => { rejectDeadline = reject; });
+    const cancel = () => { controller.abort(); rejectDeadline(new Error('Request ended')); };
+    const timer = setTimeout(cancel, REQUEST_MS);
+    const response = (async () => {
+      const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+      if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+      return res.json().catch((err) => { err.responded = true; throw err; });
+    })();
+    return { cancel, result: Promise.race([response, deadline]).finally(() => clearTimeout(timer)) };
+  }
+  function stopRequests() {
+    clearTimeout(pollTimer);
+    const pending = active, vitals = vitalsRequest;
+    active = vitalsRequest = null;
+    pending?.cancel(); vitals?.cancel();
+  }
+  function expired() {
+    authExpired = true; stopRequests();
+    location.replace('/login.html');
+  }
   async function poll() {
+    if (active || document.hidden || authExpired || navigator.onLine === false) return;
+    clearTimeout(pollTimer);
+    const request = active = requestJson('/api/performance');
     try {
-      const res = await fetch('/api/power/vitals', { cache: 'no-store' });
-      if (res.status === 401) return location.replace('/login.html');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      render(await res.json());
-    } catch {
-      // The server may be restarting. Keep the last reading on screen rather than flashing an error.
+      const data = await request.result;
+      if (active !== request) return;
+      if (!data?.cpu || !data?.disk || !data?.memory || !Object.hasOwn(WORD, data.status)) throw Object.assign(new Error('No performance reading'), { responded: true });
+      performance = data;
+      performanceAlerts = data.alerts || [];
+      receivedAt = Date.now();
+      connection = 'connected';
+      paintPerformance(); renderAlerts();
+    } catch (err) {
+      if (active !== request) return;
+      if (err.status === 401 || err.status === 403) return expired();
+      if (err.status === 404) {
+        performance = null; performanceAlerts = []; connection = 'unsupported';
+        paintPerformance(); renderAlerts();
+      } else setConnection(navigator.onLine === false ? 'offline' : err.status || err.responded ? 'unavailable' : 'unreachable');
+    } finally {
+      if (active === request) {
+        active = null;
+        if (!document.hidden && !authExpired && navigator.onLine !== false) pollTimer = setTimeout(poll, POLL_MS);
+      }
     }
   }
-
-  poll();
-  setInterval(() => { if (!document.hidden) poll(); }, POLL_MS);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+  async function pollVitals() {
+    if (vitalsRequest || document.hidden || authExpired || navigator.onLine === false) return;
+    const request = vitalsRequest = requestJson('/api/power/vitals');
+    try {
+      const data = await request.result;
+      if (vitalsRequest === request) renderVitals(data);
+    } catch (err) {
+      if (vitalsRequest === request && (err.status === 401 || err.status === 403)) expired();
+    } finally { if (vitalsRequest === request) vitalsRequest = null; }
+  }
+  function resume() {
+    stopRequests();
+    if (authExpired) return;
+    setConnection(navigator.onLine === false ? 'offline' : 'checking');
+    updateAge(); poll(); pollVitals();
+  }
+  setInterval(() => {
+    if (document.hidden || authExpired) return;
+    if (navigator.onLine === false) setConnection('offline');
+    else if (receivedAt !== null && Date.now() - receivedAt > STALE_MS && connection === 'connected') setConnection('unreachable');
+    updateAge();
+  }, 1000);
+  setInterval(pollVitals, VITALS_MS);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopRequests(); else resume(); });
+  window.addEventListener('offline', () => { stopRequests(); setConnection('offline'); });
+  window.addEventListener('online', resume);
+  window.addEventListener('pageshow', resume);
+  paintPerformance(); renderAlerts(); poll(); pollVitals();
 })();

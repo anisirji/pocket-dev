@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Pocket Dev Admin</title>
+<link rel="stylesheet" href="/folder-picker.css">
+<script src="/folder-picker.js"></script>
 <link rel="stylesheet" href="/admin.css">
 <link rel="stylesheet" href="/collaborators.css">
+<link rel="stylesheet" href="/messages.css">
 <script src="/admin-client.js" defer></script>
 <script src="/admin-permissions.js" defer></script>
 </head>
@@ -26,7 +29,9 @@
 <div class="layout">
   <nav class="side" aria-label="Sections">
     <a href="#connection">Connection</a>
+    <a href="#internet">Internet</a>
     <a href="#sharing">Share &amp; login</a>
+    <a href="#messages">Messages</a>
     <a href="#pending" data-nav="pending">Waiting <b id="navPending"></b></a>
     <a href="#devices">Devices</a>
     <a href="#collaborators">Collaborators</a>
@@ -58,9 +63,55 @@
       </label>
     </section>
 
+    <section id="internet" class="panel" aria-labelledby="internetTitle">
+      <div class="panel-head"><h2 id="internetTitle">Internet access</h2><span class="count" id="netCount"></span></div>
+      <p class="note">Optional. Pocket Dev works on your Wi-Fi without any of this. With internet access on, phones on the same Wi-Fi still have the Wi-Fi address and can switch between the two.</p>
+      <div class="seg net-kinds" role="group" aria-label="Internet access">
+        <button type="button" data-kind="off" aria-pressed="true">Off</button>
+        <button type="button" data-kind="quick" aria-pressed="false">Quick link</button>
+        <button type="button" data-kind="domain" aria-pressed="false">My own domain</button>
+      </div>
+      <p class="note" id="netCloudflared" hidden>cloudflared is not installed on this Mac. In Terminal, run <code>brew install cloudflared</code>, then come back here.</p>
+      <div id="netOff" class="net-kind">
+        <p class="note">Only your Wi-Fi reaches Pocket Dev. Choose Quick link or My own domain to reach it from anywhere.</p>
+      </div>
+      <div id="netQuick" class="net-kind" hidden>
+        <p class="note">Needs only cloudflared on this Mac, no account. Turn on gives a random <code>trycloudflare.com</code> address that lasts until you turn it off or Pocket Dev restarts. Every Turn on is a new address, so each phone links to it again from Wi-Fi (Settings → Connection → Link this phone) before it can open it without the password.</p>
+        <div class="setting">
+          <div class="setting-text"><b id="quickStatus"></b><small id="quickDetail"></small></div>
+          <button type="button" class="btn" id="quickBtn"></button>
+        </div>
+        <div class="net-link" id="quickLink" hidden><code id="quickUrl"></code><a class="btn btn-sm link-btn" id="quickOpen" target="_blank" rel="noopener">Open</a><button type="button" class="btn btn-sm" id="quickCopy">Copy link</button></div>
+      </div>
+      <div id="netDomain" class="net-kind" hidden>
+        <ol class="steps">
+          <li>In the Cloudflare dashboard, open Zero Trust → Networks → Tunnels → Create a tunnel → Cloudflared, and name it.</li>
+          <li>From the install command it shows, copy only the token (the long code after <code>--token</code>). Do not run that command: Pocket Dev runs cloudflared for you.</li>
+          <li>Add a public hostname, such as <code>pocket.example.com</code>, pointing to <b>HTTP</b> <code id="domainPort">localhost:7777</code>. The domain must use Cloudflare DNS.</li>
+          <li>Turn on <b>Always Use HTTPS</b> for the domain (SSL/TLS → Edge Certificates), so a phone that types the address without https is sent there before it logs in.</li>
+          <li>Paste the hostname and the token here.</li>
+        </ol>
+        <p class="note">One fixed address, so each phone links to it once: on Wi-Fi, Settings → Connection → Link this phone. After that it opens the address without the password, even with Approve new devices on.</p>
+        <form id="domainForm" class="form" autocomplete="off">
+          <input type="text" name="hostname" placeholder="pocket.example.com" aria-label="Public hostname" autocapitalize="off" spellcheck="false" required>
+          <input type="password" name="token" autocomplete="off" placeholder="Tunnel token" aria-label="Tunnel token">
+          <div class="form-row"><button class="btn btn-primary">Save and connect</button></div>
+        </form>
+        <div class="setting">
+          <div class="setting-text"><b id="domainStatus"></b><small id="domainDetail"></small></div>
+          <div class="form-row"><a class="btn btn-sm link-btn" id="domainOpen" target="_blank" rel="noopener" hidden>Open</a><button type="button" class="btn btn-sm" id="domainRetry" hidden>Try again</button></div>
+        </div>
+      </div>
+      <div class="setting">
+        <label class="setting-text switch-label" for="wifi"><b>Wi-Fi access</b><small id="wifiNote"></small></label>
+        <input type="checkbox" role="switch" class="switch" id="wifi">
+      </div>
+      <p class="err" id="netErr" role="alert"></p>
+    </section>
+
     <section id="sharing" class="panel" aria-labelledby="sharingTitle">
       <div class="panel-head"><h2 id="sharingTitle">Share &amp; login</h2></div>
-      <p class="note">Scan from a phone on the same Wi-Fi as this Mac.</p>
+      <p class="note" id="sharingNote">Scan from a phone on the same Wi-Fi as this Mac.</p>
       <div class="setting">
         <div class="setting-text"><b>Share Pocket Dev</b><small>Opens Pocket Dev. A new device still needs the password and any required approval.</small></div>
         <button type="button" class="btn" id="shareQrBtn" aria-controls="shareQr" aria-expanded="false" disabled>Show share QR</button>
@@ -97,6 +148,8 @@
 
     <div class="banner" id="guessing" hidden role="alert"></div>
 
+    <section id="messages" class="panel"></section>
+
     <section class="cards" aria-label="Overview">
       <div class="card"><span class="card-label">Logged in</span><b id="cLogged">–</b><small id="cLoggedSub"></small></div>
       <div class="card"><span class="card-label">Online now</span><b id="cOnline">–</b><small id="cOnlineSub">with a terminal open or active in the last minute</small></div>
@@ -106,7 +159,7 @@
 
     <section id="pending" class="panel" hidden>
       <div class="panel-head"><h2>Waiting for approval</h2></div>
-      <p class="note">These browsers typed the right password. Check the code on the phone matches before you approve it. Requests expire after <span id="pendingTtl">10</span> minutes.</p>
+      <p class="note">These browsers typed the right password. Check the code on the phone matches before you approve it. Requests expire after <span id="pendingTtl">10</span> minutes. With <a href="#settings">Approve from a logged-in phone</a> on, your other phones see this list too.</p>
       <div class="rows" id="pendingRows"></div>
     </section>
 
@@ -158,6 +211,10 @@
         <div class="setting">
           <label class="setting-text switch-label" for="approval"><b>Approve new devices</b><small>A password login waits here until you approve it. QR logins skip this: scanning a code from this Mac proves you're here.</small></label>
           <input type="checkbox" role="switch" class="switch" id="approval">
+        </div>
+        <div class="setting">
+          <label class="setting-text switch-label" for="approveFrom"><b>Approve from a logged-in phone</b><small>Your logged-in phones see who is waiting (Settings → Devices) and can approve or deny with the same code check, so you can let someone in while away. A logged-in phone already has full shell access, so this adds no power it did not have; if that phone is lost, log it out here or run Lockdown. Only this page turns it on; a phone can turn it off. Collaborator invitations already work from a logged-in owner phone once sharing is enabled.</small></label>
+          <input type="checkbox" role="switch" class="switch" id="approveFrom">
         </div>
         <div class="setting setting-col">
           <div class="setting-text"><b>Addresses</b><small>Phones on the same Wi-Fi can use either. Each address logs in separately.</small></div>

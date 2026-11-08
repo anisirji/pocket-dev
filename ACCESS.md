@@ -7,7 +7,9 @@ Pocket Dev runs on your Mac as the user who starts it. An owner/Admin phone can 
 - Terminals run commands as your user and can change or delete files you can access.
 - Chat runs the installed Claude Code or Codex engine with your existing login. Approval and sandbox settings control what it can do.
 - Git reads allowed repositories and can push, review, close, reopen, or merge pull requests when you request those actions.
+- The owner folder browser lists directories the Mac user can access for Chat, Terminal and collaborator setup. Guest sessions cannot use it; selecting a folder does not itself grant access.
 - Files reads configured roots, uploads and downloads files, renames entries, and moves them to the macOS Trash. It follows symlinks only inside the configured roots.
+- Mac status reads CPU activity, memory availability, free storage and Pocket Dev response delay for owner devices. Monitoring does not close apps or restart the Mac.
 - Open apps lists applications and can quit unprotected apps. Force quit can lose unsaved work.
 - Power can keep the Mac awake, request sleep, or ask System Events to shut down.
 - Port forwarding exposes a selected localhost service to the LAN. Forwarded services have no Pocket Dev login.

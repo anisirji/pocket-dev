@@ -14,11 +14,11 @@ Every real problem we met while building Pocket Dev, and what we did about it.
 
 ## Remote access: user corrections and agreed direction
 
-These points came from the remote-access discussion. They record requirements and proposed solutions, not completed features. The tunnel draft is unfinished; no live tunnel or domain DNS changes were applied.
+These points came from the remote-access discussion. They record requirements and the direction agreed on. The tunnel kinds, the handoff and the switching prompt are implemented and tested against a stand-in for cloudflared; no live tunnel or domain DNS change was applied.
 
 | Challenge | What the user clarified or corrected | Agreed direction |
 | --- | --- | --- |
-| Making local routing too complicated | The user proposed switching between the remote domain and the Mac's local URL instead of requiring split DNS. | Prefer automatic URL switching: local when the Mac is reachable directly, remote otherwise. Settings should offer Auto (default), Local and Remote. |
+| Making local routing too complicated | The user proposed switching between the remote domain and the Mac's local URL instead of requiring split DNS. | Two plain addresses, no split DNS. The default is Wi-Fi only with internet off. Switching is manual: Settings shows both addresses with Switch to local and Switch to remote, and a prompt offers the switch when the server sees the phone on the Mac's network or the Wi-Fi connection is lost. Nothing switches by itself. |
 | Checking the network continuously | The user proposed checking after a network change or page reload rather than constantly probing the LAN. | Use network-change signals where available, initial load/reload, connection failure and returning to the page as triggers. A manual check should use the same logic. Browser events may miss some network transitions. |
 | Finding the Mac's current local IP | The server already runs on the Mac and can discover and report its own LAN address. The phone's private IP is unnecessary for choosing a route. | Obtain the current local address from the authenticated server, then verify that the phone can reach the same Mac before switching. Knowing an address alone does not establish reachability. |
 | Treating separate cookies as a blocker | Switching addresses does not erase cookies; each origin has its own storage. The user proposed reusing the QR-login idea to establish login at the destination. | Design a short-lived, single-use login handoff token. Preserve the current device's permissions without duplicate device entries or evicting another device. Never send a password hash as the token. |
@@ -30,9 +30,23 @@ These points came from the remote-access discussion. They record requirements an
 | Polling the Mac's address | The user asked why the Mac checks its Wi-Fi address every 10 s, and proposed that the Mac push a new address to the phone over the open WebSocket only when it changes. | The phone never polls; the Mac pushes the new address when it changes. The Mac's own check was measured at 24.8 µs per call, about 0.2 s of CPU per day at 10 s. The event-based alternative, `route -n monitor`, uses about 1 MB and no idle CPU. Keep the 10 s check unless instant detection is needed. |
 | One cookie for both addresses | Claude proposed a `lan.` subdomain that points at the Mac's Wi-Fi address, with local HTTPS, so one cookie would work on both addresses. The user rejected it: the address changes, phones cache DNS answers, and certificates add setup. | Use the handoff token over the raw Wi-Fi address. A device keeps one cookie per address. The server accepts a handoff token only when it arrives on the Wi-Fi address, so a leaked token cannot be used through the tunnel. |
 | One setup for every kind of user | The user required that someone who wants only local access, and someone who wants everything, can each set Pocket Dev up their way. | One `network.mode` setting: `local`, `remote` or `auto`. Only the Mac can widen access. A phone can only narrow it to `local`. |
+| Internet access as an optional extra | The user wanted local-only users to set nothing up, and did not want a Cloudflare account to be required for a first try. | Internet access is off by default. Quick link needs only cloudflared and gives a random address on demand. My own domain takes a hostname and a tunnel token pasted from the Cloudflare dashboard; the token is stored in its own 0600 file and reaches cloudflared through the environment, never argv, a response or a log. Only the Mac can turn access on; a phone can only turn it off. |
+| A handoff token that waits around | A token minted when the page loads would sit in the page for as long as it stays open. | The phone asks for the token at the moment Switch is tapped, so its 60 seconds cover only the redirect. It is kept as a hash, works once, and is refused and spent when it arrives through the tunnel instead of on the Wi-Fi address. |
+| Detecting the same network | A browser cannot tell which network the phone is on without a permission prompt, and the phone's private address proves nothing about the Mac. | The server compares the phone's public address, seen through the tunnel, with the Mac's own: IPv6 by the /64 of the Mac's global addresses, IPv4 against the Mac's public address from Cloudflare's trace endpoint. Unknown is reported as unknown, never as a match, and the hint only offers a switch. |
+| Landing on an address without a cookie | The owner found that a phone opening the internet address for the first time gets the password page, and with approval on it waits for the Mac, which is impossible while away. A Quick link is a new address on every start, so this repeated. | Link from home: on Wi-Fi the phone offers to link itself to the current internet hostname. A handoff token minted at tap time, bound to the to-remote direction and that hostname, gives the same device a cookie there and returns to Wi-Fi. Each cookie records the host it was issued for, so a new Quick link address asks for a link again, while a domain needs it once. A handoff never waits for approval, counts as a new device or evicts one. |
+| Approving a login while away | With approval on, a new device's password login waited for the Mac's Admin page only, so the owner could not let anyone in from elsewhere. | `approveFromDevices`, off by default and turned on only from the Mac: a logged-in owner phone (an Admin device when roles are on) sees the waiting list with the same four-character code, approves or denies through the Mac's own code path, and the log names the phone. Open pages are told when a login starts waiting. A logged-in phone already has full shell access, so this adds no power; a lost phone is logged out from the Mac or by lockdown. |
 | Starting work before agreeing on the approach | Implementation and a connector installation were started before the user approved the architecture. The user instructed Codex to ask first; the installation was cancelled. | Ask and wait for approval before further commands, edits, installations or configuration changes. An explicit request authorizes its stated scope. Start with the simplest workable approach and distinguish an implementation condition from an impossibility. |
 
 Still to verify: local reachability checks on the user's phone/browser; permission and HTTPS behavior; recovery when a local URL is reloaded after leaving Wi-Fi; and state transfer during a route switch. The domain currently uses GoDaddy nameservers, so the Cloudflare DNS setup also remains unresolved. None of these points has been validated as working yet.
+
+## Choosing folders without typing paths
+
+| Challenge | What happened | How we solved it |
+| --- | --- | --- |
+| Folder selection blocked everyday tasks | Chat, Terminal and Collaborator access relied on typed paths or short project suggestions. The owner could not choose another folder from the phone without knowing its full location. | Added one shared Mac folder browser to Chat, Terminal, the collaborator repository and each related folder, including Mac Admin. Navigate with Home, Desktop, Documents, Downloads, external drives, breadcrumbs, Back and Up, then select the folder. |
+| Finding less obvious locations | Hidden folders, nested projects and large directory lists were hard to reach from suggestions. | Include hidden-folder controls and name search within the current directory. A bounded list can be narrowed with search. Directory links work; broken links and ordinary files are omitted. |
+| Browsing must not widen collaborator access | A folder chooser for owners could otherwise expose the Mac's directory layout to guests. | Put directory navigation behind owner authentication or Mac Admin. Guest sessions, including mixed guest/owner cookies, are refused; the existing grant validation still decides what may be shared. |
+| A stale selection after navigation | Responses can arrive after Cancel or after a newer folder request. | Discard obsolete responses, disable selection while loading or after an error, and provide Home recovery for missing or inaccessible folders. |
 
 ## Terminal on a phone
 
@@ -55,6 +69,26 @@ Still to verify: local reachability checks on the user's phone/browser; permissi
 | Attacks from your own dev servers | A web page on an opened port (like `:3000`) counts as the same site and could send requests to Pocket Dev.                              | Every change needs a special header and JSON content type, which such pages can't send.                           |
 | Settings being wiped              | One bad entry in a list could replace your saved shortcuts with the defaults, permanently. Hand edits were overwritten.                 | Settings are read fresh, and only the setting you changed is written back.                                        |
 | Password storage                  | The first version kept the password as plain text in `config.json`.                                                                     | Stored as a scrambled hash (scrypt). Device logins are saved as hashes too.                                       |
+| Cookies worked on every address   | A Wi-Fi cookie (sent over plain http) also worked through the internet link.                                                            | Each cookie now works only on the address it was issued for; linking a phone creates its internet cookie.         |
+| Forwarding the Admin port         | A port forward connects from the Mac itself with whatever Host the client sends, which is all the Admin page checks, so forwarding its port opened Admin to the whole Wi-Fi. | Forwards refuse Pocket Dev's own ports, the Admin port included.                                                  |
+
+## Combining Take over, Messages and Internet access
+
+| Challenge | What happened | How we solved it |
+| --- | --- | --- |
+| A PID is reused with the same command | Comparing only command text could signal a new process after the original exits. | Recheck process start time, executable and user before each signal. |
+| Guest sockets receive owner login notices | Internet access assumed every shared WebSocket belonged to an owner, while Messages also adds guests. | Auth delivers approval notices only to its tracked sockets for eligible owner devices. |
+
+## Knowing when the Mac is overloaded or stops responding
+
+| Challenge | What happened | How we solved it |
+| --- | --- | --- |
+| Performance was hidden in a panel | The persistent strip showed battery and temperature, so the owner could not keep an eye on CPU usage and storage left while working. | Add CPU percentage, available storage, load state and reading age to the strip above every phone screen. Tap it for health details. |
+| Monitoring could add its own load | Repeated full health checks launch several system commands, including `top`. | Use CPU counter differences and filesystem statistics for a shared five-second sample. Sample memory pressure every 20 seconds and keep battery/temperature on their existing 30-second schedule. Bound sensor reads and share in-flight requests across clients. |
+| Old values looked current after a stall | Failed requests silently retained the previous battery and temperature. | Bound the entire response, including JSON parsing, to eight seconds. Mark retained readings as old, show their age and offer Check again. Cancel obsolete requests on background/offline transitions and ignore late replies. |
+| A lost connection looked like a frozen Mac | A sleeping Mac, an offline phone and a hung Mac can all stop a request. | Separate Phone offline, Mac not responding and Readings unavailable. Explain that a nonresponding Mac may be busy, asleep or disconnected; never claim a freeze is proven. |
+| Short CPU bursts caused noisy warnings | A brief CPU spike can be normal work. | Show Busy immediately at 90% CPU, but raise its banner only after 15 seconds of continuous high readings. Tight memory, low storage and server delays have their own labels and alerts. |
+| Missing sensors looked healthy | Unknown readings could be confused with zero usage or a positive health verdict. | Show dashes and Partial readings. The detail panel shows Some readings unavailable when it cannot support a healthy verdict. |
 
 ## Power and Mac safety
 
@@ -106,6 +140,28 @@ Working principle: understand the user's concrete workflow, test alternative arc
 | Integration branch looked unmerged | It went into main as one squashed commit, so git still listed all its commits as unmerged. | A tree diff showed that only private docs differ. No merge was needed. |
 | Cleaning up old worktrees | Eight worktree folders used about 660 MB, and one held private notes that git does not track. | Copied the private notes into the main folder, where they stay ignored, and checked each copy. Then removed the folders and kept their branches. |
 | Tests failing after committing work in progress | Seven collaborator tests crashed reading `req.socket.encrypted`, because the test helper built a fake request with no socket. | The helper's fake request now includes a socket. All 114 tests pass. |
+
+## Messages
+
+Messages provides an Everyone group and direct conversations between the Mac, owner devices, collaborators and guests. Text and attachments stay in Pocket Dev so people can copy or download them themselves.
+
+| Challenge | What happened | How we solved it |
+| --- | --- | --- |
+| Sharing needed a conversation | The first proposal focused on transferring clipboard text, but the owner wanted a chat application for text, images, videos and other files. | Built Messages with an Everyone group, direct conversations, attachments and a Mac CLI command. |
+| Clipboard access | The first design proposed reading and writing the Mac clipboard with `pbpaste` and `pbcopy`. The owner rejected automatic clipboard access. | Messages stores shared content in its own view. Copy runs only when you tap it on your device; sending and receiving never reads or changes a system clipboard automatically. |
+| Every role needs to participate | Restricting sharing to owner devices would leave collaborators and guests out of the conversation. | The Mac, owner devices, Developers and Viewers can send and receive. Guests see history only from when their grant was created; direct messages and attachments are visible only to their participants. |
+| Different file limits by connection | The owner wanted no fixed file-size limit on Wi-Fi, while internet uploads need a limit. | Wi-Fi uploads stream to disk without a fixed size cap. Internet uploads are capped at 100 MB, with a client check before uploading and server enforcement. |
+| Low disk space without losing small messages | Refusing every upload when space is low would also block small images and files. | Below the default 5 GB reserve, files over 50 MB wait while text and smaller files remain available. A separate 500 MB floor protects against uploads filling the disk; space is checked during streaming too. |
+| Uploaded files could execute on the app's origin | Every role can attach files, including HTML or SVG disguised with an image filename. | Detect types from file bytes, allow only supported image, video and audio formats inline, force other files to download, and send sandbox and nosniff headers. |
+| Test suite hung | A refused upload was answered before its body was read. The client could get a connection reset instead of the answer, and the test ignored that error and waited forever. | A refused upload of up to 200 MB is read and dropped, so the answer arrives. The test now fails on a reset instead of waiting. |
+| Broken thumbnails | Two pages asking for the same new image at once could read the JPEG while `sips` was still writing it. | Requests for the same image wait on one thumbnail job. |
+| Admin layout | The two-pane layout used a container query on the same element that declared the container, which CSS ignores, so the panes overlapped on the Admin page. | The query now styles an inner element. |
+| New people missing | A phone learned who was in Messages only when its socket connected, so someone who logged in later did not appear. | The list refreshes when Messages opens and every 15 s while it is open. |
+| Two sends claim one attachment | Recipient lookup yielded after attachment validation, so concurrent sends could reference the same file; deleting either then broke the other. | Resolve the recipient first, then validate attachments and persist the message without yielding. |
+| Access ends while a message or upload arrives | The sender was authenticated before waiting for data, allowing a later write after revocation. | Recheck access before persistence and remove partial uploads on refusal. |
+| A failed append leaves a message in memory | The store added the message and consumed pending attachments before disk persistence succeeded. | Append first, then update memory and consume attachments. |
+
+The latest Messages fixes have passing model-free regressions. The combined branch has not been deployed; full server, browser and physical-phone checks remain pending as recorded in [VALIDATION.md](VALIDATION.md#combined-feature-review-2026-11-08).
 
 ## Building it with several agents at once
 
