@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { findBin, engineEnv, cap, lineDiff, INPUT_MAX } from './env.js';
+import { findBin, engineEnv, ENGINE_SETTINGS, cap, lineDiff, INPUT_MAX } from './env.js';
 import { saveToolImages, resultText } from './tool-images.js';
 
 const CLAUDE_BIN = process.env.POCKET_DEV_CLAUDE || findBin('claude') || '/usr/local/bin/claude';
@@ -358,6 +358,7 @@ export function createClaudeEngine(chat) {
           includePartialMessages: true,
           pathToClaudeCodeExecutable: CLAUDE_BIN,
           env: engineEnv(),
+          settings: ENGINE_SETTINGS,
           canUseTool,
           stderr: (d) => { stderrTail = (stderrTail + d).slice(-2000); },
         },

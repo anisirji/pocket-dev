@@ -30,6 +30,10 @@ export function engineEnv() {
   return env;
 }
 
+// Chats started from Pocket Dev never sign commits or pull requests as Claude. includeCoAuthoredBy is the older name
+// for the same switch, kept so a Claude Code build from before `attribution` obeys it too.
+export const ENGINE_SETTINGS = { attribution: { commit: '', pr: '' }, includeCoAuthoredBy: false };
+
 export const OUTPUT_MAX = 8000;
 export const INPUT_MAX = 4000;
 
