@@ -94,7 +94,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     return ws;
   }
   const apis = ['/api/sessions', '/api/folders', '/api/shortcuts', '/api/forwards', '/api/info', '/api/history', '/api/git/repos', '/api/settings', '/api/service', '/api/power', '/api/apps', '/api/chat', `/api/files/list?path=${encodeURIComponent(home)}`];
-  const assets = ['/vendor/xterm/xterm.js', '/vendor/xterm/xterm.css', '/vendor/xterm/addon-fit.js', '/connection.js', '/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/collaborators.js', '/collaborators.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
+  const assets = ['/vendor/xterm/xterm.js', '/vendor/xterm/xterm.css', '/vendor/xterm/addon-fit.js', '/connection.js', '/network.js', '/git.js', '/graph.js', '/git.css', '/history.js', '/history.css', '/settings.js', '/settings.css', '/collaborators.js', '/collaborators.css', '/apps.js', '/apps.css', '/screen.js', '/screen.css', '/macstatus.js', '/macstatus.css', '/health.js', '/health.css', '/power.js', '/service.js', '/chat.js', '/chat.css', '/files.js', '/files.css'];
   await t.test('every feature requires authentication; private source stays private', async () => {
     assert.equal((await request('GET', '/')).status, 302);
     for (const endpoint of [...apis, ...assets]) assert.equal((await request('GET', endpoint)).status, 401, endpoint);

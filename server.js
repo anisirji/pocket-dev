@@ -710,7 +710,7 @@ const PAGES = {
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
   '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
-  '/connection.js': 'connection.js',
+  '/connection.js': 'connection.js', '/network.js': 'network.js',
   '/collaborators.js': 'collaborators.js', '/collaborators.css': 'collaborators.css',
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
 };
