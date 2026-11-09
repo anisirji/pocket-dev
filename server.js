@@ -27,6 +27,7 @@ import { collectHealth } from './health.js';
 import { collectPerformance } from './performance.js';
 import { createTunnel } from './tunnel.js';
 import { createMessages } from './messages.js';
+import { createRoom } from './room.js';
 import { createFolderBrowser } from './folder-browser.js';
 import { readNetwork, readToken, createSameNetwork } from './network.js';
 import { sameOrigin, fromConnector, clientIp, cookieHost } from './transport.js';
@@ -112,6 +113,7 @@ const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE,
   onLockdown: () => collaborators?.lockdown(),
 });
 collaborators = createCollaborators({ config, auth, urls });
+const room = createRoom({ config, urls });
 
 const HOME = os.homedir();
 const RECENT_MAX = 5;
@@ -605,6 +607,9 @@ async function handleApi(req, res, url) {
     return sendJson(res, 403, { error: 'Your role does not allow this action.' });
   }
 
+  // Join codes and room secrets are the credentials for the three peer routes, so another device can use them without a login.
+  if (resource === 'room' && ['ping', 'accept', 'notify'].includes(key) && req.method === 'POST') return room.handleApi(req, res, url, { readJson, sendJson });
+
   const authReply = await auth.handleApi(req, url.pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
   if (resource === 'local' && key === 'power') {
@@ -633,6 +638,7 @@ async function handleApi(req, res, url) {
   if (resource === 'chat') return chatApi.handleApi(req, res, url.pathname);
   if (resource === 'files') return handleFiles(req, res, url);
   if (resource === 'messages') return messages.handleApi(req, res);
+  if (resource === 'room') return room.handleApi(req, res, url, { readJson, sendJson, loggedIn: true });
 
   switch (route) {
     case 'GET performance':
