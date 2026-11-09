@@ -38,7 +38,7 @@ ConvertTo-Json -InputObject @($out) -Compress`;
 
 const ZIP_PATHS = ['/usr/bin/zip', '/bin/zip'];
 
-export const NO_WINDOWS_ZIP = 'Zipping a folder on Windows needs a node zip library, which Pocket Dev does not include yet.';
+export const NO_WINDOWS_ZIP = 'Zipping a folder needs tar.exe, which comes with Windows 10 and 11 in the System32 folder but was not found.';
 
 function collect(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -134,9 +134,14 @@ export function createPlatform({
   home = os.homedir(), readText = readTextFile, listDir = listDirectory, networkInterfaces = os.networkInterfaces,
   memory = () => ({ total: os.totalmem(), free: os.freemem() }), hostname = os.hostname, uid = process.getuid?.() ?? 0,
   user = env.USER || env.USERNAME || os.userInfo().username, repoDir = REPO_DIR,
+  cpus = os.cpus, delay = (ms) => new Promise((r) => setTimeout(r, ms)), now = Date.now,
 } = {}) {
   const win = platform === 'win32';
   const mac = platform === 'darwin';
+  // How messages name the computer this runs on: the Mac keeps its own words, other systems say "computer".
+  const host = mac
+    ? { the: 'the Mac', The: 'The Mac', this: 'this Mac', This: 'This Mac', mac: 'Mac', Mac: 'Mac' }
+    : { the: 'the host computer', The: 'The host computer', this: 'this computer', This: 'This computer', mac: 'computer', Mac: 'Computer' };
   const onPath = (name) => (env.PATH ?? env.Path ?? '').split(win ? ';' : ':').filter(Boolean).some((d) => exists(path.join(d, name)));
 
   // Resolves one { trashPath } or { error } per path, in order. trashPath is null when the system does not say.
@@ -206,7 +211,12 @@ export function createPlatform({
 
   // { available: true, cmd, args } or { available: false, reason }. Mac always has /usr/bin/zip.
   function zipCommand() {
-    if (win) return { available: false, reason: NO_WINDOWS_ZIP };
+    if (win) {
+      // Only Windows's own bsdtar writes zip. A tar earlier on PATH (Git for Windows ships GNU tar) cannot, so the path is
+      // fixed. -n because the caller lists every entry itself; -T - reads the names from stdin, like zip -@.
+      const tar = env.POCKET_DEV_TAR || path.win32.join(env.SystemRoot || env.windir || 'C:\\Windows', 'System32', 'tar.exe');
+      return exists(tar) ? { available: true, cmd: tar, args: ['-n', '-c', '-f', '-', '--format', 'zip', '-T', '-'] } : { available: false, reason: NO_WINDOWS_ZIP };
+    }
     const cmd = mac ? ZIP_PATHS[0] : ZIP_PATHS.find(exists);
     if (!cmd) return { available: false, reason: 'Zipping a folder needs the zip program. Install it (for example: sudo apt install zip).' };
     // -nw reads each name literally, so a "[" or "*" in a file name is not a wildcard.
@@ -394,12 +404,60 @@ Wait-Process -Id ${Number(pid)}`;
 
   // ---- Health ------------------------------------------------------------------------------------------------------
 
+  // Total and idle time summed over all cores, from /proc/stat (Linux) or os.cpus().
+  function cpuTimes() {
+    const stat = !win && !mac ? /^cpu\s+(.+)$/m.exec(readText('/proc/stat') ?? '')?.[1].split(/\s+/).map(Number) : null;
+    if (stat && stat.length >= 5 && stat.every(Number.isFinite)) {
+      return { total: stat.slice(0, 8).reduce((a, b) => a + b, 0), idle: stat[3] + stat[4] };
+    }
+    const list = cpus();
+    if (!Array.isArray(list) || !list.length) return null;
+    let total = 0, idle = 0;
+    for (const c of list) {
+      for (const k of ['user', 'nice', 'sys', 'idle', 'irq']) total += c.times?.[k] ?? 0;
+      idle += c.times?.idle ?? 0;
+    }
+    return total > 0 ? { total, idle } : null;
+  }
+
+  // Busy share between two readings 250 ms apart: the same counters top and Task Manager use.
+  async function cpuByCounters() {
+    const a = cpuTimes();
+    if (!a) return null;
+    await delay(250);
+    const b = cpuTimes();
+    if (!b || b.total <= a.total) return null;
+    const used = Math.round((1 - (b.idle - a.idle) / (b.total - a.total)) * 100);
+    return used >= 0 && used <= 100 ? used : null;
+  }
+
+  // Windows asks the processor load from WMI (what Task Manager shows); a machine that gives no figure falls back to
+  // the counters. The result is kept for 5 seconds and shared, so frequent polling starts at most one PowerShell.
+  const WIN_CPU_SCRIPT = '(Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average';
+  let cpuCache = null, cpuPending = null;
+  function cpuPercent() {
+    if (mac) return Promise.resolve(null);
+    if (cpuCache && now() - cpuCache.at < 5000) return Promise.resolve(cpuCache.value);
+    cpuPending ??= (async () => {
+      let value = null;
+      if (win) {
+        const text = (await quiet(powershell(WIN_CPU_SCRIPT, { timeout: 8000 }), '')).trim();
+        const n = Number(text);
+        if (/^\d+(\.\d+)?$/.test(text) && n <= 100) value = Math.round(n);
+      }
+      value ??= await quiet(cpuByCounters());
+      cpuCache = { at: now(), value };
+      return value;
+    })().finally(() => { cpuPending = null; });
+    return cpuPending;
+  }
+
   // { cpuUsedPercent, memory: { usedMB, wiredMB, compressedMB } }. A reading that cannot be taken is null, never a
-  // guess. Elsewhere the processor comes from performance.js's counters, and memory has no wired or compressed split.
+  // guess. Elsewhere memory has no wired or compressed split.
   async function cpuMemory() {
     if (mac) return parseTop(await quiet(sh(tool('TOP', '/usr/bin/top'), ['-l', '2', '-n', '0', '-s', '1'], { timeout: 10_000 }), ''));
     const { total, free } = memory();
-    return { cpuUsedPercent: null, memory: total > 0 ? { usedMB: Math.round((total - free) / 1024 ** 2), wiredMB: null, compressedMB: null } : null };
+    return { cpuUsedPercent: await cpuPercent(), memory: total > 0 ? { usedMB: Math.round((total - free) / 1024 ** 2), wiredMB: null, compressedMB: null } : null };
   }
 
   // Free memory as a percentage, or null. A Mac's own memory_pressure; elsewhere the free share of installed memory.
@@ -623,7 +681,8 @@ $src.Dispose()`;
   async function writePlanFiles(plan) {
     for (const f of plan.files) {
       await fsp.mkdir(path.dirname(f.path), { recursive: true });
-      await fsp.writeFile(f.path, f.encoding === 'utf16le' ? Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(f.content, 'utf16le')]) : f.content);
+      const bom = { utf16le: [0xff, 0xfe], utf8bom: [0xef, 0xbb, 0xbf] }[f.encoding];
+      await fsp.writeFile(f.path, bom ? Buffer.concat([Buffer.from(bom), Buffer.from(f.content, f.encoding === 'utf16le' ? 'utf16le' : 'utf8')]) : f.content);
     }
     await fsp.mkdir(path.dirname(plan.log), { recursive: true });
   }
@@ -780,7 +839,7 @@ $src.Dispose()`;
   }
 
   return {
-    platform, osName, trash, openUrl, defaultShell, zipCommand, capabilities, unsupported,
+    platform, osName, host, trash, openUrl, defaultShell, zipCommand, capabilities, unsupported,
     battery, temperatures, batteryCondition, lid, sleepHolds, updateInProgress, keepAwakeCommand, sleepNow, shutDown, openAppNames,
     cpuMemory, memoryFreePercent,
     listApps, quitApp, appWindows, processTable, systemApps, macScript, windowPermission, probeWindowAccess,

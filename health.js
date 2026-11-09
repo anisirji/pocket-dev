@@ -40,7 +40,7 @@ export async function collectHealth() {
     battery: { percent: power.battery, charging: power.charging, onAC: power.onAC, timeRemaining: power.timeRemaining, condition },
     temperature: readings.temperature,
     limits: readings.limits,
-    cpu: { usedPercent: cpuUsedPercent, load: Math.round(os.loadavg()[0] * 100) / 100, cores: os.cpus().length },
+    cpu: { usedPercent: cpuUsedPercent, load: platform.platform === 'win32' ? null : Math.round(os.loadavg()[0] * 100) / 100, cores: os.cpus().length },
     memory: memory && { ...memory, freePercent: memoryFreePercent },
     memoryFreePercent,
     disk,
