@@ -97,7 +97,7 @@ export class Tab {
   }
   async clickText(text, scope = 'button, a, [role=button], summary, label') {
     const ok = await this.eval(`(() => { const want = ${JSON.stringify(text)}; const list = [...document.querySelectorAll(${JSON.stringify(scope)})].filter((e) => e.offsetParent !== null || getComputedStyle(e).position === 'fixed');
-      const e = list.find((x) => x.innerText.trim() === want) || list.find((x) => x.innerText.trim().startsWith(want)) || list.find((x) => x.innerText.includes(want)); if (!e) return false; e.click(); return true; })()`);
+      const e = list.find((x) => (x.innerText ?? x.textContent ?? '').trim() === want) || list.find((x) => (x.innerText ?? x.textContent ?? '').trim().startsWith(want)) || list.find((x) => (x.innerText ?? x.textContent ?? '').includes(want)); if (!e) return false; e.click(); return true; })()`);
     if (!ok) throw new Error(`no button with text: ${text}`);
     await pause(250);
   }
@@ -134,12 +134,12 @@ function sanitiserSource(config) {
   return `(() => {
   const C = ${JSON.stringify(config)};
   const esc = (s) => s.replace(/[.*+?^$()|[\\]{}\\\\]/g, '\\\\$&');
-  const rules = [...C.replace.map(([from, to]) => [new RegExp(esc(from), 'gi'), to]), [/\\b(?:10\\.\\d+|192\\.168|172\\.(?:1[6-9]|2\\d|3[01]))\\.\\d+\\.\\d+\\b/g, C.demoIp], [/\\b(?:127\\.0\\.0\\.1|localhost):\\d+/g, C.demoIp + ':7681']];
+  const rules = [...C.replace.map(([from, to]) => [new RegExp(esc(from), 'gi'), to]), [/\\b(?:10\\.\\d+|192\\.168|172\\.(?:1[6-9]|2\\d|3[01]))\\.\\d+\\.\\d+\\b/g, C.demoIp], [/\\b(?:127\\.0\\.0\\.1|localhost):\\d+/g, C.demoIp + ':7681'], ...(C.regexes || []).map(([re, to]) => [new RegExp(re, 'g'), to])];
   const scrub = (s) => { let out = s; for (const [re, to] of rules) out = out.replace(re, to); return out; };
   const walk = (root) => {
     if (!root) return;
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let n; while ((n = w.nextNode())) { const v = scrub(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
+    let n; while ((n = w.nextNode())) { const v = C.exact && C.exact[n.nodeValue.trim()] ? C.exact[n.nodeValue.trim()] : scrub(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
     for (const e of (root.querySelectorAll ? root.querySelectorAll('input,textarea,[title],[aria-label],[placeholder]') : [])) {
       if ((e.tagName === 'INPUT' || e.tagName === 'TEXTAREA') && typeof e.value === 'string') { const v = scrub(e.value); if (v !== e.value) e.value = v; }
       for (const a of ['title', 'aria-label', 'placeholder']) { const x = e.getAttribute(a); if (x) { const v = scrub(x); if (v !== x) e.setAttribute(a, v); } }

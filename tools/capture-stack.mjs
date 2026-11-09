@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startServer } from '../test/helpers/server.mjs';
+import { startServer, until } from '../test/helpers/server.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const FAKE_CLAUDE = path.join(HERE, '..', 'test', 'helpers', 'fake-claude.mjs');
@@ -82,4 +82,60 @@ export function seedProject(s, dir = s.demo, { logo } = {}) {
   [['README.md', 1], ['package.json', 3], ['index.html', 8], ['vite.config.js', 8], ['LICENSE', 8], ['src', 0], ['docs', 2], ['assets', 4], ['src/App.jsx', 0], ['src/Footer.jsx', 0], ['src/styles.css', 4], ['src/utils.js', 7], ['src/main.jsx', 8], ['src/Settings.jsx', 5]].forEach(([n, d]) => when(n, d));
   fs.mkdirSync(path.join(s.home, 'projects', 'notes'), { recursive: true });
   fs.writeFileSync(path.join(s.home, 'projects', 'notes', 'todo.txt'), 'buy milk\n');
+}
+
+const put = (dir, file, text, daysAgo = 3) => {
+  const f = path.join(dir, file); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, text);
+  const t = new Date(Date.now() - daysAgo * 86400_000); fs.utimesSync(f, t, t);
+};
+
+// A plain folder tree for the other devices, so their Files screens look lived in.
+function seedStudio(s) {
+  const p = path.join(s.home, 'Projects');
+  put(p, 'campaign-site/index.html', '<h1>Spring campaign</h1>\n', 2);
+  put(p, 'campaign-site/styles.css', 'body { margin: 0; }\n', 4);
+  put(p, 'brand-kit/palette.txt', 'blue #3b82f6\nviolet #8b5cf6\n', 9);
+  put(p, 'render-notes.md', '# Render notes\n\nExport at 4K, 30 fps.\n', 1);
+  put(s.home, 'Documents/invoice-march.pdf', '%PDF-1.4\n', 12);
+  put(s.home, 'Documents/storyboard.md', '# Storyboard\n', 6);
+  put(s.home, 'Downloads/old_videos/clip-01.mov', 'x', 40);
+  put(s.home, 'Downloads/old_videos/clip-02.mov', 'x', 40);
+  put(s.home, 'Downloads/reference.png', 'x', 5);
+  put(s.home, 'Music/loop.wav', 'x', 20);
+  fs.mkdirSync(path.join(s.home, 'Movies'), { recursive: true });
+}
+function seedLinux(s) {
+  const p = path.join(s.home, 'code');
+  put(p, 'api-server/main.go', 'package main\n', 1);
+  put(p, 'api-server/go.mod', 'module api-server\n', 8);
+  put(p, 'api-server/Dockerfile', 'FROM golang:1.22\n', 8);
+  put(p, 'scripts/backup.sh', '#!/bin/sh\n', 14);
+  put(s.home, 'notes/standup.txt', 'blocked on the staging cert\n', 0);
+  put(s.home, 'data/export.csv', 'id,name\n1,a\n', 2);
+}
+
+// The three devices of the room: Home Mac hosts, Studio PC and Work Linux box join as admin devices.
+export async function demoRoom(bag, { env = {}, logo, picture } = {}) {
+  const home = await demoServer(bag, { name: 'Home Mac', repo: true, logo, env });
+  const studio = await demoServer(bag, { name: 'Studio PC', env });
+  const linux = await demoServer(bag, { name: 'Work Linux box', env });
+  seedStudio(studio); seedLinux(linux);
+  const all = [home, studio, linux];
+  for (const [s, phone] of [[home, 'iPhone'], [studio, 'iPad'], [linux, 'Pixel 8']]) {
+    s.api = (method, endpoint = '', body) => s.request(method, `/api/room${endpoint}`, { cookie: s.cookie, body });
+    s.id = (await s.api('GET', '')).data.deviceId;
+    s.to = (target, method, endpoint, body) => s.request(method, `/m/${target.id}${endpoint}`, { cookie: s.cookie, body });
+    const me = (await s.call('GET', '/api/settings')).data.currentDeviceId;
+    await s.call('PATCH', `/api/devices/${me}`, { name: phone });
+    s.phone = phone;
+  }
+  const created = await home.api('POST', '/create', { name: 'Home Mac', addresses: [home.base] });
+  if (created.status !== 200) throw new Error(`room create failed: ${JSON.stringify(created.data)}`);
+  for (const s of [studio, linux]) {
+    const { data: { code } } = await home.api('POST', '/invite');
+    const r = await s.api('POST', '/join', { code, host: home.base, name: s.deviceName, addresses: [s.base], level: 'admin' });
+    if (r.status !== 200) throw new Error(`join failed: ${JSON.stringify(r.data)}`);
+  }
+  await until(async () => (await studio.api('GET', '')).data.room?.members.length === 3);
+  return { home, studio, linux, all };
 }

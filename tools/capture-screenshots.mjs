@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchChrome, Tab } from './capture-lib.mjs';
-import { demoServer, cleanupBag, DEMO_IP } from './capture-stack.mjs';
+import { demoServer, demoRoom, cleanupBag, DEMO_IP } from './capture-stack.mjs';
 import { pause, until } from '../test/helpers/server.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -48,7 +48,7 @@ function privacy(servers) {
   const rest = [...paths].filter((p) => !p.endsWith('/home')).map((p) => [p, '~/.pocket-dev']);
   const real = [...new Set([host, short, user, os.homedir(), os.tmpdir(), '/var/folders'])].filter((x) => x && x.length > 2);
   const replace = [...demo.sort((a, b) => b[0].length - a[0].length), ...rest, [host, 'home-mac.local'], [short, 'home-mac'], [user, 'demo'], [os.homedir(), '~'], ['/private/var/folders', '/tmp'], ['/var/folders', '/tmp']];
-  return { replace: replace.filter(([a]) => a && a.length > 2), regex: true, forbid: [...real, ...(os.networkInterfaces().en0 ?? []).filter((a) => a.family === 'IPv4').map((a) => a.address)], demoIp: DEMO_IP };
+  return { replace: replace.filter(([a]) => a && a.length > 2), regex: true, forbid: [...real, ...(os.networkInterfaces().en0 ?? []).filter((a) => a.family === 'IPv4').map((a) => a.address)], demoIp: DEMO_IP, exact: { fake: 'Sonnet' }, regexes: [['done · [\\d.]+s · \\$[\\d.]+', 'done · 24s · $0.18']] };
 }
 
 async function main() {
@@ -92,11 +92,56 @@ async function main() {
     if (want('06')) await tab.shot(out('06-git-history.png'));
     if (want('05')) { await tab.clickText('Changes'); await tab.settle(); await tab.shot(out('05-git-changes.png')); }
   }
-  if (want('10') || want('11') || want('12')) {
+  if (want('11') || want('12') || want('13') || want('15')) {
     await open(); await tab.click('#settingsBtn'); await tab.settle();
-    if (want('10')) await tab.shot(out('10-settings.png'));
     if (want('12')) { await tab.eval(`[...document.querySelectorAll('h2,h3,.sec-title,div')].find((e) => e.children.length === 0 && e.textContent.trim().toUpperCase() === 'POWER')?.scrollIntoView({ block: 'start' })`); await pause(300); await tab.shot(out('12-power.png')); }
     if (want('11')) { await tab.clickText('Device health'); await tab.settle(); await pause(800); await tab.shot(out('11-health.png')); }
+  }
+  if (want('13') || want('15')) {
+    await open();
+    await tab.eval(`import('/room-screen.js').then((m) => m.openRoom())`); await tab.settle();
+    if (want('13')) await tab.shot(out('13-room-start.png'));
+    if (want('15')) {
+      await tab.clickText('Join a room'); await tab.settle();
+      await tab.type('.rs-sheet textarea', '192.168.1.20:7681  K7QM-2XWD'); await pause(400);
+      await tab.shot(out('15-room-join.png'));
+    }
+  }
+
+  await roomShots({ tab, logo, picture: null });
+}
+
+async function roomShots({ tab, logo }) {
+  if (!['07','08','09','10','14','16','17','18','19','20','21','22','23','24','25'].some(want)) return;
+  const picture = await tab.draw(960, 640, `const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#1e3a8a'); g.addColorStop(0.55, '#f97316'); g.addColorStop(1, '#fde68a'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#fff7ed'; ctx.beginPath(); ctx.arc(w * 0.68, h * 0.5, 70, 0, 7); ctx.fill();
+    ctx.fillStyle = '#1f2937'; ctx.beginPath(); ctx.moveTo(0, h); ctx.lineTo(0, h * 0.78); ctx.lineTo(w * 0.22, h * 0.58); ctx.lineTo(w * 0.4, h * 0.74); ctx.lineTo(w * 0.62, h * 0.52); ctx.lineTo(w * 0.85, h * 0.72); ctx.lineTo(w, h * 0.62); ctx.lineTo(w, h); ctx.fill();`);
+  const room = await demoRoom(bag, { logo, env: { POCKET_DEV_APPROVAL_MS: '3600000', ...stubs(path.join(os.tmpdir(), `pd-stubs-${process.pid}`)) } });
+  const { home, studio, linux } = room;
+  const config = privacy(room.all);
+  await tab.uninstall(); await tab.install(config);
+  await tab.clearCookies();
+  const base = home.base;
+  await tab.cookie(home.cookie, base);
+  const open = async (view) => { await tab.goto(`${base}/`); if (view) await tab.click(`#viewSwitch [data-view=${view}]`); await tab.settle(); };
+  const openRoom = async () => { await tab.eval(`import('/room-screen.js').then((m) => m.openRoom())`); await tab.settle(); };
+  const toLabel = async (name) => { await tab.click('#macStatus .ms-label'); await tab.settle(); await tab.clickText(name, '.mc-row'); await tab.settle(); await pause(600); };
+  const send = async (s, chat, text) => (await s.call('POST', `/api/chat/${chat}/message`, { text })).status;
+  const waitFor = async (fn, ms = 15000) => until(fn, ms);
+
+  if (want('10')) { await open(); await tab.click('#settingsBtn'); await tab.settle(); await tab.shot(out('10-settings.png')); }
+  if (want('14') || want('16')) {
+    await open(); await openRoom();
+    if (want('16')) await tab.shot(out('16-room-members.png'));
+    if (want('14')) { await tab.clickText('Add a device'); await tab.settle(); await pause(500); await tab.shot(out('14-room-add-device.png')); }
+  }
+  if (want('07')) {
+    const id = (await home.call('POST', '/api/chat', { tool: 'claude', cwd: home.demo })).data.id;
+    await send(home, id, 'Add a dark mode toggle to the app');
+    await waitFor(async () => (await home.call('GET', `/api/chat/${id}`)).data.events.some((e) => /all 12 tests/.test(JSON.stringify(e))));
+    await open('chat'); await tab.click('.chat-row'); await tab.settle(); await pause(800);
+    await tab.click('.chat-edit .chat-fold-head'); await pause(400);
+    await tab.shot(out('07-chat.png'));
   }
 }
 
