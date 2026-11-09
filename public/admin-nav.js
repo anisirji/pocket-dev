@@ -64,6 +64,5 @@
   }
 
   const api = { GROUPS, DEFAULT_GROUP, SECTION_GROUP, resolveHash, attentionItems, groupBadges, isMacHost, say };
-  if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else globalThis.AdminNav = api;
+  globalThis.AdminNav = api;
 })();
