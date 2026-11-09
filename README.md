@@ -231,11 +231,20 @@ Viewer can preview and download scoped files. Developer can change a separate pr
 
 ## Install as a command
 
-Build a tarball and install it globally. Nothing is published to the npm registry.
+From the npm registry (needs Node 22 or newer):
+
+```sh
+npm install -g @anisirji/pocket-dev
+pocket-dev start
+```
+
+The command is `pocket-dev`. Update later with `npm install -g @anisirji/pocket-dev@latest`, then restart it. On Windows, if `node-pty` fails to install, install Visual Studio Build Tools (C++ workload) and Python 3 and run it again.
+
+Or build a tarball from this repository and install it globally:
 
 ```sh
 npm pack
-npm install -g ./pocket-dev-1.0.0.tgz
+npm install -g ./anisirji-pocket-dev-*.tgz
 pocket-dev start
 ```
 
