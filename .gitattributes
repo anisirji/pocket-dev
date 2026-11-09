@@ -1,0 +1,16 @@
+# Scripts keep Unix line endings on every system. A CRLF after #!/usr/bin/env node or #!/bin/sh breaks the command
+# ("env: node\r: No such file") when Git on Windows checks the files out, as it does for npm install from GitHub.
+* text=auto eol=lf
+*.sh text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.woff2 binary
+*.ico binary
+public/vendor/** -text
