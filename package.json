@@ -1,6 +1,6 @@
 {
   "name": "pocket-dev",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "postinstall": "node scripts/postinstall.js",

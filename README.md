@@ -1,8 +1,8 @@
 # Pocket Dev
 
-Control your Mac from your phone's browser on the same Wi-Fi, or optionally from anywhere: terminals, Claude Code and Codex chats, Git and GitHub pull requests, files, open apps, and power.
+Control your computers from your phone's browser on the same Wi-Fi, or optionally from anywhere: terminals, Claude Code and Codex chats, Git and GitHub pull requests, files, open apps, and power. Run it on several computers (Mac, Windows, Linux), join them into a room, and work on any of them from one phone.
 
-Pocket Dev is one Node.js server that runs on the Mac as your user. The phone opens `http://<mac-lan-ip>:7777`, logs in with a password or a one-time QR code, and gets a mobile web app. Nothing is installed on the phone. [Internet access](#connect-over-the-internet-optional) is optional and off by default.
+Pocket Dev is one Node.js server that runs on a computer as your user (a Mac is the best tested; Windows 11 is tested for the main features; Linux is written but not tested on a real machine). The phone opens `http://<mac-lan-ip>:7777`, logs in with a password or a one-time QR code, and gets a mobile web app. Nothing is installed on the phone. [Internet access](#connect-over-the-internet-optional) is optional and off by default.
 
 - A one-page summary of what Pocket Dev can access on the Mac: [ACCESS.md](ACCESS.md).
 
@@ -183,6 +183,24 @@ It needs **Screen Recording** for the program that runs Pocket Dev. Without it t
 | Shut down | Ends Pocket Dev terminals, then `osascript` tells System Events to shut down. After 45 s the phone shows a blocked screen with **Try shut down again**, **See open apps**, **Force shut down…** (`sudo shutdown -h now` in a terminal), and **Keep the Mac on**. | Force without your password. |
 | Update guard | Refuses sleep and shutdown while a macOS update installs, or when the check fails. | Guard the lid switch. |
 
+### Rooms: several devices, one phone
+
+Install Pocket Dev on each computer. A **room** joins them so the phone can switch between them, share tasks and messages, and approve what other devices do. The room has one host. Each device keeps its own files, terminals and logins; nothing of one device's private data is shared unless its owner allows it.
+
+1. On the host: Settings, **Room**, **Add a device**. It shows a short code like `ABCD-EFGH`, the host's Wi-Fi address and a QR. The code works once for 10 minutes.
+2. On the other device: Settings, **Room**, **Join a room**. Paste the invite line (address and code), type them, scan the QR with the camera, or choose a photo of the QR. Pick what the room may do on this device: **Admin** (everything) or **Collaborator** (chosen folders only).
+3. Use the **Work on** switcher (the device name in the top strip) to open another device's Files, Terminal, Git, Chat and Messages through the host.
+
+What the room gives you:
+
+- **Switching.** Terminals, files, Git, Chat and Messages of any device in the room, from one login. Offline devices are marked and say why.
+- **Tasks.** A simple board with ids like `LAP-14` (To do, Doing, Done, assignee). Tasks sync between devices and catch up when a device was off.
+- **Messages and chats.** Messages to everyone and AI chats from admin-level devices are copied to the other members as read-only mirrors (Room chats). Images are fetched on demand.
+- **Modes per device.** For each other device: Read-only, Plan, Ask, Auto or Bypass. Risky actions (deleting a folder, running unknown programs, anything outside the shared folders) ask first, except in Bypass. Bypass lasts 1, 2, 3 or 4 hours or Always, shows a red banner on the device, and only the owner can turn it on. Requests wait in an **Approvals** inbox; the first answer wins.
+- **Leaving.** A member can leave at any time; being removed or leaving ends access at once and removes the room's data from that device.
+
+Limits of this version: the room is a star, so devices reach each other through the host and members only reach the host and their own device when the host is off; no automatic failover of the internet link; no direct messages across devices; modes are pattern based; copies of chats on other devices follow the owner's admin setting, not per-chat rules.
+
 ### Login and security
 
 **Collaborators:** **Browse folders** selects the repository and each related folder on the Mac, in both Admin and phone Settings. Paths remain editable as an optional shortcut. Admin and phone Settings include a Collaborators section for one-repository access, optional related folders, 1-hour/1-day/7-day expiry, QR invitations, native sharing, WhatsApp sharing, editing access and revocation. First enable sharing from Mac Admin, explicitly selecting your own trusted devices as Admin. Other devices need review, subsequent password logins require Mac approval, and Admin pairing stays on the Mac. Invitations work once within 10 minutes; opening a link preview never accepts one, and admission never evicts an Admin.
@@ -205,9 +223,9 @@ Viewer can preview and download scoped files. Developer can change a separate pr
 
 ## Requirements
 
-- macOS. Tested on macOS 14.5.
-- Node.js 22.
-- Xcode Command Line Tools (`xcode-select --install`), to build `node-pty`.
+- macOS (tested on macOS 14.5), Windows 11 (main features tested), or Linux (written, not tested on a real machine).
+- Node.js 22 or newer.
+- To build `node-pty`: Xcode Command Line Tools on macOS (`xcode-select --install`); on Windows or Linux a prebuilt binary is used when one exists, otherwise Visual Studio Build Tools with the C++ workload and Python 3 (Windows) or `build-essential` and Python 3 (Linux).
 - Optional: `claude` (Claude Code), `codex`, and `gh` (GitHub CLI, logged in with `gh auth login`). Features that need a missing tool show an error.
 - Terminal scripts and styles are bundled locally; opening Pocket Dev does not require internet access on the phone.
 
@@ -272,6 +290,23 @@ The first start writes `~/.pocket-dev/config.json` (mode 0600) and prints the pa
 | `npm run shutdown [-- --force]` | Shut down through System Events, or with `--force` through `sudo shutdown -h now`. |
 
 The launchd agent writes `~/Library/LaunchAgents/dev.pocket.server.plist`, starts at login (not at boot), restarts within about 10 s after a crash, and logs to `~/Library/Logs/pocket-dev.log`. Terminals in the separate terminal host keep running across server restarts; terminals created by an older server or while the host is unavailable end on restart. Working chat turns are interrupted, and devices stay logged in. **Stop Pocket Dev** ends terminals as well as the server.
+
+## Install on Windows
+
+Tested on Windows 11 Pro with PowerShell 5.1 and Node 26. Not available on Windows: temperature, lid control and window names (the app says "not available on this system").
+
+1. Install Node.js 22 or newer (nodejs.org), and Git for Windows if you want the Git view (`winget install --id Git.Git -e`).
+2. Copy the Pocket Dev folder to the PC, for example `C:\pocket-dev`. In PowerShell:
+   ```
+   cd C:\pocket-dev
+   npm install
+   npm start
+   ```
+3. The first start prints a random password once. Windows Firewall asks if Node may accept connections: choose **Private networks**. The URL is `http://<this PC's IPv4 address>:7777` (find it with `ipconfig`); on the PC itself use `http://localhost:7777`. Data and settings live in `%USERPROFILE%\.pocket-dev`.
+4. To keep it running without a window, start it hidden: `Start-Process node -ArgumentList server.js -WindowStyle Hidden`. After installing a tool such as Git, restart Pocket Dev so its terminals see the new PATH.
+5. Join it to a room with **Room**, **Join a room** as described above.
+
+Do not use the remote Sleep button on a Windows PC unless you know it wakes: Windows may hibernate instead, and nothing remote can wake it.
 
 ## Connect over the internet (optional)
 
@@ -368,6 +403,7 @@ macOS grants TCC permissions to the app that started `node`: Terminal or VS Code
 - A logged-in device has the full rights of your user: shell, files, and your Claude, Codex, and GitHub logins (limited by the credentials and permissions you have configured).
 - Protections: hashed password and cookies, one-time QR keys only from the Mac, device limit, SameSite=Strict HttpOnly cookie, the `x-pocket-dev` header and JSON content-type for every change, WebSocket `Origin` check, a Git repository allowlist, path checks after symlink resolution in Files, and sandboxed previews. Messages attachments are typed by their first bytes, not their name: only PNG, JPEG, GIF, WebP, MP4, WebM, MOV, MP3, M4A, Ogg and WAV display in the page, and everything else, SVG and HTML included, downloads. Every attachment response has `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and a file is reachable only by someone who can see its message.
 - The Admin page on 127.0.0.1:7778 has a Host allowlist, so it resists DNS rebinding. It has no password, so any local process can use it.
+- Rooms: a device joins only with a one-time short code (10 minutes, limited guesses) and the room's owner of each device decides what other devices may do there; the host's control of a member is limited by the member's own mode and a member never controls the host. Every room request carries a secret per device, failed secrets are rate limited, and kicking or leaving closes open connections.
 - Not protected: traffic sniffing on the LAN, forwarded ports, an unlocked logged-in phone, local processes on the Mac, or a malicious program on the Mac. Both the phone and Admin listeners check Host headers; the tunnel's hostname is accepted on https, and `allowedHosts` can add others.
 
 ## Limitations
@@ -375,9 +411,10 @@ macOS grants TCC permissions to the app that started `node`: Terminal or VS Code
 - No passkeys yet. Internet access needs `cloudflared` and, for a fixed address, a Cloudflare account and a domain on Cloudflare DNS.
 - Terminals and port forwards do not survive a restart.
 - Old uploads in `~/.pocket-dev/uploads` are never deleted.
-- The Git view does not stage, commit, pull, or switch branches.
 - Agent services such as Claude and Codex still need internet access on the Mac.
-- Pocket Dev cannot wake or power on the Mac.
+- Pocket Dev cannot wake or power on the Mac or any other device, and the remote Sleep button can leave a device unreachable until someone presses its power button.
+- Rooms work over the Wi-Fi or each device's own address; failover across devices and a room over the internet are not built. A device that is asleep or off leaves the room until it wakes.
+- Windows and Linux: written and partly tested; Linux has not run on a real machine.
 
 ## Tests
 
