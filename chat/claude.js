@@ -253,6 +253,21 @@ export function createClaudeEngine(chat) {
     chat.update(parent.id, { steps: (parent.steps ?? 0) + uses.length, latest: cap(`${last.name} ${summarize(last.name, last.input)}`.trim(), 200) });
   }
 
+  // A background agent's Agent call returns "launched" at once, so its tool result says nothing about the work. The SDK
+  // reports the real life of the agent as task messages that name the Agent call; they are kept on that call's event as
+  // agentStatus (running, completed, failed, stopped) so the phone can show it for as long as it actually runs.
+  const TASK_STATUS = { completed: 'completed', failed: 'failed', killed: 'stopped', stopped: 'stopped', running: 'running' };
+  function onBackgroundTask(m) {
+    const ev = (m.tool_use_id && chat.find(m.tool_use_id)) || chat.events.find((e) => m.task_id && e.taskId === m.task_id);
+    if (!ev || ev.type !== 'tool-run') return;
+    if (m.subtype === 'task_started') chat.update(ev.id, { taskId: m.task_id, agentStatus: 'running' });
+    else if (m.subtype === 'task_progress') {
+      const latest = cap([m.last_tool_name, m.summary || m.description].filter(Boolean).join(' '), 200);
+      chat.update(ev.id, { taskId: m.task_id, agentStatus: 'running', steps: m.usage?.tool_uses ?? ev.steps, ...(latest && { latest }) });
+    } else if (m.subtype === 'task_updated' && TASK_STATUS[m.patch?.status]) chat.update(ev.id, { agentStatus: TASK_STATUS[m.patch.status] });
+    else if (m.subtype === 'task_notification') chat.update(ev.id, { agentStatus: TASK_STATUS[m.status] ?? 'completed', ...(m.usage && { steps: m.usage.tool_uses }) });
+  }
+
   function onToolUse(block) {
     if (block.name === 'AskUserQuestion') return;
     const { id, name, input: toolInput } = block;
@@ -319,6 +334,7 @@ export function createClaudeEngine(chat) {
     switch (m.type) {
       case 'system':
         if (m.subtype === 'init') chat.setSession(m.session_id);
+        else if (m.subtype.startsWith('task_')) onBackgroundTask(m);
         else if (m.subtype === 'compact_boundary') chat.emit({ type: 'status', text: 'Conversation compacted' });
         return;
       case 'rate_limit_event': {

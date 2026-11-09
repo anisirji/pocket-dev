@@ -27,6 +27,17 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     send({ type: 'system', subtype: 'init', session_id: session, cwd: process.cwd(), tools: [], model: 'fake', permissionMode: 'default', apiKeySource: 'none', mcp_servers: [], slash_commands: [], output_style: 'default' });
   }
   const text = JSON.stringify(m.message?.content ?? '');
+  if (text.includes('bgagent')) {
+    // A background agent: its Agent call is answered at once, and the SDK reports its real life as task messages.
+    const sys = (subtype, extra) => send({ type: 'system', subtype, task_id: 'task_1', tool_use_id: 'toolu_bg', uuid: `u${++n}`, session_id: session, ...extra });
+    send({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', model: 'fake', content: [{ type: 'tool_use', id: 'toolu_bg', name: 'Agent', input: { description: 'Build the room screen', run_in_background: true } }] }, parent_tool_use_id: null, session_id: session });
+    send({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_bg', content: 'Async agent launched successfully.' }] }, parent_tool_use_id: null, session_id: session });
+    sys('task_started', { description: 'Build the room screen' });
+    after(300, () => sys('task_progress', { description: 'Build the room screen', usage: { total_tokens: 10, tool_uses: 3, duration_ms: 300 }, last_tool_name: 'Edit', summary: 'editing room.js' }));
+    after(600, () => { assistant('launched it'); result(); });
+    after(1200, () => sys('task_notification', { status: 'completed', output_file: '/tmp/x', summary: 'done', usage: { total_tokens: 20, tool_uses: 7, duration_ms: 1100 } }));
+    return;
+  }
   if (text.includes('helpers')) {
     // Two helper agents and a todo list; the second helper's tool calls are tagged with its parent's id.
     const use = (id, name, input, parent = null) => send({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', model: 'fake', content: [{ type: 'tool_use', id, name, input }] }, parent_tool_use_id: parent, session_id: session });

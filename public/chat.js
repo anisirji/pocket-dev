@@ -1135,17 +1135,19 @@
 
   // Helper agents and the todo list, pinned above the composer so they stay in view while the log scrolls.
   const HELPERS = new Set(['Agent', 'Task']);
+  // A background agent's call finishes at once; the SDK's task messages say whether the agent itself is still working.
+  const helperState = (ev) => ev.agentStatus ?? ev.status;
   const MARK = { completed: '✓', in_progress: '▶', pending: '○' };
   let workOpen = false;
   let workKey = '';
   function renderWork() {
     const events = convo.events;
     const helpers = events.filter((e) => e.type === 'tool-run' && HELPERS.has(e.name));
-    const running = helpers.filter((e) => e.status === 'running');
+    const running = helpers.filter((e) => helperState(e) === 'running');
     const todos = [...events].reverse().find((e) => e.type === 'tool-run' && e.name === 'TodoWrite')?.todos ?? [];
     const open = todos.filter((t) => t.status !== 'completed');
     const show = running.length > 0 || (open.length > 0 && isBusy(convo.chat || {}));
-    const key = JSON.stringify([show, workOpen, running.map((e) => [e.id, e.steps, e.latest]), todos]);
+    const key = JSON.stringify([show, workOpen, helpers.map((e) => [e.id, helperState(e), e.steps, e.latest]), todos]);
     if (key === workKey) return;
     workKey = key;
     ui.work.hidden = !show;
@@ -1166,8 +1168,9 @@
     const body = el('div', 'chat-work-body');
     body.hidden = !workOpen;
     for (const h of helpers.slice(-6)) {
-      const row = el('div', `chat-work-row chat-work-${h.status}`);
-      row.append(h.status === 'running' ? spinner() : runIcon(h.status), el('span', 'chat-work-name', h.summary || h.name));
+      const state = helperState(h);
+      const row = el('div', `chat-work-row chat-work-${state}`);
+      row.append(state === 'running' ? spinner() : runIcon(state === 'completed' ? 'ok' : state === 'failed' ? 'error' : state), el('span', 'chat-work-name', h.summary || h.name));
       if (h.latest) row.append(el('span', 'chat-work-latest', `${h.steps ? `${h.steps} ${h.steps === 1 ? 'step' : 'steps'} · ` : ''}${h.latest}`));
       body.append(row);
     }
@@ -1425,7 +1428,7 @@
     thinking: (ev) => fold(ev, 'chat-thinking', [el('span', 'chat-fold-name', 'Thinking…'), ...(ev.streaming ? [spinner()] : [])],
       () => el('div', 'chat-thinking-text', ev.text || '')),
     'tool-run': (ev) => fold(ev, 'chat-tool',
-      [el('span', 'chat-fold-name', ev.name), el('span', 'chat-fold-summary', ev.summary || ''), runIcon(ev.status)],
+      [el('span', 'chat-fold-name', ev.name), el('span', 'chat-fold-summary', ev.summary || ''), ev.agentStatus === 'running' ? spinner() : runIcon(ev.status)],
       () => {
         const body = el('div', 'chat-fold-body');
         if (ev.input) body.append(el('div', 'chat-io-label', 'Input'), el('pre', 'chat-io chat-pre', ev.input));

@@ -34,3 +34,24 @@ test('helper agents show what they are doing, and the todo list is kept', { time
   assert.equal(events.find((e) => e.id === 'toolu_h1').status, 'ok', 'a finished helper is marked done');
   assert.equal(events.find((e) => e.id === 'toolu_h2').status, 'stopped', 'a helper left running when the turn ends is stopped');
 });
+
+test('a background agent counts as running after its call returns, until the SDK says it finished', { timeout: 60000 }, async (t) => {
+  const s = await startServer(t, { env: { POCKET_DEV_CLAUDE: FAKE_CLAUDE } });
+  const A = await s.login();
+  const call = (method, url, body) => s.request(method, url, { cookie: A.cookie, body });
+  const id = (await call('POST', '/api/chat', { tool: 'claude', cwd: s.home })).data.id;
+  await call('POST', `/api/chat/${id}/message`, { text: 'start a bgagent' });
+  const agent = async () => (await call('GET', `/api/chat/${id}`)).data.events.find((e) => e.id === 'toolu_bg');
+
+  await pause(450);
+  let ev = await agent();
+  assert.equal(ev.status, 'ok', 'the call itself returned at once');
+  assert.equal(ev.agentStatus, 'running', 'but the agent is still working');
+  assert.equal(ev.steps, 3);
+  assert.equal(ev.latest, 'Edit editing room.js');
+
+  await pause(900);
+  ev = await agent();
+  assert.equal(ev.agentStatus, 'completed');
+  assert.equal(ev.steps, 7);
+});
