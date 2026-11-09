@@ -47,6 +47,10 @@ export const EVENT_KINDS = {
   'conversation-taken-over': 'change',
   'conversation-takeover-failed': 'failure',
   'messages-cleared': 'change',
+  'room-action': 'change',
+  'room-approval': 'change',
+  'room-mode-changed': 'change',
+  'room-denied': 'failure',
 };
 
 const FILTERS = {

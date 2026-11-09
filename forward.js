@@ -15,7 +15,7 @@ const PATH = /^\/m\/([0-9a-f]{4,64})(\/.*)?$/;
 // Working on another device through the room. The phone logs in on one device (the front); `/m/<deviceId>/<path>` on the
 // front is passed to that device. The room is a star, so a member reaches another member through the host (one hop) and
 // the host reaches everyone directly. The target decides what the originating member may do (room.authPeerRequest).
-export function createForward({ room, auth, collaborators, sendJson }) {
+export function createForward({ room, auth, collaborators, sendJson, modes }) {
   const good = new Map(); // deviceId -> { url, at }: the address that answered last
 
   // Called for every request first. Returns null for an ordinary request, an error to refuse, and otherwise marks `req` as
@@ -23,6 +23,8 @@ export function createForward({ room, auth, collaborators, sendJson }) {
   function identify(req) {
     if (req.headers['x-room-secret'] === undefined && req.headers['x-room-sender'] === undefined) return null;
     try { req.roomPeer = room.authPeerRequest(req.headers); } catch (err) { return { status: err.status || 403, error: err.message }; }
+    // Bypass is full access: a member in Bypass is ranked as an admin device here, whatever level its owner chose at join.
+    if (modes?.isBypass(req.roomPeer.origin)) req.roomPeer.level = 'admin';
     if (req.roomPeer.level === 'admin') req.roomDevice = { id: `room-${req.roomPeer.origin}`, name: req.roomPeer.name, status: 'active', role: 'admin', via: 'room', tokenHashes: [] };
     return null;
   }

@@ -30,6 +30,7 @@ import { createTunnel } from './tunnel.js';
 import { createMessages } from './messages.js';
 import { createRoom } from './room.js';
 import { createForward } from './forward.js';
+import { createModes } from './modes.js';
 import { createTasks } from './tasks.js';
 import { createRoomSync } from './room-sync.js';
 import { createFolderBrowser } from './folder-browser.js';
@@ -103,6 +104,7 @@ const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE,
 });
 collaborators = createCollaborators({ config, auth, urls });
 const room = createRoom({ config, urls, grants: collaborators, intervalMs: Number(process.env.POCKET_DEV_ROOM_PING_MS) || undefined });
+const modes = createModes({ room, log: (type, f) => auth.admin.log(type, f), approvalMs: Number(process.env.POCKET_DEV_APPROVAL_MS) || undefined });
 const roomSync = createRoomSync({ room });
 const tasks = createTasks({ room, sync: roomSync });
 
@@ -536,7 +538,9 @@ const sendJson = (res, status, body, headers = {}) => {
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
-function readJson(req) {
+// A room request is read once by the mode gate, so the handler that follows gets the same parsed body.
+const readJson = (req) => (req.jsonBody ??= readJsonOnce(req));
+function readJsonOnce(req) {
   if (!/^application\/json\s*(;|$)/i.test(req.headers['content-type'] ?? '')) {
     return Promise.reject(httpError(415, 'Send the body as JSON with content-type: application/json.'));
   }
@@ -579,6 +583,14 @@ async function handleApi(req, res, url) {
   }
   if (MUTATING.has(req.method) && !sameOrigin(req)) return sendJson(res, 403, { error: 'Cross-origin request refused.' });
   // A room member reaching this device never manages the room itself, whatever rank it has here.
+  if (resource === 'room' && ['approvals', 'modes', 'assigned'].includes(key)) {
+    return modes.handleApi(req, res, url, { readJson, sendJson, isOwner: !req.roomPeer && !collaborators.guest(req) && Boolean(auth.deviceFor(req)) });
+  }
+  if (req.roomPeer) {
+    const refusal = await modes.gate(req, { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), onAbort: (fn) => res.once('close', () => !res.writableEnded && fn()),
+      body: /^application\/json/i.test(req.headers['content-type'] ?? '') && MUTATING.has(req.method) ? await readJson(req).catch(() => undefined) : undefined });
+    if (refusal) return sendJson(res, refusal.status, refusal.body);
+  }
   if (req.roomPeer && resource === 'room') return sendJson(res, 403, { error: 'Room settings are changed on the device itself.' });
   if (req.roomDevice && req.method === 'GET' && url.pathname === '/api/status') return sendJson(res, 200, { status: 'active', name: req.roomDevice.name, code: 'room' });
 
@@ -795,7 +807,7 @@ function servePage(req, res, pathname) {
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
-const forward = createForward({ room, auth, collaborators, sendJson });
+const forward = createForward({ room, auth, collaborators, sendJson, modes });
 
 const server = http.createServer(async (req, res) => {
   if (insecureRemote(req)) {
@@ -840,13 +852,17 @@ const rejectUpgrade = (socket, status, text) => {
 };
 const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade, room, roomSync });
 
-server.on('upgrade', (req, socket, head) => {
+server.on('upgrade', async (req, socket, head) => {
   if (insecureRemote(req) || !hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
   const refused = forward.identify(req);
   if (refused) return rejectUpgrade(socket, refused.status, 'Forbidden');
   const target = new URL(req.url, 'http://localhost');
   if (forward.isForward(target.pathname)) return forward.upgrade(req, socket, head, target, rejectUpgrade);
   if (target.pathname === '/ws/messages') return messages.handleUpgrade(req, socket, head);
+  if (req.roomPeer && /^\/ws\/(chat\/)?[0-9a-f]+$/.test(target.pathname)) {
+    const refusal = await modes.gateSocket(req, target.pathname, (fn) => socket.once('close', fn));
+    if (refusal) return rejectUpgrade(socket, refusal.status, refusal.status === 408 ? 'Request Timeout' : 'Forbidden');
+  }
   if (collaborators.guest(req)) return rejectUpgrade(socket, 403, 'Forbidden');
   const { pathname } = new URL(req.url, 'http://localhost');
   const match = /^\/ws\/([0-9a-f]+)$/.exec(pathname);
