@@ -335,6 +335,7 @@
       </div>
       <div class="chat-dock">
         <div class="chat-card" hidden></div>
+        <div class="chat-work" hidden></div>
         <div class="chat-statusline" hidden></div>
         <div class="chat-notice" hidden></div>
         <div class="chat-queue" role="list" aria-label="Queued messages" hidden></div>
@@ -368,7 +369,7 @@
     listScreen: q('.chat-list-screen'), rows: q('.chat-rows'), newBtn: q('.chat-new-btn'), close: q('.chat-close'),
     convoScreen: q('.chat-convo-screen'), back: q('.chat-back'), title: q('.chat-title'), sub: q('.chat-sub'), menu: q('.chat-menu'), chips: q('.chat-chips'),
     scroll: q('.chat-log-scroll'), empty: q('.chat-empty'), log: q('.chat-log'), latest: q('.chat-latest'), conn: q('.chat-conn'),
-    card: q('.chat-card'), statusline: q('.chat-statusline'), notice: q('.chat-notice'), queue: q('.chat-queue'), files: q('.chat-files'),
+    card: q('.chat-card'), work: q('.chat-work'), statusline: q('.chat-statusline'), notice: q('.chat-notice'), queue: q('.chat-queue'), files: q('.chat-files'),
     dock: q('.chat-dock'), composer: q('.chat-composer'), attach: q('.chat-attach'), input: q('.chat-input'), send: q('.chat-send'), fileInput: q('.chat-file-input'),
     newWrap: q('.chat-new-wrap'), newSheet: q('.chat-new-sheet'), settingsWrap: q('.chat-settings-wrap'), settingsSheet: q('.chat-settings-sheet'),
     permsScreen: q('.chat-perms-screen'), permsBack: q('.chat-perms-back'), permsSub: q('.chat-perms-sub'), permsBody: q('.chat-perms-body'),
@@ -1127,8 +1128,58 @@
     }
     renderCard();
     renderQueue();
+    renderWork();
     if (stick) scrollToBottom();
     renderLatest();
+  }
+
+  // Helper agents and the todo list, pinned above the composer so they stay in view while the log scrolls.
+  const HELPERS = new Set(['Agent', 'Task']);
+  // A background agent's call finishes at once; the SDK's task messages say whether the agent itself is still working.
+  const helperState = (ev) => ev.agentStatus ?? ev.status;
+  const MARK = { completed: '✓', in_progress: '▶', pending: '○' };
+  let workOpen = false;
+  let workKey = '';
+  function renderWork() {
+    const events = convo.events;
+    const helpers = events.filter((e) => e.type === 'tool-run' && HELPERS.has(e.name));
+    const running = helpers.filter((e) => helperState(e) === 'running');
+    const todos = [...events].reverse().find((e) => e.type === 'tool-run' && e.name === 'TodoWrite')?.todos ?? [];
+    const open = todos.filter((t) => t.status !== 'completed');
+    const show = running.length > 0 || (open.length > 0 && isBusy(convo.chat || {}));
+    const key = JSON.stringify([show, workOpen, helpers.map((e) => [e.id, helperState(e), e.steps, e.latest]), todos]);
+    if (key === workKey) return;
+    workKey = key;
+    ui.work.hidden = !show;
+    if (!show) return;
+    const done = todos.length - open.length;
+    const parts = [];
+    if (running.length) parts.push(`${running.length} ${running.length === 1 ? 'agent' : 'agents'} running`);
+    if (todos.length) parts.push(`${done}/${todos.length} tasks`);
+    const head = el('button', 'chat-work-head');
+    head.type = 'button';
+    head.setAttribute('aria-expanded', String(workOpen));
+    head.append(running.length ? spinner() : el('span', 'chat-work-dot'), el('span', 'chat-work-title', parts.join(' · ')), el('span', 'chat-work-caret', workOpen ? '▾' : '▸'));
+    head.onclick = () => {
+      workOpen = !workOpen;
+      renderWork();
+    };
+    keepFocus(head);
+    const body = el('div', 'chat-work-body');
+    body.hidden = !workOpen;
+    for (const h of helpers.slice(-6)) {
+      const state = helperState(h);
+      const row = el('div', `chat-work-row chat-work-${state}`);
+      row.append(state === 'running' ? spinner() : runIcon(state === 'completed' ? 'ok' : state === 'failed' ? 'error' : state), el('span', 'chat-work-name', h.summary || h.name));
+      if (h.latest) row.append(el('span', 'chat-work-latest', `${h.steps ? `${h.steps} ${h.steps === 1 ? 'step' : 'steps'} · ` : ''}${h.latest}`));
+      body.append(row);
+    }
+    for (const t of todos) {
+      const row = el('div', `chat-work-row chat-todo-${t.status}`);
+      row.append(el('span', 'chat-todo-mark', MARK[t.status] || '○'), el('span', 'chat-work-name', t.text));
+      body.append(row);
+    }
+    ui.work.replaceChildren(head, body);
   }
 
   // Re-rendering a streaming tool output must not yank its inner scroll back to the top.
@@ -1377,7 +1428,7 @@
     thinking: (ev) => fold(ev, 'chat-thinking', [el('span', 'chat-fold-name', 'Thinking…'), ...(ev.streaming ? [spinner()] : [])],
       () => el('div', 'chat-thinking-text', ev.text || '')),
     'tool-run': (ev) => fold(ev, 'chat-tool',
-      [el('span', 'chat-fold-name', ev.name), el('span', 'chat-fold-summary', ev.summary || ''), runIcon(ev.status)],
+      [el('span', 'chat-fold-name', ev.name), el('span', 'chat-fold-summary', ev.summary || ''), ev.agentStatus === 'running' ? spinner() : runIcon(ev.status)],
       () => {
         const body = el('div', 'chat-fold-body');
         if (ev.input) body.append(el('div', 'chat-io-label', 'Input'), el('pre', 'chat-io chat-pre', ev.input));
@@ -1435,6 +1486,7 @@
     ui.input.placeholder = `Message ${TOOLS[c.tool] || c.tool}`;
     renderComposer();
     renderStatusLine();
+    renderWork();
     const pick = stack.find((l) => l.layer === 'pick' && l.scope === 'chat');
     const target = pick && pickTarget(pick);
     if (target && pickKeyOf(target) !== pickKey) renderPicker(pick);
