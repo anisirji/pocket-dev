@@ -123,14 +123,26 @@ export function mountRoom(container, { api }) {
     }, 'co-danger'));
     out.push(actions);
     const pages = el('div', 'co-actions');
-    pages.append(button('Tasks', () => window.PocketDevRoomPages?.open('tasks'), 'co-primary'), button('Room chats', () => window.PocketDevRoomPages?.open('chats')));
+    pages.append(button('Tasks', () => window.PocketDevRoomPages?.open('tasks'), 'co-primary'), button('Room chats', () => window.PocketDevRoomPages?.open('chats')), button('Approvals', () => window.PocketDevApprovals?.open()));
     out.push(pages);
+    out.push(modesHost());
     if (host) {
       if (invite) out.push(inviteView());
       if (room.members.length > 1) out.push(el('p', 'co-note', 'To leave as host, hand the room over to another device first.'));
     }
     if (room.revoked?.length) out.push(el('p', 'co-note', `Removed devices: ${room.revoked.map((r) => r.name).join(', ')}`));
     return out;
+  }
+
+  // Who may do what on this device. Draws and refreshes itself; this screen only gives it a place.
+  let modes = null;
+  function modesHost() {
+    if (modes) return modes.host;
+    const host = el('div', 'md-host');
+    modes = { host };
+    import('/room-modes.js').then((m) => { modes.api = m.mountModes(host, { api }); modes.api.refresh(); })
+      .catch((err) => { host.textContent = `Could not load the mode controls: ${err.message}. Reload this page.`; });
+    return host;
   }
 
   function memberItem(m, room, host) {
