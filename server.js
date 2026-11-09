@@ -29,6 +29,7 @@ import { collectPerformance } from './performance.js';
 import { createTunnel } from './tunnel.js';
 import { createMessages } from './messages.js';
 import { createRoom } from './room.js';
+import { createForward } from './forward.js';
 import { createTasks } from './tasks.js';
 import { createFolderBrowser } from './folder-browser.js';
 import { readNetwork, readToken, createSameNetwork } from './network.js';
@@ -590,6 +591,9 @@ async function handleApi(req, res, url) {
     return sendJson(res, 403, { error: 'This page is older than the server. Reload Pocket Dev and try again.' });
   }
   if (MUTATING.has(req.method) && !sameOrigin(req)) return sendJson(res, 403, { error: 'Cross-origin request refused.' });
+  // A room member reaching this device never manages the room itself, whatever rank it has here.
+  if (req.roomPeer && resource === 'room') return sendJson(res, 403, { error: 'Room settings are changed on the device itself.' });
+  if (req.roomDevice && req.method === 'GET' && url.pathname === '/api/status') return sendJson(res, 200, { status: 'active', name: req.roomDevice.name, code: 'room' });
 
   if (url.pathname === '/api/invitations/accept' && req.method === 'POST') {
     const r = collaborators.accept(req, await readJson(req));
@@ -619,7 +623,7 @@ async function handleApi(req, res, url) {
   const authReply = await auth.handleApi(req, url.pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
   if (resource === 'local' && key === 'power') {
-    if (!auth.isLocalRequest(req)) return sendJson(res, 403, { error: 'Only a script run on the Mac can use this.' });
+    if (req.roomPeer || !auth.isLocalRequest(req)) return sendJson(res, 403, { error: 'Only a script run on the Mac can use this.' });
     return handlePowerApi(req, res, url.pathname.split('/')[4], { readJson, sendJson, wss, sessions });
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
@@ -803,6 +807,8 @@ function servePage(req, res, pathname) {
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
+const forward = createForward({ room, auth, collaborators, sendJson });
+
 const server = http.createServer(async (req, res) => {
   if (insecureRemote(req)) {
     res.writeHead(308, { location: `https://${parseHost(req.headers.host).name}${req.url}`, 'cache-control': 'no-store', connection: 'close' });
@@ -814,8 +820,11 @@ const server = http.createServer(async (req, res) => {
   }
   if (fromConnector(req)) res.setHeader('strict-transport-security', HSTS);
   const url = new URL(req.url, 'http://localhost');
+  const refused = forward.identify(req);
+  if (refused) return sendJson(res, refused.status, { error: refused.error });
   try {
-    if (url.pathname === '/' && url.searchParams.has('k')) {
+    if (forward.isForward(url.pathname)) await forward.http(req, res, url);
+    else if (url.pathname === '/' && url.searchParams.has('k')) {
       if (collaborators.guest(req)) return sendJson(res, 403, { error: 'Log out collaborator access before pairing an Admin device on the Mac.' });
       const { status, headers, body } = auth.redeemQrKey(req, url.searchParams.get('k'));
       res.writeHead(status, { 'cache-control': 'no-store', ...headers });
@@ -845,7 +854,11 @@ const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrad
 
 server.on('upgrade', (req, socket, head) => {
   if (insecureRemote(req) || !hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
-  if (new URL(req.url, 'http://localhost').pathname === '/ws/messages') return messages.handleUpgrade(req, socket, head);
+  const refused = forward.identify(req);
+  if (refused) return rejectUpgrade(socket, refused.status, 'Forbidden');
+  const target = new URL(req.url, 'http://localhost');
+  if (forward.isForward(target.pathname)) return forward.upgrade(req, socket, head, target, rejectUpgrade);
+  if (target.pathname === '/ws/messages') return messages.handleUpgrade(req, socket, head);
   if (collaborators.guest(req)) return rejectUpgrade(socket, 403, 'Forbidden');
   const { pathname } = new URL(req.url, 'http://localhost');
   const match = /^\/ws\/([0-9a-f]+)$/.exec(pathname);
