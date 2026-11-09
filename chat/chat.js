@@ -28,6 +28,7 @@ export class Chat {
     this.closed = false;
     this.lastActive = Date.now();
     this.persistTimer = null;
+    this.listener = null; // room replication: event(id), meta(), removed()
   }
 
   static create(fields, dir) {
@@ -81,6 +82,7 @@ export class Chat {
   touch() {
     this.updatedAt = this.lastActive = Date.now();
     this.schedulePersist();
+    this.listener?.meta();
   }
 
   changed() {
@@ -99,6 +101,7 @@ export class Chat {
     if (this.events.length > EVENTS_MAX) this.events.splice(0, this.events.length - EVENTS_MAX);
     this.broadcast({ t: 'event', event: ev });
     this.touch();
+    this.listener?.event(ev.id);
     return ev;
   }
 
@@ -108,6 +111,7 @@ export class Chat {
     Object.assign(ev, patch);
     this.broadcast({ t: 'event', event: ev });
     this.touch();
+    this.listener?.event(id);
     return ev;
   }
 
@@ -117,6 +121,7 @@ export class Chat {
     ev[field] = (ev[field] ?? '') + d;
     this.broadcast({ t: 'delta', id, field, d });
     this.touch();
+    this.listener?.event(id);
   }
 
   setTitleFrom(text) {
@@ -262,6 +267,7 @@ export class Chat {
   }
 
   remove() {
+    this.listener?.removed();
     this.closed = true;
     clearTimeout(this.persistTimer);
     this.cancelRequests();

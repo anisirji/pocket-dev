@@ -646,6 +646,7 @@ async function handleApi(req, res, url) {
   if (resource === 'chat') return chatApi.handleApi(req, res, url.pathname);
   if (resource === 'files') return handleFiles(req, res, url);
   if (resource === 'messages') return messages.handleApi(req, res);
+  if (resource === 'room' && key === 'chats') return chatApi.handleRoomApi(req, res, url);
   if (resource === 'room' && key === 'tasks') return tasks.handleApi(req, res, url, { readJson, sendJson, loggedIn: true });
   if (resource === 'room') return room.handleApi(req, res, url, { readJson, sendJson, loggedIn: true });
 
@@ -838,7 +839,7 @@ const server = http.createServer(async (req, res) => {
 
 // Terminal and chat sockets share this server, so a disconnect, sleep or shutdown that closes wss.clients closes both.
 const wss = new WebSocketServer({ noServer: true });
-const chatApi = createChatApi({ sendJson, readJson, config, wss });
+const chatApi = createChatApi({ sendJson, readJson, config, wss, room, roomSync });
 
 const rejectUpgrade = (socket, status, text) => {
   socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
@@ -877,6 +878,7 @@ setInterval(() => {
 await adoptTerminals();
 startPower(config);
 roomSync.start();
+chatApi.startReplica();
 watchLanIp();
 if (internetOn()) sameNetwork.refresh();
 

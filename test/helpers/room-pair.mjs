@@ -37,12 +37,12 @@ export function wire(s) {
 }
 
 // Starts the same server again after it was stopped.
-export async function restart(t, s) {
+export async function restart(t, s, env = {}) {
   if (s.proc.exitCode === null) {
     s.proc.kill('SIGTERM');
     await new Promise((resolve) => s.proc.once('exit', resolve));
   }
-  const next = await startServer(t, { env: { ...syncEnv }, reuse: { root: s.root, port: s.port, adminPort: s.adminPort } });
+  const next = await startServer(t, { env: { ...syncEnv, ...env }, reuse: { root: s.root, port: s.port, adminPort: s.adminPort } });
   wire(next);
   next.cookie = (await next.login()).cookie;
   next.id = s.id;

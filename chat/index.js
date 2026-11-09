@@ -6,6 +6,8 @@ import { Chat, QUEUE_MAX } from './chat.js';
 import { IMAGE_FILE_RE, CONTENT_TYPE, ATTACHMENT_NAME_RE, ATTACHMENT_TYPES, thumbnailOf } from './tool-images.js';
 import * as claude from './claude.js';
 import * as codex from './codex.js';
+import { createChatReplica } from './replica.js';
+import { STATE_DIR } from '../paths.js';
 
 const BUILT_IN_ENGINES = {
   claude: {
@@ -110,7 +112,7 @@ function parseAnswer(event, body) {
 // Mount after the auth check: every route here assumes a logged-in caller. config is { read(), update(changes) };
 // chat uses its chatIdleMinutes and chatDefaults keys. `wss` is the server's WebSocketServer, which pings its clients.
 // `engines` replaces Claude and Codex in tests.
-export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINES = BUILT_IN_ENGINES }) {
+export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINES = BUILT_IN_ENGINES, room = null, roomSync = null }) {
   const dir = process.env.POCKET_DEV_CHAT_DIR || path.join(process.env.POCKET_DEV_STATE_DIR || path.join(HOME, '.pocket-dev'), 'chats');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const idleMs = () => Number(process.env.POCKET_DEV_CHAT_IDLE_SECONDS) * 1000 || (Number(config.read().chatIdleMinutes) || 10) * 60_000;
@@ -123,11 +125,13 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   }
 
   const chats = new Map();
+  const replica = room && roomSync ? createChatReplica({ room, roomSync, chats, stateDir: STATE_DIR }) : null;
   for (const file of fs.readdirSync(dir).filter((f) => /^[0-9a-f]{12}\.json$/.test(f))) {
     try {
       const chat = Chat.load(path.join(dir, file));
       chat.afterTurn = (status) => drainQueue(chat, status);
       chats.set(chat.id, chat);
+      replica?.track(chat);
     } catch (err) {
       console.warn(`Skipping unreadable chat ${file}: ${err.message}`);
     }
@@ -280,6 +284,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     if (fields.sessionId) chat.emit({ type: 'status', text: `Continuing ${ENGINES[tool].label} session ${fields.sessionId.slice(0, 8)}` });
     chat.afterTurn = (status) => drainQueue(chat, status);
     chats.set(chat.id, chat);
+    replica?.track(chat);
     chat.persist();
     await rememberDefaults(chat);
     return { status: 201, chat };
@@ -488,5 +493,5 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     return true;
   }
 
-  return { handleApi, handleUpgrade, active, stop, bound, release };
+  return { handleApi, handleUpgrade, active, stop, bound, release, startReplica: () => replica?.start(), handleRoomApi: (req, res, url) => replica.handleApi(req, res, url, sendJson) };
 }
