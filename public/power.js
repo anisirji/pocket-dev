@@ -97,10 +97,11 @@ function injectCss() {
   document.head.append(style);
 }
 
+const say = (text) => globalThis.PocketMachine?.say?.(text) ?? text;
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
-  if (text != null) node.textContent = text;
+  if (text != null) node.textContent = say(text);
   return node;
 };
 
@@ -148,7 +149,7 @@ function temperatureLine(t) {
 function statusLine(s) {
   const parts = [s.onAC ? 'Plugged in' : 'On battery'];
   if (s.battery !== null) parts.push(`${s.battery}%`);
-  parts.push(s.stayingAwake ? 'staying awake' : 'Mac may sleep');
+  parts.push(s.stayingAwake ? 'staying awake' : say('Mac may sleep'));
   return parts.join(' · ');
 }
 
@@ -271,7 +272,7 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
   const root = el('section', 'pw');
   const seg = el('div', 'pw-seg');
   seg.setAttribute('role', 'radiogroup');
-  seg.setAttribute('aria-label', 'Keep Mac awake');
+  seg.setAttribute('aria-label', say('Keep Mac awake'));
   const hint = el('p', 'pw-hint');
   const status = el('p', 'pw-status');
   const statusText = el('span');
@@ -338,15 +339,22 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
 
   function show(s) {
     shown = s;
+    const off = s.unsupported ?? {};
+    const note = (key) => `Not available on this system. ${off[key]}`;
+    for (const b of buttons) b.disabled = Boolean(off.keepAwake);
+    lid.hidden = Boolean(off.lid || off.lidSleep);
     for (const b of buttons) b.setAttribute('aria-checked', String(b.dataset.mode === s.awake));
-    hint.textContent = MODES.find((m) => m.id === s.awake).hint;
+    hint.textContent = off.keepAwake ? note('keepAwake') : MODES.find((m) => m.id === s.awake).hint;
     statusText.textContent = statusLine(s);
     status.classList.toggle('awake', s.stayingAwake);
     temp.textContent = temperatureLine(s.temperature);
     temp.classList.toggle('hot', s.temperature?.thermal === 'serious' || s.temperature?.thermal === 'critical');
     temp.hidden = !temp.textContent;
     showLid(s);
-    sleepButton.disabled = shutdownButton.disabled = s.updateInProgress;
+    sleepButton.disabled = s.updateInProgress || Boolean(off.sleepNow);
+    shutdownButton.disabled = s.updateInProgress || Boolean(off.shutDown);
+    sleepButton.title = off.sleepNow ? note('sleepNow') : '';
+    shutdownButton.title = off.shutDown ? note('shutDown') : '';
     updateWarn.hidden = !s.updateInProgress;
     if (s.updateInProgress) {
       sleepConfirm.close();
@@ -438,7 +446,7 @@ function batteryView(s) {
     percent: s.battery,
     plugged,
     low: !plugged && s.battery <= LOW_BATTERY,
-    title: `Mac battery ${s.battery}%, ${s.charging ? 'charging' : plugged ? 'plugged in' : 'on battery'}${left}`,
+    title: say(`Mac battery ${s.battery}%, ${s.charging ? 'charging' : plugged ? 'plugged in' : 'on battery'}${left}`),
   };
 }
 

@@ -56,20 +56,23 @@ exec sleep 300
   return file;
 }
 
-export async function startServer(t, { network, devices, token, lanIpFile = true, traceUrl, env: extraEnv } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-internet-'));
+// `reuse` starts the same server again after it was killed: same state folder, HOME, config and ports.
+export async function startServer(t, { network, devices, token, lanIpFile = true, traceUrl, env: extraEnv, reuse } = {}) {
+  const root = reuse ? reuse.root : fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-internet-'));
   const home = path.join(root, 'home'), state = path.join(root, 'state'), record = path.join(root, 'cloudflared-record');
-  fs.mkdirSync(home);
-  fs.mkdirSync(path.join(home, 'Desktop'));
-  fs.mkdirSync(state, { mode: 0o700 });
-  fs.mkdirSync(record);
   const config = path.join(root, 'config.json');
-  fs.writeFileSync(config, JSON.stringify({ password: 'test-password', awake: 'off', fileRoots: [home], maxDevices: 20, ...(network && { network }) }));
-  if (devices) fs.writeFileSync(path.join(state, 'devices.json'), JSON.stringify({ devices }));
-  if (token) fs.writeFileSync(path.join(state, 'tunnel-token'), `${token}\n`, { mode: 0o600 });
   const lanIp = path.join(root, 'lan-ip');
-  fs.writeFileSync(lanIp, '127.0.0.1');
-  const port = await freePort(), adminPort = await freePort();
+  if (!reuse) {
+    fs.mkdirSync(home);
+    fs.mkdirSync(path.join(home, 'Desktop'));
+    fs.mkdirSync(state, { mode: 0o700 });
+    fs.mkdirSync(record);
+    fs.writeFileSync(config, JSON.stringify({ password: 'test-password', awake: 'off', fileRoots: [home], maxDevices: 20, ...(network && { network }) }));
+    if (devices) fs.writeFileSync(path.join(state, 'devices.json'), JSON.stringify({ devices }));
+    if (token) fs.writeFileSync(path.join(state, 'tunnel-token'), `${token}\n`, { mode: 0o600 });
+    fs.writeFileSync(lanIp, '127.0.0.1');
+  }
+  const port = reuse ? reuse.port : await freePort(), adminPort = reuse?.adminPort ?? await freePort();
   const stub = path.join(root, 'read-only-stub');
   fs.writeFileSync(stub, '#!/bin/sh\nprintf "No\\n"\n', { mode: 0o700 });
   const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: isolatedEnv(home, {
@@ -79,7 +82,7 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
     POCKET_DEV_CODEX: '/nonexistent/codex', POCKET_DEV_PMSET: stub, POCKET_DEV_IOREG: stub, POCKET_DEV_TOP: stub, POCKET_DEV_MEMORY_PRESSURE: stub,
     POCKET_DEV_UPDATE_CHECK: stub, POCKET_DEV_OSASCRIPT: stub, POCKET_DEV_TERMINAL_HOST: 'off',
     POCKET_DEV_CLOUDFLARED: fakeCloudflared(root), POCKET_DEV_FAKE_CF: record,
-    POCKET_DEV_PROCESS_FIXTURE: path.join(root, 'no-processes.json'),
+    POCKET_DEV_PROCESS_FIXTURE: path.join(root, 'no-processes.json'), POCKET_DEV_ROOM_ALLOW_LOOPBACK: '1',
     POCKET_DEV_TRACE_URL: traceUrl ?? 'http://127.0.0.1:9/trace', POCKET_DEV_HANDOFF_TTL_MS: '1500',
     ...(lanIpFile && { POCKET_DEV_LAN_IP_FILE: lanIp }),
     ...extraEnv,
@@ -94,7 +97,7 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
     }
     fs.rmSync(root, { recursive: true, force: true });
   });
-  await until(() => { assert.equal(proc.exitCode, null, `server exited during startup:\n${logs}`); return logs.includes('Admin (this Mac only)'); });
+  await until(() => { assert.equal(proc.exitCode, null, `server exited during startup:\n${logs}`); return /Admin \(this (Mac|computer) only\)/.test(logs); });
   const base = `http://127.0.0.1:${port}`, admin = `http://127.0.0.1:${adminPort}`;
 
   // `via: 'tunnel'` sends what the connector on the Mac would: a loopback connection carrying the proxy headers.
@@ -125,5 +128,5 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
   const current = () => local('GET', '/api/state').then((r) => r.data);
   const tunnelStatus = (status) => until(async () => (await current()).network.tunnel.status === status);
   const recorded = (name) => fs.readFileSync(path.join(record, name), 'utf8');
-  return { root, home, stateDir: state, port, base, admin, proc, logs: () => logs, request, local, login, status: current, tunnelStatus, recorded, record, config, lanIp };
+  return { root, home, stateDir: state, port, adminPort, base, admin, proc, logs: () => logs, request, local, login, status: current, tunnelStatus, recorded, record, config, lanIp };
 }

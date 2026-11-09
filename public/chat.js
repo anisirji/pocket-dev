@@ -26,7 +26,7 @@
   const POLL_MS = 3000;
   const MAX_INPUT_PX = 140;
   const TOAST_MS = 2600;
-  const QUEUE_UPDATE_MESSAGE = 'Queued-message editing needs a Pocket Dev update. Let active chats and queued messages finish, then restart Pocket Dev from Settings → This Mac and refresh. Your edit stays in this tab.';
+  const QUEUE_UPDATE_MESSAGE = 'Queued-message editing needs a Pocket Dev update. Let active chats and queued messages finish, then restart Pocket Dev from Settings → This device and refresh. Your edit stays in this tab.';
 
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
@@ -528,7 +528,7 @@
 
   function renderList() {
     if (!list.length) {
-      ui.rows.replaceChildren(el('div', 'chat-placeholder', 'No chats yet. Start one to talk to Claude Code or Codex in a folder on this Mac.'));
+      ui.rows.replaceChildren(el('div', 'chat-placeholder', 'No chats yet. Start one to talk to Claude Code or Codex in a folder on this device.'));
       return;
     }
     ui.rows.replaceChildren(...list.map((c) => {

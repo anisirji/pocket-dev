@@ -38,6 +38,14 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     after(1200, () => sys('task_notification', { status: 'completed', output_file: '/tmp/x', summary: 'done', usage: { total_tokens: 20, tool_uses: 7, duration_ms: 1100 } }));
     return;
   }
+  if (text.includes('picture')) {
+    // A tool run whose result is a picture (a 1x1 PNG), then an answer.
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    send({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', model: 'fake', content: [{ type: 'tool_use', id: 'toolu_pic', name: 'Read', input: { file_path: '/tmp/shot.png' } }] }, parent_tool_use_id: null, session_id: session });
+    send({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_pic', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: png } }] }] }, parent_tool_use_id: null, session_id: session });
+    after(100, () => { assistant('here is the picture'); result(); });
+    return;
+  }
   if (text.includes('bgresume')) {
     // An agent started in the background, then resumed with SendMessage: both calls carry the same task id.
     const use = (id, name, input) => send({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', model: 'fake', content: [{ type: 'tool_use', id, name, input }] }, parent_tool_use_id: null, session_id: session });

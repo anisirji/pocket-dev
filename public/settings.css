@@ -42,7 +42,7 @@
 .st-notice-actions { flex: none; display: flex; gap: 8px; }
 .st-notice .st-btn, .st-notice .st-primary { height: 34px; }
 
-.st-btn, .st-primary { height: 40px; padding: 0 14px; border-radius: 8px; font-weight: 600; }
+.st-btn, .st-primary { min-height: 44px; padding: 0 14px; border-radius: 8px; font-weight: 600; }
 .st-btn { background: var(--panel-2); border: 1px solid var(--line); }
 .st-primary { background: var(--accent); color: #08101e; }
 .st-btn:active { background: var(--line); }
@@ -61,12 +61,12 @@ section > .st-danger { width: 100%; }
 .st-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .st-row .st-ok { margin: 0; }
 .st-stepper { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
-.st-stepper button { width: 44px; height: 40px; font-size: 20px; line-height: 1; }
+.st-stepper button { width: 44px; height: 44px; font-size: 20px; line-height: 1; }
 .st-stepper output { min-width: 32px; text-align: center; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .st-form { display: grid; gap: 10px; }
 .st-form p { margin: 0; }
-.st-check { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.st-check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
 .st-check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 
 .st-qr { margin-top: 12px; width: min(100%, 260px); padding: 8px; border-radius: 10px; background: #fff; }
@@ -83,3 +83,4 @@ section > .st-danger { width: 100%; }
 .st-chev { color: var(--muted); font-size: 20px; }
 .st-body .st-power .pw-title { margin: 0; color: var(--text); font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .st-qr + .st-btn { margin-top: 10px; }
+.st-room-sum { margin-left: 10px; }

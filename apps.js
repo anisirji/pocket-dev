@@ -1,83 +1,16 @@
-import { execFile } from 'node:child_process';
+import { platform } from './platform.js';
 
-const OSASCRIPT = process.env.POCKET_DEV_OSASCRIPT || '/usr/bin/osascript';
 const QUIT_WAIT_MS = 8000;
 const TERM_WAIT_MS = 3000;
 const KILL_WAIT_MS = 1000;
 
-const SYSTEM_APPS = new Set([
-  'Finder', 'Dock', 'SystemUIServer', 'loginwindow', 'WindowServer',
-  'ControlCenter', 'NotificationCenter', 'Spotlight', 'Pocket Dev',
-]);
-
-// NSWorkspace lists exactly what the Mac's own Force Quit window lists (regular, Dock-visible apps),
-// and unlike System Events it needs no Automation permission.
-const LIST_APPS = `
-ObjC.import('AppKit');
-JSON.stringify($.NSWorkspace.sharedWorkspace.runningApplications.js
-  .filter((a) => a.activationPolicy === $.NSApplicationActivationPolicyRegular)
-  .map((a) => ({
-    name: a.localizedName.js,
-    bundleId: a.bundleIdentifier.js || null,
-    pid: a.processIdentifier,
-    frontmost: a.active,
-    hidden: a.hidden,
-  })));`;
-
-// terminate sends the app a normal quit, so it can still ask "Save changes?" or refuse.
-const QUIT_APP = `
-function run([pid]) {
-  ObjC.import('AppKit');
-  const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(Number(pid));
-  return JSON.stringify(app.js ? app.terminate : false);
-}`;
-
-const LIST_WINDOWS = `
-function run([pid]) {
-  const proc = Application('System Events').processes.whose({ unixId: Number(pid) })[0];
-  return JSON.stringify(proc.windows().map((w) => {
-    let document = null;
-    try { document = w.attributes.byName('AXDocument').value(); } catch {}
-    return { title: w.name(), document };
-  }));
-}`;
-
-// Counting Finder's windows touches the same two permissions the window list needs.
-const PROBE_WINDOWS = `Application('System Events').processes.byName('Finder').windows.length; 'ok'`;
-
-function run(file, args, timeout = 15_000) {
-  return new Promise((resolve, reject) => {
-    execFile(file, args, { timeout, maxBuffer: 4_000_000 }, (err, stdout, stderr) => {
-      if (err) reject(Object.assign(err, { stderr: String(stderr) }));
-      else resolve(String(stdout));
-    });
-  });
-}
-
-const jxa = async (script, ...args) => JSON.parse(await run(OSASCRIPT, ['-l', 'JavaScript', '-e', script, ...args]));
-
-function permissionNeeded(err) {
-  const text = `${err.stderr ?? ''} ${err.message}`;
-  if (/-1743|Not authorized to send Apple events/i.test(text)) return 'needs-automation';
-  // -1719 alone is also "invalid index", so only the assistive-access wording counts.
-  if (/-25211|assistive access/i.test(text)) return 'needs-accessibility';
-  return null;
-}
+export const permissionNeeded = (err) => platform.windowPermission(err);
 
 export function permissionHelp(access, host) {
   if (access === 'needs-automation') {
     return `Pocket Dev may not control System Events. On the Mac, open System Settings → Privacy & Security → Automation → ${host} and turn on System Events.`;
   }
   return `Pocket Dev needs Accessibility to read window names. On the Mac, open System Settings → Privacy & Security → Accessibility and turn on ${host}.`;
-}
-
-async function processTable() {
-  const table = new Map();
-  for (const line of (await run('/bin/ps', ['-axo', 'pid=,ppid=,%cpu=,rss='])).split('\n')) {
-    const [pid, ppid, cpu, rss] = line.trim().split(/\s+/).map(Number);
-    if (pid) table.set(pid, { ppid, cpu, rssKB: rss });
-  }
-  return table;
 }
 
 // Chrome, VS Code and friends spread across helper processes, so an app's usage is its whole process tree.
@@ -101,13 +34,15 @@ function ancestry(table) {
 }
 
 function protectedReason(app, ancestors) {
-  if (SYSTEM_APPS.has(app.name)) return 'system';
+  if (platform.systemApps().has(app.name)) return 'system';
   if (ancestors.has(app.pid)) return 'hosts-pocket-dev';
   return null;
 }
 
 export async function snapshot() {
-  const [raw, table] = await Promise.all([jxa(LIST_APPS), processTable()]);
+  const cap = platform.capabilities().apps;
+  if (!cap.available) return { apps: [], host: 'node', unsupported: cap.reason };
+  const [raw, table] = await Promise.all([platform.listApps(), platform.processTable()]);
   const ancestors = ancestry(table);
   const children = new Map();
   for (const [pid, { ppid }] of table) {
@@ -131,21 +66,9 @@ export async function snapshot() {
   return { apps, host };
 }
 
-// 'granted'; 'automation' or 'accessibility' for the one still missing (Automation is checked first, so a missing
-// Automation hides the Accessibility answer); 'waiting' when macOS is asking on the Mac and nobody has answered; 'error'.
-export async function probeWindowAccess(timeout = 15_000) {
-  try {
-    await run(OSASCRIPT, ['-l', 'JavaScript', '-e', PROBE_WINDOWS], timeout);
-    return 'granted';
-  } catch (err) {
-    const needed = permissionNeeded(err);
-    if (needed) return needed.replace('needs-', '');
-    return err.killed ? 'waiting' : 'error';
-  }
-}
-
 async function windowAccess() {
-  const result = await probeWindowAccess();
+  if (!platform.capabilities().appWindows.available) return 'ok';
+  const result = await platform.probeWindowAccess();
   return result === 'automation' || result === 'accessibility' ? `needs-${result}` : 'ok';
 }
 
@@ -168,7 +91,7 @@ async function waitForExit(pid, ms) {
 }
 
 async function quit(app) {
-  await jxa(QUIT_APP, String(app.pid));
+  await platform.quitApp(app.pid);
   if (await waitForExit(app.pid, QUIT_WAIT_MS)) return { result: 'quit' };
   return { result: 'still-running', reason: 'probably waiting for "Save changes?" on the Mac or refused' };
 }
@@ -214,15 +137,17 @@ export function createAppsApi({ sendJson }) {
     if (extra !== undefined) return sendJson(res, 404, { error: 'Not found' });
 
     if (req.method === 'GET' && key === undefined) {
-      const [{ apps }, access] = await Promise.all([snapshot(), windowAccess()]);
-      return sendJson(res, 200, { apps, windowAccess: access });
+      const [{ apps, unsupported }, access] = await Promise.all([snapshot(), windowAccess()]);
+      return sendJson(res, 200, { apps, windowAccess: access, ...(unsupported && { unsupported }) });
     }
 
     if (req.method === 'GET' && action === 'windows') {
       const found = await findApp(res, key);
       if (!found) return;
+      const noWindows = platform.capabilities().appWindows;
+      if (!noWindows.available) return sendJson(res, 200, { windowAccess: 'ok', windows: [], unsupported: noWindows.reason });
       try {
-        const windows = await jxa(LIST_WINDOWS, key);
+        const windows = await platform.appWindows(key);
         return sendJson(res, 200, { windowAccess: 'ok', windows: windows.map(windowView) });
       } catch (err) {
         const access = permissionNeeded(err);
@@ -232,10 +157,12 @@ export function createAppsApi({ sendJson }) {
     }
 
     if (req.method === 'POST' && ACTIONS[action]) {
+      const noApps = platform.capabilities().apps;
+      if (!noApps.available) return sendJson(res, 501, { error: `Not available on this system: ${noApps.reason}`, unsupported: true });
       const found = await findApp(res, key);
       if (!found) return;
       if (found.app.protected) {
-        return sendJson(res, 403, { error: `${found.app.name} is protected: ${found.app.protectedReason === 'system' ? 'it is part of macOS' : 'Pocket Dev runs inside it'}.` });
+        return sendJson(res, 403, { error: `${found.app.name} is protected: ${found.app.protectedReason === 'system' ? `it is part of ${platform.osName}` : 'Pocket Dev runs inside it'}.` });
       }
       return sendJson(res, 200, await ACTIONS[action](found.app));
     }

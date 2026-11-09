@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { platform } from './platform.js';
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -36,7 +37,7 @@ export function openConfig(file) {
     try {
       next = parse(file);
     } catch (err) {
-      throw new Error(`Not saved: ${err.message}. Fix config.json on the Mac and try again.`);
+      throw new Error(`Not saved: ${err.message}. Fix config.json on ${platform.host.the} and try again.`);
     }
     for (const [key, value] of Object.entries(changes)) {
       if (value === undefined) delete next[key];

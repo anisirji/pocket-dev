@@ -21,12 +21,19 @@ import { startAdmin } from './admin.js';
 import { createPhoneAccess } from './access.js';
 import { createChatApi } from './chat/index.js';
 import { createFilesApi } from './files.js';
+import { platform } from './platform.js';
 import { createCollaborators } from './collaborators.js';
 import { captureScreen } from './screen.js';
 import { collectHealth } from './health.js';
 import { collectPerformance } from './performance.js';
 import { createTunnel } from './tunnel.js';
 import { createMessages } from './messages.js';
+import { createRoom } from './room.js';
+import { createForward } from './forward.js';
+import { createModes } from './modes.js';
+import { createTasks } from './tasks.js';
+import { createRoomSync } from './room-sync.js';
+import { createPeerGuard } from './peer-guard.js';
 import { createFolderBrowser } from './folder-browser.js';
 import { readNetwork, readToken, createSameNetwork } from './network.js';
 import { sameOrigin, fromConnector, clientIp, cookieHost } from './transport.js';
@@ -44,29 +51,14 @@ const internetOn = () => network().internet.kind !== 'off';
 const WIFI = network().wifi;
 const sameNetwork = createSameNetwork();
 
-// Every IPv4 address the Mac has on a network, en0 first. POCKET_DEV_LAN_IP_FILE replaces the interface lookup in
-// tests: the file holds one address, empty means no network.
-function lanIps() {
-  if (process.env.POCKET_DEV_LAN_IP_FILE) {
-    let ip = '';
-    try { ip = fs.readFileSync(process.env.POCKET_DEV_LAN_IP_FILE, 'utf8').trim(); } catch {}
-    return ip ? [ip] : [];
-  }
-  const ifaces = os.networkInterfaces();
-  const names = ['en0', ...Object.keys(ifaces).filter((n) => n !== 'en0')];
-  return names.flatMap((name) => (ifaces[name] ?? []).filter((a) => a.family === 'IPv4' && !a.internal).map((a) => a.address));
-}
+const lanIps = () => platform.lanIps();
 const lanIp = () => lanIps()[0] ?? null;
-
-const localName = () => {
-  const name = os.hostname().toLowerCase();
-  return name.endsWith('.local') ? name : `${name}.local`;
-};
+const localName = () => platform.localName();
 let tunnel;
 // With Wi-Fi access off the listener is on loopback, so the LAN and .local addresses reach nothing.
 const urls = () => ({
   lan: WIFI && lanIp() ? `http://${lanIp()}:${PORT}` : null,
-  local: WIFI ? `http://${localName()}:${PORT}` : null,
+  local: WIFI && localName() ? `http://${localName()}:${PORT}` : null,
   remote: tunnel?.view().url ?? null,
 });
 const LOCAL_NOTE = 'same Wi-Fi only; some Android phones cannot open .local names';
@@ -112,6 +104,11 @@ const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE,
   onLockdown: () => collaborators?.lockdown(),
 });
 collaborators = createCollaborators({ config, auth, urls });
+const room = createRoom({ config, urls, grants: collaborators, intervalMs: Number(process.env.POCKET_DEV_ROOM_PING_MS) || undefined });
+const modes = createModes({ room, log: (type, f) => auth.admin.log(type, f), approvalMs: Number(process.env.POCKET_DEV_APPROVAL_MS) || undefined });
+const roomSync = createRoomSync({ room });
+const peerGuard = createPeerGuard();
+const tasks = createTasks({ room, sync: roomSync });
 
 const HOME = os.homedir();
 const RECENT_MAX = 5;
@@ -352,7 +349,7 @@ async function adoptTerminals() {
 
 // `command`, when given, is typed into the new shell once its prompt is up.
 async function createSession(cwd, base = folderName(cwd), command) {
-  const shell = process.env.SHELL || '/bin/zsh';
+  const shell = platform.defaultShell();
   // launchd and nohup start node without LANG, which makes ls print non-ASCII filenames as ???.
   const env = { ...process.env, LANG: 'en_US.UTF-8', LC_CTYPE: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', TERM: 'xterm-256color' };
   const id = crypto.randomBytes(6).toString('hex');
@@ -361,13 +358,13 @@ async function createSession(cwd, base = folderName(cwd), command) {
   let proc = null;
   if (terminalHost) {
     try {
-      proc = await terminalHost.create({ id, title, cwd, shell, env, cols: 80, rows: 24 });
+      proc = await terminalHost.create({ id, title, cwd, shell, args: platform.shellArgs(shell), env, cols: 80, rows: 24 });
     } catch (err) {
       console.warn(`Could not start the terminal in the host, starting it here instead: ${err.message}`);
     }
   }
   const remote = proc !== null;
-  proc ??= pty.spawn(shell, ['-l'], { name: 'xterm-256color', cols: 80, rows: 24, cwd, env });
+  proc ??= pty.spawn(shell, platform.shellArgs(shell), { name: 'xterm-256color', cols: 80, rows: 24, cwd, env });
   const session = {
     id, title, cwd, pty: proc, remote, scrollback: '', clients: new Set(), exitCode: null, startedAt: Date.now(), activeAt: Date.now(),
   };
@@ -496,7 +493,7 @@ function moveForward(fwd, port, host) {
 }
 
 async function openForward(port) {
-  if (!WIFI) throw new Error('Wi-Fi access is off, so nothing on the network could reach a forwarded port. Turn Wi-Fi access on in Admin on the Mac first.');
+  if (!WIFI) throw new Error(`Wi-Fi access is off, so nothing on the network could reach a forwarded port. Turn Wi-Fi access on in Admin on ${platform.host.the} first.`);
   const existing = forwards.get(port);
   if (existing) return forwardView(port, existing);
   const fwd = { server: null, host: null, sockets: new Set(), state: 'waiting', error: null, closed: false, moving: Promise.resolve() };
@@ -543,7 +540,9 @@ const sendJson = (res, status, body, headers = {}) => {
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
-function readJson(req) {
+// A room request is read once by the mode gate, so the handler that follows gets the same parsed body.
+const readJson = (req) => (req.jsonBody ??= readJsonOnce(req));
+function readJsonOnce(req) {
   if (!/^application\/json\s*(;|$)/i.test(req.headers['content-type'] ?? '')) {
     return Promise.reject(httpError(415, 'Send the body as JSON with content-type: application/json.'));
   }
@@ -552,7 +551,10 @@ function readJson(req) {
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > BODY_MAX) { reject(new Error('body too large')); req.destroy(); return; }
+      if (size > BODY_MAX) {
+        // The rest is read and thrown away (Node's request timeout bounds it) so the reply reaches the sender and the connection stays usable.
+        reject(httpError(413, 'body too large')); req.removeAllListeners('data'); req.resume(); return;
+      }
       chunks.push(c);
     });
     req.on('end', () => {
@@ -568,7 +570,7 @@ function parsePort(value) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) return { error: 'Port must be a whole number from 1 to 65535.' };
   if (port === PORT) return { error: `Port ${port} is Pocket Dev itself.` };
   // A forward connects from loopback with any Host the client chooses, which is all the Admin page checks.
-  if (port === admin.port) return { error: `Port ${port} is Pocket Dev’s Admin page, which only this Mac may open.` };
+  if (port === admin.port) return { error: `Port ${port} is Pocket Dev’s Admin page, which only ${platform.host.this} may open.` };
   return { port };
 }
 
@@ -585,6 +587,17 @@ async function handleApi(req, res, url) {
     return sendJson(res, 403, { error: 'This page is older than the server. Reload Pocket Dev and try again.' });
   }
   if (MUTATING.has(req.method) && !sameOrigin(req)) return sendJson(res, 403, { error: 'Cross-origin request refused.' });
+  // A room member reaching this device never manages the room itself, whatever rank it has here.
+  if (resource === 'room' && ['approvals', 'modes', 'assigned'].includes(key)) {
+    return modes.handleApi(req, res, url, { readJson, sendJson, isOwner: !req.roomPeer && !collaborators.guest(req) && Boolean(auth.deviceFor(req)) });
+  }
+  if (req.roomPeer) {
+    const refusal = await modes.gate(req, { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), onAbort: (fn) => res.once('close', () => !res.writableEnded && fn()),
+      body: /^application\/json/i.test(req.headers['content-type'] ?? '') && MUTATING.has(req.method) ? await readJson(req).catch(() => undefined) : undefined });
+    if (refusal) return sendJson(res, refusal.status, refusal.body);
+  }
+  if (req.roomPeer && resource === 'room') return sendJson(res, 403, { error: 'Room settings are changed on the device itself.' });
+  if (req.roomDevice && req.method === 'GET' && url.pathname === '/api/status') return sendJson(res, 200, { status: 'active', name: req.roomDevice.name, code: 'room' });
 
   if (url.pathname === '/api/invitations/accept' && req.method === 'POST') {
     const r = collaborators.accept(req, await readJson(req));
@@ -605,10 +618,16 @@ async function handleApi(req, res, url) {
     return sendJson(res, 403, { error: 'Your role does not allow this action.' });
   }
 
+  // Join codes and room secrets are the credentials for the three peer routes, so another device can use them without a login.
+  if (resource === 'room' && ['ping', 'accept', 'notify'].includes(key) && req.method === 'POST') return room.handleApi(req, res, url, { readJson, sendJson, guard: peerGuard });
+
+  // Sync between room devices (tasks, messages, chats): the room secret is the credential, same reasoning as the peer routes above.
+  if (resource === 'room' && key === 'sync' && req.method === 'POST') return roomSync.handleApi(req, res, url, { readJson, sendJson, guard: peerGuard });
+
   const authReply = await auth.handleApi(req, url.pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
   if (resource === 'local' && key === 'power') {
-    if (!auth.isLocalRequest(req)) return sendJson(res, 403, { error: 'Only a script run on the Mac can use this.' });
+    if (req.roomPeer || !auth.isLocalRequest(req)) return sendJson(res, 403, { error: `Only a script run on ${platform.host.the} can use this.` });
     return handlePowerApi(req, res, url.pathname.split('/')[4], { readJson, sendJson, wss, sessions });
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
@@ -617,7 +636,7 @@ async function handleApi(req, res, url) {
   // Switching between addresses exists only once internet access is on; before that these routes are not there.
   if ((resource === 'handoff' || resource === 'connection') && !internetOn()) return sendJson(res, 404, { error: 'Not found' });
   if (resource === 'collaborators') {
-    if (!auth.isTrustedAdmin(req) && !(req.method === 'GET' && url.pathname === '/api/collaborators' && config.read().roleAccessEnabled !== true)) return sendJson(res, 403, { error: 'Only a reviewed Admin device may manage collaborators. Enable access from Admin on the Mac.' });
+    if (!auth.isTrustedAdmin(req) && !(req.method === 'GET' && url.pathname === '/api/collaborators' && config.read().roleAccessEnabled !== true)) return sendJson(res, 403, { error: `Only a reviewed Admin device may manage collaborators. Enable access from Admin on ${platform.host.the}.` });
     const r = await collaborators.ownerApi(req.method, url.pathname, ['POST', 'PUT', 'PATCH'].includes(req.method) ? await readJson(req) : {});
     return sendJson(res, r.status, r.body);
   }
@@ -633,6 +652,9 @@ async function handleApi(req, res, url) {
   if (resource === 'chat') return chatApi.handleApi(req, res, url.pathname);
   if (resource === 'files') return handleFiles(req, res, url);
   if (resource === 'messages') return messages.handleApi(req, res);
+  if (resource === 'room' && key === 'chats') return chatApi.handleRoomApi(req, res, url);
+  if (resource === 'room' && key === 'tasks') return tasks.handleApi(req, res, url, { readJson, sendJson, loggedIn: true });
+  if (resource === 'room') return room.handleApi(req, res, url, { readJson, sendJson, loggedIn: true });
 
   switch (route) {
     case 'GET performance':
@@ -640,7 +662,7 @@ async function handleApi(req, res, url) {
     case 'GET health':
       return sendJson(res, 200, await collectHealth());
     case 'GET screen': {
-      if (config.read().screenView === false) return sendJson(res, 403, { error: 'Screen view is turned off. On the Mac, run: pocket-dev config set screenView true' });
+      if (config.read().screenView === false) return sendJson(res, 403, { error: `Screen view is turned off. On ${platform.host.the}, run: pocket-dev config set screenView true` });
       try {
         const jpeg = await captureScreen();
         res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': jpeg.length, 'cache-control': 'no-store' });
@@ -729,7 +751,7 @@ async function handleApi(req, res, url) {
       if (direction === 'to-lan') {
         if (!network().wifi) return sendJson(res, 403, { error: 'Wi-Fi access is off, so there is no local address to switch to.' });
         if (!fromConnector(req)) return sendJson(res, 403, { error: 'Switch to local is only offered on the internet address.' });
-        if (!lanIp()) return sendJson(res, 409, { error: 'The Mac has no Wi-Fi address right now.' });
+        if (!lanIp()) return sendJson(res, 409, { error: `${platform.host.The} has no Wi-Fi address right now.` });
         return sendJson(res, 200, { url: `http://${lanIp()}:${PORT}/?h=${auth.mintHandoff(device, { direction, host: 'lan' })}` });
       }
       if (direction === 'to-remote') {
@@ -766,10 +788,12 @@ const PAGES = {
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
   '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
-  '/connection.js': 'connection.js', '/network.js': 'network.js',
+  '/connection.js': 'connection.js', '/machine.js': 'machine.js', '/machine.css': 'machine.css', '/network.js': 'network.js',
   '/folder-picker.js': 'folder-picker.js', '/folder-picker.css': 'folder-picker.css',
   '/messages.js': 'messages.js', '/messages.css': 'messages.css',
   '/collaborators.js': 'collaborators.js', '/collaborators.css': 'collaborators.css',
+  '/room-pages.js': 'room-pages.js', '/room-pages.css': 'room-pages.css', '/room-screen.js': 'room-screen.js', '/room-invite.js': 'room-invite.js', '/room.css': 'room.css',
+  '/modes-core.js': 'modes-core.js', '/room-modes.js': 'room-modes.js', '/room-modes.css': 'room-modes.css', '/room-approvals.js': 'room-approvals.js', '/room-approvals.css': 'room-approvals.css', '/room-banner.js': 'room-banner.js', '/room-banner.css': 'room-banner.css', '/vendor/qrcode/qrcode.js': 'vendor/qrcode/qrcode.js', '/vendor/jsqr/jsQR.js': 'vendor/jsqr/jsQR.js', '/room-scan.js': 'room-scan.js',
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
 };
 const PUBLIC_PAGES = new Set(['login.html', 'invite.html', 'invite.js', 'guest.css']);
@@ -789,6 +813,8 @@ function servePage(req, res, pathname) {
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
+const forward = createForward({ room, auth, collaborators, sendJson, modes, guard: peerGuard, answerMs: Number(process.env.POCKET_DEV_FORWARD_ANSWER_MS) || undefined, writeAnswerMs: Number(process.env.POCKET_DEV_FORWARD_WRITE_MS) || undefined });
+
 const server = http.createServer(async (req, res) => {
   if (insecureRemote(req)) {
     res.writeHead(308, { location: `https://${parseHost(req.headers.host).name}${req.url}`, 'cache-control': 'no-store', connection: 'close' });
@@ -800,9 +826,12 @@ const server = http.createServer(async (req, res) => {
   }
   if (fromConnector(req)) res.setHeader('strict-transport-security', HSTS);
   const url = new URL(req.url, 'http://localhost');
+  const refused = forward.identify(req);
+  if (refused) return sendJson(res, refused.status, { error: refused.error });
   try {
-    if (url.pathname === '/' && url.searchParams.has('k')) {
-      if (collaborators.guest(req)) return sendJson(res, 403, { error: 'Log out collaborator access before pairing an Admin device on the Mac.' });
+    if (forward.isForward(url.pathname)) await forward.http(req, res, url);
+    else if (url.pathname === '/' && url.searchParams.has('k')) {
+      if (collaborators.guest(req)) return sendJson(res, 403, { error: `Log out collaborator access before pairing an Admin device on ${platform.host.the}.` });
       const { status, headers, body } = auth.redeemQrKey(req, url.searchParams.get('k'));
       res.writeHead(status, { 'cache-control': 'no-store', ...headers });
       res.end(body);
@@ -822,16 +851,25 @@ const server = http.createServer(async (req, res) => {
 
 // Terminal and chat sockets share this server, so a disconnect, sleep or shutdown that closes wss.clients closes both.
 const wss = new WebSocketServer({ noServer: true });
-const chatApi = createChatApi({ sendJson, readJson, config, wss });
+const chatApi = createChatApi({ sendJson, readJson, config, wss, room, roomSync });
 
 const rejectUpgrade = (socket, status, text) => {
   socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 };
-const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade });
+const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade, room, roomSync });
 
-server.on('upgrade', (req, socket, head) => {
+server.on('upgrade', async (req, socket, head) => {
   if (insecureRemote(req) || !hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
-  if (new URL(req.url, 'http://localhost').pathname === '/ws/messages') return messages.handleUpgrade(req, socket, head);
+  const refused = forward.identify(req);
+  if (refused) return rejectUpgrade(socket, refused.status, 'Forbidden');
+  const target = new URL(req.url, 'http://localhost');
+  forward.watch(req, socket);
+  if (forward.isForward(target.pathname)) return forward.upgrade(req, socket, head, target, rejectUpgrade);
+  if (target.pathname === '/ws/messages') return messages.handleUpgrade(req, socket, head);
+  if (req.roomPeer && /^\/ws\/(chat\/)?[0-9a-f]+$/.test(target.pathname)) {
+    const refusal = await modes.gateSocket(req, target.pathname, (fn) => socket.once('close', fn));
+    if (refusal) return rejectUpgrade(socket, refusal.status, refusal.status === 408 ? 'Request Timeout' : 'Forbidden');
+  }
   if (collaborators.guest(req)) return rejectUpgrade(socket, 403, 'Forbidden');
   const { pathname } = new URL(req.url, 'http://localhost');
   const match = /^\/ws\/([0-9a-f]+)$/.exec(pathname);
@@ -860,6 +898,8 @@ setInterval(() => {
 
 await adoptTerminals();
 startPower(config);
+roomSync.start();
+chatApi.startReplica();
 watchLanIp();
 if (internetOn()) sameNetwork.refresh();
 
@@ -914,7 +954,7 @@ const adminSections = {
       const battery = p.battery === null ? (p.onAC ? 'On power adapter' : 'No battery') : `Battery ${p.battery}%${p.charging ? ', charging' : p.onAC ? ', plugged in' : ''}`;
       return [{
         id: 'awake',
-        label: `Keep awake: ${AWAKE_LABELS[p.awake]}${p.stayingAwake ? ' (holding the Mac awake)' : ''}`,
+        label: `Keep awake: ${AWAKE_LABELS[p.awake]}${p.stayingAwake ? ` (holding ${platform.host.the} awake)` : ''}`,
         details: [battery, p.lidClosed ? 'Lid closed' : 'Lid open', `Lid sleep ${p.lidSleepDisabled ? 'off' : 'on'}`],
       }];
     },
@@ -923,7 +963,8 @@ const adminSections = {
     title: 'Open apps',
     empty: 'No open apps.',
     async list() {
-      const { apps } = await cachedApps();
+      const { apps, unsupported } = await cachedApps();
+      if (unsupported) return [{ id: 'count', label: 'Not available on this system', details: [unsupported] }];
       return [{ id: 'count', label: plural(apps.length, 'app') + ' open', details: ['Quit or force quit them from the phone: Settings, Open apps'] }];
     },
   },
@@ -970,7 +1011,7 @@ if (opened.error) {
   if (lan ?? local) {
     console.log(await terminalQr(auth.mintQrUrl()));
     console.log(`Pocket Dev running at ${lan ?? local}`);
-    if (lan) console.log(`Also at ${local} (${LOCAL_NOTE})`);
+    if (lan && local) console.log(`Also at ${local} (${LOCAL_NOTE})`);
   }
   if (internet.kind === 'domain') console.log(`Internet link: https://${internet.hostname} (${tunnel.view().status})`);
   if (internet.kind === 'quick') console.log('Internet link: Quick link, turn it on in Admin.');

@@ -19,7 +19,7 @@
     return element;
   };
 
-  function create({ api, onSelect, onCancel = () => {}, onClose = () => {}, selectLabel = 'Select this folder', title = 'Choose a folder on your Mac' }) {
+  function create({ api, onSelect, onCancel = () => {}, onClose = () => {}, selectLabel = 'Select this folder', title = 'Choose a folder on this device' }) {
     const element = node('section', 'fp-browser');
     element.hidden = true;
     element.setAttribute('aria-label', title);
@@ -181,7 +181,7 @@
     const caption = node('label', 'fp-label', label); caption.setAttribute('for', input.id);
     const controls = node('div', 'fp-controls');
     let browse;
-    const browser = create({ api, title: `Choose ${label.toLowerCase()} on your Mac`, onClose: () => browse?.setAttribute('aria-expanded', 'false'), onSelect: (path) => {
+    const browser = create({ api, title: `Choose ${label.toLowerCase()} on this device`, onClose: () => browse?.setAttribute('aria-expanded', 'false'), onSelect: (path) => {
       input.value = path;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       return onSelect(path);

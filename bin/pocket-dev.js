@@ -10,7 +10,7 @@ import { INTERNET_KINDS, readNetwork, networkError, isToken, hasToken, writeToke
 
 const VERSION = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 
-const HELP = `pocket-dev ${VERSION}: control this Mac from your phone's browser
+const HELP = `pocket-dev ${VERSION}: control this computer from your phone's browser
 
 Usage: pocket-dev <command>
 
@@ -24,13 +24,13 @@ Usage: pocket-dev <command>
   service uninstall|status|logs                    Remove it, check it, or follow its log
   service autostart on|off|status                  Start at login (or not)
   qr                                               Print a one-time login QR code
-  admin                                            Open the admin page (this Mac only)
+  admin                                            Open the admin page (this computer only)
   connect | disconnect                             Open or close phone access
-  message [text] [--to NAME] [--file PATH]         Send to Messages as the Mac (text or piped stdin)
+  message [text] [--to NAME] [--file PATH]         Send to Messages as this computer (text or piped stdin)
   internet status|off|quick                        Internet access: show it, turn it off, or allow a Quick link
   internet domain --hostname <host> --token-stdin  Your own domain through a Cloudflare tunnel; the token
                                                    comes from stdin, or from a file with --token-file <path>
-  awake on|plugged|off|status                      Keep the Mac awake
+  awake on|plugged|off|status                      Keep this computer awake
   takeover <id> | --last                           Continue a phone conversation in this terminal
   version | help
 

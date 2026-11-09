@@ -4,6 +4,7 @@
 // It changes rarely on purpose: replacing it ends the shells it holds.
 import net from 'node:net';
 import fs from 'node:fs';
+import path from 'node:path';
 import pty from 'node-pty';
 
 export const PROTOCOL = 1;
@@ -33,7 +34,7 @@ function main(socketPath) {
   }
 
   function quit() {
-    fs.rmSync(socketPath, { force: true });
+    if (process.platform !== 'win32') fs.rmSync(socketPath, { force: true });
     process.exit(0);
   }
 
@@ -42,13 +43,14 @@ function main(socketPath) {
     terminals.delete(t.id);
   }
 
-  function create({ rid, id, title, cwd, shell, env, cols, rows }) {
-    const valid = /^[0-9a-f]{12}$/.test(id) && !terminals.has(id) && typeof shell === 'string' && shell.startsWith('/')
+  function create({ rid, id, title, cwd, shell, args, env, cols, rows }) {
+    const valid = /^[0-9a-f]{12}$/.test(id) && !terminals.has(id) && typeof shell === 'string' && (path.isAbsolute(shell) || process.platform === 'win32')
+      && (args === undefined || (Array.isArray(args) && args.every((a) => typeof a === 'string')))
       && typeof cwd === 'string' && typeof title === 'string' && env && typeof env === 'object' && isDim(cols) && isDim(rows);
     if (!valid) return send({ t: 'error', rid, message: 'Bad create request' });
     let proc;
     try {
-      proc = pty.spawn(shell, ['-l'], { name: 'xterm-256color', cols, rows, cwd, env });
+      proc = pty.spawn(shell, args ?? ['-l'], { name: 'xterm-256color', cols, rows, cwd, env });
     } catch (err) {
       return send({ t: 'error', rid, message: err.message });
     }
@@ -117,7 +119,13 @@ function main(socketPath) {
   });
 
   process.umask(0o077);
-  server.listen(socketPath, () => fs.chmodSync(socketPath, 0o600));
+  // Two hosts started at the same moment both find nobody listening; the one that loses the address has nothing to do.
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') process.exit(0);
+    console.error(`host error: ${err.stack}`);
+  });
+  // A Windows pipe lives in the pipe namespace, not the file system: it has no file to chmod or remove.
+  server.listen(socketPath, () => { if (process.platform !== 'win32') fs.chmodSync(socketPath, 0o600); });
 
   // With nothing running and nobody connected for a while, the host has no reason to stay.
   setInterval(() => {
@@ -142,6 +150,6 @@ if (!socketPath) {
 const probe = net.connect(socketPath);
 probe.once('connect', () => process.exit(0));
 probe.once('error', () => {
-  fs.rmSync(socketPath, { force: true });
+  if (process.platform !== 'win32') fs.rmSync(socketPath, { force: true });
   main(socketPath);
 });

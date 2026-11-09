@@ -37,6 +37,10 @@
       <button class="st-close" aria-label="Close settings">✕</button>
     </header>
     <div class="st-body">
+      <section>
+        <button class="st-link" data-act="room"><span>Room</span><span class="st-apps-count st-room-sum"></span><span class="st-chev" aria-hidden="true">›</span></button>
+        <p class="st-err" data-for="room"></p>
+      </section>
       <section data-mount="connection" hidden></section>
       <section data-mount="service"></section>
       <section data-mount="collaborators"></section>
@@ -57,10 +61,10 @@
         <p class="st-err" data-for="apps"></p>
       </section>
       <section>
-        <button class="st-link" data-act="health"><span>Mac health</span><span class="st-chev" aria-hidden="true">›</span></button>
+        <button class="st-link" data-act="health"><span>Device health</span><span class="st-chev" aria-hidden="true">›</span></button>
       </section>
       <section>
-        <button class="st-link" data-act="screen"><span>Mac screen</span><span class="st-chev" aria-hidden="true">›</span></button>
+        <button class="st-link" data-act="screen"><span>Device screen</span><span class="st-chev" aria-hidden="true">›</span></button>
       </section>
       <section>
         <h3>Device limit</h3>
@@ -120,7 +124,7 @@
     renderWaiting();
   }
 
-  // Logins waiting for approval. The server lists them only when the Mac lets phones approve and this device may.
+  // Logins waiting for approval. The server lists them only when this device lets phones approve and this device may.
   function renderWaiting() {
     $('.st-waiting').replaceChildren(...(settings.waiting ?? []).map((d) => {
       const card = el('li', 'st-device st-pending');
@@ -140,7 +144,7 @@
     if (!settings.approveFromDevices) return box.replaceChildren();
     const off = el('button', 'st-btn', 'Turn off approving from phones');
     off.onclick = async () => {
-      if (!confirm('Turn off approving logins from phones? Only the Mac can turn it back on.')) return;
+      if (!confirm('Turn off approving logins from phones? Only the device itself can turn it back on.')) return;
       try {
         await api('PUT', '/api/settings/approve-from-devices', { on: false });
         await refresh();
@@ -148,7 +152,7 @@
         msg('err', 'devices', err.message);
       }
     };
-    box.replaceChildren(el('p', 'st-note', 'Logged-in phones can approve waiting logins. If a phone is lost, log it out from the Mac or run Lockdown there.'), off);
+    box.replaceChildren(el('p', 'st-note', 'Logged-in phones can approve waiting logins. If a phone is lost, log it out from this device’s Admin page or run Lockdown there.'), off);
   }
 
   async function decide(d, action) {
@@ -267,7 +271,7 @@
     }
     $('.st-addr').textContent = lan
       ? `Or open ${lan} on the other phone and type the password. ${local} also works (${localNote}).`
-      : `The Mac has no network right now. ${local} works once it is back on Wi-Fi (${localNote}).`;
+      : `This device has no network right now. ${local} works once it is back on Wi-Fi (${localNote}).`;
   }
 
   async function refreshApps() {
@@ -405,9 +409,13 @@
       collaborators ||= m.mountCollaborators($('[data-mount="collaborators"]'), { api });
       collaborators.refresh();
     }).catch((err) => { $('[data-mount="collaborators"]').textContent = `Could not load Collaborators: ${err.message}. Restart Pocket Dev and reload.`; });
+    import('/room-screen.js').then((m) => m.roomSummary()).then((t) => { $('.st-room-sum').textContent = t; }).catch(() => {});
     mountPower();
     await refresh();
   }
 
+  $('[data-act="room"]').addEventListener('click', () => {
+    import('/room-screen.js').then((m) => m.openRoom()).catch((err) => msg('err', 'room', `Could not load Room: ${err.message}. Reload this page.`));
+  });
   document.getElementById('settingsBtn').addEventListener('click', open);
 })();

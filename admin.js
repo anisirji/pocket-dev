@@ -1,7 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { platform } from './platform.js';
 import { fileURLToPath } from 'node:url';
 import { PROXY_HEADERS, STATE_DIR, deviceName } from './auth.js';
 import { EVENT_KINDS, isLogFilter } from './security-log.js';
@@ -252,7 +252,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   async function changeAutostart({ enabled }, by) {
     if (typeof enabled !== 'boolean') return reply(400, { error: 'enabled must be true or false.' });
     const before = await serviceStatus();
-    if (!before.installed) return reply(409, { error: 'Pocket Dev is not installed as a service yet. Install it from the admin page on the Mac.' });
+    if (!before.installed) return reply(409, { error: `Pocket Dev is not installed as a service yet. Install it from the admin page on ${platform.host.the}.` });
     await setAutostart(enabled);
     if (before.autostart !== enabled) auth.admin.log('autostart-changed', { on: enabled, by, label: before.label });
     return ok(await serviceStatus());
@@ -262,7 +262,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   async function restart(by, req) {
     const svc = await serviceStatus();
     if (!svc.isThisServer) {
-      return reply(409, { error: 'This copy is not the background service, so it cannot restart itself. Stop it and run pocket-dev start, or install the service from the admin page on the Mac.' });
+      return reply(409, { error: `This copy is not the background service, so it cannot restart itself. Stop it and run pocket-dev start, or install the service from the admin page on ${platform.host.the}.` });
     }
     if (req) auth.noteRestart(req);
     auth.admin.log('server-restarted', { by, updateReady: svc.updateReady });
@@ -312,7 +312,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
       if (!['share', 'login'].includes(kind)) return reply(400, { error: 'kind must be share or login.' });
       if (!access.view().connected) return reply(409, { error: 'Phone access is off. Connect first, then show the code.' });
       const address = urls().remote ?? urls().lan;
-      if (!address) return reply(409, { error: readNetwork(config).wifi ? 'No Wi-Fi address. Connect this Mac to a network first.' : 'The internet link is not connected yet. Wait for it, or turn Wi-Fi access back on.' });
+      if (!address) return reply(409, { error: readNetwork(config).wifi ? `No Wi-Fi address. Connect ${platform.host.this} to a network first.` : 'The internet link is not connected yet. Wait for it, or turn Wi-Fi access back on.' });
       if (kind === 'login') return ok(await auth.admin.mintQr());
       return ok({ url: address, svg: await svgQr(address) });
     },
@@ -422,7 +422,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
     // Only the Mac can widen access; a phone may turn the internet link off.
     'PUT /api/network': ({ body }) => {
       if (readNetwork(config).internet.kind === 'off') return reply(404, { error: 'Not found' });
-      if (body.wifi !== undefined || body.token !== undefined || body.internet?.kind !== 'off') return reply(403, { error: 'Only the Mac can turn internet access on. Use Admin on the Mac or pocket-dev internet.' });
+      if (body.wifi !== undefined || body.token !== undefined || body.internet?.kind !== 'off') return reply(403, { error: `Only ${platform.host.the} can turn internet access on. Use Admin on ${platform.host.the} or pocket-dev internet.` });
       return setNetwork({ internet: { kind: 'off' } }, 'phone');
     },
   });
@@ -430,10 +430,10 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   return {
     url,
     port,
-    line: `Admin (this Mac only): ${url}`,
+    line: `Admin (${platform.host.this} only): ${url}`,
     openPage() {
       if (process.env.POCKET_DEV_NO_OPEN) return;
-      spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
+      if (!platform.openUrl(url)) console.warn(`Not available on this system: ${platform.capabilities().openUrl.reason} Open ${url} yourself.`);
     },
     async phoneApi(req, pathname, readBody) {
       const found = phoneRoute(req.method, pathname);

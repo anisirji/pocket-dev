@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createTakeover, readClaudeSessions, copyView, LIVE_MS, BUSY_MS } from './takeover.js';
+import { platform } from './platform.js';
 
 const LINE_MAX = 256_000;
 const CHUNK = 4 << 20;
@@ -445,7 +446,7 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
         return {
           id: `${tool}:${id}`,
           label: s ? view(s, held, names).title : copies[0].chat?.title || copies[0].terminal?.title || id,
-          details: [`${TOOL_LABELS[tool]} in ${copies.map((c) => copyView(c).label.replace(/^Pocket Dev /, '')).join(', ')}`, ...(cwd ? [cwd] : []), `On the Mac, run: pocket-dev takeover ${id}`],
+          details: [`${TOOL_LABELS[tool]} in ${copies.map((c) => copyView(c).label.replace(/^Pocket Dev /, '')).join(', ')}`, ...(cwd ? [cwd] : []), `On ${platform.host.the}, run: pocket-dev takeover ${id}`],
           tool, conversationId: id, cwd,
           busy: Boolean(s && Date.now() - s.mtimeMs < BUSY_MS) || copies.some((c) => c.busy || c.chat?.status === 'running'),
           activeAt: Math.max(...copies.map((c) => c.chat?.updatedAt ?? c.terminal?.activeAt ?? 0)),
@@ -457,7 +458,7 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
       const [tool, id] = item.split(':');
       if (!Object.hasOwn(TOOLS, tool) || !ID_RE.test(id ?? '')) return false;
       const s = await findSession(tool, id);
-      const r = await takeover.takeOver({ tool, id, mtimeMs: s?.mtimeMs ?? 0, scope: 'pocket-dev', confirmBusy: true, note: 'Continued on your Mac', who: { by: 'mac' } });
+      const r = await takeover.takeOver({ tool, id, mtimeMs: s?.mtimeMs ?? 0, scope: 'pocket-dev', confirmBusy: true, note: `Continued on your ${platform.host.mac}`, who: { by: 'mac' } });
       if (r.status !== 200) throw Object.assign(new Error(r.body.error), { status: r.status });
       return r.body.stopped.length > 0;
     },

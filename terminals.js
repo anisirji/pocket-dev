@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { platform } from './platform.js';
 
 const HOST_FILE = fileURLToPath(new URL('./terminal-host.js', import.meta.url));
 const PROTOCOL = 1;
@@ -13,6 +14,7 @@ const SOCKET_PATH_MAX = 90;
 
 // A unix socket path is limited to about 100 characters; a long state folder falls back to a short name in the temp folder.
 export function hostSocketPath(stateDir) {
+  if (platform.platform === 'win32') return `\\\\.\\pipe\\pocket-dev-${crypto.createHash('sha1').update(stateDir).digest('hex').slice(0, 12)}`;
   const preferred = path.join(stateDir, 'terminals.sock');
   if (preferred.length <= SOCKET_PATH_MAX) return preferred;
   return path.join(os.tmpdir(), `pd-${crypto.createHash('sha1').update(stateDir).digest('hex').slice(0, 12)}.sock`);
@@ -135,7 +137,7 @@ function attach(socketPath) {
       const host = new HostClient(sock);
       try {
         const hello = await host.request({ t: 'hello' });
-        if (hello.protocol !== PROTOCOL) throw new Error(`The terminal host speaks protocol ${hello.protocol}, this Pocket Dev needs ${PROTOCOL}`);
+        if (hello.protocol !== PROTOCOL) throw Object.assign(new Error(`The terminal host speaks protocol ${hello.protocol}, this Pocket Dev needs ${PROTOCOL}`), { fatal: true });
         resolve(host);
       } catch (err) {
         sock.destroy();
@@ -146,22 +148,38 @@ function attach(socketPath) {
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const startHost = (socketPath, stateDir) => spawn(process.execPath, [HOST_FILE, socketPath], { detached: true, stdio: 'ignore', cwd: stateDir }).unref();
+
+// Nobody is listening yet: a unix socket that does not exist or refuses, or a Windows pipe that does not exist.
+const NOT_LISTENING = new Set(['ENOENT', 'ECONNREFUSED']);
+
+// Connects to the host, starting it if nothing listens. A host that was just started needs a moment before it
+// listens, and a Windows pipe can also answer EBUSY or EPIPE between two clients, so a failed connect is retried with
+// a growing pause (50 ms doubling to 400 ms) until `waitMs` has passed. A host that answers with the wrong protocol
+// is not retried. `connect`, `start`, `pause` and `now` can be replaced in tests.
+export async function connectToHost(socketPath, { connect = attach, start = () => {}, pause = sleep, now = Date.now, waitMs = START_WAIT_MS } = {}) {
+  let lastError;
+  try {
+    return await connect(socketPath);
+  } catch (err) {
+    if (err.fatal) throw err;
+    lastError = err;
+    if (!err.code || NOT_LISTENING.has(err.code)) start();
+  }
+  const deadline = now() + waitMs;
+  for (let delay = 50; now() < deadline; delay = Math.min(delay * 2, 400)) {
+    await pause(delay);
+    try { return await connect(socketPath); } catch (err) {
+      if (err.fatal) throw err;
+      lastError = err;
+    }
+  }
+  throw new Error(`The terminal host did not start: ${lastError?.message ?? 'no answer'}`);
+}
 
 // Connects to the terminal host for this state folder, starting it (detached, in its own session so a launchd restart
 // of Pocket Dev does not take it down) if it is not running.
-export async function openTerminalHost(stateDir) {
+export function openTerminalHost(stateDir) {
   const socketPath = hostSocketPath(stateDir);
-  try {
-    return await attach(socketPath);
-  } catch {
-    const child = spawn(process.execPath, [HOST_FILE, socketPath], { detached: true, stdio: 'ignore', cwd: stateDir });
-    child.unref();
-  }
-  const deadline = Date.now() + START_WAIT_MS;
-  let lastError;
-  while (Date.now() < deadline) {
-    await sleep(100);
-    try { return await attach(socketPath); } catch (err) { lastError = err; }
-  }
-  throw new Error(`The terminal host did not start: ${lastError?.message ?? 'no answer'}`);
+  return connectToHost(socketPath, { start: () => startHost(socketPath, stateDir) });
 }

@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { platform } from './platform.js';
 
 const LIMIT = 2000;
 const SORT = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -14,7 +15,7 @@ export function createFolderBrowser({ home = os.homedir(), config = { read: () =
     const saved = config.read();
     const candidates = [
       ['Home', home], ...['Desktop', 'Documents', 'Downloads'].map((name) => [name, path.join(home, name)]),
-      ['External drives', '/Volumes'], ['Mac', '/'],
+      ['External drives', '/Volumes'], [platform.host.Mac, '/'],
       ...(Array.isArray(saved.folders) ? saved.folders : []).filter((p) => typeof p === 'string').map((p) => [path.basename(p), p]),
     ];
     const seen = new Set();
@@ -47,7 +48,7 @@ export function createFolderBrowser({ home = os.homedir(), config = { read: () =
       if (err.status) throw err;
       if (err.code === 'EEXIST') throw error(409, `"${name}" already exists here.`);
       if (err.code === 'ENOENT') throw error(404, 'This folder no longer exists. Choose another location.');
-      if (['EACCES', 'EPERM', 'EROFS'].includes(err.code)) throw error(403, 'macOS has not allowed Pocket Dev to create items in this folder.');
+      if (['EACCES', 'EPERM', 'EROFS'].includes(err.code)) throw error(403, `${platform.osName} has not allowed Pocket Dev to create items in this folder.`);
       throw err;
     }
   }
@@ -76,7 +77,7 @@ export function createFolderBrowser({ home = os.homedir(), config = { read: () =
       }
       entries.sort((a, b) => direction * (sortKey === 'name' ? 0 : a.time - b.time || 0) || direction * SORT.compare(a.name, b.name));
       let current = path.parse(dir).root;
-      const breadcrumbs = [{ name: 'Mac', path: current }];
+      const breadcrumbs = [{ name: platform.host.Mac, path: current }];
       for (const name of dir.slice(current.length).split(path.sep).filter(Boolean)) {
         current = path.join(current, name);
         breadcrumbs.push({ name, path: current });
@@ -87,7 +88,7 @@ export function createFolderBrowser({ home = os.homedir(), config = { read: () =
       if (err.status) throw err;
       if (err.code === 'ENOENT') throw error(404, 'This folder no longer exists. Choose another location.');
       if (err.code === 'ENOTDIR') throw error(400, 'That location is a file. Choose a folder.');
-      if (['EACCES', 'EPERM'].includes(err.code)) throw error(403, 'macOS has not allowed Pocket Dev to open this folder. Choose another folder or allow access on the Mac.');
+      if (['EACCES', 'EPERM'].includes(err.code)) throw error(403, `${platform.osName} has not allowed Pocket Dev to open this folder. Choose another folder or allow access on ${platform.host.the}.`);
       throw err;
     }
   }, { create });

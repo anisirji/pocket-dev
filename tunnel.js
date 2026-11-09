@@ -1,7 +1,11 @@
 import { spawn } from 'node:child_process';
 import { findCloudflared } from './network.js';
+import { platform } from './platform.js';
 
-const NOT_INSTALLED = 'cloudflared is not installed. On this Mac run: brew install cloudflared, then try again.';
+const INSTALL_HINT = { darwin: 'brew install cloudflared', win32: 'winget install Cloudflare.cloudflared' };
+const NOT_INSTALLED = INSTALL_HINT[platform.platform]
+  ? `cloudflared is not installed. On ${platform.host.this} run: ${INSTALL_HINT[platform.platform]}, then try again.`
+  : 'cloudflared is not installed. Install it from developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads, then try again.';
 
 // A Quick Tunnel gets a random trycloudflare.com address and is deliberately on demand: restarting Pocket Dev never
 // publishes it automatically. A domain tunnel runs with the token from the Cloudflare dashboard, passed in the
@@ -35,7 +39,7 @@ export function createTunnel({ port, isConnected, network, token, log = () => {}
 
   const start = serial(() => {
     const { internet } = network();
-    if (internet.kind === 'off') throw new Error('Internet access is off. Turn it on in Admin on the Mac first.');
+    if (internet.kind === 'off') throw new Error(`Internet access is off. Turn it on in Admin on ${platform.host.the} first.`);
     if (!isConnected()) throw new Error('Connect phone access before starting remote access.');
     if (child) return view();
     const secret = internet.kind === 'domain' ? token() : null;
@@ -91,7 +95,7 @@ export function createTunnel({ port, isConnected, network, token, log = () => {}
     proc.stderr.on('data', read());
     proc.once('error', (err) => fail(proc, err.code === 'ENOENT' ? NOT_INSTALLED : err.message));
     proc.once('exit', (code, signal) => fail(proc, `Remote access stopped (${signal || `exit ${code}`})${lastLine ? `: ${lastLine}` : ''}. Start it again${kind === 'quick' ? ' for a new link' : ''}.`));
-    timer = setTimeout(() => fail(proc, 'Could not connect to Cloudflare within 60 seconds. Check the Mac’s internet connection and try again.'), startupMs).unref();
+    timer = setTimeout(() => fail(proc, `Could not connect to Cloudflare within 60 seconds. Check ${platform.host.the}’s internet connection and try again.`), startupMs).unref();
     return view();
   });
 
