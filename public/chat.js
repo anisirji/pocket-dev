@@ -1357,9 +1357,12 @@
     if (window.isSecureContext && navigator.clipboard) return navigator.clipboard.writeText(text);
     const ta = el('textarea');
     ta.value = text;
-    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    ta.readOnly = true;
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
     document.body.append(ta);
+    ta.focus({ preventScroll: true });
     ta.select();
+    ta.setSelectionRange(0, text.length);
     const ok = document.execCommand('copy');
     ta.remove();
     return ok ? Promise.resolve() : Promise.reject(new Error('Copy failed'));
