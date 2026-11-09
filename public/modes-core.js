@@ -85,7 +85,7 @@ export function describeRequest(a) {
 }
 
 export function riskText(a) {
-  const why = String(a.why || '').trim();
+  const why = String(a.why || '').trim().replace(/\/[^\s),;]+/g, (p) => p.split('/').filter(Boolean).slice(-2).join('/'));
   if (!why) return '';
   const text = why.charAt(0).toUpperCase() + why.slice(1);
   return /[.!?]$/.test(text) ? text : `${text}.`;

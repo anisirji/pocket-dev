@@ -56,6 +56,7 @@ test('held requests are described in plain words', () => {
   assert.match(d('POST /api/unknown/thing'), /^Change something on this device \(POST \/api\/unknown\/thing\)$/);
   assert.equal(describeRequest({ summary: 'POST /api/files/trash /Users/x/Desktop/old_videos' }).detail, '/Users/x/Desktop/old_videos');
   assert.equal(riskText({ why: 'deletes outside the granted folders' }), 'Deletes outside the granted folders.');
+  assert.equal(riskText({ why: 'deletes a large item (/var/x/home/Desktop/old_videos)' }), 'Deletes a large item (Desktop/old_videos).');
   assert.equal(riskText({}), '');
 });
 

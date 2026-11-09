@@ -6,7 +6,8 @@
 .md-row:first-child { border-top: 0; }
 .md-row-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
 .md-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.md-line { margin: 4px 0 8px; }
+.md-right { display: inline-flex; align-items: center; gap: 8px; }
+.md-line { margin: 2px 0 0; }
 .md-chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .md-read-only { color: var(--muted); }
 .md-plan { color: #b79cff; border-color: #b79cff55; }

@@ -63,9 +63,11 @@ export function mountModes(host, { api }) {
   function memberRow(s, m, found, canEdit) {
     const row = el('li', 'md-row');
     const top = el('div', 'md-row-top');
-    top.append(el('span', 'md-name', m.name || 'Unnamed device'), chip(m.mode, m.bypassUntil));
+    const right = el('span', 'md-right');
+    right.append(chip(m.mode, m.bypassUntil));
+    if (canEdit) right.append(button('Change', () => chooseMode(s, m, found), 'md-change'));
+    top.append(el('span', 'md-name', m.name || 'Unnamed device'), right);
     row.append(top, el('p', 'co-note md-line', modeLine(m.mode)));
-    if (canEdit) row.append(button('Change', () => chooseMode(s, m, found), 'md-change'));
     return row;
   }
 
@@ -118,7 +120,7 @@ export function mountModes(host, { api }) {
     const mine = members[0];
     if (!mine) { sec.append(el('p', 'co-note', 'Nothing is set for this device there.')); return sec; }
     const top = el('div', 'md-row-top');
-    top.append(el('span', 'md-name', 'This device'), chip(mine.mode, mine.bypassUntil));
+    top.append(el('span', 'md-name', `This device on ${s.name}`), chip(mine.mode, mine.bypassUntil));
     sec.append(top, el('p', 'co-note md-line', `${modeLine(mine.mode)} Only the owner of ${s.name} can change this.`));
     return sec;
   }
