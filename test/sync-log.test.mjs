@@ -182,3 +182,22 @@ test('convergence: random interleavings, duplicates and batching give identical 
     }
   }
 });
+
+test('shrink drops the values of replaced changes but keeps ids, cursors, state and catch-up', () => {
+  const file = tmpFile();
+  const a = createSyncLog({ device: 'A', now: clockAt(100), file });
+  for (let i = 0; i < 5; i++) a.append({ type: 'chat', key: 'k', value: 'x'.repeat(1000) + i });
+  a.append({ type: 'chat', key: 'other', value: 'o' });
+  const before = fs.statSync(file).size;
+  assert.equal(a.shrink(), 4);
+  assert.ok(fs.statSync(file).size < before / 3);
+  assert.deepEqual(a.cursors(), { A: 6 });
+  assert.equal(a.get('k').endsWith('4'), true);
+  const b = createSyncLog({ device: 'B' });
+  b.apply(a.changesSince({}));
+  assert.equal(b.get('k'), a.get('k'));
+  assert.deepEqual(b.cursors(), { A: 6 });
+  const reloaded = createSyncLog({ device: 'A', file });
+  assert.equal(reloaded.get('k'), a.get('k'));
+  assert.equal(reloaded.all().length, 6);
+});

@@ -7,6 +7,7 @@ import { STATE_DIR } from './paths.js';
 import { sameOrigin, fromConnector } from './transport.js';
 import { rangeOf, disposition } from './files.js';
 import { thumbnailOf } from './chat/tool-images.js';
+import { BLOB_MAX } from './room-sync.js';
 
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
@@ -149,7 +150,13 @@ const identity = ({ key, kind, name }) => ({ key, kind, name });
 // Everyone in Messages: the Mac (the Admin page), each owner device, and each collaborator or guest grant in use.
 // `rejectUpgrade(socket, status, text)` is the server's upgrade refusal; `wss` pings and closes its sockets.
 // `statfs` is fs.promises.statfs, replaceable in tests.
-export function createMessages({ auth, collaborators, config, wss, rejectUpgrade, stateDir = STATE_DIR, statfs = fsp.statfs }) {
+//
+// In a room (`room`, `roomSync`) a message to Everyone is also copied to the other devices. It gets a global id, the
+// device id and its local seq ("abcd1234:57"), computed on demand so messages written before the room need no migration
+// and the file keeps its format. A copy from another device is stored here as a message with `origin`, under a seq of
+// this device, so every local cursor, delete and hide keeps working. Only the sending device can delete the original;
+// that delete travels as a tombstone. Direct messages stay on their device: nobody else has a place in that chat.
+export function createMessages({ auth, collaborators, config, wss, rejectUpgrade, stateDir = STATE_DIR, statfs = fsp.statfs, room = null, roomSync = null }) {
   const dir = privateDir(path.join(stateDir, 'messages'));
   const filesDir = privateDir(path.join(dir, 'files'));
   const thumbsDir = privateDir(path.join(dir, 'thumbs'));
@@ -196,9 +203,11 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
   }
 
   function dropFile(f) {
-    fs.rmSync(path.join(filesDir, f.id), { force: true });
+    const file = path.join(filesDir, f.id);
+    // A copy from another device has no bytes here until somebody opens it.
+    if (fs.existsSync(file)) usage -= f.size;
+    fs.rmSync(file, { force: true });
     fs.rmSync(path.join(thumbsDir, `thumb-${f.id}.jpg`), { force: true });
-    usage -= f.size;
   }
   function sweepPending() {
     for (const [id, p] of pending) {
@@ -220,10 +229,12 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
   const personView = (v) => (p) => ({ id: pub(p.key), name: p.name, kind: p.kind, ...(isOwner(v) && p.code && { code: p.code }) });
   function messageView(m, v) {
     const mine = m.from.key === v.key;
+    const origin = m.origin && { deviceId: m.origin.device, deviceName: deviceName(m.origin.device) };
     return {
-      seq: m.seq, at: m.at, text: m.text, mine, canDelete: mine || isOwner(v),
+      seq: m.seq, at: m.at, text: m.text, mine, canDelete: !m.origin && (mine || isOwner(v)),
+      ...(room && { gid: gidOf(m) }), ...(origin && { origin }),
       chat: m.to === null ? 'everyone' : pub(mine ? m.to.key : m.from.key),
-      from: { id: pub(m.from.key), name: m.from.name, kind: m.from.kind },
+      from: { id: pub(m.from.key), name: origin ? `${m.from.name} (${origin.deviceName})` : m.from.name, kind: m.from.kind },
       to: m.to && { id: pub(m.to.key), name: m.to.name, kind: m.to.kind },
       files: m.files.map(({ id, name, size, kind }) => ({ id, name, size, kind })),
     };
@@ -234,6 +245,84 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
   function sync(v, after) {
     const seen = store.list().filter(canSee(v));
     return { messages: seen.filter((m) => m.seq > after).map((m) => messageView(m, v)), keep: seen.map((m) => m.seq) };
+  }
+
+  // ---- copies between room devices ----
+  const selfId = () => room.deviceId();
+  const gidOf = (m) => `${m.origin ? m.origin.device : selfId()}:${m.origin ? m.origin.seq : m.seq}`;
+  const deviceName = (id) => room.peers()?.members.find((m) => m.deviceId === id)?.name ?? 'another device';
+  const keyOf = (m) => `msg/${gidOf(m)}`;
+  const copies = new Map(store.list().filter((m) => m.origin).map((m) => [gidOf(m), m]));
+  const globalKey = (device, key) => `${device}:${key}`;
+
+  // A message to Everyone written while this device is in a room, after it joined, is shared.
+  function publish(m) {
+    const info = channel && room.peers();
+    if (!info || m.origin || m.to !== null) return;
+    if (!(m.at >= info.members.find((x) => x.deviceId === info.deviceId)?.joinedAt)) return;
+    channel.log().append({ type: 'msg', key: keyOf(m), value: {
+      seq: m.seq, at: m.at, text: m.text, from: { ...m.from, key: globalKey(info.deviceId, m.from.key) },
+      files: m.files.map(({ id, name, size, type, kind }) => ({ id, name, size, type, kind })),
+    } });
+    channel.changed();
+  }
+  // Delete the original: tombstone it for the others (only if it was ever shared).
+  function unpublish(list) {
+    if (!channel?.inRoom()) return;
+    const log = channel.log();
+    const shared = list.filter((m) => !m.origin && log.get(keyOf(m)) !== undefined);
+    for (const m of shared) log.remove('msg', keyOf(m));
+    if (shared.length) channel.changed();
+  }
+  const validCopy = (c) => c.deleted || (Number.isSafeInteger(c.value?.at) && typeof c.value.text === 'string' && typeof c.value.from?.key === 'string'
+    && Array.isArray(c.value.files) && Number.isSafeInteger(c.value.seq));
+  // New changes arrived (from the star): show new copies, drop the ones that were deleted at the sender.
+  function reconcileCopies(added) {
+    const gone = [];
+    for (const c of added) {
+      if (c.type !== 'msg' || c.device === selfId()) continue;
+      const gid = c.key.slice(4);
+      const value = channel.log().get(c.key);
+      const have = copies.get(gid);
+      if (value && !have) {
+        const m = store.add({ origin: { device: c.device, seq: value.seq }, at: value.at, from: value.from, to: null, text: value.text,
+          files: value.files.map((f) => ({ ...f, origin: c.device })) });
+        copies.set(gid, m);
+        deliver(m);
+      } else if (!value && have) gone.push(have);
+    }
+    if (gone.length) removeMessages(gone, false);
+  }
+  const dropCopies = () => removeMessages([...copies.values()], false);
+
+  // Bytes of a file on request: only from messages that were shared, never above BLOB_MAX.
+  async function shareBlob({ kind, id }) {
+    const f = kind === 'file' && typeof id === 'string' ? store.list().find((m) => !m.origin && m.to === null && m.files.some((x) => x.id === id))?.files.find((x) => x.id === id) : null;
+    if (!f) throw httpError(404, 'Not found');
+    if (f.size > BLOB_MAX) throw httpError(413, 'This file is too large to copy to another device.');
+    return { type: f.type, data: await fsp.readFile(path.join(filesDir, f.id)) };
+  }
+  const channel = roomSync?.register('messages', {
+    accept: (c) => c.type === 'msg' && typeof c.key === 'string' && c.key.startsWith(`msg/${c.device}:`) && validCopy(c),
+    onApplied: reconcileCopies, onClear: dropCopies, blob: shareBlob,
+  });
+
+  // Fetched once, then kept with the other files. Two requests for the same file share one fetch.
+  const fetching = new Map();
+  async function ensureLocal(f) {
+    const file = path.join(filesDir, f.id);
+    if (!f.origin || fs.existsSync(file)) return;
+    if (f.size > BLOB_MAX) throw httpError(413, 'This file is too large to copy here. Open it on the device that has it.');
+    if (!fetching.has(f.id)) {
+      fetching.set(f.id, (async () => {
+        const b = await channel.fetchBlob(f.origin, { kind: 'file', id: f.id });
+        if (b.data.length !== f.size) throw httpError(502, 'The copy did not match the original.');
+        fs.writeFileSync(`${file}.part`, b.data, { mode: 0o600 });
+        fs.renameSync(`${file}.part`, file);
+        usage += f.size;
+      })().finally(() => fetching.delete(f.id)));
+    }
+    await fetching.get(f.id);
   }
 
   const sockets = new Map();
@@ -249,10 +338,14 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
       if (seqs.length && only(v) && ws.readyState === ws.OPEN) ws.send(JSON.stringify({ t: 'removed', seqs }));
     }
   }
-  function removeMessages(list) {
+  function removeMessages(list, replicate = true) {
+    if (replicate) unpublish(list);
     retract(list);
     store.remove(list);
-    for (const m of list) for (const f of m.files) dropFile(f);
+    for (const m of list) {
+      if (m.origin) copies.delete(gidOf(m));
+      for (const f of m.files) dropFile(f);
+    }
   }
 
   // People are matched by id; the Mac's CLI may also name a device by its code or anyone by name.
@@ -292,6 +385,7 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
     if (!text.trim() && !files.length) throw httpError(400, 'Write a message or attach a file.');
     const m = store.add({ from: identity(v), to: to && identity(to), text, files });
     for (const f of files) pending.delete(f.id);
+    publish(m);
     deliver(m);
     return [201, messageView(m, v)];
   }
@@ -380,9 +474,10 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
     await pipeline(fs.createReadStream(file, { start: range.start, end: range.end }), res);
   }
 
-  function serveFile({ v, req, res, url, match, headers }) {
+  async function serveFile({ v, req, res, url, match, headers }) {
     const f = attachment(v, match[1]);
     if (!f) throw httpError(404, 'Not found');
+    await ensureLocal(f);
     const inline = Boolean(INLINE[f.type]) && url.searchParams.get('download') !== '1';
     return stream(req, res, path.join(filesDir, f.id), inline ? f.type : 'application/octet-stream', disposition(inline ? 'inline' : 'attachment', f.name), headers);
   }
@@ -392,6 +487,7 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
   async function serveThumb({ v, req, res, match, headers }) {
     const f = attachment(v, match[1]);
     if (f?.kind !== 'image') throw httpError(404, 'Not found');
+    await ensureLocal(f);
     const source = path.join(filesDir, f.id);
     let thumb = null;
     if (f.type !== 'image/gif') {
@@ -414,6 +510,7 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
 
   function remove({ v, match }) {
     const m = visibleMessage(v, match);
+    if (m.origin) throw httpError(403, 'This message is from another device. Delete it there, or hide it here.');
     if (!isOwner(v) && m.from.key !== v.key) throw httpError(403, 'Only the sender or the owner can delete this message. Hide it instead.');
     removeMessages([m]);
     return [204];

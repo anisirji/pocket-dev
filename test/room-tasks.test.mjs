@@ -131,7 +131,7 @@ test('a member who left gets nothing new; the others still sync', async (t) => {
   await a.tasks('POST', '/sync');
   await pause(800);
   assert.equal((await b.tasks('GET')).status, 409, 'B is out of the room');
-  assert.equal(fs.readFileSync(stateFile(b), 'utf8').includes('after B left'), false);
+  assert.equal(fs.existsSync(stateFile(b)), false, 'the tasks file went with the room');
   assert.equal((await a.tasks('PATCH', `/${later}`, { status: 'doing' })).status, 200);
   await has(c, later, (x) => x.status === 'doing');
 });
@@ -168,4 +168,24 @@ test('a non-member secret is refused, with no login and with a made-up change', 
   const asHost = await a.request('POST', '/api/room/sync/pull', { body: { roomId, from: a.id, secret: hostSecret, cursors: {} } });
   assert.equal(asHost.status, 403, 'the host cannot be impersonated with a secret meant for a member');
   assert.equal((await a.request('POST', '/api/room/sync/pull', { body: { roomId, from: b.id }, csrf: false })).status, 403, 'header check still applies');
+});
+
+test('leaving a room clears its tasks, so they cannot sync into another room; rejoining the same room works', async (t) => {
+  const [a, b] = await room(t);
+  const { id } = (await a.tasks('POST', '', { title: 'old room task' })).data;
+  await has(b, id);
+  const mine = (await b.tasks('POST', '', { title: 'written by B' })).data.id;
+  await has(a, mine);
+  assert.equal((await b.api('POST', '/leave')).status, 200);
+  assert.equal(fs.existsSync(stateFile(b)), false);
+  // B starts a room of its own: none of the old tasks are there.
+  assert.equal((await b.api('POST', '/create', { name: 'Desktop', addresses: [b.base] })).status, 200);
+  assert.deepEqual(await list(b), []);
+  assert.equal((await b.api('POST', '/leave')).status, 200);
+  // B joins A's room again and writes: A must not ignore the new task because of a reused counter.
+  const { data: { code } } = await a.api('POST', '/invite');
+  assert.equal((await b.api('POST', '/join', { code, host: a.base, name: 'Desktop', addresses: [b.base], level: 'admin' })).status, 200);
+  const again = (await b.tasks('POST', '', { title: 'after rejoin' })).data.id;
+  await has(a, again);
+  await has(b, id);
 });

@@ -45,12 +45,13 @@ const valid = (c) => c && typeof c.device === 'string' && Number.isInteger(c.cou
   && c.id === `${c.device}:${c.counter}` && c.at && Number.isFinite(c.at.w) && Number.isFinite(c.at.l)
   && typeof c.type === 'string' && typeof c.key === 'string';
 
-export function createSyncLog({ device, code = defaultCode(device), file = null, now = Date.now } = {}) {
+// `floor`: counters up to this number were used by an earlier copy of this log (a room that was left), so never reuse them.
+export function createSyncLog({ device, code = defaultCode(device), file = null, now = Date.now, floor = 0 } = {}) {
   if (!device) throw new Error('device id required');
   const byId = new Map();
   const cursors = {}; // device -> highest counter n with 1..n all present
   const clock = { w: 0, l: 0 };
-  let own = 0;
+  let own = floor;
   let state = new Map();
   let winners = new Map();
 
@@ -71,7 +72,7 @@ export function createSyncLog({ device, code = defaultCode(device), file = null,
     const cur = winners.get(c.key);
     if (!cur || compareChanges(c, cur) > 0) {
       winners.set(c.key, c);
-      if (c.deleted) state.delete(c.key); else state.set(c.key, c.value);
+      if (c.deleted) state.delete(c.key); else if (!c.stale) state.set(c.key, c.value);
     }
   }
 
@@ -122,6 +123,18 @@ export function createSyncLog({ device, code = defaultCode(device), file = null,
     fs.renameSync(tmp, file);
   }
 
+  // Drops the value of every change that lost to a newer one for its key. Ids, times and counters stay, so cursors and
+  // catch-up work as before; a long-edited key stops costing space for each edit.
+  function shrink() {
+    let n = 0;
+    for (const c of byId.values()) {
+      if (winners.get(c.key) === c || c.stale) continue;
+      delete c.value; c.stale = true; n++;
+    }
+    if (n) compact();
+    return n;
+  }
+
   function load() {
     if (!file || !fs.existsSync(file)) return;
     const parsed = [];
@@ -136,7 +149,7 @@ export function createSyncLog({ device, code = defaultCode(device), file = null,
 
   return {
     device, code,
-    append, remove, apply, changesSince, compact,
+    append, remove, apply, changesSince, compact, shrink,
     cursors: () => ({ ...cursors }),
     state: () => new Map(state),
     get: (key) => state.get(key),

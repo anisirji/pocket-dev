@@ -31,6 +31,7 @@ import { createMessages } from './messages.js';
 import { createRoom } from './room.js';
 import { createForward } from './forward.js';
 import { createTasks } from './tasks.js';
+import { createRoomSync } from './room-sync.js';
 import { createFolderBrowser } from './folder-browser.js';
 import { readNetwork, readToken, createSameNetwork } from './network.js';
 import { sameOrigin, fromConnector, clientIp, cookieHost } from './transport.js';
@@ -117,7 +118,8 @@ const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE,
 });
 collaborators = createCollaborators({ config, auth, urls });
 const room = createRoom({ config, urls, grants: collaborators, intervalMs: Number(process.env.POCKET_DEV_ROOM_PING_MS) || undefined });
-const tasks = createTasks({ room });
+const roomSync = createRoomSync({ room });
+const tasks = createTasks({ room, sync: roomSync });
 
 const HOME = os.homedir();
 const RECENT_MAX = 5;
@@ -617,8 +619,8 @@ async function handleApi(req, res, url) {
   // Join codes and room secrets are the credentials for the three peer routes, so another device can use them without a login.
   if (resource === 'room' && ['ping', 'accept', 'notify'].includes(key) && req.method === 'POST') return room.handleApi(req, res, url, { readJson, sendJson });
 
-  // Task sync between room devices: the room secret is the credential, same reasoning as the peer routes above.
-  if (resource === 'room' && key === 'sync' && req.method === 'POST') return tasks.handleApi(req, res, url, { readJson, sendJson });
+  // Sync between room devices (tasks, messages, chats): the room secret is the credential, same reasoning as the peer routes above.
+  if (resource === 'room' && key === 'sync' && req.method === 'POST') return roomSync.handleApi(req, res, url, { readJson, sendJson });
 
   const authReply = await auth.handleApi(req, url.pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
@@ -648,6 +650,7 @@ async function handleApi(req, res, url) {
   if (resource === 'chat') return chatApi.handleApi(req, res, url.pathname);
   if (resource === 'files') return handleFiles(req, res, url);
   if (resource === 'messages') return messages.handleApi(req, res);
+  if (resource === 'room' && key === 'chats') return chatApi.handleRoomApi(req, res, url);
   if (resource === 'room' && key === 'tasks') return tasks.handleApi(req, res, url, { readJson, sendJson, loggedIn: true });
   if (resource === 'room') return room.handleApi(req, res, url, { readJson, sendJson, loggedIn: true });
 
@@ -845,12 +848,12 @@ const server = http.createServer(async (req, res) => {
 
 // Terminal and chat sockets share this server, so a disconnect, sleep or shutdown that closes wss.clients closes both.
 const wss = new WebSocketServer({ noServer: true });
-const chatApi = createChatApi({ sendJson, readJson, config, wss });
+const chatApi = createChatApi({ sendJson, readJson, config, wss, room, roomSync });
 
 const rejectUpgrade = (socket, status, text) => {
   socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 };
-const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade });
+const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade, room, roomSync });
 
 server.on('upgrade', (req, socket, head) => {
   if (insecureRemote(req) || !hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
@@ -887,7 +890,8 @@ setInterval(() => {
 
 await adoptTerminals();
 startPower(config);
-tasks.start();
+roomSync.start();
+chatApi.startReplica();
 watchLanIp();
 if (internetOn()) sameNetwork.refresh();
 
