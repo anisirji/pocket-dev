@@ -1145,7 +1145,17 @@
   let workKey = '';
   function renderWork() {
     const events = convo.events;
-    const helpers = events.filter((e) => e.type === 'tool-run' && HELPERS.has(e.name));
+    // One row per agent. A resumed agent shows up as a SendMessage call carrying the same task id as the Agent call that
+    // started it, so rows are merged by task id: the newest call gives the state and the first named call gives the label.
+    const byAgent = new Map();
+    for (const e of events) {
+      if (e.type !== 'tool-run' || !(HELPERS.has(e.name) || (e.agentStatus && e.name === 'SendMessage'))) continue;
+      const key = e.taskId || e.id;
+      const prev = byAgent.get(key);
+      const label = (prev?.named && prev.label) || (HELPERS.has(e.name) ? e.summary : '') || prev?.label || e.summary || e.name;
+      byAgent.set(key, { ...e, label, named: !!(prev?.named || HELPERS.has(e.name)) });
+    }
+    const helpers = [...byAgent.values()];
     const running = helpers.filter((e) => helperState(e) === 'running');
     const todos = [...events].reverse().find((e) => e.type === 'tool-run' && e.name === 'TodoWrite')?.todos ?? [];
     const open = todos.filter((t) => t.status !== 'completed');
@@ -1173,7 +1183,7 @@
     for (const h of helpers.slice(-6)) {
       const state = helperState(h);
       const row = el('div', `chat-work-row chat-work-${state}`);
-      row.append(state === 'running' ? spinner() : runIcon(state === 'completed' ? 'ok' : state === 'failed' ? 'error' : state), el('span', 'chat-work-name', h.summary || h.name));
+      row.append(state === 'running' ? spinner() : runIcon(state === 'completed' ? 'ok' : state === 'failed' ? 'error' : state), el('span', 'chat-work-name', h.label || h.summary || h.name));
       if (h.latest) row.append(el('span', 'chat-work-latest', `${h.steps ? `${h.steps} ${h.steps === 1 ? 'step' : 'steps'} · ` : ''}${h.latest}`));
       body.append(row);
     }

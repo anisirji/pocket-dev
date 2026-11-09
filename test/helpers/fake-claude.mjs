@@ -38,6 +38,20 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     after(1200, () => sys('task_notification', { status: 'completed', output_file: '/tmp/x', summary: 'done', usage: { total_tokens: 20, tool_uses: 7, duration_ms: 1100 } }));
     return;
   }
+  if (text.includes('bgresume')) {
+    // An agent started in the background, then resumed with SendMessage: both calls carry the same task id.
+    const use = (id, name, input) => send({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', model: 'fake', content: [{ type: 'tool_use', id, name, input }] }, parent_tool_use_id: null, session_id: session });
+    const res = (id) => send({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] }, parent_tool_use_id: null, session_id: session });
+    const sys = (subtype, tool, extra) => send({ type: 'system', subtype, task_id: 'task_9', tool_use_id: tool, uuid: `u${++n}`, session_id: session, ...extra });
+    use('toolu_a', 'Agent', { description: 'Build the modes' }); res('toolu_a');
+    sys('task_started', 'toolu_a', { description: 'Build the modes' });
+    sys('task_notification', 'toolu_a', { status: 'stopped', output_file: '/tmp/x', summary: 'stopped' });
+    use('toolu_sm', 'SendMessage', { to: 'task_9', message: 'continue' }); res('toolu_sm');
+    sys('task_started', 'toolu_sm', { description: 'continue' });
+    sys('task_progress', 'toolu_sm', { description: 'continue', usage: { total_tokens: 1, tool_uses: 4, duration_ms: 1 }, last_tool_name: 'Bash', summary: 'running tests' });
+    after(900, () => { assistant('resumed'); result(); });
+    return;
+  }
   if (text.includes('helpers')) {
     // Two helper agents and a todo list; the second helper's tool calls are tagged with its parent's id.
     const use = (id, name, input, parent = null) => send({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', model: 'fake', content: [{ type: 'tool_use', id, name, input }] }, parent_tool_use_id: parent, session_id: session });
