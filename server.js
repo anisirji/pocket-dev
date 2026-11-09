@@ -114,7 +114,7 @@ const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE,
   onLockdown: () => collaborators?.lockdown(),
 });
 collaborators = createCollaborators({ config, auth, urls });
-const room = createRoom({ config, urls, intervalMs: Number(process.env.POCKET_DEV_ROOM_PING_MS) || undefined });
+const room = createRoom({ config, urls, grants: collaborators, intervalMs: Number(process.env.POCKET_DEV_ROOM_PING_MS) || undefined });
 
 const HOME = os.homedir();
 const RECENT_MAX = 5;
