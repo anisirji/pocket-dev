@@ -105,6 +105,8 @@ export function createForward({ room, auth, collaborators, sendJson }) {
       const headers = {};
       const dropped = new Set(String(ur.headers.connection ?? '').split(',').map((v) => v.trim().toLowerCase()));
       for (const [k, v] of Object.entries(ur.headers)) if (!HOP.has(k) && !dropped.has(k) && k !== 'set-cookie') headers[k] = v;
+      // A redirect to a path on the target stays on the target: the browser only knows this device's address.
+      if (typeof headers.location === 'string' && headers.location.startsWith('/') && !headers.location.startsWith('//') && !headers.location.startsWith('/m/')) headers.location = `/m/${targetId}${headers.location}`;
       res.writeHead(ur.statusCode, ur.statusMessage, headers);
       ur.on('error', () => res.destroy());
       ur.pipe(res);
