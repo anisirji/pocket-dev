@@ -161,15 +161,24 @@ export function createRoomSync({ room, stateDir = STATE_DIR, fetchImpl = fetch, 
     return fail(404, 'Not found');
   }
 
-  async function handleApi(req, res, url, { readJson, sendJson }) {
+  async function handleApi(req, res, url, { readJson, sendJson, guard }) {
     const parts = url.pathname.split('/'); // '', api, room, sync, channel, route   (old tasks route: sync/push)
     const legacy = ['push', 'pull'].includes(parts[4]);
     const ch = channels.get(legacy ? 'tasks' : parts[4]);
+    const locked = guard?.refuse(req);
+    if (locked) return sendJson(res, locked.status, { error: locked.error });
+    let sender;
     try {
       if (!ch) fail(404, 'Not found');
       const body = await readJson(req);
+      sender = body.from;
+      const again = guard?.refuse(req, sender);
+      if (again) return sendJson(res, again.status, { error: again.error });
       return sendJson(res, 200, await peerRoute(ch, legacy ? parts[4] : parts[5], body));
-    } catch (err) { return sendJson(res, err.status || 400, { error: err.message }); }
+    } catch (err) {
+      if (err.status === 403) guard?.fail(req, sender);
+      return sendJson(res, err.status || 400, { error: err.message });
+    }
   }
 
   // Leaving or being kicked: the data of that room goes, so it can never sync into another room.

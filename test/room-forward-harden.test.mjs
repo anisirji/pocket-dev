@@ -188,3 +188,51 @@ test('a target that accepts the connection and never answers gives a 502 after t
   assert.equal(slow.status, 502, 'only after the body was sent and nothing came back');
   assert.ok(Date.now() - sending >= 1000, 'the 800 ms upload finished before the 300 ms limit counted');
 });
+
+test('wrong room secrets are limited on forwarded requests, the peer routes and sync, and a correct one is refused while locked', async (t) => {
+  const { h, a } = await trio(t);
+  const held = heldBy(a);
+  const guess = (secret, sender = a.id) => h.request('GET', '/api/sessions', { headers: { 'x-room-id': held.id, 'x-room-sender': sender, 'x-room-from': sender, 'x-room-secret': secret } });
+  assert.equal((await guess(held.memberSecret)).status, 200);
+  for (let i = 0; i < 10; i++) assert.equal((await guess('f'.repeat(64))).status, 403);
+  const locked = await guess('f'.repeat(64));
+  assert.equal(locked.status, 429);
+  assert.match(locked.data.error, /Too many/);
+  assert.equal((await guess(held.memberSecret)).status, 429, 'the lock covers the right secret too, as with the login');
+  assert.equal((await guess('f'.repeat(64), 'someone-else')).status, 403, 'another claimed device is counted on its own');
+
+  assert.equal((await h.request('GET', '/api/sessions', { cookie: h.cookie })).status, 200, 'the owner\'s own login is not affected');
+});
+
+test('wrong secrets on the peer routes and wrong join codes are limited, and so is an address that keeps changing the name it claims', async (t) => {
+  const { h, a } = await trio(t);
+  const held = heldBy(a);
+  const peer = (route, body) => h.request('POST', route, { body });
+  for (const [route, extra] of [['/api/room/ping', {}], ['/api/room/notify', { type: 'members' }], ['/api/room/sync/tasks/pull', {}]]) {
+    const body = { roomId: held.id, from: `guesser-${route}`, secret: 'e'.repeat(64), ...extra };
+    for (let i = 0; i < 10; i++) assert.equal((await peer(route, body)).status, 403, `${route} #${i}`);
+    assert.equal((await peer(route, body)).status, 429, route);
+  }
+  // Join codes are guessed the same way (the claimed device is the joiner).
+  const join = (code) => peer('/api/room/accept', { code, deviceId: 'joiner', hostSecret: 'x'.repeat(40), name: 'J', addresses: ['http://127.0.0.1:1'], level: 'admin' });
+  for (let i = 0; i < 10; i++) assert.equal((await join(`wrong${i}`)).status, 403);
+  assert.equal((await join('wrong')).status, 429);
+  // 40 failures from one address under ever new names lock the address, whoever it claims to be.
+  const fresh = (i) => peer('/api/room/ping', { roomId: held.id, from: `rotating-${i}`, secret: 'd'.repeat(64) });
+  let status;
+  for (let i = 0; i < 60 && status !== 429; i++) status = (await fresh(i)).status;
+  assert.equal(status, 429);
+  assert.equal((await peer('/api/room/ping', { roomId: held.id, from: a.id, secret: held.memberSecret })).status, 429, 'even the real member, from this address');
+});
+
+test('an oversized body on a peer route is refused with a reason', async (t) => {
+  const { h, a } = await trio(t);
+  const held = heldBy(a);
+  const big = { roomId: held.id, from: a.id, secret: held.memberSecret, changes: [{ pad: 'x'.repeat(200_000) }] };
+  for (const route of ['/api/room/notify', '/api/room/sync/tasks/push', '/api/room/ping']) {
+    const res = await h.request('POST', route, { body: big });
+    assert.equal(res.status, 413, route);
+    assert.match(res.data.error, /too large/);
+  }
+  assert.equal((await h.request('POST', '/api/room/ping', { body: { roomId: held.id, from: a.id, secret: held.memberSecret } })).status, 200, 'the server is fine afterwards');
+});

@@ -113,7 +113,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
   const tell = (member, type, extra = {}) => send(member, 'notify', { roomId: data.room.id, from: data.deviceId, secret: member.hostSecret, type, ...extra });
 
   // Anything that gets an answer is done, even a refusal: the device decided. No answer, or a server error, means try again later.
-  const arrived = (r) => r.status > 0 && r.status < 500;
+  const arrived = (r) => r.status > 0 && r.status < 500 && r.status !== 429;
   // A message nobody could receive waits in the outbox (saved in room.json, so a restart keeps it) and goes out on the timer.
   // A newer 'members' list replaces an older one for the same device.
   function queue(to, body) {
@@ -411,12 +411,18 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
       path: m.deviceId === data.deviceId || isHost() || m.role === 'host' ? 'direct' : 'host' })) };
   }
 
-  async function handleApi(req, res, url, { readJson, sendJson, loggedIn }) {
+  async function handleApi(req, res, url, { readJson, sendJson, loggedIn, guard }) {
     const name = url.pathname.split('/')[3];
     const peer = req.method === 'POST' && (name === 'ping' || name === 'accept' || name === 'notify');
     if (!peer && !loggedIn) return sendJson(res, 401, { error: 'Not logged in' });
+    const locked = peer && guard?.refuse(req);
+    if (locked) return sendJson(res, locked.status, { error: locked.error });
+    let sender;
     try {
       const body = req.method === 'POST' && req.headers['content-type'] ? await readJson(req) : {};
+      sender = body.from ?? body.deviceId;
+      const again = peer && guard?.refuse(req, sender);
+      if (again) return sendJson(res, again.status, { error: again.error });
       const routes = {
         'GET ': () => url.searchParams.get('live') ? live() : view(),
         'GET devices': () => devices(url.searchParams.get('live')),
@@ -427,7 +433,10 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
       const route = routes[`${req.method} ${name ?? ''}`];
       if (!route) return sendJson(res, 404, { error: 'Not found' });
       return sendJson(res, 200, await route());
-    } catch (err) { return sendJson(res, err.status || 400, { error: err.message }); }
+    } catch (err) {
+      if (peer && err.status === 403) guard?.fail(req, sender);
+      return sendJson(res, err.status || 400, { error: err.message });
+    }
   }
 
   reconcile();

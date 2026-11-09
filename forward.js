@@ -17,7 +17,7 @@ const PATH = /^\/m\/([0-9a-f]{4,64})(\/.*)?$/;
 // Working on another device through the room. The phone logs in on one device (the front); `/m/<deviceId>/<path>` on the
 // front is passed to that device. The room is a star, so a member reaches another member through the host (one hop) and
 // the host reaches everyone directly. The target decides what the originating member may do (room.authPeerRequest).
-export function createForward({ room, auth, collaborators, sendJson, answerMs = ANSWER_MS, idleMs = IDLE_MS }) {
+export function createForward({ room, auth, collaborators, sendJson, guard, answerMs = ANSWER_MS, idleMs = IDLE_MS }) {
   const good = new Map(); // deviceId -> { url, at }: the address that answered last
 
   // Sockets that exist because of the room: the pipes this device passes on, and sockets a member opened to this device.
@@ -44,7 +44,10 @@ export function createForward({ room, auth, collaborators, sendJson, answerMs = 
   // coming from a room member: admin level becomes a virtual owner device, collaborator level a guest (see collaborators.guest).
   function identify(req) {
     if (req.headers['x-room-secret'] === undefined && req.headers['x-room-sender'] === undefined) return null;
-    try { req.roomPeer = room.authPeerRequest(req.headers); } catch (err) { return { status: err.status || 403, error: err.message }; }
+    const sender = req.headers['x-room-sender'];
+    const locked = guard?.refuse(req, sender);
+    if (locked) return locked;
+    try { req.roomPeer = room.authPeerRequest(req.headers); } catch (err) { guard?.fail(req, sender); return { status: err.status || 403, error: err.message }; }
     if (req.roomPeer.level === 'admin') req.roomDevice = { id: `room-${req.roomPeer.origin}`, name: req.roomPeer.name, status: 'active', role: 'admin', via: 'room', tokenHashes: [] };
     return null;
   }
