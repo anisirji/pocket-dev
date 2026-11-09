@@ -286,6 +286,18 @@ Known limit: a phone login currently covers at most 8 hosts (cookies per host), 
 Open: is "reload the link and land on a live device" good enough, or must the page keep working without a reload?
 
 
+## Access across devices (decided 2026-11-09)
+
+- Every device has its own link (its own tunnel). Every device keeps the list of all device links in the room, so the app always knows where to point.
+- If the link you are using fails, the app opens another device's link. There you are a member, not the owner, and see only what that device's owner shared.
+- Joining a room gives you a member entry on every device in it (option 1). You log in at any device with your normal login and it already has you on its list.
+- At join time, each device owner picks your level on that device: full admin, or collaborator with chosen folders. If all the devices are yours, you pick full admin on each, so nothing conflicts.
+- A room is a set of collaborator grants spread across devices. This builds on `collaborators.js`. There are no special room powers.
+- Rank is per device: owner on your own devices, member on others.
+- Replaces the earlier idea of one room-wide login.
+- Open: a device that was offline during the join must be told later, and leaving the room must remove the entry on every device.
+- Open: failover of the domain itself (the same tunnel on several devices away from home, a saved address list at home). Not tested.
+
 ## Open questions
 
 1. ~~Is a room permanent?~~ Decided: permanent until revoked.
