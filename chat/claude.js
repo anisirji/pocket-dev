@@ -241,13 +241,28 @@ export function createClaudeEngine(chat) {
     return { behavior: 'allow', updatedInput: toolInput };
   }
 
+  // A helper agent's own tool calls arrive tagged with the Agent call that started it. They are not shown as events of
+  // their own; the Agent entry counts them and keeps the latest, so the phone can say what each helper is doing.
+  function onHelperMessage(m) {
+    if (m.type !== 'assistant') return;
+    const parent = chat.find(m.parent_tool_use_id);
+    if (!parent) return;
+    const uses = m.message.content.filter((b) => b.type === 'tool_use');
+    if (!uses.length) return;
+    const last = uses.at(-1);
+    chat.update(parent.id, { steps: (parent.steps ?? 0) + uses.length, latest: cap(`${last.name} ${summarize(last.name, last.input)}`.trim(), 200) });
+  }
+
   function onToolUse(block) {
     if (block.name === 'AskUserQuestion') return;
     const { id, name, input: toolInput } = block;
     if (DIFF[name]) {
       chat.emit({ id, type: 'file-edit', path: toolInput.file_path ?? toolInput.notebook_path ?? '', diff: cap(DIFF[name](toolInput)), status: 'running' });
     } else {
-      chat.emit({ id, type: 'tool-run', name, summary: summarize(name, toolInput), input: describeInput(name, toolInput), output: '', status: 'running' });
+      const todos = name === 'TodoWrite' && Array.isArray(toolInput.todos)
+        ? toolInput.todos.slice(0, 50).map((t) => ({ text: cap(String(t.content ?? t.activeForm ?? ''), 200), status: t.status }))
+        : undefined;
+      chat.emit({ id, type: 'tool-run', name, summary: summarize(name, toolInput), input: describeInput(name, toolInput), output: '', status: 'running', ...(todos && { todos }) });
     }
   }
 
@@ -295,7 +310,7 @@ export function createClaudeEngine(chat) {
   }
 
   function onMessage(m) {
-    if (m.parent_tool_use_id) return;
+    if (m.parent_tool_use_id) return onHelperMessage(m);
     // Claude can work without being asked: a background helper finishing wakes it, and a message sent mid-turn
     // interrupts the old turn and begins another. Work that arrives with no turn counted is a turn, so the chat shows
     // Stop and the list says running for as long as Claude is actually working.

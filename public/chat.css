@@ -200,6 +200,18 @@
 .chat-q-desc { grid-column: 2; color: var(--muted); font-size: 12.5px; line-height: 1.35; overflow-wrap: anywhere; }
 .chat-submit { width: 100%; }
 
+.chat-work { flex: none; margin: 8px 10px 0; border-radius: 10px; background: var(--chat-user); border: 1px solid var(--chat-user-line); font-size: 12.5px; overflow: hidden; }
+.chat-work-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: none; border: 0; color: var(--text); font: inherit; font-weight: 600; text-align: left; }
+.chat-work-title { flex: 1; min-width: 0; }
+.chat-work-caret { color: var(--muted); }
+.chat-work-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.chat-work-body { max-height: 38vh; overflow-y: auto; padding: 0 10px 8px; display: flex; flex-direction: column; gap: 6px; }
+.chat-work-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; line-height: 1.35; }
+.chat-work-name { overflow-wrap: anywhere; }
+.chat-work-latest { flex-basis: 100%; padding-left: 22px; color: var(--muted); overflow-wrap: anywhere; }
+.chat-todo-mark { width: 14px; text-align: center; color: var(--muted); }
+.chat-todo-in_progress .chat-todo-mark, .chat-todo-in_progress .chat-work-name { color: var(--accent); }
+.chat-todo-completed .chat-work-name { color: var(--muted); text-decoration: line-through; }
 .chat-statusline { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 14px 0; color: var(--accent); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .chat-statusline-wait { color: var(--chat-warn); font-weight: 600; }
 .chat-notice { margin: 8px 10px 0; padding: 7px 10px; border-radius: 8px; background: var(--chat-del-bg); color: var(--danger); font-size: 12.5px; line-height: 1.4; }
