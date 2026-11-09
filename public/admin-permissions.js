@@ -24,6 +24,7 @@ function actionLabel(item) {
 function renderPermissions() {
   const mac = permItems.filter((i) => i.group === 'mac');
   const allowed = mac.filter((i) => i.state === 'granted' || i.state === 'not-needed').length;
+  window.dispatchEvent(new CustomEvent('admin-permissions', { detail: permItems }));
   $('permCount').textContent = permItems.length ? `${allowed} of ${mac.length} Mac permissions ready` : '';
   const row = (item) => {
     const label = actionLabel(item);

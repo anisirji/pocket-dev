@@ -89,6 +89,76 @@ import('/collaborators.js').then((m) => {
 }).catch((err) => { $('collaborators').textContent = `Could not load Collaborators: ${err.message}`; });
 import('/messages.js').then((m) => m.mountMacMessages($('messages'), { api, toast }))
   .catch((err) => { $('messages').textContent = `Could not load Messages: ${err.message}`; });
+// ---- Groups: one group of sections at a time, chosen by the address hash (#devices, or a section such as #settings).
+
+const { GROUPS, resolveHash, attentionItems, groupBadges, isMacHost, say } = AdminNav;
+const IS_MAC = isMacHost(navigator.platform || navigator.userAgentData?.platform || '');
+const GROUP_KEY = 'pd.admin.group';
+let activeGroup = 'overview';
+let perms = [];
+
+function storedGroup() {
+  try { return localStorage.getItem(GROUP_KEY) || undefined; } catch { return undefined; }
+}
+
+function showGroup({ group, section }, { scroll = true } = {}) {
+  const changed = group !== activeGroup || $(`group-${group}`).hidden;
+  activeGroup = group;
+  for (const g of GROUPS) $(`group-${g.id}`).hidden = g.id !== group;
+  for (const a of $('nav').children) {
+    if (a.dataset.group === group) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  }
+  try { localStorage.setItem(GROUP_KEY, group); } catch {}
+  document.title = `${GROUPS.find((g) => g.id === group).label} · Pocket Dev Admin`;
+  measureBars();
+  const target = section && $(section);
+  if (scroll) {
+    if (target) target.scrollIntoView({ block: 'start' });
+    else window.scrollTo(0, 0);
+  }
+  $('nav').querySelector('[aria-current]')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  if (changed) refresh(true);
+  if (group === 'internet') refreshQuickLink();
+}
+
+function route() {
+  showGroup(resolveHash(location.hash, storedGroup()));
+}
+
+// Sticky bars must not cover what a jump lands on, so the page measures them for scroll-padding.
+function measureBars() {
+  const root = document.documentElement.style;
+  root.setProperty('--top-h', `${document.querySelector('.top').offsetHeight}px`);
+  root.setProperty('--nav-h', matchMedia('(max-width: 899px)').matches ? `${$('nav').offsetHeight}px` : '0px');
+}
+
+function renderAttention() {
+  const items = attentionItems(state, perms, { isMac: IS_MAC });
+  $('attList').replaceChildren(...items.map((i) => h('li', { class: `att ${i.level}` },
+    h('span', {}, say(i.text, IS_MAC)),
+    h('a', { class: 'btn btn-sm link-btn', href: `#${i.to}` }, i.action))));
+  $('attClear').hidden = items.length > 0;
+  const badges = groupBadges(items);
+  for (const b of document.querySelectorAll('[data-badge]')) {
+    const info = badges[b.dataset.badge];
+    b.hidden = !info;
+    b.textContent = info?.count ?? '';
+    b.className = `badge${info?.level === 'danger' ? ' danger' : ''}`;
+    b.setAttribute('aria-label', info ? `${info.count} need attention` : '');
+  }
+}
+
+window.addEventListener('hashchange', route);
+window.addEventListener('resize', measureBars);
+window.addEventListener('admin-permissions', (e) => { perms = e.detail; if (state) renderAttention(); });
+if (!IS_MAC) {
+  const rewrite = (node) => { if (/\bMacs?\b|launchd service/.test(node.nodeValue)) node.nodeValue = say(node.nodeValue, false); };
+  const walk = (root) => { const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); while (w.nextNode()) rewrite(w.currentNode); };
+  walk(document.body);
+  new MutationObserver((list) => { for (const m of list) { if (m.type === 'characterData') rewrite(m.target); else m.addedNodes.forEach((n) => (n.nodeType === 3 ? rewrite(n) : n.nodeType === 1 && walk(n))); } })
+    .observe(document.body, { childList: true, subtree: true, characterData: true });
+}
+
 let logFilter = 'all';
 let editingId = null;
 let limitDraft = null;
@@ -158,7 +228,7 @@ function renderInternet() {
   const running = tunnel.status !== 'off';
   $('quickStatus').textContent = tunnel.kind !== 'quick' ? 'Off' : { starting: 'Connecting to Cloudflare…', connected: 'On', error: 'Could not start' }[tunnel.status];
   $('quickDetail').textContent = tunnel.kind === 'quick' && tunnel.status === 'error' ? tunnel.error
-    : !access.connected ? 'Press Connect above first.'
+    : !access.connected ? 'Press Connect on the Overview page first.'
       : tunnel.kind === 'quick' && tunnel.status === 'connected' ? 'Anyone with this link reaches the login page. Turn off when you are done.'
         : 'Gives a random address that works until you turn it off.';
   $('quickBtn').textContent = tunnel.kind === 'quick' && running ? 'Turn off' : 'Turn on';
@@ -244,7 +314,6 @@ function renderOverview() {
   $('cPending').textContent = overview.pending;
   $('cPendingSub').textContent = requireApproval ? 'approval is on' : 'approval is off';
   $('cPendingCard').classList.toggle('warn', overview.pending > 0);
-  $('navPending').textContent = overview.pending || '';
   const failed = overview.failedLogins;
   $('cFailed').textContent = failed.count;
   $('cFailedCard').classList.toggle('alarm', failed.guessing);
@@ -342,7 +411,7 @@ function renderDevices() {
   const head = h('div', { class: 'row row-head' }, h('div', {}, 'Device'), h('div', {}, 'Address'), h('div', {}, 'Logged in with'), h('div', {}, 'Activity'), h('div', {}, ''));
   $('deviceRows').replaceChildren(...(list.length
     ? [head, ...list.map(deviceRow)]
-    : [h('p', { class: 'empty' }, 'No devices yet. Show a login QR in Share & login above, or open the address on a phone and type the password.')]));
+    : [h('p', { class: 'empty' }, 'No devices yet. Show a login QR in Share & login, or open the address on a phone and type the password.')]));
 }
 
 function renderPending() {
@@ -417,19 +486,29 @@ const EVENT_TEXT = {
   'conversation-takeover-failed': (e) => `${e.by === 'phone' ? e.name : 'A Mac terminal'} could not take over ${e.tool} conversation ${e.conversationId.slice(0, 8)}: pid ${e.remaining.join(', ') || '?'} kept running`,
 };
 
-function renderLog(entries) {
-  $('logRows').replaceChildren(...(entries.length ? entries.map((e) => h('div', { class: `log-row ${e.category}` },
+const LOG_PAGE = 20;
+let logShown = LOG_PAGE;
+let logEntries = [];
+
+function renderLog(entries = logEntries) {
+  logEntries = entries;
+  $('logMore').hidden = entries.length <= logShown;
+  $('logMore').textContent = `Show more (${Math.min(LOG_PAGE, entries.length - logShown)} of ${entries.length - logShown} older)`;
+  $('logRows').replaceChildren(...(entries.length ? entries.slice(0, logShown).map((e) => h('div', { class: `log-row ${e.category}` },
     h('time', { datetime: new Date(e.at).toISOString() }, stamp(e.at)),
     h('span', { class: 'what' }, (EVENT_TEXT[e.type] ?? ((x) => x.type))(e)),
     h('span', { class: 'where', title: e.ua ?? null }, e.ip ?? ''),
   )) : [h('p', { class: 'empty' }, logFilter === 'all' ? 'Nothing logged yet.' : 'Nothing matches this filter.')]));
 }
 
-document.querySelector('.seg').addEventListener('click', (e) => {
+$('logMore').addEventListener('click', () => { logShown += LOG_PAGE; renderLog(); });
+
+document.querySelector('#log .seg').addEventListener('click', (e) => {
   const filter = e.target.closest('[data-filter]')?.dataset.filter;
   if (!filter) return;
   logFilter = filter;
-  for (const b of document.querySelectorAll('.seg button')) b.setAttribute('aria-pressed', String(b.dataset.filter === filter));
+  logShown = LOG_PAGE;
+  for (const b of document.querySelectorAll('#log .seg button')) b.setAttribute('aria-pressed', String(b.dataset.filter === filter));
   refresh(true);
 });
 
@@ -561,7 +640,7 @@ function clearQr(kind) {
 function renderSharing(online = true) {
   const address = online && state?.access.connected ? state.urls.remote ?? state.urls.lan : null;
   const reason = !online ? 'Cannot reach Pocket Dev. QR codes will be available when it reconnects.'
-    : !state?.access.connected ? 'Press Connect above to share or log in a phone.'
+    : !state?.access.connected ? 'Press Connect on the Overview page to share or log in a phone.'
       : !address ? (state.network.wifi ? 'Connect this Mac to Wi-Fi to show a QR code.' : 'Wait for the internet link to connect.') : '';
   $('sharingNote').textContent = state?.urls.remote ? 'Works from anywhere through your internet link.' : 'Scan from a phone on the same Wi-Fi as this Mac.';
   if (address !== qrAddress) {
@@ -677,7 +756,7 @@ function renderService() {
   restartButton.disabled = !canRestart || !!restarting;
   restartButton.textContent = restarting ? 'Restarting…' : 'Restart Pocket Dev';
   restartButton.title = canRestart ? 'Load the latest code. This page reconnects automatically.'
-    : 'Restart is available when Pocket Dev runs as the background service. See Service below.';
+    : 'Restart is available when Pocket Dev runs as the background service. See Service under This computer.';
   const restartRow = h('div', { class: 'setting' },
     h('div', { class: 'setting-text' }, h('b', {}, svc.updateReady ? 'Update ready' : 'Restart Pocket Dev'),
       h('small', {}, restarting ? 'Back in about 15 seconds. This page reloads by itself.' : !canRestart
@@ -774,7 +853,7 @@ $('lockBtn').addEventListener('click', async () => {
   const password = h('input', { type: 'password', autocomplete: 'new-password', placeholder: 'New password (optional, 6+ characters)', 'aria-label': 'New password (optional)' });
   const extra = h('label', { class: 'ask-field' }, h('span', {}, 'Also change the password now'), password);
   for (;;) {
-    if (!(await ask({ title: 'Lock down Pocket Dev?', body: lines.join('\n'), confirm: 'Lock down', danger: true, extra }))) return;
+    if (!(await ask({ title: 'Lock down Pocket Dev?', body: `${lines.join('\n')}\n\nThis cannot be undone from a phone.`, confirm: 'Lock down', danger: true, extra }))) return;
     if (!password.value || password.value.length >= 6) break;
     toast('The new password needs at least 6 characters, or leave it empty.', true);
   }
@@ -799,17 +878,18 @@ async function refresh(force = false) {
   }
   refreshing = true;
   try {
-    const [fresh, log] = await Promise.all([api('GET', '/api/state'), api('GET', `/api/log?filter=${logFilter}`)]);
+    const [fresh, log] = await Promise.all([api('GET', '/api/state'), activeGroup === 'security' ? api('GET', `/api/log?filter=${logFilter}`) : null]);
     state = fresh;
-    collaborators?.refresh();
+    if (activeGroup === 'devices') collaborators?.refresh();
     lastOk = Date.now();
     $('offline').hidden = true;
     renderConnection();
     renderInternet();
     renderOverview();
+    renderAttention();
     renderPending();
     renderDevices();
-    renderLog(log);
+    if (log) renderLog(log);
     renderPassword();
     if ($('recoveryCode').hidden) renderRecovery();
     renderSettings();
@@ -837,9 +917,10 @@ function renderUpdated() {
 
 setInterval(refresh, REFRESH_MS);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
-refresh(true);
+route();
 
 async function refreshQuickLink() {
+  if (activeGroup !== 'internet') return;
   try {
     const { hostname } = await api('GET', '/api/quick-link');
     $('quickLinkStatus').textContent = hostname
@@ -866,5 +947,4 @@ $('quickLinkBtn').addEventListener('click', async () => {
   refreshQuickLink();
 });
 
-setInterval(refreshQuickLink, REFRESH_MS);
-refreshQuickLink();
+setInterval(() => { if (activeGroup === 'internet') refreshQuickLink(); }, REFRESH_MS);
