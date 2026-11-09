@@ -24,6 +24,14 @@ const DOWNLOAD_RUN = /\b(curl|wget|scp|rsync|nc|ncat)\b|\|\s*(sudo\s+)?(ba|z)?sh
 const INSTALL = /\b(brew|apt|apt-get|dnf|yum|pacman|choco|winget|port)\s+(install|upgrade|remove|uninstall)\b|\b(npm|pnpm|yarn)\s+(i|install|add)\s+(-g|--global)\b|\b(pip3?|gem|cargo|go)\s+install\b|\bnpm\s+(i|install)\b|\bsudo\b|\bdefaults\s+write\b|\b(launchctl|systemsetup|networksetup|pmset|scutil|csrutil|spctl)\b/;
 const BIG_DELETE = /\brm\s+(-\w*[rf]\w*\s+)+/;
 
+// The folder or file a request is about, for the one-line summary an approval shows.
+const targetOf = (b) => {
+  if (!b || typeof b !== 'object') return '';
+  const t = typeof b.path === 'string' ? b.path : Array.isArray(b.paths) ? b.paths.join(', ')
+    : typeof b.dir === 'string' && typeof b.name === 'string' ? path.join(b.dir, b.name) : [b.from, b.dir, b.cwd, b.repo].find((v) => typeof v === 'string');
+  return t ? ` ${t}` : '';
+};
+
 // What a request from a room member means on this device, given the member's mode. A pure function, so tests and the
 // server use the same rules.
 //   verdict: allow | ask | propose | deny      risks: why it counts as risky (empty when it does not)
@@ -160,7 +168,7 @@ export function createModes({ stateDir = STATE_DIR, room, log = () => {}, now = 
       }
     }
     const verdict = classify({ method: r.method, path: r.path, query: r.query, body: r.body, mode: entry.mode, folders: principal.folders, statSync });
-    const summary = `${r.method} ${r.path}${r.body?.path ? ` ${r.body.path}` : r.body?.paths ? ` ${r.body.paths.join(', ')}` : ''}${typeof r.body?.command === 'string' ? ` : ${r.body.command}` : ''}`.slice(0, 300);
+    const summary = `${r.method} ${r.path}${targetOf(r.body)}${typeof r.body?.command === 'string' ? ` : ${r.body.command}` : ''}`.slice(0, 300);
     const audit = (result, extra = {}) => log('room-action', { device: room.deviceId(), member: principal.origin, name: principal.name, mode: entry.mode, action: summary, result, ...extra });
     if (verdict.read) return null;
     if (verdict.verdict === 'allow') { audit('allowed', verdict.risks.length ? { risks: verdict.risks } : {}); return null; }
