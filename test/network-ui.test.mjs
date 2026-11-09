@@ -72,7 +72,7 @@ test('on the internet link next to the Mac: the prompt, Not now per network, and
   const f = fixture({ responses: { '/api/connection': () => current }, chat: 'chat42' });
   await settle();
   assert.equal(f.banner.hidden, false);
-  assert.match(f.banner.children[0].textContent, /same Wi-Fi as your Mac/);
+  assert.match(f.banner.children[0].textContent, /same Wi-Fi as the device/);
   assert.equal(f.posted.length, 0, 'no handoff token until the tap');
   f.banner.button('Not now').onclick();
   assert.equal(f.banner.hidden, true);
@@ -127,7 +127,7 @@ test('on Wi-Fi the internet link is remembered, and a Mac out of reach for five 
   }
   await f.runTimers();
   assert.equal(f.banner.hidden, false);
-  assert.match(f.banner.children[0].textContent, /Can’t reach your Mac on Wi-Fi/);
+  assert.match(f.banner.children[0].textContent, /Can’t reach the device on Wi-Fi/);
   assert.equal(f.fetched.filter((u) => u === '/api/status').length, 5);
   f.banner.button('Switch to remote').onclick();
   assert.deepEqual(f.assigned, ['https://pocket.example.com#terminal=abc123']);

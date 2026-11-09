@@ -31,7 +31,7 @@
   const storage = el('span', 'ms-item ms-storage', 'Free —');
   const age = el('span', 'ms-age');
   battery.hidden = temp.hidden = true;
-  strip.append(el('span', 'ms-label', 'Mac'), state, cpu, storage, battery, temp, age);
+  strip.append(el('span', 'ms-label', 'This device'), state, cpu, storage, battery, temp, age);
   const banner = el('div', 'ms-banner');
   banner.hidden = true;
   const bannerText = el('span', 'ms-text');
@@ -57,6 +57,9 @@
   window.addEventListener('orientationchange', follow);
   window.addEventListener('pageshow', follow);
   follow();
+
+  // The room's device names arrive after the page starts: say() then words the strip with the device's name.
+  document.addEventListener('pd-machine-names', () => { strip.title = say('Mac health'); paintPerformance(); renderAlerts(); });
 
   const dismissed = new Map(); // key -> { level, at }
   const announced = new Map(); // key -> level already vibrated for

@@ -113,7 +113,9 @@ function paint() {
   if (lastError && !loaded) status.append(' ', button('Try again', refresh));
 }
 
-function close() { open = false; root?.remove(); root = null; schedule(); }
+function finish() { open = false; root?.remove(); root = null; schedule(); }
+// The inbox owns one history entry, so the Android back gesture closes it.
+function close() { const o = window.pocketDev?.overlays; if (o) o.close('approvals'); finish(); }
 
 export function openInbox() {
   if (open) return;
@@ -129,6 +131,7 @@ export function openInbox() {
   body.append(el('p', 'co-note', 'Requests from other devices that need your yes or no. The first answer counts.'), status, list);
   root.append(head, body);
   document.body.append(root);
+  window.pocketDev?.overlays?.open('approvals', finish);
   paint(); refresh(); schedule();
 }
 

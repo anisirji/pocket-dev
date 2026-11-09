@@ -50,10 +50,15 @@
     return !COLLABORATOR_API.test(new URL(url, base).pathname);
   }
 
-  // The pages say "the Mac" for the device they run on. On another room device that would be wrong (it may not be a Mac, and
-  // it is not the one in the user's hand), so its own name stands in. Used for status text, never for what the user typed.
+  // The pages say "the Mac" for the device they run on. Any room device may be a PC or a Linux box, and on a remote device it
+  // is not the one in the user's hand, so the device's own name stands in. With no name (this device, no room) the wording is
+  // generic. Used for status text, never for what the user typed.
   function sayFor(name, text) {
-    return String(text).replace(/your Mac password/g, `the password for ${name}`).replace(/\b[Tt]he Mac(?=[’']s\b)/g, name)
+    const s = String(text);
+    if (!name) {
+      return s.replace(/your Mac password/g, 'the password for this device').replace(/\b([Tt])(he|his) Mac\b/g, '$1$2 device').replace(/\bMac\b/g, 'Device');
+    }
+    return s.replace(/your Mac password/g, `the password for ${name}`).replace(/\b[Tt]he Mac(?=[’']s\b)/g, name)
       .replace(/\b[Tt]he Mac\b/g, name).replace(/\b[Tt]his Mac\b/g, name).replace(/\bMac\b/g, name);
   }
 
@@ -74,7 +79,8 @@
   const nameOf = () => me()?.name || 'That device';
   const rank = () => (id && me()?.rank) || 'owner';
 
-  PocketMachine.say = (text) => id ? sayFor(me()?.name || 'the device', text) : text;
+  const selfName = () => devices.find((d) => d.self)?.name;
+  PocketMachine.say = (text) => sayFor(id ? me()?.name || 'the device' : selfName(), text);
   const abs = (url) => rewriteUrl(id, url, location.href);
   const mark = () => {
     const root = document.documentElement;
@@ -155,23 +161,29 @@
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   let chip, sheet, banner;
 
+  const nowName = () => id ? nameOf() : (selfName() || 'This device');
+  const nowOnline = () => me()?.online !== false;
+
+  // The header is full at 360 px (views, Resume, Room, Settings), so at home the status strip below it carries the device
+  // name. On another device Ports and Settings are hidden, which frees room for a chip that keeps a readable width.
   function renderChip() {
     if (!chip) return;
-    chip.hidden = devices.length < 2 && !id;
-    const label = id ? nameOf() : (devices.find((d) => d.self)?.name || 'This device');
-    const dot = el('i', `mc-dot${me()?.online === false ? ' off' : ''}`);
-    chip.replaceChildren(dot, el('span', 'mc-name', label));
-    chip.setAttribute('aria-label', `Working on ${label}. Change device`);
+    chip.hidden = !id;
+    if (!id) return;
+    chip.replaceChildren(el('i', `mc-dot${nowOnline() ? '' : ' off'}`), el('span', 'mc-name', nowName()));
+    chip.setAttribute('aria-label', `Working on ${nowName()}. Change device`);
   }
 
-  // Files, Chat and Messages cover the header, and with it the chip. The status strip stays above every screen, so its first
-  // word (the device it reports on) is also the way to the switcher.
+  // Files, Chat and Messages cover the header, and with it the chip. The status strip stays above every screen, so its
+  // first word (the device it reports on) is also the way to the switcher: a pill with a dot, the name and a caret.
   function renderLabel() {
     const label = document.querySelector('#macStatus .ms-label');
-    if (!label || (devices.length < 2 && !id)) return;
-    label.textContent = `${id ? nameOf() : (devices.find((d) => d.self)?.name || 'This device')} ▾`;
+    if (!label) return;
+    if (devices.length < 2 && !id) return;
+    label.replaceChildren(el('i', `mc-dot${nowOnline() ? '' : ' off'}`), el('span', 'mc-name', nowName()), el('span', 'mc-caret', '▾'));
     label.classList.add('mc-switch');
     label.setAttribute('role', 'button');
+    label.setAttribute('aria-label', `Working on ${nowName()}. Change device`);
     label.title = 'Change device';
   }
   document.addEventListener('click', (e) => {
@@ -179,6 +191,13 @@
     e.stopPropagation(); e.preventDefault();
     openSheet();
   }, true);
+
+  // A field the keyboard would cover scrolls into view; the sheets and screens of this project share this one handler.
+  document.addEventListener('focusin', (e) => {
+    const field = e.target;
+    if (!field.matches?.('input:not([type=checkbox]):not([type=radio]), textarea, select') || !field.closest('.rs, .rp, .md-sheet, .ap, .mc-sheet')) return;
+    setTimeout(() => { if (document.activeElement === field) field.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 350);
+  });
 
   async function loadDevices(live) {
     let body;
@@ -194,6 +213,7 @@
     mark();
     renderChip();
     renderLabel();
+    document.dispatchEvent(new Event('pd-machine-names'));
     if (sheet && !sheet.hidden) renderSheet();
     applyRank();
   }
@@ -208,16 +228,22 @@
       const text = el('span', 'mc-text');
       text.append(el('b', null, d.self ? `${d.name}` : d.name), el('small', null, stateText(d)));
       row.append(el('i', `mc-dot${d.online ? '' : ' off'}`), text, el('span', 'mc-check', current ? '✓' : ''));
-      row.onclick = () => { if (!current) select(d.self ? null : d.deviceId); else closeSheet(); };
+      row.onclick = () => { if (!current) { hideSheet(); select(d.self ? null : d.deviceId); } else closeSheet(); };
       return row;
     }));
   }
+  // The sheet only ever opens from a tap on the strip name or the chip, and never survives a reload or a page restore:
+  // it owns one history entry, so the Android back gesture closes it, and it starts hidden every time the page shows.
   function openSheet() {
+    if (!sheet || !sheet.hidden) return;
     renderSheet();
     sheet.hidden = false;
+    window.pocketDev?.overlays?.open('machine', hideSheet);
     loadDevices(true);
   }
-  const closeSheet = () => { sheet.hidden = true; };
+  const hideSheet = () => { sheet.hidden = true; };
+  const closeSheet = () => { const o = window.pocketDev?.overlays; if (o) o.close('machine'); hideSheet(); };
+  window.addEventListener('pageshow', () => { if (sheet && !sheet.hidden) closeSheet(); });
 
   function showDown(message) {
     if (!banner) return;
@@ -262,6 +288,7 @@
     close.type = 'button';
     close.setAttribute('aria-label', 'Close');
     close.onclick = closeSheet;
+    sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.setAttribute('aria-label', 'Work on');
     head.append(el('h2', null, 'Work on'), close);
     panel.append(head, el('div', 'mc-list'), el('p', 'mc-note', 'Terminal, Git, Chat, Files and Messages open on the device you pick.'));
     sheet.append(panel);

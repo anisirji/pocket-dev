@@ -3,6 +3,6 @@
 .rb-fixed { position: fixed; top: var(--viewport-top, 0px); left: 0; right: 0; z-index: 3000; padding-top: calc(8px + env(safe-area-inset-top, 0px)); }
 .rb-text { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .rb-text strong { color: #fff; }
-.rb-end { flex: none; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid currentColor; background: transparent; color: inherit; font: inherit; font-weight: 600; }
+.rb-end { flex: none; min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid currentColor; background: transparent; color: inherit; font: inherit; font-weight: 600; }
 .rb-end:disabled { opacity: .5; }
 .rb-end:active { opacity: .7; }

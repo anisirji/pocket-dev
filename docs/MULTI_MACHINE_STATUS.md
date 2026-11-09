@@ -22,8 +22,8 @@ Branch `mm-int` (worktree `.claude/worktrees/mm-int`). Not merged into `live`; t
 6. Modes classifier is pattern based and can be fooled. Terminal input is not checked per keystroke; modes decide whether the terminal can be opened. Pending approvals live in memory and are lost on restart.
 7. Replication: leaving or being kicked while offline keeps copies until the device reaches the host; data of a kicked member stays in other devices' logs and is only hidden; each log is held in memory and nothing runs `shrink()` on a schedule; chat mirror does not update live; no pagination.
 8. Direct messages across devices are not built.
-9. Header chip is squeezed at 390 px (shows a dot and a cut-off name) and is covered by Files/Chat; the strip name opens the sheet instead.
-10. The "Work on" sheet opened by itself in two scripted runs of the modes UI check; not traced.
+9. Fixed on mm-final-ui: the strip name is a pill that opens the sheet on every screen; the header chip shows only on another device, with a readable width (see the plan, Final UI pass).
+10. The "Work on" sheet opening by itself: not reproduced; likely causes removed (layout shift, strip tap), sheet now closes on page show. See the plan, Final UI pass.
 11. A forwarding test failed once under heavy CPU load and passed on rerun.
 12. The agents panel counts an agent as running if it acted in the last 90 s when the SDK sends no status; real Claude does send task messages.
 13. Bypass is only the owner's to enable; there is no per-folder limit in Bypass by design.

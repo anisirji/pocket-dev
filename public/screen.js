@@ -9,16 +9,16 @@
   };
   const { overlays } = window.pocketDev;
 
-  // The picture is read-only: it shows what is on the Mac's screen and sends nothing back.
+  // The picture is read-only: it shows what is on the device's screen and sends nothing back.
   const state = { open: false, busy: false, auto: true, zoom: false, url: null, timer: 0 };
   let ui = null;
 
   function build() {
     const root = el('div', 'screen-sheet');
     root.setAttribute('role', 'dialog');
-    root.setAttribute('aria-label', 'Mac screen');
+    root.setAttribute('aria-label', 'Device screen');
     const bar = el('div', 'screen-bar');
-    const title = el('h2', null, 'Mac screen');
+    const title = el('h2', null, 'Device screen');
     const refresh = el('button', 'screen-btn', 'Refresh');
     const auto = el('button', 'screen-btn');
     const zoom = el('button', 'screen-btn');
@@ -31,7 +31,7 @@
     bar.append(title, refresh, auto, zoom, close);
     const scroll = el('div', 'screen-scroll');
     const img = el('img', 'screen-img');
-    img.alt = 'The Mac screen';
+    img.alt = 'The device screen';
     const error = el('p', 'screen-error');
     error.hidden = true;
     scroll.append(error, img);
@@ -59,7 +59,7 @@
       if (state.url) URL.revokeObjectURL(state.url);
       state.url = url;
       ui.error.hidden = true;
-      ui.note.textContent = `Updated ${new Date().toLocaleTimeString()}. If you only see the wallpaper, allow Screen Recording for node on the Mac (Admin page → Permissions).`;
+      ui.note.textContent = `Updated ${new Date().toLocaleTimeString()}. If you only see the wallpaper, allow Screen Recording for node on the Mac (Admin page → Permissions; this is a macOS setting).`;
     } catch (err) {
       ui.error.textContent = err.message;
       ui.error.hidden = false;

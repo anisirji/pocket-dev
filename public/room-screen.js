@@ -58,7 +58,7 @@ const loadQr = () => window.PocketDevQr ? Promise.resolve() : qrLoading ||= new 
   const s = el('script'); s.src = '/vendor/qrcode/qrcode.js'; s.onload = ok; s.onerror = () => { qrLoading = null; no(new Error('QR failed')); }; document.head.append(s);
 });
 
-let screen = null;
+let screen = null, sheetCount = 0;
 export function openRoom() {
   if (screen) return;
   const { overlays } = window.pocketDev || {};
@@ -189,7 +189,10 @@ export function openRoom() {
     const box = el('div', 'rs-sheet');
     box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-label', title);
     const cleanups = [];
-    const handle = { onClose: (fn) => cleanups.push(fn), close() { for (const fn of cleanups.splice(0)) { try { fn(); } catch { /* ignore */ } } back.remove(); sheets.delete(handle); } };
+    const finish = () => { for (const fn of cleanups.splice(0)) { try { fn(); } catch { /* ignore */ } } back.remove(); sheets.delete(handle); };
+    // A sheet owns one history entry, so the Android back gesture closes the sheet and not the whole Room.
+    const name = `room-sheet-${++sheetCount}`;
+    const handle = { onClose: (fn) => cleanups.push(fn), close() { if (overlays) overlays.close(name); finish(); } };
     const top = el('div', 'rs-sheet-top');
     top.append(el('h3', '', title), button('✕', () => handle.close(), 'rs-x'));
     top.lastChild.setAttribute('aria-label', 'Close');
@@ -199,6 +202,7 @@ export function openRoom() {
     back.append(box);
     root.append(back);
     sheets.add(handle);
+    overlays?.open(name, finish);
     return handle;
   }
 

@@ -668,10 +668,10 @@
     const params = new URLSearchParams(paths.map((p) => ['path', p]));
     try {
       const check = await api('GET', `/api/files/zip?${params}&check=1`);
-      if (!check.complete) throw new Error('Too many files to zip from here. Zip it on the Mac instead.');
+      if (!check.complete) throw new Error('Too many files to zip from here. Zip it on the device instead.');
       if (check.bytes > check.max) throw new Error(`That is ${formatSize(check.bytes)}; the zip limit is ${formatSize(check.max)}.`);
       if (check.bytes > ZIP_WARN) {
-        const go = await ask({ title: `Zip ${formatSize(check.bytes)}?`, message: `${check.files.toLocaleString()} files. The zip streams while the Mac builds it, so it can take a while.`, okLabel: 'Download' });
+        const go = await ask({ title: `Zip ${formatSize(check.bytes)}?`, message: `${check.files.toLocaleString()} files. The zip streams while the device builds it, so it can take a while.`, okLabel: 'Download' });
         if (!go) return;
       }
     } catch (err) {

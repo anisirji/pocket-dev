@@ -259,7 +259,7 @@ function sendMsg(view, msg) {
 }
 const sendInput = (view, d) => sendMsg(view, { t: 'in', d });
 const phoneInput = matchMedia('(pointer: coarse)').matches;
-const CLIENT_UPDATE_MESSAGE = 'Pocket Dev could not load its connection code. On the Mac, open Admin and press Restart Pocket Dev, then reload this page.';
+const CLIENT_UPDATE_MESSAGE = 'Pocket Dev could not load its connection code. On the device Pocket Dev runs on, open Admin and press Restart Pocket Dev, then reload this page.';
 function showClientError(message) {
   $('clientErrorText').textContent = message;
   $('clientError').hidden = false;
@@ -269,12 +269,12 @@ $('clientReload').addEventListener('click', () => location.reload());
 function requireTerminalClient() {
   if (typeof window.PocketDevConnection !== 'function') throw new Error(CLIENT_UPDATE_MESSAGE);
   if (typeof Terminal !== 'function' || typeof window.FitAddon?.FitAddon !== 'function') {
-    throw new Error('Pocket Dev could not load its terminal code. Reload this page. If it still fails, restart Pocket Dev from Admin on the Mac.');
+    throw new Error('Pocket Dev could not load its terminal code. Reload this page. If it still fails, restart Pocket Dev from Admin on the device.');
   }
 }
 // The HTML is read from disk on every request, but a running server may predate
 // newly added asset routes. Give both health entry points a useful failure state.
-window.openHealthSheet = () => alert('Mac health has not loaded. Open Settings → This Mac → Update to load the latest server, then reload this page.');
+window.openHealthSheet = () => alert('Device health has not loaded. Open Settings → This device → Update to load the latest server, then reload this page.');
 
 function makeView(session) {
   requireTerminalClient();
@@ -991,7 +991,7 @@ function uploadFile(file, onProgress) {
       if (xhr.status === 201) resolve(data.path);
       else reject(new Error(data?.error || `HTTP ${xhr.status}`));
     };
-    xhr.onerror = () => reject(new Error('cannot reach the Mac'));
+    xhr.onerror = () => reject(new Error('cannot reach the device'));
     xhr.send(file);
   });
 }
@@ -1040,7 +1040,7 @@ function renderForwards() {
     } else {
       // The Mac changed networks: the forward waits for an address, or could not listen on the new one.
       link = h('button', `chip-off${error ? ' error' : ''}`, `:${port} ${error ? 'failed' : 'no network'}`);
-      link.onclick = () => { $('portErr').textContent = error || 'The Mac has no network. The forward reopens when it gets one.'; };
+      link.onclick = () => { $('portErr').textContent = error || 'The device has no network. The forward reopens when it gets one.'; };
     }
     const stop = h('button', null, '✕');
     stop.setAttribute('aria-label', `Stop forwarding ${port}`);

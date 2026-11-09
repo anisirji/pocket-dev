@@ -6,16 +6,20 @@ const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls)
 const button = (text, run, cls = '') => { const b = el('button', cls, text); b.type = 'button'; b.onclick = run; return b; };
 
 // One bottom sheet at a time, drawn over everything. `build(sheet, close)` fills it.
+let sheetCount = 0;
 function openSheet(title, build) {
   const back = el('div', 'md-back');
   const sheet = el('div', 'md-sheet');
   sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.setAttribute('aria-label', title);
-  const close = () => back.remove();
+  // One history entry per sheet: the Android back gesture closes the sheet, not the Room behind it.
+  const overlays = window.pocketDev?.overlays, name = `mode-sheet-${++sheetCount}`;
+  const close = () => { if (overlays) overlays.close(name); back.remove(); };
   back.onclick = (e) => { if (e.target === back) close(); };
   sheet.append(el('h3', '', title));
   build(sheet, close);
   back.append(sheet);
   document.body.append(back);
+  overlays?.open(name, () => back.remove());
   return close;
 }
 
@@ -120,7 +124,7 @@ export function mountModes(host, { api }) {
     const mine = members[0];
     if (!mine) { sec.append(el('p', 'co-note', 'Nothing is set for this device there.')); return sec; }
     const top = el('div', 'md-row-top');
-    top.append(el('span', 'md-name', `This device on ${s.name}`), chip(mine.mode, mine.bypassUntil));
+    top.append(el('span', 'md-name', 'Access for this device'), chip(mine.mode, mine.bypassUntil));
     sec.append(top, el('p', 'co-note md-line', `${modeLine(mine.mode)} Only the owner of ${s.name} can change this.`));
     return sec;
   }
