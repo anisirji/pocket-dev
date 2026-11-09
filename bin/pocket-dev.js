@@ -23,6 +23,9 @@ Usage: pocket-dev <command>
   service install|restart                          Run in the background and start at login
   service uninstall|status|logs                    Remove it, check it, or follow its log
   service autostart on|off|status                  Start at login (or not)
+  setup [--check] [--yes] [--dry-run] [--only <step>]
+                                                   Guided setup: install and log in Git, Claude Code, Codex, GitHub CLI,
+                                                   cloudflared, then password, phone access and start at login
   qr                                               Print a one-time login QR code
   admin                                            Open the admin page (this computer only)
   connect | disconnect                             Open or close phone access
@@ -170,11 +173,22 @@ function service([action = 'status', ...rest]) {
   fail('usage: pocket-dev service install|restart|uninstall|status|logs|autostart', 2);
 }
 
+// Ctrl+C stops between steps. Every change setup makes is a finished write, so nothing is left half done.
+async function setup(args) {
+  const { createRealContext, runSetup } = await import('../setup.js');
+  process.once('SIGINT', () => { console.log('\nStopped. Nothing is half done; run pocket-dev setup again to continue.'); process.exit(130); });
+  try { return await runSetup(args, await createRealContext()); } catch (err) {
+    if (err.code === 'SIGINT') { console.log('Stopped. Nothing is half done; run pocket-dev setup again to continue.'); return 130; }
+    throw err;
+  }
+}
+
 const [command, ...args] = process.argv.slice(2);
 switch (command) {
   case 'start': await start(args); break;
   case 'config': config(args); break;
   case 'service': service(args); break;
+  case 'setup': process.exit(await setup(args)); break;
   case 'qr': runScript('qr.js'); break;
   case 'admin': runScript('admin.js', ['open']); break;
   case 'connect': case 'disconnect': runScript('admin.js', [command]); break;

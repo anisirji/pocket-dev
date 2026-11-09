@@ -10,6 +10,7 @@ import { checkPermissions, openPane } from './permissions.js';
 import { captureScreen } from './screen.js';
 import { svgQr } from './qr.js';
 import { readNetwork, networkError, isToken, hasToken, writeToken, findCloudflared } from './network.js';
+import { createContext, cachedStatus } from './setup.js';
 import { createFolderBrowser } from './folder-browser.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -118,6 +119,8 @@ async function quickLinkHost() {
   }
   return null;
 }
+
+const setupStatus = cachedStatus(createContext());
 
 export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections }) {
   const browseFolders = createFolderBrowser({ config });
@@ -412,6 +415,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   // Routes the phone can call on the main listener, after the server checked its login.
   const phoneRoute = router({
     'GET /api/service': async () => ok(await serviceStatus()),
+    'GET /api/setup/status': async () => ok(await setupStatus()),
     'PUT /api/service/autostart': ({ body }) => changeAutostart(body, 'phone'),
     'POST /api/service/restart': ({ req }) => restart('phone', req),
     'POST /api/access/disconnect': () => {

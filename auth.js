@@ -43,7 +43,7 @@ const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest();
 const sameSecret = (a, b) => crypto.timingSafeEqual(sha256(a), sha256(b));
 const tokenHash = (token) => sha256(token).toString('hex');
 
-function hashPassword(password) {
+export function hashPassword(password) {
   const { N, r, p, keylen } = SCRYPT;
   const salt = crypto.randomBytes(16);
   const hash = crypto.scryptSync(password, salt, keylen, { N, r, p });
@@ -65,7 +65,7 @@ const newRecoveryCode = () => Array.from({ length: 16 }, () => RECOVERY_ALPHABET
 const normalizeRecoveryCode = (code) => code.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 const isMaxDevices = (n) => Number.isInteger(n) && n >= 1 && n <= 20;
-const newPasswordError = (next) => (typeof next !== 'string' || next.length < MIN_PASSWORD || next.length > 200
+export const newPasswordError = (next) => (typeof next !== 'string' || next.length < MIN_PASSWORD || next.length > 200
   ? `The new password needs ${MIN_PASSWORD} to 200 characters.` : null);
 
 // A device is exactly one of these. Only active devices may use the API, open terminals, or count toward the limit.

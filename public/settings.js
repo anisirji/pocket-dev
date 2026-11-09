@@ -44,6 +44,7 @@
       <section data-mount="connection" hidden></section>
       <section data-mount="service"></section>
       <section data-mount="collaborators"></section>
+      <section data-mount="tools"></section>
       <section>
         <h3>Devices</h3>
         <p class="st-summary"></p>
@@ -405,6 +406,7 @@
     timer = setInterval(refresh, REFRESH_MS);
     window.pocketDevNetwork?.mount($('[data-mount="connection"]'));
     import('/service.js').then((m) => m.renderServiceSection($('[data-mount="service"]'), api)).catch(() => {});
+    import('/setup-tools.js').then((m) => m.renderToolsSection($('[data-mount="tools"]'), api)).catch(() => {});
     import('/collaborators.js').then((m) => {
       collaborators ||= m.mountCollaborators($('[data-mount="collaborators"]'), { api });
       collaborators.refresh();
