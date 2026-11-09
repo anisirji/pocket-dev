@@ -3,20 +3,37 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { STATE_DIR } from './paths.js';
+import { CODE_ALPHABET, CODE_LENGTH, normalizeCode, formatCode, isLoopbackHost, inviteLine } from './public/room-invite.js';
 
 const INVITE_MS = 10 * 60_000;
 const PEER_TIMEOUT_MS = 5000;
 const hash = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
 const secret = () => crypto.randomBytes(32).toString('hex');
 const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
-const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
+const fail = (status, message, code) => { throw Object.assign(new Error(message), { status, ...(code && { code }) }); };
 const text = (v, max = 80) => typeof v === 'string' && v.trim() && v.length <= max ? v.trim() : null;
+const newCode = () => Array.from({ length: CODE_LENGTH }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
+// Loopback addresses name the device they are used on, so another device can never reach them. Tests run every server on
+// 127.0.0.1 and opt in with POCKET_DEV_ROOM_ALLOW_LOOPBACK=1.
+const loopbackAllowed = () => process.env.POCKET_DEV_ROOM_ALLOW_LOOPBACK === '1';
+const loopbackIn = (address) => { try { return isLoopbackHost(new URL(address).hostname); } catch { return false; } };
+
+// The addresses other devices can use to reach this one, best first: the address this request came in on (when it is not
+// loopback), then the Wi-Fi address, the internet address, the .local name. Loopback never appears unless allowed.
+export function reachableAddresses({ req, urls = {}, allowLoopback = loopbackAllowed() } = {}) {
+  const host = req?.headers?.host;
+  const proto = String(req?.headers?.['x-forwarded-proto'] || 'http').split(',')[0].trim() === 'https' ? 'https' : 'http';
+  let asked = null;
+  try { asked = host ? new URL(`${proto}://${host}`).origin : null; } catch { /* a bad Host header names nothing */ }
+  const list = [asked, urls.lan, urls.remote, urls.local].filter(Boolean).map((a) => { try { return new URL(a).origin; } catch { return null; } }).filter(Boolean);
+  return [...new Set(list)].filter((a) => allowLoopback || !loopbackIn(a));
+}
 
 // A room is a permanent group of devices with one host. Every device stores room.json in its own state folder.
 // Control flows host to member only: the host keeps one secret per member (hostSecret) and presents it when it tells
 // a member something. A member keeps only the secret the host minted for it at join (memberSecret), which lets it
 // report liveness or leave. Leaving or being kicked deletes the room from room.json, secrets included.
-export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), grants, fetchImpl = fetch, now = Date.now, intervalMs = 30_000,
+export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), grants, fetchImpl = fetch, now = Date.now, intervalMs = 30_000, allowLoopback = loopbackAllowed,
   every = (fn, ms) => { const timer = setInterval(fn, ms); timer.unref?.(); return () => clearInterval(timer); } }) {
   fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   const file = path.join(stateDir, 'room.json');
@@ -42,7 +59,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
   const isHost = () => data.room?.hostId === data.deviceId;
   const need = () => data.room || fail(409, 'This device is not in a room.');
   const needHost = () => { need(); if (!isHost()) fail(403, 'Only the host can do this.'); };
-  const myAddresses = () => [urls().remote, urls().lan, urls().local].filter(Boolean);
+  const myAddresses = (req) => reachableAddresses({ req, urls: urls(), allowLoopback: allowLoopback() });
   const publicMember = ({ deviceId, name, addresses, role, joinedAt, level, folders, grantRole, lastSeen }) => ({ deviceId, name, addresses, role, joinedAt, level, folders, ...(grantRole && { grantRole }), ...(lastSeen && { lastSeen }) });
   // A member only reaches the other members through the host, so while the host is out of reach they all count as offline.
   const statusOf = (m) => {
@@ -94,8 +111,18 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     const grantRole = body.grantRole === undefined ? 'viewer' : ['viewer', 'developer'].includes(body.grantRole) ? body.grantRole : fail(400, 'Choose viewer or developer.');
     return { level, folders, grantRole };
   }
-  function addresses(list) {
-    return Array.isArray(list) && list.length && list.every((a) => { try { return /^https?:$/.test(new URL(a).protocol); } catch { return false; } }) ? list.map((a) => new URL(a).origin) : fail(400, 'Give this device at least one http or https address.');
+  const NO_ADDRESS = 'This device has no address that other devices can reach. Connect it to Wi-Fi (or turn on internet access) and try again.';
+  function addresses(list, { host = false } = {}) {
+    if (Array.isArray(list) && !list.length && !host) fail(400, NO_ADDRESS, 'no-address');
+    const urlsOk = Array.isArray(list) && list.length && list.every((a) => { try { return /^https?:$/.test(new URL(a).protocol); } catch { return false; } });
+    if (!urlsOk) fail(400, 'Give this device at least one http or https address.');
+    const clean = list.map((a) => new URL(a).origin);
+    const bad = clean.find(loopbackIn);
+    if (bad && !allowLoopback()) {
+      fail(400, host ? `${bad} means the device you are on, not the host. Use the host's Wi-Fi address, like 192.168.1.24:7777.`
+        : `${bad} means this device itself, so no other device can reach it. Use this device's Wi-Fi address, like 192.168.1.24:7777.`, 'loopback');
+    }
+    return clean;
   }
 
   async function send(member, route, body) {
@@ -151,51 +178,87 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
   const changeHandlers = [];
   const changed = () => { for (const fn of changeHandlers) { try { fn(); } catch { /* a listener must not break the room */ } } };
 
-  async function create(body) {
+  async function create(body, req) {
     if (data.room) fail(409, 'This device is already in a room. Leave it first.');
     const name = text(body.name) || os.hostname();
-    const list = body.addresses === undefined ? myAddresses() : body.addresses;
+    const list = body.addresses === undefined ? myAddresses(req) : body.addresses;
     data.room = { id: crypto.randomBytes(8).toString('hex'), hostId: data.deviceId, revoked: [], members: [
       { deviceId: data.deviceId, name, addresses: addresses(list), role: 'host', joinedAt: now(), ...access({ level: 'admin' }) }] };
     persist();
     return view();
   }
 
-  function invite() {
+  function invite(req) {
     needHost();
-    for (const [key, expiresAt] of invitations) if (expiresAt <= now()) invitations.delete(key);
-    const code = crypto.randomBytes(24).toString('base64url');
-    invitations.set(hash(code), now() + INVITE_MS);
-    return { code, expiresInSeconds: INVITE_MS / 1000, roomId: data.room.id, addresses: me().addresses };
+    // Spent and expired codes are remembered for an hour so the joiner is told which it was.
+    for (const [key, entry] of invitations) if (now() - entry.expiresAt > 60 * 60_000) invitations.delete(key);
+    const reachable = myAddresses(req);
+    if (!reachable.length) reachable.push(...me().addresses.filter((a) => allowLoopback() || !loopbackIn(a)));
+    if (!reachable.length) fail(409, NO_ADDRESS, 'no-address');
+    const code = newCode();
+    invitations.set(hash(code), { expiresAt: now() + INVITE_MS });
+    return { code: formatCode(code), expiresInSeconds: INVITE_MS / 1000, roomId: data.room.id, addresses: reachable, address: reachable[0], invite: inviteLine(reachable[0], code) };
   }
 
   // On the joining device: its owner picks the level and folders other room members get on this device.
-  async function join(body) {
+  async function join(body, req) {
     if (data.room) fail(409, 'This device is already in a room. Leave it first.');
     const code = text(body.code, 200) || fail(400, 'Give the join code.');
-    const hostAddresses = addresses(Array.isArray(body.host) ? body.host : [body.host]);
-    const self = { deviceId: data.deviceId, name: text(body.name) || os.hostname(), addresses: addresses(body.addresses ?? myAddresses()), ...access(body) };
+    const hostAddresses = addresses(Array.isArray(body.host) ? body.host : [body.host], { host: true });
+    const self = { deviceId: data.deviceId, name: text(body.name) || os.hostname(), addresses: addresses(body.addresses ?? myAddresses(req)), ...access(body) };
     const hostSecret = secret();
     const r = await send({ addresses: hostAddresses }, 'accept', { code, hostSecret, ...self });
-    if (r.status !== 200) fail(r.status === 0 ? 502 : r.status, r.body.error || 'The host did not accept the code.');
+    if (r.status === 0) fail(502, `Could not reach the host at ${hostAddresses.join(' or ')}.`, 'unreachable');
+    if (r.status !== 200) fail(r.status, r.body.error || 'The host did not accept the code.', r.body.code);
     const { roomId, hostId, memberSecret, members, revoked } = r.body;
     data.room = { id: roomId, hostId, revoked, memberSecret, hostSecretHash: hash(hostSecret), members };
     persist();
     await reconcile();
-    return view();
+    // The host now calls this device back. A device the host cannot reach is in the room but cut off, so say so.
+    const host = hostName();
+    const check = await send(host, 'ping', { roomId, from: data.deviceId, secret: memberSecret, check: true });
+    return { ...view(), callback: check.body.callback ?? { ok: false, address: self.addresses[0], tried: self.addresses, error: 'The host did not answer the check.' } };
+  }
+
+  // This device's own addresses changed, or were wrong at join. The host is told and calls back again.
+  async function setAddress(body, req) {
+    need();
+    const list = addresses(body.addresses ?? myAddresses(req));
+    me().addresses = list;
+    persist();
+    if (isHost()) { announce(); changed(); return { ...view(), callback: { ok: true, address: list[0], tried: list } }; }
+    const host = hostName();
+    const r = await send(host, 'notify', { roomId: data.room.id, from: data.deviceId, secret: data.room.memberSecret, type: 'address', addresses: list });
+    if (r.status !== 200) fail(r.status === 0 ? 502 : r.status, r.status === 0 ? `Could not reach the host at ${host.addresses.join(' or ')}.` : r.body.error || 'The host did not accept the address.', r.status === 0 ? 'unreachable' : r.body.code);
+    const check = await send(host, 'ping', { roomId: data.room.id, from: data.deviceId, secret: data.room.memberSecret, check: true });
+    return { ...view(), callback: check.body.callback ?? { ok: false, address: list[0], tried: list, error: 'The host did not answer the check.' } };
+  }
+
+  // Calls a member back on each of its addresses, the way the host talks to it later. Says which address worked or which failed.
+  async function probe(member) {
+    const tried = [];
+    for (const address of member.addresses) {
+      const r = await send({ addresses: [address] }, 'ping', { roomId: data.room.id, from: data.deviceId, secret: member.hostSecret });
+      if (r.status === 200) { unreachable.delete(member.deviceId); member.lastSeen = now(); persist(); return { ok: true, address, tried: [...tried, address] }; }
+      tried.push(address);
+    }
+    unreachable.add(member.deviceId);
+    return { ok: false, address: member.addresses[0], tried, error: 'No answer from this device.' };
   }
 
   // On the host: a device presents a join code. Public route, the code is the credential.
   async function accept(body) {
     needHost();
-    const key = hash(String(body.code ?? ''));
-    const expiresAt = invitations.get(key);
-    if (!expiresAt || expiresAt <= now()) fail(403, 'That join code is not valid. Ask the host for a new one.');
+    const key = hash(normalizeCode(body.code));
+    const entry = invitations.get(key);
+    if (!entry) fail(403, 'That code is not right. Check it and try again.', 'wrong-code');
+    if (entry.usedAt) fail(403, 'That code was already used. Ask the host for a new code.', 'used-code');
+    if (entry.expiresAt <= now()) fail(403, 'That code has expired. Ask the host for a new code.', 'expired-code');
     const info = { name: text(body.name) || fail(400, 'Give a name.'), addresses: addresses(body.addresses), ...access(body) };
     const deviceId = text(body.deviceId, 64) || fail(400, 'Give a device id.');
     const hostSecret = typeof body.hostSecret === 'string' && body.hostSecret.length >= 32 ? body.hostSecret : fail(400, 'Give a secret.');
     if (data.room.members.some((m) => m.deviceId === deviceId)) fail(409, 'This device is already in the room.');
-    invitations.delete(key);
+    entry.usedAt = now();
     const memberSecret = secret();
     data.outbox = data.outbox.filter((i) => !(i.deviceId === deviceId && i.body.type === 'kicked'));
     data.room.revoked = data.room.revoked.filter((r) => r.deviceId !== deviceId);
@@ -264,7 +327,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
   const fromHost = (body) => data.room && !isHost() && body.roomId === data.room.id && body.from === data.room.hostId && same(hash(body.secret), data.room.hostSecretHash);
 
   // Peer liveness. A member proves itself to the host; the host proves itself to a member.
-  function ping(body) {
+  async function ping(body) {
     if (data.room && isHost()) {
       const member = asMember(body);
       if (!member) {
@@ -273,7 +336,8 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
       }
       member.lastSeen = now();
       persist();
-      return { ok: true, deviceId: data.deviceId, roomId: data.room.id, hostId: data.room.hostId, members: publicMembers(), revoked: data.room.revoked };
+      const callback = body.check === true ? await probe(member) : undefined;
+      return { ok: true, deviceId: data.deviceId, roomId: data.room.id, hostId: data.room.hostId, members: publicMembers(), revoked: data.room.revoked, ...(callback && { callback }) };
     } else if (!fromHost(body)) fail(403, 'Not the host of this room.');
     return { ok: true, deviceId: data.deviceId, roomId: data.room.id, hostId: data.room.hostId };
   }
@@ -317,7 +381,13 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
   async function notify(body) {
     if (data.room && isHost()) {
       const member = asMember(body);
-      if (!member || body.type !== 'leave') fail(403, 'Not allowed.');
+      if (!member || !['leave', 'address'].includes(body.type)) fail(403, 'Not allowed.');
+      if (body.type === 'address') {
+        member.addresses = addresses(body.addresses);
+        persist();
+        announce(member.deviceId);
+        return { ok: true };
+      }
       removeMember(member, 'left');
       announce();
       return { ok: true };
@@ -424,9 +494,9 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
       const again = peer && guard?.refuse(req, sender);
       if (again) return sendJson(res, again.status, { error: again.error });
       const routes = {
-        'GET ': () => url.searchParams.get('live') ? live() : view(),
+        'GET ': async () => ({ ...(url.searchParams.get('live') ? await live() : view()), advertised: myAddresses(req), allowLoopback: allowLoopback() }),
         'GET devices': () => devices(url.searchParams.get('live')),
-        'POST create': () => create(body), 'POST invite': invite, 'POST join': () => join(body), 'POST leave': leave,
+        'POST create': () => create(body, req), 'POST invite': () => invite(req), 'POST join': () => join(body, req), 'POST leave': leave, 'POST address': () => setAddress(body, req),
         'POST kick': () => kick(body), 'POST handover': () => handover(body),
         'POST ping': () => ping(body), 'POST accept': () => accept(body), 'POST notify': () => notify(body),
       };
@@ -435,7 +505,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
       return sendJson(res, 200, await route());
     } catch (err) {
       if (peer && err.status === 403) guard?.fail(req, sender);
-      return sendJson(res, err.status || 400, { error: err.message });
+      return sendJson(res, err.status || 400, { error: err.message, ...(err.code && typeof err.code === 'string' && err.status && { code: err.code }) });
     }
   }
 

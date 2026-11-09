@@ -82,7 +82,7 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
     POCKET_DEV_CODEX: '/nonexistent/codex', POCKET_DEV_PMSET: stub, POCKET_DEV_IOREG: stub, POCKET_DEV_TOP: stub, POCKET_DEV_MEMORY_PRESSURE: stub,
     POCKET_DEV_UPDATE_CHECK: stub, POCKET_DEV_OSASCRIPT: stub, POCKET_DEV_TERMINAL_HOST: 'off',
     POCKET_DEV_CLOUDFLARED: fakeCloudflared(root), POCKET_DEV_FAKE_CF: record,
-    POCKET_DEV_PROCESS_FIXTURE: path.join(root, 'no-processes.json'),
+    POCKET_DEV_PROCESS_FIXTURE: path.join(root, 'no-processes.json'), POCKET_DEV_ROOM_ALLOW_LOOPBACK: '1',
     POCKET_DEV_TRACE_URL: traceUrl ?? 'http://127.0.0.1:9/trace', POCKET_DEV_HANDOFF_TTL_MS: '1500',
     ...(lanIpFile && { POCKET_DEV_LAN_IP_FILE: lanIp }),
     ...extraEnv,
