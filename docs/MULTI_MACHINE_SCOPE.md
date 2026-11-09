@@ -307,6 +307,9 @@ Open: is "reload the link and land on a live device" good enough, or must the pa
 - Known cost: today's macOS-only calls (power, health, performance, launchd, apps, permissions, screen, files trash, admin) each need an equivalent per OS behind one interface. Where an OS has no equivalent, the option must say so clearly instead of silently failing. Not yet scoped or tested on any non-Mac machine.
 - Unclear, to ask: "Pocket Dev itself can be a separate OS that we can run on the phone". Not understood yet.
 
+- **Replication scope (decided):** everything the UI shows is copied, including the full agent chat text, conversations and images, so any phone connected to the room sees the same thing. This replaces the earlier idea of keeping images local and copying only a summary. Terminal streams, file contents and the private zone are not part of this decision yet.
+- Risk: a copy on another device can be read by that device's owner. Copies must follow each member's access level, or a member who was only given one folder would receive chats they should not see. Storage and bandwidth for images also grow with every member. Not yet designed.
+
 ## Open questions
 
 1. ~~Is a room permanent?~~ Decided: permanent until revoked.
@@ -315,7 +318,7 @@ Open: is "reload the link and land on a live device" good enough, or must the pa
 4. Decided: Bypass duration is configurable (1, 2, 3, 4 hours, always) with a warning banner.
 5. Decided: Bypass reaches the private zone.
 10. Tasks for people: plain messages, or Jira-like tasks with a done tick? The owner wants a simple Jira-like task page.
-11. Whether full agent chat text is copied to all members or only a summary.
+11. Decided: everything the UI shows is copied. Open: copies must respect each member's access level.
 12. Whether the phone page must survive the front device dying without a reload.
 6. (Deferred with the supervisor) How does the supervisor check that a part is done: read files, run tests, ask the device's AI, or a "done" definition I write for each part?
 7. (Deferred) When a part is not done: only tell me, or also tell that device's AI to fix it?
