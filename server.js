@@ -843,7 +843,7 @@ const chatApi = createChatApi({ sendJson, readJson, config, wss });
 const rejectUpgrade = (socket, status, text) => {
   socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 };
-const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade });
+const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade, room, roomSync });
 
 server.on('upgrade', (req, socket, head) => {
   if (insecureRemote(req) || !hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
