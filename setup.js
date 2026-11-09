@@ -156,9 +156,9 @@ const LINKS = {
 export function installPlan(id, { platform, has = {}, npmWritable = null, npmFound = true }) {
   const tool = toolById(id);
   if (id === 'node') {
-    const how = { darwin: 'brew install node', win32: 'winget install OpenJS.NodeJS', linux: `install Node ${MIN_NODE} or newer with your package manager, nvm or fnm` }[platform];
+    const how = { darwin: 'Run yourself: brew install node', win32: 'Run yourself: winget install OpenJS.NodeJS', linux: `Install Node ${MIN_NODE} or newer with your package manager, nvm or fnm` }[platform];
     return manual(`Pocket Dev needs Node ${MIN_NODE} or newer, with npm. Pocket Dev cannot update the Node that is running it.`,
-      [`${how === 'brew install node' || how.startsWith('winget') ? 'Run' : 'Then'}: ${how}`, `Or download it from ${NODE_LINK}`, 'Then run: pocket-dev setup'], NODE_LINK);
+      [how, `Or download it from ${NODE_LINK}`, 'Then run: pocket-dev setup'], NODE_LINK);
   }
   if (tool.npm) {
     if (!npmFound) return manual('npm is not installed, and it installs this tool.', [`Install Node.js with npm first (${NODE_LINK}), then run: pocket-dev setup`], NODE_LINK);
