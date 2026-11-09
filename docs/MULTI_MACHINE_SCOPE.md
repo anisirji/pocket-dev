@@ -1,6 +1,8 @@
 # Pocket Dev multi-machine: scope agreed so far
 
-Status: discussion notes from the planning session of 2026-11-09. Nothing here is built or tested. This file feeds `docs/MULTI_MACHINE_DESIGN.md`, which is not written yet.
+Status: scope agreed by the owner on 2026-11-09. Nothing here is built or tested. Next step: an execution plan (build order with tests).
+
+Build rule: everything is built and tested in separate worktrees (starting from `multi-machine-design`). Nothing merges into the live checkout until it is tested. Live stays exactly as it is now, and the `dev.pocket.server` service is not restarted. This file feeds `docs/MULTI_MACHINE_DESIGN.md`, which is not written yet.
 
 ## First version (decided 2026-11-09, replaces orchestration for now)
 
@@ -311,6 +313,8 @@ Open: is "reload the link and land on a live device" good enough, or must the pa
 - Risk: a copy on another device can be read by that device's owner. Copies must follow each member's access level, or a member who was only given one folder would receive chats they should not see. Storage and bandwidth for images also grow with every member. Not yet designed.
 
 ## Open questions
+
+0. Who can see a chat: only the person who started it, or everyone in the room with access to that device? Not yet answered.
 
 1. ~~Is a room permanent?~~ Decided: permanent until revoked.
 2. ~~More than one room per device?~~ Decided: one device, one room.
