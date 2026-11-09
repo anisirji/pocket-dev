@@ -24,3 +24,5 @@
 .ap button:focus-visible { outline: 2px solid var(--accent, #6aa9ff); outline-offset: 2px; }
 .ap .ap-allow { background: var(--accent, #6aa9ff); color: var(--bg, #0b0e14); font-weight: 600; border-color: transparent; }
 .ap .ap-deny { color: var(--danger, #ff7b72); }
+/* The header is full at 390 px: while a request waits, the bell takes the place of the Tasks button (Tasks stays in Settings, Room). */
+body.ap-waiting #roomTasksBtn { display: none !important; }

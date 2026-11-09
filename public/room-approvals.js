@@ -54,6 +54,7 @@ function paintBell() {
   if (!bell) return;
   const n = [...cards.values()].filter((c) => c.state === 'pending').length;
   bell.hidden = n === 0;
+  document.body.classList.toggle('ap-waiting', n > 0);
   count.textContent = n > 9 ? '9+' : String(n);
   bell.setAttribute('aria-label', `${n} request${n === 1 ? '' : 's'} waiting for your answer`);
 }
