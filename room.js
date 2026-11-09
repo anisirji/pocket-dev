@@ -16,16 +16,21 @@ const text = (v, max = 80) => typeof v === 'string' && v.trim() && v.length <= m
 // Control flows host to member only: the host keeps one secret per member (hostSecret) and presents it when it tells
 // a member something. A member keeps only the secret the host minted for it at join (memberSecret), which lets it
 // report liveness or leave. Leaving or being kicked deletes the room from room.json, secrets included.
-export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fetchImpl = fetch, now = Date.now }) {
+export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), grants, fetchImpl = fetch, now = Date.now, intervalMs = 30_000,
+  every = (fn, ms) => { const timer = setInterval(fn, ms); timer.unref?.(); return () => clearInterval(timer); } }) {
   fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   const file = path.join(stateDir, 'room.json');
-  let data = { deviceId: crypto.randomBytes(8).toString('hex'), room: null };
+  let data = { deviceId: crypto.randomBytes(8).toString('hex'), room: null, outbox: [] };
   try {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (typeof saved.deviceId !== 'string') throw new Error('Invalid room state');
-    data = { deviceId: saved.deviceId, room: saved.room ?? null };
+    data = { deviceId: saved.deviceId, room: saved.room ?? null, outbox: Array.isArray(saved.outbox) ? saved.outbox : [] };
   } catch (err) { if (err.code !== 'ENOENT') throw new Error(`Cannot load room state safely: ${err.message}`); }
   const invitations = new Map();
+  // Peers this device could not reach on its last try. Local only; the lastSeen age covers a device that stays silent.
+  const unreachable = new Set();
+  // A peer that has not answered for two intervals (plus a little slack for a slow answer) counts as offline.
+  const offlineAfter = () => 2 * intervalMs + Math.min(intervalMs, PEER_TIMEOUT_MS);
 
   function persist() {
     fs.writeFileSync(`${file}.tmp`, JSON.stringify(data, null, 2) + '\n', { mode: 0o600 });
@@ -38,16 +43,51 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
   const need = () => data.room || fail(409, 'This device is not in a room.');
   const needHost = () => { need(); if (!isHost()) fail(403, 'Only the host can do this.'); };
   const myAddresses = () => [urls().remote, urls().lan, urls().local].filter(Boolean);
-  const publicMember = ({ deviceId, name, addresses, role, joinedAt, level, folders, lastSeen }) => ({ deviceId, name, addresses, role, joinedAt, level, folders, ...(lastSeen && { lastSeen }) });
-  const publicMembers = () => data.room.members.map(publicMember);
+  const publicMember = ({ deviceId, name, addresses, role, joinedAt, level, folders, grantRole, lastSeen }) => ({ deviceId, name, addresses, role, joinedAt, level, folders, ...(grantRole && { grantRole }), ...(lastSeen && { lastSeen }) });
+  const statusOf = (m) => m.deviceId === data.deviceId || (!unreachable.has(m.deviceId) && m.lastSeen && now() - m.lastSeen <= offlineAfter()) ? 'online' : 'offline';
+  const publicMembers = () => data.room.members.map((m) => {
+    const entry = publicMember(m);
+    return { ...entry, ...(m.deviceId === data.deviceId && { lastSeen: now() }), status: statusOf(m) };
+  });
+  // What this device's owner gave the other members: full admin, or a grant on chosen folders. Both exist only while the
+  // member is in the room.
+  const trustedAdmins = () => data.room && me()?.level === 'admin' ? data.room.members.filter((m) => m.deviceId !== data.deviceId).map((m) => m.deviceId) : [];
   const view = () => data.room
-    ? { deviceId: data.deviceId, room: { id: data.room.id, hostId: data.room.hostId, role: me().role, members: publicMembers(), revoked: data.room.revoked } }
+    ? { deviceId: data.deviceId, room: { id: data.room.id, hostId: data.room.hostId, role: me().role, members: publicMembers(), revoked: data.room.revoked,
+      trustedAdmins: trustedAdmins(), ...(accessErrors.size && { accessErrors: Object.fromEntries(accessErrors) }) } }
     : { deviceId: data.deviceId, room: null };
+  const accessErrors = new Map();
+
+  // Makes this device's grants match the room. Ending access is immediate; creating a grant can take a moment (a developer
+  // gets a copy of the project), so creations run one at a time and look again at the room before each one.
+  let grantQueue = Promise.resolve();
+  function reconcile() {
+    if (!grants) return grantQueue;
+    const roomId = data.room?.id ?? null;
+    const others = data.room ? data.room.members.filter((m) => m.deviceId !== data.deviceId) : [];
+    grants.revokeRoom(roomId, new Set(others.map((m) => m.deviceId)));
+    for (const id of accessErrors.keys()) if (!others.some((m) => m.deviceId === id)) accessErrors.delete(id);
+    const self = me();
+    if (self?.level !== 'collaborator') return grantQueue;
+    grantQueue = grantQueue.then(async () => {
+      for (const member of others) {
+        if (data.room?.id !== roomId || !data.room.members.some((m) => m.deviceId === member.deviceId)) continue;
+        try {
+          await grants.roomGrant({ roomId, deviceId: member.deviceId, label: member.name, role: self.grantRole, folders: self.folders });
+          accessErrors.delete(member.deviceId);
+        } catch (err) { accessErrors.set(member.deviceId, err.message); }
+      }
+    });
+    return grantQueue;
+  }
 
   function access(body) {
     const level = body.level === 'admin' || body.level === 'collaborator' ? body.level : fail(400, 'Choose admin or collaborator.');
     const folders = level === 'admin' ? [] : Array.isArray(body.folders) && body.folders.length && body.folders.every((f) => typeof f === 'string' && path.isAbsolute(f)) ? body.folders : fail(400, 'A collaborator needs at least one folder (absolute paths).');
-    return { level, folders };
+    if (folders.length > 6) fail(400, 'Choose one repository and up to five related folders.');
+    if (level === 'admin') return { level, folders };
+    const grantRole = body.grantRole === undefined ? 'viewer' : ['viewer', 'developer'].includes(body.grantRole) ? body.grantRole : fail(400, 'Choose viewer or developer.');
+    return { level, folders, grantRole };
   }
   function addresses(list) {
     return Array.isArray(list) && list.length && list.every((a) => { try { return /^https?:$/.test(new URL(a).protocol); } catch { return false; } }) ? list.map((a) => new URL(a).origin) : fail(400, 'Give this device at least one http or https address.');
@@ -66,11 +106,40 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
   }
   // The host tells one member something. The room id and the member's own secret travel with it.
   const tell = (member, type, extra = {}) => send(member, 'notify', { roomId: data.room.id, from: data.deviceId, secret: member.hostSecret, type, ...extra });
+
+  // Anything that gets an answer is done, even a refusal: the device decided. No answer, or a server error, means try again later.
+  const arrived = (r) => r.status > 0 && r.status < 500;
+  // A message nobody could receive waits in the outbox (saved in room.json, so a restart keeps it) and goes out on the timer.
+  // A newer 'members' list replaces an older one for the same device.
+  function queue(to, body) {
+    data.outbox = data.outbox.filter((i) => !(i.deviceId === to.deviceId && i.body.type === 'members' && body.type === 'members'));
+    data.outbox.push({ deviceId: to.deviceId, addresses: to.addresses, body });
+    persist();
+  }
+  async function tellOrQueue(member, type, extra) {
+    const r = await tell(member, type, extra);
+    if (!arrived(r)) queue(member, { roomId: data.room.id, from: data.deviceId, secret: member.hostSecret, type, ...extra });
+    return r;
+  }
+  // A list or handover for a device that is no longer in the room is moot. A kick or a leave still has to arrive.
+  const moot = (item) => ['members', 'handover'].includes(item.body.type) && !data.room?.members.some((m) => m.deviceId === item.deviceId);
+  async function flush() {
+    if (!data.outbox.length) return;
+    const items = data.outbox.filter((i) => !moot(i));
+    for (const item of items) {
+      if (item.body.type === 'members' && data.room && isHost()) Object.assign(item.body, { hostId: data.room.hostId, members: publicMembers(), revoked: data.room.revoked });
+    }
+    const results = await Promise.all(items.map((item) => send(item, 'notify', item.body)));
+    const pending = items.filter((_, i) => !arrived(results[i]));
+    // Items queued while we were sending stay.
+    data.outbox = data.outbox.filter((i) => pending.includes(i) || (!items.includes(i) && !moot(i)));
+    persist();
+  }
   const hostName = () => data.room.members.find((m) => m.deviceId === data.room.hostId);
   const announce = (skip) => Promise.all(data.room.members.filter((m) => m.deviceId !== data.deviceId && m.deviceId !== skip)
-    .map((m) => tell(m, 'members', { hostId: data.room.hostId, members: publicMembers(), revoked: data.room.revoked })));
+    .map((m) => tellOrQueue(m, 'members', { hostId: data.room.hostId, members: publicMembers(), revoked: data.room.revoked })));
 
-  function drop() { data.room = null; persist(); }
+  function drop() { data.room = null; persist(); reconcile(); }
 
   async function create(body) {
     if (data.room) fail(409, 'This device is already in a room. Leave it first.');
@@ -102,6 +171,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     const { roomId, hostId, memberSecret, members, revoked } = r.body;
     data.room = { id: roomId, hostId, revoked, memberSecret, hostSecretHash: hash(hostSecret), members };
     persist();
+    await reconcile();
     return view();
   }
 
@@ -117,10 +187,12 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     if (data.room.members.some((m) => m.deviceId === deviceId)) fail(409, 'This device is already in the room.');
     invitations.delete(key);
     const memberSecret = secret();
+    data.outbox = data.outbox.filter((i) => !(i.deviceId === deviceId && i.body.type === 'kicked'));
     data.room.revoked = data.room.revoked.filter((r) => r.deviceId !== deviceId);
     data.room.members.push({ deviceId, ...info, role: 'member', joinedAt: now(), hostSecret, secretHash: hash(memberSecret) });
     persist();
     announce(deviceId);
+    reconcile();
     return { roomId: data.room.id, hostId: data.room.hostId, memberSecret, members: publicMembers(), revoked: data.room.revoked };
   }
 
@@ -133,7 +205,8 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     const host = hostName();
     const note = { roomId: data.room.id, from: data.deviceId, secret: data.room.memberSecret, type: 'leave' };
     drop();
-    await send(host, 'notify', note);
+    const r = await send(host, 'notify', note);
+    if (!arrived(r)) queue(host, note);
     return view();
   }
 
@@ -142,7 +215,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     const target = data.room.members.find((m) => m.deviceId === body.deviceId);
     if (!target) fail(404, 'No such device in the room.');
     if (target.deviceId === data.deviceId) fail(400, 'The host cannot kick itself. Hand over or leave.');
-    const told = await tell(target, 'kicked');
+    const told = await tellOrQueue(target, 'kicked');
     removeMember(target, 'kicked');
     await announce();
     return { ...view(), notified: told.status === 200 };
@@ -151,6 +224,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     data.room.members = data.room.members.filter((m) => m !== target);
     data.room.revoked.push({ deviceId: target.deviceId, name: target.name, reason, at: now() });
     persist();
+    reconcile();
   }
 
   async function handover(body) {
@@ -187,11 +261,47 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
       }
       member.lastSeen = now();
       persist();
+      return { ok: true, deviceId: data.deviceId, roomId: data.room.id, hostId: data.room.hostId, members: publicMembers(), revoked: data.room.revoked };
     } else if (!fromHost(body)) fail(403, 'Not the host of this room.');
     return { ok: true, deviceId: data.deviceId, roomId: data.room.id, hostId: data.room.hostId };
   }
 
-  function notify(body) {
+  // One ping to one peer. A success refreshes lastSeen; a member also takes the host's current list from the answer, which is
+  // how a member that missed an announcement catches up. A host that says this device was removed ends its access here too.
+  async function pingPeer(peer) {
+    const host = isHost();
+    const r = await send(peer, 'ping', { roomId: data.room.id, from: data.deviceId, secret: host ? peer.hostSecret : data.room.memberSecret });
+    if (!host && r.status === 403 && /removed/.test(r.body.error || '')) { drop(); return r; }
+    if (r.status === 200) {
+      unreachable.delete(peer.deviceId);
+      if (!host && Array.isArray(r.body.members) && r.body.members.some((m) => m.deviceId === data.deviceId)) {
+        data.room.members = r.body.members.map(publicMember);
+        data.room.revoked = Array.isArray(r.body.revoked) ? r.body.revoked : data.room.revoked;
+        data.room.hostId = r.body.hostId;
+        await reconcile();
+      }
+      const entry = data.room.members.find((m) => m.deviceId === peer.deviceId);
+      if (entry) entry.lastSeen = now();
+      persist();
+    } else if (r.status === 0) unreachable.add(peer.deviceId);
+    return r;
+  }
+
+  // The timer. The host pings every member; a member pings the host.
+  let ticking = false;
+  async function tick() {
+    if (ticking) return;
+    ticking = true;
+    try {
+      await flush();
+      if (!data.room) return;
+      const peers = isHost() ? data.room.members.filter((m) => m.deviceId !== data.deviceId) : [hostName()];
+      await Promise.all(peers.map((m) => pingPeer(m).catch(() => {})));
+    } finally { ticking = false; }
+  }
+  const stopTimer = every(() => { tick().catch(() => {}); }, intervalMs);
+
+  async function notify(body) {
     if (data.room && isHost()) {
       const member = asMember(body);
       if (!member || body.type !== 'leave') fail(403, 'Not allowed.');
@@ -207,6 +317,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
       data.room.revoked = Array.isArray(body.revoked) ? body.revoked : [];
       data.room.hostId = body.hostId;
       persist();
+      await reconcile();
       return { ok: true };
     }
     if (body.type === 'handover') {
@@ -221,6 +332,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
       mine.role = 'host'; delete mine.hostSecret; delete mine.secretHash;
       data.room = { id: data.room.id, hostId: data.deviceId, revoked: body.room.revoked || [], members: list };
       persist();
+      await reconcile();
       return { ok: true, hostSecret };
     }
     fail(400, 'Unknown message.');
@@ -230,8 +342,8 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
   async function live() {
     if (!data.room) return view();
     const peers = isHost() ? data.room.members.filter((m) => m.deviceId !== data.deviceId) : [hostName()];
-    const results = await Promise.all(peers.map((m) => send(m, 'ping', { roomId: data.room.id, from: data.deviceId, secret: isHost() ? m.hostSecret : data.room.memberSecret })));
-    if (!isHost() && results[0].status === 403 && /removed/.test(results[0].body.error || '')) { drop(); return view(); }
+    const results = await Promise.all(peers.map((m) => pingPeer(m)));
+    if (!data.room) return view();
     const out = view();
     peers.forEach((m, i) => { out.room.members.find((x) => x.deviceId === m.deviceId).online = results[i].status === 200; });
     return out;
@@ -255,5 +367,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     } catch (err) { return sendJson(res, err.status || 400, { error: err.message }); }
   }
 
-  return { handleApi, view, deviceId: () => data.deviceId };
+  reconcile();
+
+  return { handleApi, view, tick, isTrustedAdmin: (deviceId) => trustedAdmins().includes(deviceId), grantsReady: () => grantQueue, close: stopTimer, deviceId: () => data.deviceId };
 }

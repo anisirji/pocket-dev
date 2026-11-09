@@ -39,11 +39,11 @@ export function createCollaborators({ config, auth, urls, stateDir = STATE_DIR, 
     fs.renameSync(`${file}.tmp`, file);
   }
   const enabled = () => config.read().roleAccessEnabled === true;
-  const active = (grant) => enabled() && grant && !grant.revoked && grant.expiresAt > now();
+  const active = (grant) => enabled() && grant && !grant.revoked && (grant.room || grant.expiresAt > now());
   const find = (id) => data.grants.find((g) => g.id === id);
   const sessionCount = () => data.sessions.filter((s) => active(find(s.grantId))).length;
   const log = (type, fields) => auth.admin.log(type, fields);
-  const status = (g) => g.revoked ? 'revoked' : !g.expiresAt ? 'invited' : active(g) ? 'active' : 'expired';
+  const status = (g) => g.revoked ? 'revoked' : g.room ? (active(g) ? 'active' : 'inactive') : !g.expiresAt ? 'invited' : active(g) ? 'active' : 'expired';
   const view = (g) => ({ ...g, status: status(g), sessions: data.sessions.filter((s) => s.grantId === g.id).length });
   const ai = { available: false, reason: 'Collaborator AI needs a validated isolated runner. Owner AI sessions are never shared.' };
 
@@ -225,6 +225,7 @@ export function createCollaborators({ config, auth, urls, stateDir = STATE_DIR, 
       return { status: 204 };
     }
     if (grant && match[2] && method === 'POST') {
+      if (grant.room) fail(409, 'This access comes from room membership. Signing in through another device is not built yet.');
       if (grant.revoked || (grant.expiresAt && !active(grant))) fail(409, 'Update this collaborator’s access before creating another invitation.');
       checkSources(grant);
       const base = urls().remote || urls().lan || urls().local;
@@ -240,6 +241,37 @@ export function createCollaborators({ config, auth, urls, stateDir = STATE_DIR, 
     }
     fail(404, 'Not found');
   }
+  // Access that belongs to a room member on this device. It never expires; it ends when the member leaves the room or is
+  // removed from it. It sits behind the same role switch as every grant, and it uses the same limits and folder checks.
+  // Repeating the call for the same member changes nothing.
+  async function roomGrant({ roomId, deviceId, label, role, folders }) {
+    const mine = (g) => g.room?.id === roomId && g.room.deviceId === deviceId && !g.roomEnded;
+    const existing = data.grants.find(mine);
+    if (existing) return view(existing);
+    if (data.grants.filter((g) => !g.revoked).length >= 50) fail(429, 'Revoke an unused collaborator before adding another.');
+    const id = crypto.randomBytes(8).toString('hex');
+    const parsed = await parseGrant({ role, label: String(label).replace(/[\r\n\x00]/g, ' ').trim().slice(0, 80) || 'Room member', duration: 604800, repository: folders[0],
+      extraFolders: folders.slice(1).map((path) => ({ path, mode: 'read' })) }, id);
+    if (data.grants.find(mine)) { if (parsed.workspace) await fsp.rm(parsed.workspace, { recursive: true, force: true }); return view(data.grants.find(mine)); }
+    const next = { id, ...parsed, createdAt: now(), expiresAt: null, revoked: false, room: { id: roomId, deviceId } };
+    data.grants.push(next); persist();
+    log('collaborator-created', { grantId: id, role: next.role, room: roomId });
+    return view(next);
+  }
+  // Ends every room grant of a room that is not for one of the devices in `keep`. A null room ends them all.
+  function revokeRoom(roomId, keep = new Set()) {
+    let changed = false;
+    data.grants = data.grants.map((grant) => {
+      if (!grant.room || grant.roomEnded || (grant.room.id === roomId && keep.has(grant.room.deviceId))) return grant;
+      changed = true;
+      data.sessions = data.sessions.filter((s) => s.grantId !== grant.id);
+      invalidate(grant.id);
+      log('collaborator-revoked', { grantId: grant.id, room: grant.room.id });
+      return { ...grant, revoked: true, roomEnded: true };
+    });
+    if (changed) persist();
+  }
+
   function summary() {
     const settings = config.read();
     const candidates = [...(Array.isArray(settings.folders) ? settings.folders : []), ...(Array.isArray(settings.recentFolders) ? settings.recentFolders : []), settings.chatDefaults?.cwd];
@@ -277,5 +309,5 @@ export function createCollaborators({ config, auth, urls, stateDir = STATE_DIR, 
     data.grants = data.grants.map((grant) => { stopTransfers(grant.id); return { ...grant, revoked: true }; });
     invitations.clear(); data.sessions = []; persist();
   }
-  return { guest, scope, currentAccess, ownerApi, accept, logout, sessionCount, lockdown, close: () => clearInterval(expiryTimer) };
+  return { guest, scope, currentAccess, ownerApi, roomGrant, revokeRoom, accept, logout, sessionCount, lockdown, close: () => clearInterval(expiryTimer) };
 }
