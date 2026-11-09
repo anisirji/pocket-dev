@@ -6,11 +6,12 @@
   const SNOOZE_MS = 15 * 60_000;
   const THERMAL_WORD = { fair: 'warm', serious: 'hot', critical: 'very hot' };
   const baseTitle = document.title;
+  const say = (text) => globalThis.PocketMachine?.say?.(text) ?? text;
 
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
-    if (text != null) node.textContent = text;
+    if (text != null) node.textContent = say(text);
     return node;
   };
 
@@ -20,7 +21,7 @@
   wrap.hidden = false;
   const strip = el('button', 'ms-strip');
   strip.type = 'button';
-  strip.title = 'Mac health';
+  strip.title = say('Mac health');
   strip.onclick = () => window.openHealthSheet?.();
   const battery = el('span', 'ms-item');
   const temp = el('span', 'ms-item');
@@ -99,7 +100,7 @@
     if (!shown.length) return;
     const top = shown[0];
     banner.className = `ms-banner ${top.level}`;
-    bannerText.textContent = shown.length > 1 ? `${top.text} (+${shown.length - 1} more)` : top.text;
+    bannerText.textContent = say(shown.length > 1 ? `${top.text} (+${shown.length - 1} more)` : top.text);
     const dismiss = el('button', 'ms-btn', 'Dismiss');
     dismiss.type = 'button';
     dismiss.onclick = () => {
@@ -128,7 +129,7 @@
       const plugged = v.onAC || v.charging;
       const charge = v.charging ? 'Charging' : v.onAC && v.battery === 100 ? 'Fully charged' : 'Not charging';
       battery.textContent = `${v.battery}% · ${charge}`;
-      battery.title = `Mac battery: ${v.battery}%, ${charge.toLowerCase()}, ${plugged ? 'plugged in' : 'on battery'}`;
+      battery.title = say(`Mac battery: ${v.battery}%, ${charge.toLowerCase()}, ${plugged ? 'plugged in' : 'on battery'}`);
       battery.className = `ms-item${!plugged && v.battery <= 10 ? ' crit' : !plugged && v.battery <= v.limits.batteryPercent ? ' warn' : ''}`;
     }
     const { batteryC, thermal } = v.temperature;
@@ -154,15 +155,15 @@
     const status = connection === 'offline' ? 'Phone offline' : connection === 'unreachable' ? 'Mac not responding'
       : connection === 'checking' ? 'Checking Mac…' : connection === 'unavailable' ? 'Readings unavailable'
         : connection === 'unsupported' ? 'Monitoring needs update' : WORD[performance?.status] || 'Partial readings';
-    setText(state, status);
+    setText(state, say(status));
     state.className = `ms-state ${connection === 'connected' ? performance?.level || 'unknown' : 'unknown'}`;
     const percent = performance?.cpu?.usedPercent;
     cpu.textContent = Number.isFinite(percent) ? `CPU ${percent}%` : 'CPU —';
-    cpu.title = Number.isFinite(percent) ? `${percent}% of the Mac’s total CPU capacity is in use` : 'CPU reading is unavailable';
+    cpu.title = Number.isFinite(percent) ? say(`${percent}% of the Mac’s total CPU capacity is in use`) : 'CPU reading is unavailable';
     cpu.className = `ms-item ms-cpu${Number.isFinite(percent) && percent >= 90 ? ' warn' : ''}`;
     const free = performance?.disk?.freeGB;
     storage.textContent = Number.isFinite(free) ? `${free < 1 ? `${Math.round(free * 1024)} MB` : `${free.toFixed(1)} GB`} free` : 'Free —';
-    storage.title = Number.isFinite(free) ? `Available on the Mac’s home disk: ${free.toFixed(1)} GB${Number.isFinite(performance.disk.totalGB) ? ` of ${performance.disk.totalGB} GB` : ''}` : 'Storage reading is unavailable';
+    storage.title = Number.isFinite(free) ? say(`Available on the Mac’s home disk: ${free.toFixed(1)} GB${Number.isFinite(performance.disk.totalGB) ? ` of ${performance.disk.totalGB} GB` : ''}`) : 'Storage reading is unavailable';
     storage.className = `ms-item ms-storage${Number.isFinite(free) && free < 3 ? ' crit' : Number.isFinite(free) && free < 10 ? ' warn' : ''}`;
     updateAge(); setHeight();
   }

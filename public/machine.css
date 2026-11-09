@@ -30,3 +30,4 @@ html[data-machine="remote"][data-rank="collaborator"] :is(#resumeBtn, #viewSwitc
 .mc-home p { margin: 0 0 8px; color: var(--muted); }
 .mc-home .primary { width: 200px; height: 44px; border-radius: 10px; }
 html:not([data-machine="remote"]) .mc-home { display: none; }
+.ms-label.mc-switch { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; padding: 8px 6px; margin: -8px -6px; }

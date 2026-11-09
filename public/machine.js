@@ -50,7 +50,14 @@
     return !COLLABORATOR_API.test(new URL(url, base).pathname);
   }
 
-  globalThis.PocketMachine = { blockedFor, rewriteUrl, storageKey, allowedViews, rankText, stateText, sortDevices };
+  // The pages say "the Mac" for the device they run on. On another room device that would be wrong (it may not be a Mac, and
+  // it is not the one in the user's hand), so its own name stands in. Used for status text, never for what the user typed.
+  function sayFor(name, text) {
+    return String(text).replace(/your Mac password/g, `the password for ${name}`).replace(/\b[Tt]he Mac(?=[’']s\b)/g, name)
+      .replace(/\b[Tt]he Mac\b/g, name).replace(/\b[Tt]his Mac\b/g, name).replace(/\bMac\b/g, name);
+  }
+
+  globalThis.PocketMachine = { sayFor, blockedFor, rewriteUrl, storageKey, allowedViews, rankText, stateText, sortDevices };
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
 
   const realFetch = window.fetch.bind(window);
@@ -67,6 +74,7 @@
   const nameOf = () => me()?.name || 'That device';
   const rank = () => (id && me()?.rank) || 'owner';
 
+  PocketMachine.say = (text) => id ? sayFor(me()?.name || 'the device', text) : text;
   const abs = (url) => rewriteUrl(id, url, location.href);
   const mark = () => {
     const root = document.documentElement;
@@ -156,6 +164,22 @@
     chip.setAttribute('aria-label', `Working on ${label}. Change device`);
   }
 
+  // Files, Chat and Messages cover the header, and with it the chip. The status strip stays above every screen, so its first
+  // word (the device it reports on) is also the way to the switcher.
+  function renderLabel() {
+    const label = document.querySelector('#macStatus .ms-label');
+    if (!label || (devices.length < 2 && !id)) return;
+    label.textContent = `${id ? nameOf() : (devices.find((d) => d.self)?.name || 'This device')} ▾`;
+    label.classList.add('mc-switch');
+    label.setAttribute('role', 'button');
+    label.title = 'Change device';
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest?.('.ms-label.mc-switch')) return;
+    e.stopPropagation(); e.preventDefault();
+    openSheet();
+  }, true);
+
   async function loadDevices(live) {
     let body;
     try {
@@ -169,6 +193,7 @@
     if (id && !me()) return select(null);
     mark();
     renderChip();
+    renderLabel();
     if (sheet && !sheet.hidden) renderSheet();
     applyRank();
   }
@@ -253,6 +278,7 @@
     document.body.append(banner);
 
     renderChip();
+    renderLabel();
     applyRank();
   }
 

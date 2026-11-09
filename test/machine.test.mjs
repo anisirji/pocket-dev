@@ -6,7 +6,7 @@ import vm from 'node:vm';
 // public/machine.js installs its browser wrappers only when there is a document; here it only exposes PocketMachine.
 const ctx = { URL };
 vm.runInNewContext(fs.readFileSync(new URL('../public/machine.js', import.meta.url), 'utf8'), ctx);
-const { rewriteUrl, storageKey, allowedViews, blockedFor, sortDevices, stateText } = ctx.PocketMachine;
+const { sayFor, rewriteUrl, storageKey, allowedViews, blockedFor, sortDevices, stateText } = ctx.PocketMachine;
 const BASE = 'https://phone.example.test/';
 const ID = '41231418761633a4';
 
@@ -52,4 +52,14 @@ test('the device list puts this device first, then online ones, and explains an 
   assert.equal(list.map((d) => d.name).join(),'Me,A,Z,B');
   assert.equal(stateText({ online: false, rank: 'admin' }), 'Not answering right now');
   assert.match(stateText({ online: true, rank: 'collaborator' }), /files and messages/);
+});
+
+test('status wording names the remote device instead of the Mac', () => {
+  assert.equal(sayFor('Beta', 'Mac not responding'), 'Beta not responding');
+  assert.equal(sayFor('Beta', 'Checking Mac…'), 'Checking Beta…');
+  assert.equal(sayFor('Beta', 'The Mac may sleep'), 'Beta may sleep');
+  assert.equal(sayFor('Beta', 'Available on the Mac’s home disk'), 'Available on Beta’s home disk');
+  assert.equal(sayFor('Beta', 'Type your Mac password in the new terminal.'), 'Type the password for Beta in the new terminal.');
+  assert.equal(sayFor('Beta', 'Open the lid on the Mac'), 'Open the lid on Beta');
+  assert.equal(sayFor('Beta', 'MacBook'), 'MacBook', 'a word that only starts with Mac is left alone');
 });

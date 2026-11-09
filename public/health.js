@@ -1,11 +1,12 @@
 (() => {
   const REFRESH_MS = 10_000;
+  const say = (text) => globalThis.PocketMachine?.say?.(text) ?? text;
   const { overlays } = window.pocketDev;
 
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
-    if (text != null) node.textContent = text;
+    if (text != null) node.textContent = say(text);
     return node;
   };
 
@@ -31,7 +32,7 @@
   function build() {
     const root = el('div', 'health-sheet');
     root.setAttribute('role', 'dialog');
-    root.setAttribute('aria-label', 'Mac health');
+    root.setAttribute('aria-label', say('Mac health'));
     const bar = el('div', 'health-bar');
     const refresh = el('button', 'health-btn', 'Refresh');
     const close = el('button', 'health-btn', 'Close');
@@ -48,7 +49,8 @@
 
   const row = (label, value, tone) => {
     const r = el('div', 'health-row');
-    r.append(el('span', 'health-label', label), el('span', `health-value${tone ? ` ${tone}` : ''}`, value));
+    // The value is a reading or the device's own name: only the fixed words around it are reworded.
+    r.append(el('span', 'health-label', label), Object.assign(el('span', `health-value${tone ? ` ${tone}` : ''}`), { textContent: value }));
     return r;
   };
   const group = (title, ...rows) => {
@@ -96,7 +98,7 @@
       group('Staying awake',
         na('keepAwake') && row('Keep awake', 'Not available on this system'),
         !na('keepAwake') && row('Keep awake', { always: 'Always', plugged: 'When plugged in', off: 'Off' }[h.power.awake] ?? h.power.awake),
-        row('Right now', h.power.stayingAwake ? 'Staying awake' : 'The Mac may sleep'),
+        row('Right now', h.power.stayingAwake ? 'Staying awake' : say('The Mac may sleep')),
         row('Lid', na('lid') ? 'Not available on this system' : h.power.lidClosed ? (h.power.lidSleepDisabled ? 'Closed, awake' : 'Closed') : 'Open')),
       group('This Mac',
         row('Name', h.mac.name),
@@ -118,7 +120,7 @@
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || `HTTP ${res.status}`);
       render(await res.json());
     } catch (err) {
-      ui.note.textContent = `Could not read the Mac: ${err.message}`;
+      ui.note.textContent = say(`Could not read the Mac: ${err.message}`);
     } finally {
       state.busy = false;
     }
