@@ -266,6 +266,7 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     more.onclick = () => openMenu(m, more);
     const tick = el('span', 'mx-tick');
     tick.innerHTML = ICON.tick;
+    if (m.origin) { const o = el('span', 'mx-origin', `from ${m.origin.deviceName}`); o.title = 'Sent from another device in your room'; meta.append(o); }
     meta.append(el('time', null, clockText(m.at)), ...(m.mine ? [tick] : []), more);
     body.append(meta);
     node.append(body);

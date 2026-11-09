@@ -122,6 +122,9 @@ export function mountRoom(container, { api }) {
       if (confirm('Leave this room? This device loses access to the other devices and they lose access to it.')) act(() => api('POST', '/api/room/leave'));
     }, 'co-danger'));
     out.push(actions);
+    const pages = el('div', 'co-actions');
+    pages.append(button('Tasks', () => window.PocketDevRoomPages?.open('tasks'), 'co-primary'), button('Room chats', () => window.PocketDevRoomPages?.open('chats')));
+    out.push(pages);
     if (host) {
       if (invite) out.push(inviteView());
       if (room.members.length > 1) out.push(el('p', 'co-note', 'To leave as host, hand the room over to another device first.'));
