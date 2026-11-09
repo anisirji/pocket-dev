@@ -91,6 +91,7 @@ export class Tab {
     await pause(250);
   }
   async click(selector) {
+    for (let i = 0; i < 40 && !(await this.eval(`!!document.querySelector(${JSON.stringify(selector)})`)); i++) await pause(150);
     const ok = await this.eval(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; e.click(); return true; })()`);
     if (!ok) throw new Error(`nothing to click: ${selector}`);
     await pause(200);
@@ -134,7 +135,7 @@ function sanitiserSource(config) {
   return `(() => {
   const C = ${JSON.stringify(config)};
   const esc = (s) => s.replace(/[.*+?^$()|[\\]{}\\\\]/g, '\\\\$&');
-  const rules = [...C.replace.map(([from, to]) => [new RegExp(esc(from), 'gi'), to]), [/\\b(?:10\\.\\d+|192\\.168|172\\.(?:1[6-9]|2\\d|3[01]))\\.\\d+\\.\\d+\\b/g, C.demoIp], [/\\b(?:127\\.0\\.0\\.1|localhost):\\d+/g, C.demoIp + ':7681'], ...(C.regexes || []).map(([re, to]) => [new RegExp(re, 'g'), to])];
+  const rules = [...C.replace.map(([from, to]) => [new RegExp(esc(from), 'gi'), to]), [/\\b(?:10\\.\\d+|192\\.168|172\\.(?:1[6-9]|2\\d|3[01]))\\.\\d+\\.\\d+\\b/g, C.demoIp], [/\\b(?:127\\.0\\.0\\.1|localhost):\\d+/g, C.demoIp + ':7681'], [/\\b127\\.0\\.0\\.1\\b/g, '192.168.1.42'], [new RegExp(esc(C.demoIp) + ':\\\\d{4,5}', 'g'), C.demoIp + ':7681'], ...(C.regexes || []).map(([re, to]) => [new RegExp(re, 'g'), to])];
   const scrub = (s) => { let out = s; for (const [re, to] of rules) out = out.replace(re, to); return out; };
   const walk = (root) => {
     if (!root) return;

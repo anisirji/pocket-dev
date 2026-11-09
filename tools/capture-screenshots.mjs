@@ -123,8 +123,12 @@ async function roomShots({ tab, logo }) {
   await tab.clearCookies();
   const base = home.base;
   await tab.cookie(home.cookie, base);
-  const open = async (view) => { await tab.goto(`${base}/`); if (view) await tab.click(`#viewSwitch [data-view=${view}]`); await tab.settle(); };
+  const open = async (view) => {
+    await tab.goto(`${base}/login.html`); await tab.eval('localStorage.clear(); sessionStorage.clear()');
+    await tab.goto(`${base}/`); if (view) await tab.click(`#viewSwitch [data-view=${view}]`); await tab.settle();
+  };
   const openRoom = async () => { await tab.eval(`import('/room-screen.js').then((m) => m.openRoom())`); await tab.settle(); };
+  const chatRow = async (text) => { const ok = await tab.eval(`(() => { const r = [...document.querySelectorAll('.chat-row')].find((x) => x.innerText.includes(${JSON.stringify(text)})); if (r) r.click(); return !!r; })()`); if (!ok) throw new Error(`no chat row ${text}`); };
   const toLabel = async (name) => { await tab.click('#macStatus .ms-label'); await tab.settle(); await tab.clickText(name, '.mc-row'); await tab.settle(); await pause(600); };
   const send = async (s, chat, text) => (await s.call('POST', `/api/chat/${chat}/message`, { text })).status;
   const waitFor = async (fn, ms = 15000) => until(fn, ms);
@@ -135,13 +139,111 @@ async function roomShots({ tab, logo }) {
     if (want('16')) await tab.shot(out('16-room-members.png'));
     if (want('14')) { await tab.clickText('Add a device'); await tab.settle(); await pause(500); await tab.shot(out('14-room-add-device.png')); }
   }
+  if (want('17')) {
+    for (const x of (await home.call('GET', '/api/sessions')).data) await home.call('DELETE', `/api/sessions/${x.id}`);
+    await home.call('POST', '/api/sessions', { cwd: home.demo });
+    await open(); for (const c of ['clear', 'ls', 'git status -sb']) { await tab.type('#cmd', c); await tab.click('#send'); await pause(700); }
+ await tab.click('#macStatus .ms-label'); await tab.settle(); await pause(500); await tab.shot(out('17-switcher.png'));
+  }
+  if (want('18')) {
+    await open(); await toLabel('Studio PC');
+    await tab.click('#viewSwitch [data-view=files]'); await tab.eval(`window.openFiles(${JSON.stringify(path.join(studio.home, 'Projects'))})`); await tab.settle(); await pause(600);
+    await tab.shot(out('18-remote-files.png'));
+  }
+  if (want('19')) {
+    const t = (s, body) => s.request('POST', '/api/room/tasks', { cookie: s.cookie, body });
+    const mk = async (s, title, status, assignee, description) => { const r = await t(s, { title, status, assignee: assignee?.id, description }); if (r.status !== 200) throw new Error(JSON.stringify(r.data)); };
+    await mk(home, 'Ship the dark mode toggle', 'doing', home, 'Toggle in the header, remember the choice.');
+    await mk(home, 'Write the release notes', 'done', null);
+    await mk(studio, 'Render the spring campaign video', 'doing', studio, 'Export at 4K, 30 fps.');
+    await mk(linux, 'Fix the staging certificate', 'todo', linux, 'The cert for staging expires on Friday.');
+    await mk(home, 'Set up CI for the demo app', 'done', home);
+    await until(async () => (await studio.request('GET', '/api/room/tasks', { cookie: studio.cookie })).data.tasks?.length >= 5 || (await studio.request('GET', '/api/room/tasks', { cookie: studio.cookie })).data.length >= 5, 15000);
+    await open(); await openRoom(); await tab.clickText('Tasks'); await tab.settle(); await pause(800);
+    await tab.shot(out('19-tasks.png'));
+  }
   if (want('07')) {
     const id = (await home.call('POST', '/api/chat', { tool: 'claude', cwd: home.demo })).data.id;
     await send(home, id, 'Add a dark mode toggle to the app');
     await waitFor(async () => (await home.call('GET', `/api/chat/${id}`)).data.events.some((e) => /all 12 tests/.test(JSON.stringify(e))));
-    await open('chat'); await tab.click('.chat-row'); await tab.settle(); await pause(800);
+    await open('chat'); await chatRow('dark mode toggle'); await tab.settle(); await pause(800);
     await tab.click('.chat-edit .chat-fold-head'); await pause(400);
     await tab.shot(out('07-chat.png'));
+  }
+  if (want('08')) {
+    const id = (await home.call('POST', '/api/chat', { tool: 'claude', cwd: home.demo })).data.id;
+    await send(home, id, 'Use helpers to write the tests for the settings page in parallel');
+    await waitFor(async () => { const e = (await home.call('GET', `/api/chat/${id}`)).data.events; return e.some((x) => x.id === 'toolu_h2' && x.steps >= 1); });
+    await open('chat'); await chatRow('Use helpers'); await tab.settle(); await pause(800);
+    await tab.click('.chat-work-head'); await pause(500);
+    await tab.shot(out('08-chat-agents.png'));
+  }
+  if (want('09')) {
+    const upload = async (s, name, bytes) => {
+      const r = await fetch(`${s.base}/api/messages/files`, { method: 'POST', headers: { cookie: s.cookie, 'x-pocket-dev': '1', 'x-filename': name, 'content-type': 'image/png' }, body: bytes });
+      if (r.status !== 201) throw new Error(`upload ${r.status}`);
+      return (await r.json()).id;
+    };
+    const say = async (s, text, files = []) => { const r = await s.call('POST', '/api/messages', { text, files }); if (r.status !== 201) throw new Error(JSON.stringify(r.data)); await pause(400); };
+    await say(studio, 'Location scout from this morning, golden hour looks perfect', [await upload(studio, 'golden-hour.png', picture)]);
+    await say(home, 'Love it. Can you send the 4K export when it is ready?');
+    await say(studio, 'Rendering now, about ten minutes.');
+    await until(async () => JSON.stringify((await home.call('GET', '/api/messages')).data).includes('golden-hour'), 15000);
+    await open('messages'); await tab.click('.mx-row'); await tab.settle(); await pause(900);
+    await tab.shot(out('09-messages.png'));
+  }
+  if (want('20')) {
+    const id = (await studio.call('POST', '/api/chat', { tool: 'claude', cwd: path.join(studio.home, 'Projects', 'campaign-site') })).data.id;
+    await send(studio, id, 'Add a dark mode toggle to the landing page');
+    await waitFor(async () => (await studio.call('GET', `/api/chat/${id}`)).data.events.some((e) => /all 12 tests/.test(JSON.stringify(e))));
+    await waitFor(async () => JSON.stringify((await home.request('GET', '/api/room/chats', { cookie: home.cookie })).data).includes('dark mode'), 20000);
+    await open(); await openRoom(); await tab.clickText('Room chats'); await tab.settle(); await pause(600);
+    await tab.click('.rp-chat'); await tab.settle(); await pause(900);
+    await tab.click('.chat-edit .chat-fold-head').catch(() => {}); await pause(300);
+    await tab.shot(out('20-room-chats.png'));
+  }
+  if (want('21') || want('22') || want('23')) {
+    fs.mkdirSync(path.join(home.home, 'Downloads', 'old_videos'), { recursive: true });
+    fs.writeFileSync(path.join(home.home, 'Downloads', 'old_videos', 'clip-01.mov'), 'x');
+    await home.api('PUT', `/modes/${studio.id}`, { mode: 'ask' });
+    await home.api('PUT', `/modes/${linux.id}`, { mode: 'read-only' });
+    studio.to(home, 'POST', '/api/files/trash', { paths: [path.join(home.home, 'Downloads', 'old_videos')] }).catch(() => {});
+    await until(async () => (await home.api('GET', '/approvals')).data.pending.length >= 1, 15000);
+  }
+  if (want('21')) {
+    await open(); await openRoom(); await tab.clickText('Approvals'); await tab.settle(); await pause(600);
+    await tab.shot(out('21-approvals.png'));
+  }
+  if (want('22')) {
+    await open(); await openRoom(); await tab.click('.rs-perm summary'); await tab.settle(); await pause(600);
+    await tab.clickText('Change'); await tab.settle(); await pause(400);
+    await tab.shot(out('22-permissions.png'));
+  }
+  if (want('23')) {
+    const r = await home.api('PUT', `/modes/${linux.id}`, { mode: 'bypass', bypassHours: 2 });
+    if (r.status !== 200) throw new Error(`bypass: ${JSON.stringify(r.data)}`);
+    for (const x of (await home.call('GET', '/api/sessions')).data) await home.call('DELETE', `/api/sessions/${x.id}`);
+    await home.call('POST', '/api/sessions', { cwd: home.demo });
+    await open(); for (const c of ['clear', 'ls', 'git status -sb']) { await tab.type('#cmd', c); await tab.click('#send'); await pause(700); }
+    await pause(1500);
+    await tab.shot(out('23-bypass-banner.png'));
+    await home.api('PUT', `/modes/${linux.id}`, { mode: 'ask' });
+  }
+  if (want('24')) {
+    const mine = (await home.call('GET', '/api/settings')).data.currentDeviceId;
+    await home.local('POST', '/api/collaborators/enable', { adminDeviceIds: [mine] });
+    await open(); await tab.click('#settingsBtn'); await tab.settle();
+    await tab.clickText('Invite someone'); await tab.settle(); await pause(600);
+    await tab.eval(`[...document.querySelectorAll('h2,h3,.sec-title,div')].find((e) => e.children.length === 0 && e.textContent.trim().toUpperCase() === 'COLLABORATORS')?.scrollIntoView({ block: 'start' })`); await pause(400);
+    await tab.shot(out('24-collaborators.png'));
+  }
+  if (want('25')) {
+    const admin = await Tab.open(chrome, { width: 1100, height: 900, mobile: false });
+    await admin.install(config);
+    await admin.goto(home.admin + '/'); await pause(1500); await admin.settle();
+    await admin.clickText('Skip for now').catch(() => {}); await pause(600);
+    await admin.shot(out('25-admin.png'));
+    admin.close();
   }
 }
 

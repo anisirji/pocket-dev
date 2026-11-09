@@ -77,15 +77,19 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   }
   if (text.includes('helpers')) {
     // Two helper agents and a todo list; the second helper's tool calls are tagged with its parent's id.
+    // "in parallel" is the documentation variant: nicer names, and both helpers keep working.
+    const docs = text.includes('in parallel');
     const use = (id, name, input, parent = null) => send({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', model: 'fake', content: [{ type: 'tool_use', id, name, input }] }, parent_tool_use_id: parent, session_id: session });
-    use('toolu_todo', 'TodoWrite', { todos: [{ content: 'Write plan', status: 'completed', activeForm: 'Writing plan' }, { content: 'Build it', status: 'in_progress', activeForm: 'Building' }] });
-    use('toolu_h1', 'Agent', { description: 'Search the codebase', prompt: 'look' });
-    use('toolu_h2', 'Agent', { description: 'Write the tests', prompt: 'write' });
-    use('toolu_c1', 'Read', { file_path: '/tmp/a.js' }, 'toolu_h1');
-    use('toolu_c2', 'Grep', { pattern: 'needle' }, 'toolu_h1');
-    use('toolu_c3', 'Bash', { command: 'npm test' }, 'toolu_h2');
-    after(700, () => send({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_h1', content: 'found it' }] }, parent_tool_use_id: null, session_id: session }));
-    after(text.includes('linger') || text.includes('in parallel') ? 60000 : 900, () => { assistant('helpers done'); result(); });
+    use('toolu_todo', 'TodoWrite', { todos: docs
+      ? [{ content: 'Find the untested code', status: 'completed', activeForm: 'Finding untested code' }, { content: 'Write the unit tests', status: 'in_progress', activeForm: 'Writing unit tests' }, { content: 'Review the coverage report', status: 'pending', activeForm: 'Reviewing coverage' }]
+      : [{ content: 'Write plan', status: 'completed', activeForm: 'Writing plan' }, { content: 'Build it', status: 'in_progress', activeForm: 'Building' }] });
+    use('toolu_h1', 'Agent', { description: docs ? 'Check the date helpers' : 'Search the codebase', prompt: 'look' });
+    use('toolu_h2', 'Agent', { description: docs ? 'Write tests for the settings page' : 'Write the tests', prompt: 'write' });
+    use('toolu_c1', 'Read', { file_path: docs ? 'src/utils.js' : '/tmp/a.js' }, 'toolu_h1');
+    use('toolu_c2', 'Grep', { pattern: docs ? 'clamp' : 'needle' }, 'toolu_h1');
+    use('toolu_c3', 'Bash', { command: docs ? 'npm test -- Settings' : 'npm test' }, 'toolu_h2');
+    if (!docs) after(700, () => send({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_h1', content: 'found it' }] }, parent_tool_use_id: null, session_id: session }));
+    after(text.includes('linger') || docs ? 60000 : 900, () => { assistant('helpers done'); result(); });
     return;
   }
   assistant('first answer');
