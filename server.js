@@ -813,7 +813,7 @@ function servePage(req, res, pathname) {
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
-const forward = createForward({ room, auth, collaborators, sendJson, modes, guard: peerGuard });
+const forward = createForward({ room, auth, collaborators, sendJson, modes, guard: peerGuard, answerMs: Number(process.env.POCKET_DEV_FORWARD_ANSWER_MS) || undefined, writeAnswerMs: Number(process.env.POCKET_DEV_FORWARD_WRITE_MS) || undefined });
 
 const server = http.createServer(async (req, res) => {
   if (insecureRemote(req)) {
