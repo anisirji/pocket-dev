@@ -131,34 +131,103 @@ function laneSvg(row, lanes) {
 
 const REF_ORDER = { head: 0, branch: 1, tag: 2, remote: 3 };
 // A remote branch sitting on the same commit as its local branch adds nothing but width on a phone.
-function refChips(refs) {
+function refChips(refs, onChip) {
   const local = new Set(refs.filter((r) => r.kind === 'head' || r.kind === 'branch').map((r) => r.name));
   return refs.filter((r) => r.kind !== 'remote' || !local.has(r.name.slice(r.name.indexOf('/') + 1)))
     .sort((a, b) => REF_ORDER[a.kind] - REF_ORDER[b.kind])
-    .map((r) => el('span', { class: `g-ref ${r.kind}` }, r.kind === 'tag' ? `# ${r.name}` : r.name));
+    .map((r) => el('span', {
+      class: `g-ref ${r.kind}${onChip ? ' tap' : ''}`,
+      ...(onChip && { role: 'button', onclick: (e) => { e.stopPropagation(); onChip(r); } }),
+    }, r.kind === 'tag' ? `# ${r.name}` : r.name));
 }
 
-function commitRow(row, lanes, open) {
+function commitRow(row, lanes, open, onChip) {
   const { commit } = row;
   const graphCell = el('span', { class: 'g-lanes' });
   graphCell.innerHTML = laneSvg(row, lanes);
   return el('button', { class: 'g-commit', onclick: () => open(commit) },
     graphCell,
     el('span', { class: 'g-commit-text' },
-      el('span', { class: 'g-line1' }, ...refChips(commit.refs), el('span', { class: 'g-subject' }, commit.subject)),
+      el('span', { class: 'g-line1' }, ...refChips(commit.refs, onChip && ((ref) => onChip(ref, commit))), el('span', { class: 'g-subject' }, commit.subject)),
       el('span', { class: 'g-line2' }, `${commit.author} · ${ago(commit.time)} · `, el('code', {}, short(commit.hash)))));
 }
 
+// A bottom sheet of actions. Tapping outside it, or Cancel, closes it and does nothing.
+function sheet(title, rows, extra) {
+  const close = () => overlay.remove();
+  const overlay = el('div', { class: 'g-sheet', onclick: (e) => { if (e.target === overlay) close(); } },
+    el('div', { class: 'g-sheet-box', role: 'dialog', 'aria-label': title },
+      el('div', { class: 'g-sheet-title' }, title),
+      extra,
+      ...rows.map((r) => el('button', { class: `g-sheet-row${r.danger ? ' danger' : ''}`, onclick: () => { close(); r.run(); } }, r.label)),
+      el('button', { class: 'g-sheet-row cancel', onclick: close }, 'Cancel')));
+  root.append(overlay);
+}
+
+// Runs a change, then reloads the screen with what happened. Every other screen reloads when it is next shown.
+async function act(screen, route, body, said) {
+  try {
+    screen.flash = notice('ok', said(await post(route, body)));
+  } catch (err) {
+    screen.flash = notice('error', err.message);
+  }
+  for (const stack of Object.values(stacks)) for (const st of stack) st.stale = st !== screen;
+  refresh(screen);
+}
+
+function newBranchSheet(screen, commit) {
+  const name = el('input', { class: 'g-input', type: 'text', placeholder: 'New branch name', autocapitalize: 'off', autocomplete: 'off', spellcheck: 'false', enterkeyhint: 'done' });
+  sheet(`New branch at ${short(commit.hash)}`, [
+    { label: 'Create and switch', run: () => act(screen, 'branch', { name: name.value, from: commit.hash }, (r) => `Created and switched to ${r.branch}.`) },
+  ], name);
+  name.focus();
+}
+
+function chipMenu(screen, ref, commit) {
+  const rows = [];
+  if (ref.kind === 'branch' || ref.kind === 'remote') {
+    rows.push({ label: `Switch to ${ref.name}`, run: () => act(screen, 'switch', { name: ref.name }, (r) => `Switched to ${r.branch}.`) });
+  }
+  rows.push({ label: 'New branch from here…', run: () => newBranchSheet(screen, commit) });
+  rows.push({ label: 'View this commit', run: () => push('commit', { hash: commit.hash, title: short(commit.hash) }) });
+  sheet(ref.kind === 'head' ? `${ref.name} (you are on this branch)` : ref.name, rows);
+}
+
+function stashSheet(screen, st) {
+  const label = `stash@{${st.index}}`;
+  const once = (route, verb) => () => act(screen, route, { index: st.index }, () => `${verb} ${label}.`);
+  sheet(`${label}: ${st.message}`, [
+    { label: 'Apply (keep the stash)', run: once('stash/apply', 'Applied') },
+    { label: 'Pop (apply, then remove)', run: once('stash/pop', 'Applied and removed') },
+    { label: 'Drop…', danger: true, run: () => sheet(`Drop ${label}?`, [{ label: 'Drop it for good', danger: true, run: once('stash/drop', 'Dropped') }]) },
+  ]);
+}
+
+const stashSection = (screen, list) => (list.length
+  ? section(`Stashes (${list.length})`, list.map((st) => el('button', { class: 'g-file g-stash-row', onclick: () => stashSheet(screen, st) },
+    el('span', { class: 'g-code' }, '⎘'),
+    el('span', { class: 'g-commit-text' },
+      el('span', { class: 'g-line1' }, el('span', { class: 'g-subject' }, st.message)),
+      el('span', { class: 'g-line2' }, `stash@{${st.index}}${st.branch ? ` · on ${st.branch}` : ''} · ${ago(st.time)}`)))))
+  : null);
+
 async function renderGraph(screen) {
-  let { commits, hasMore } = await get('graph', { limit: PAGE });
-  if (!commits.length) return empty('No commits yet.');
+  const flash = screen.flash;
+  screen.flash = null;
+  let [{ commits, hasMore }, st, stashList] = await Promise.all([get('graph', { limit: PAGE }), get('status'), get('stashes')]);
+  const dirty = st.files.length
+    ? el('button', { class: 'g-uncommitted', onclick: () => selectTab('changes') },
+      el('span', { class: 'g-uncommitted-dot' }, '○'),
+      el('span', {}, el('b', {}, 'Uncommitted changes'), ` · ${st.files.length} file${st.files.length === 1 ? '' : 's'}${st.branch ? ` on ${st.branch}` : ''}`))
+    : null;
+  if (!commits.length) return [flash, dirty, empty('No commits yet.')];
   const list = el('div', { class: 'g-graph' });
   const more = el('button', { class: 'g-more' }, 'Load more');
   const open = (commit) => push('commit', { hash: commit.hash, title: short(commit.hash) });
   const draw = () => {
     const rows = layoutGraph(commits);
     const lanes = Math.min(MAX_LANES, Math.max(...rows.map((r) => r.width)));
-    list.replaceChildren(...rows.map((row) => commitRow(row, lanes, open)));
+    list.replaceChildren(...rows.map((row) => commitRow(row, lanes, open, (ref, commit) => chipMenu(screen, ref, commit))));
     more.hidden = !hasMore;
   };
   more.onclick = async () => {
@@ -176,7 +245,7 @@ async function renderGraph(screen) {
     more.textContent = 'Load more';
   };
   draw();
-  return [list, more];
+  return [flash, dirty, stashSection(screen, stashList), list, more];
 }
 
 const STATUS_NAMES = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed', C: 'copied', T: 'type changed', U: 'conflict' };
@@ -217,14 +286,64 @@ const CHANGE_GROUPS = [
   { title: 'Untracked', source: 'untracked', pick: (f) => f.untracked, code: () => '?' },
 ];
 
-async function renderChanges() {
-  const s = await get('status');
+const plural_ = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+// One card for the common case: commit everything and push it, or push what is already committed.
+function commitCard(screen, s) {
+  const files = s.files.length;
+  if (!files && !(s.branch && (s.ahead > 0 || !s.upstream))) return null;
+  const target = s.upstream ?? `origin/${s.branch}`;
+  const message = files ? el('textarea', { class: 'g-input', rows: 2, placeholder: 'Commit message', enterkeyhint: 'done' }) : null;
+  const msg = el('div', {});
+  const buttons = [];
+  let stashButton = null;
+  const run = async (button, route, payload) => {
+    for (const b of buttons) b.disabled = true;
+    const label = button.textContent;
+    button.textContent = 'Working…';
+    msg.replaceChildren();
+    try {
+      const r = await post(route, payload);
+      const said = r.committed
+        ? r.pushed ? `Committed ${r.commit} and pushed ${r.branch}.` : r.pushError ? '' : `Committed ${r.commit}.`
+        : `Pushed ${r.branch}.`;
+      screen.flash = r.pushError
+        ? notice('warn', `Committed ${r.commit}, but the push failed: ${r.pushError}`)
+        : notice('ok', said);
+      for (const st of stacks[state.tab]) st.stale = st !== screen;
+      refresh(screen);
+    } catch (err) {
+      for (const b of buttons) b.disabled = false;
+      button.textContent = label;
+      msg.replaceChildren(notice('error', err.message));
+    }
+  };
+  if (files) {
+    const both = el('button', { class: 'g-btn primary', onclick: (e) => run(e.currentTarget, 'commit', { message: message.value, push: true }) }, 'Commit & push');
+    const only = el('button', { class: 'g-btn', onclick: (e) => run(e.currentTarget, 'commit', { message: message.value, push: false }) }, 'Commit only');
+    buttons.push(both, only);
+    stashButton = el('button', { class: 'g-btn g-stash-btn', onclick: () => act(screen, 'stash', { message: message.value }, () => 'Stashed. The working tree is clean.') }, 'Stash changes instead');
+  } else {
+    buttons.push(el('button', { class: 'g-btn primary', onclick: (e) => run(e.currentTarget, 'push', {}) },
+      s.upstream ? `Push ${plural_(s.ahead, 'commit')}` : 'Push branch to origin'));
+  }
+  return el('div', { class: 'g-card g-save' },
+    files ? el('div', { class: 'g-save-note' }, `All ${plural_(files, 'change')} will be committed on `, el('b', {}, s.branch ?? 'a detached HEAD'), s.branch ? `, then pushed to ${target}.` : '.') : null,
+    message, msg, el('div', { class: 'g-btnrow' }, buttons), stashButton);
+}
+
+async function renderChanges(screen) {
+  const flash = screen.flash;
+  screen.flash = null;
+  const [s, stashList] = await Promise.all([get('status'), get('stashes')]);
   const sync = s.upstream
     ? el('span', { class: 'g-sync' }, s.upstream, ' ', el('b', { class: s.ahead ? 'ahead' : '' }, `↑${s.ahead}`), ' ', el('b', { class: s.behind ? 'behind' : '' }, `↓${s.behind}`))
     : el('span', { class: 'g-sync' }, 'no upstream');
   const head = el('div', { class: 'g-card g-branch' }, el('span', { class: 'g-ref head' }, s.branch ?? 'detached HEAD'), sync);
-  if (!s.files.length) return [head, empty('Working tree clean.')];
-  return [head, ...CHANGE_GROUPS.map((g) => {
+  const card = commitCard(screen, s);
+  const stashes = stashSection(screen, stashList);
+  if (!s.files.length) return [flash, head, card, empty('Working tree clean.'), stashes];
+  return [flash, head, card, stashes, ...CHANGE_GROUPS.map((g) => {
     const files = s.files.filter(g.pick);
     if (!files.length) return null;
     return section(`${g.title} (${files.length})`, files.map((f) => fileRow({
@@ -534,6 +653,11 @@ function selectTab(tab) {
   tabBar.replaceChildren(...Object.entries(TABS).map(([key, label]) => el('button', { class: key === tab ? 'on' : '', onclick: () => selectTab(key) }, label)));
   if (!stacks[tab].length) push(tab);
   show();
+  const shown = top();
+  if (shown?.stale) {
+    shown.stale = false;
+    refresh(shown);
+  }
 }
 
 function selectRepo(repo) {

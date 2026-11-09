@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { platform } from './platform.js';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 
@@ -12,7 +13,7 @@ export const STOP_GRACE_MS = 5000;
 const POLL_MS = 100;
 const TOOL_LABELS = { claude: 'Claude', codex: 'Codex' };
 
-export const NOT_FOUND = "Couldn't find the program that has this conversation open. Close it on the Mac, then try again.";
+export const NOT_FOUND = `Couldn't find the program that has this conversation open. Close it on ${platform.host.the}, then try again.`;
 
 // Only these programs write conversations. Everything else that mentions an id (grep, tail, an editor, a shell) is a reader.
 const PROGRAMS = [
@@ -111,6 +112,7 @@ const fixtureFile = () => process.env.POCKET_DEV_PROCESS_FIXTURE;
 
 export async function listProcesses() {
   if (fixtureFile()) return JSON.parse(fs.readFileSync(fixtureFile(), 'utf8')).processes;
+  if (!platform.capabilities().processScan.available) return [];
   const [status, args] = await Promise.all([ps('pid=,ppid=,uid=,stat=,lstart=,comm='), ps('pid=,args=')]);
   return parsePs(status, args);
 }
@@ -207,7 +209,7 @@ export async function stopProcesses(procs, { kill: send, isAlive, sleep, force =
 }
 
 function where(copies) {
-  if (copies.some((c) => c.kind === 'process')) return 'on the Mac';
+  if (copies.some((c) => c.kind === 'process')) return `on ${platform.host.the}`;
   if (copies.some((c) => c.kind === 'terminal')) return 'in a Pocket Dev terminal';
   return 'in a Pocket Dev chat';
 }
@@ -217,7 +219,7 @@ function where(copies) {
 // stops one's engine. `log(type, fields)` writes the security log.
 export function createTakeover({
   listProcesses: list = listProcesses, claudeSessions = () => [], kill: send = kill, isAlive, sleep = sleepFor, now = Date.now,
-  uid = process.getuid(), selfPid = process.pid, log = () => {},
+  uid = process.getuid?.() ?? 0, selfPid = process.pid, log = () => {},
   terminals = () => [], endTerminal = () => false, chats = () => [], releaseChat = async () => false,
 }) {
   isAlive ??= async (proc) => {
@@ -275,7 +277,7 @@ export function createTakeover({
         code: 'still-running', busy, canForce, stopped, remaining: left.map(copyView),
         error: canForce
           ? `${names} did not close when asked. Force quit stops it at once, and its last reply may be lost.`
-          : `${names} did not close. Close it on the Mac, then try again.`,
+          : `${names} did not close. Close it on ${platform.host.the}, then try again.`,
       });
     }
     log('conversation-taken-over', { tool, conversationId: id, pids, stopped: stopped.map((s) => s.kind), force, ...who });

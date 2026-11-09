@@ -21,6 +21,7 @@ export const EVENT_KINDS = {
   'login-failed': 'failure',
   'login-locked': 'failure',
   'qr-expired': 'failure',
+  'qr-created': 'change',
   'device-revoked': 'change',
   'device-blocked': 'change',
   'device-unblocked': 'change',
@@ -46,6 +47,10 @@ export const EVENT_KINDS = {
   'conversation-taken-over': 'change',
   'conversation-takeover-failed': 'failure',
   'messages-cleared': 'change',
+  'room-action': 'change',
+  'room-approval': 'change',
+  'room-mode-changed': 'change',
+  'room-denied': 'failure',
 };
 
 const FILTERS = {

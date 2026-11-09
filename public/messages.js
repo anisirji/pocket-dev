@@ -2,7 +2,7 @@
 // Phones and guest pages call startPhoneMessages (a full-screen view with a live socket); the Admin page calls
 // mountMacMessages (an embedded copy that polls). The server decides who sees what; this file only shows it.
 
-const KIND = { mac: 'Mac', device: 'Device', collaborator: 'Collaborator', guest: 'Guest' };
+const KIND = { mac: 'Admin page', device: 'Device', collaborator: 'Collaborator', guest: 'Guest' };
 const MB = 1024 * 1024;
 const NEAR_BOTTOM = 80;
 
@@ -13,12 +13,31 @@ function el(tag, cls, text) {
   return node;
 }
 const sizeText = (n) => (n >= 1024 * MB ? `${(n / 1024 / MB).toFixed(1)} GB` : n >= MB ? `${(n / MB).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
-const who = (p) => (p.kind === 'mac' ? 'Mac' : p.kind === 'collaborator' || p.kind === 'guest' ? `${p.name} (${p.kind})` : p.name);
+// The Admin page takes part under the name "Mac" in the data; it is shown as what it is, whatever kind of device this is.
+const label = (p) => p.kind === 'mac' ? 'Admin page' : p.name;
+const who = (p) => (p.kind === 'mac' ? 'Admin page' : p.kind === 'collaborator' || p.kind === 'guest' ? `${p.name} (${p.kind})` : p.name);
 function timeText(at) {
   const d = new Date(at);
   const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
 }
+const ICON = {
+  back: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
+  attach: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>',
+  send: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10.2 15 12 3.4 13.8z"/></svg>',
+  tick: '<svg viewBox="0 0 16 11" width="16" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m1.5 5.8 3.4 3.4L11 2.2"/></svg>',
+};
+// WhatsApp's day labels: Today, Yesterday, a weekday inside the last week, then the date.
+function dayLabel(at) {
+  const d = new Date(at), now = new Date();
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86_400_000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return d.toLocaleDateString([], { weekday: 'long' });
+  return d.toLocaleDateString([], { day: 'numeric', month: 'long', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
+}
+const clockText = (at) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
 const extOf = (name) => (/\.([a-z0-9]{1,5})$/i.exec(name)?.[1] ?? 'file').toUpperCase();
 const fileUrl = (f, extra = '') => `/api/messages/files/${f.id}${extra}`;
 
@@ -69,14 +88,16 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
 
   const convo = el('section', 'mx-pane mx-convo-pane');
   const convoHead = el('div', 'mx-head');
-  const back = el('button', 'mx-icon mx-back', '‹');
+  const back = el('button', 'mx-icon mx-back');
+  back.innerHTML = ICON.back;
   back.setAttribute('aria-label', 'All chats');
   back.onclick = () => openChat(null);
   const heading = el('div', 'mx-heading');
   const convoTitle = el('h2', 'mx-title');
   const convoSub = el('span', 'mx-sub');
   heading.append(convoTitle, convoSub);
-  convoHead.append(back, heading);
+  const convoAvatar = el('span', 'mx-avatar');
+  convoHead.append(back, convoAvatar, heading);
   const log = el('div', 'mx-log mx-scroll');
   log.setAttribute('aria-live', 'polite');
   const pill = el('button', 'mx-pill', '↓ New messages');
@@ -86,7 +107,8 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   const error = el('p', 'mx-error');
   error.setAttribute('role', 'alert');
   const form = el('form', 'mx-compose');
-  const attach = el('button', 'mx-icon mx-attach', '📎');
+  const attach = el('button', 'mx-icon mx-attach');
+  attach.innerHTML = ICON.attach;
   attach.type = 'button';
   attach.setAttribute('aria-label', 'Attach files');
   const picker = el('input');
@@ -97,7 +119,9 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   input.rows = 1;
   input.placeholder = 'Message';
   input.setAttribute('aria-label', 'Message');
-  const send = el('button', 'mx-send', 'Send');
+  const send = el('button', 'mx-send');
+  send.innerHTML = ICON.send;
+  send.setAttribute('aria-label', 'Send');
   form.append(attach, picker, input, send);
   const gone = el('p', 'mx-gone', 'This person is no longer in Messages.');
   convo.append(convoHead, log, pill, tray, error, gone, form);
@@ -152,17 +176,17 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   function renderChats() {
     chats.replaceChildren();
     for (const c of chatList()) {
-      const row = el('button', `mx-row${c.id === state.chat ? ' on' : ''}`);
-      const avatar = el('span', `mx-avatar mx-k-${c.kind}`, c.kind === 'group' ? '#' : c.name.slice(0, 1).toUpperCase());
+      const unread = unreadIn(c.id);
+      const row = el('button', `mx-row${c.id === state.chat ? ' on' : ''}${unread ? ' unread' : ''}`);
+      const avatar = el('span', `mx-avatar mx-k-${c.kind}`, c.kind === 'group' ? '#' : label(c).slice(0, 1).toUpperCase());
       const main = el('span', 'mx-row-main');
       const top = el('span', 'mx-row-top');
-      top.append(el('b', 'mx-row-name', c.name), el('span', 'mx-row-kind', c.kind === 'group' ? `${state.people.size + 1} people` : !c.here ? 'No longer here' : c.kind === 'mac' ? '' : KIND[c.kind]));
+      top.append(el('b', 'mx-row-name', label(c)), el('span', 'mx-row-kind', c.kind === 'group' ? `${state.people.size + 1} people` : !c.here ? 'No longer here' : c.kind === 'mac' ? '' : KIND[c.kind]));
       const latest = inChat(c.id).at(-1);
-      const preview = latest ? `${latest.mine ? 'You: ' : c.id === 'everyone' ? `${latest.from.kind === 'mac' ? 'Mac' : latest.from.name}: ` : ''}${latest.text.split('\n')[0] || `📎 ${latest.files.length === 1 ? latest.files[0].name : `${latest.files.length} files`}`}` : 'No messages yet';
+      const preview = latest ? `${latest.mine ? 'You: ' : c.id === 'everyone' ? `${latest.from.kind === 'mac' ? 'Admin page' : latest.from.name}: ` : ''}${latest.text.split('\n')[0] || `📎 ${latest.files.length === 1 ? latest.files[0].name : `${latest.files.length} files`}`}` : 'No messages yet';
       main.append(top, el('span', 'mx-row-preview', preview));
       const side = el('span', 'mx-row-side');
       if (latest) side.append(el('time', 'mx-row-time', timeText(latest.at)));
-      const unread = unreadIn(c.id);
       if (unread) side.append(el('span', 'mx-count', String(unread)));
       row.append(avatar, main, side);
       row.onclick = () => openChat(c.id, true);
@@ -221,12 +245,16 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   const NAME_HUES = [4, 28, 48, 96, 150, 178, 200, 228, 262, 290, 320, 340];
   const nameColor = (id) => `hsl(${NAME_HUES[[...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % NAME_HUES.length]} 70% 66%)`;
 
-  function bubble(m) {
-    const node = el('article', `mx-msg${m.mine ? ' mine' : ''}`);
+  // A run is consecutive messages from one sender on one day; only its first bubble gets the tail and the name.
+  function bubble(m, prev = inChat(m.chat).filter((x) => x.seq < m.seq).at(-1)) {
+    const newDay = !prev || !sameDay(prev.at, m.at);
+    const first = newDay || prev.mine !== m.mine || (!m.mine && prev.from.id !== m.from.id);
+    const node = el('article', `mx-msg${m.mine ? ' mine' : ''}${first ? ' first' : ''}`);
     node.dataset.seq = m.seq;
+    if (newDay) node.append(el('span', 'mx-day', dayLabel(m.at)));
     const body = el('div', 'mx-bubble');
-    if (!m.mine && m.chat === 'everyone') {
-      const from = el('div', 'mx-from', m.from.name);
+    if (!m.mine && m.chat === 'everyone' && first) {
+      const from = el('div', 'mx-from', label(m.from));
       from.style.color = nameColor(m.from.id);
       if (m.from.kind === 'collaborator' || m.from.kind === 'guest') from.append(el('span', 'mx-tag', m.from.kind));
       body.append(from);
@@ -238,7 +266,10 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     more.setAttribute('aria-label', 'Message actions');
     more.setAttribute('aria-haspopup', 'menu');
     more.onclick = () => openMenu(m, more);
-    meta.append(el('time', null, timeText(m.at)), more);
+    const tick = el('span', 'mx-tick');
+    tick.innerHTML = ICON.tick;
+    if (m.origin) { const o = el('span', 'mx-origin', `from ${m.origin.deviceName}`); o.title = 'Sent from another device in your room'; meta.append(o); }
+    meta.append(el('time', null, clockText(m.at)), ...(m.mine ? [tick] : []), more);
     body.append(meta);
     node.append(body);
     // Right-click, and long-press on Android, arrive as contextmenu; iOS Safari has none, so touch waits itself.
@@ -300,7 +331,7 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     items[0].focus({ preventScroll: true });
   }
   async function drop(m, everyone) {
-    if (everyone && !confirm('Delete this message for everyone? Its files are deleted from the Mac too.')) return;
+    if (everyone && !confirm('Delete this message for everyone? Its files are deleted from the device too.')) return;
     try {
       await api(everyone ? 'DELETE' : 'POST', everyone ? `/api/messages/${m.seq}` : `/api/messages/${m.seq}/hide`, everyone ? undefined : {});
       remove([m.seq]);
@@ -350,8 +381,10 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     root.classList.toggle('mx-in-chat', state.chat !== null);
     if (state.chat === null) return;
     const c = chatList().find((x) => x.id === state.chat) ?? { id: state.chat, name: 'Chat', kind: 'group', here: false };
-    convoTitle.textContent = c.name;
-    convoSub.textContent = c.kind === 'group' ? `Everyone in Messages · ${state.people.size + 1} people` : !c.here ? 'No longer here' : c.kind === 'mac' ? 'The Admin page on the Mac' : KIND[c.kind];
+    convoTitle.textContent = label(c);
+    convoAvatar.className = `mx-avatar mx-k-${c.kind}`;
+    convoAvatar.textContent = c.kind === 'group' ? '#' : label(c).slice(0, 1).toUpperCase();
+    convoSub.textContent = c.kind === 'group' ? `Everyone in Messages · ${state.people.size + 1} people` : !c.here ? 'No longer here' : c.kind === 'mac' ? 'The Admin page on the device' : KIND[c.kind];
     const open = c.id === 'everyone' || c.here;
     form.hidden = !open;
     tray.hidden = !open;
@@ -361,8 +394,10 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   function rebuildLog() {
     bubbles.clear();
     log.replaceChildren();
+    let prev;
     for (const m of inChat(state.chat)) {
-      const node = bubble(m);
+      const node = bubble(m, prev);
+      prev = m;
       bubbles.set(m.seq, node);
       log.append(node);
     }
@@ -458,8 +493,8 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   // Refusals the server would give, shown before a byte is sent: Cloudflare answers an oversized body with its own page.
   function refusalFor(file) {
     const { fileMax, lowSpace, largeFile, freeBytes, reserveBytes } = state.limits;
-    if (fileMax && file.size > fileMax) return `Over the internet you can send files up to 100 MB. This file is ${sizeText(file.size)}. Connect on the same Wi-Fi as the Mac to send it.`;
-    if (lowSpace && file.size > largeFile) return `Your Mac is low on space (${sizeText(freeBytes)} free). Files over 50 MB are paused until there's more than ${sizeText(reserveBytes)} free. Text and files up to 50 MB still work.`;
+    if (fileMax && file.size > fileMax) return `Over the internet you can send files up to 100 MB. This file is ${sizeText(file.size)}. Connect on the same Wi-Fi as the device to send it.`;
+    if (lowSpace && file.size > largeFile) return `The device is low on space (${sizeText(freeBytes)} free). Files over 50 MB are paused until there's more than ${sizeText(reserveBytes)} free. Text and files up to 50 MB still work.`;
     return null;
   }
 
@@ -635,7 +670,7 @@ export function mountMacMessages(section, { api, toast = () => {} }) {
 
   async function renderStorage() {
     const s = await api('GET', '/api/messages/storage');
-    usage.textContent = `${sizeText(s.usage)} of files · ${sizeText(s.freeBytes)} free on this Mac`;
+    usage.textContent = `${sizeText(s.usage)} of files · ${sizeText(s.freeBytes)} free on this device`;
     storageBody.replaceChildren();
     if (s.lowSpace) storageBody.append(el('p', 'err', `Low on space: files over 50 MB wait until more than ${sizeText(s.reserveBytes)} is free.`));
     for (const c of s.chats) {

@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { findBin, engineEnv, cap, lineDiff, OUTPUT_MAX } from './env.js';
 import { connectCodexRpc } from './codex-rpc.js';
+import { codexLimitNotices } from './limits.js';
 
 const CODEX_BIN = process.env.POCKET_DEV_CODEX || findBin('codex');
 // A binary override keeps tests/custom installations isolated unless they also select a socket.
@@ -106,6 +107,9 @@ const server = {
     if (msg.id != null) {
       if (engine) engine.onRequest(msg.id, msg.method, msg.params);
       else this.write({ id: msg.id, error: { code: -32601, message: `Pocket Dev cannot answer ${msg.method}` } });
+    } else if (msg.method === 'account/rateLimits/updated') {
+      // The limit belongs to the account, so it names no thread: every open Codex chat hears it.
+      for (const open of this.threads.values()) open.onNotification(msg.method, msg.params);
     } else {
       engine?.onNotification(msg.method, msg.params);
     }
@@ -223,6 +227,9 @@ export function createCodexEngine(chat) {
       const len = (outputLen.get(itemId) ?? 0) + delta.length;
       outputLen.set(itemId, len);
       if (len <= OUTPUT_MAX) chat.delta(itemId, 'output', delta);
+    },
+    'account/rateLimits/updated': ({ rateLimits }) => {
+      for (const notice of codexLimitNotices(rateLimits, (chat.limitSeen ??= new Map()))) chat.emit(notice);
     },
     'thread/tokenUsage/updated': ({ tokenUsage }) => { total = tokenUsage.total; },
     'turn/completed': ({ turn }) => {

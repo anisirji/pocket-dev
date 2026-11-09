@@ -1,9 +1,24 @@
 {
-  "name": "pocket-dev",
-  "version": "1.0.0",
+  "name": "@anisirji/pocket-dev",
+  "version": "1.1.0",
+  "description": "Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
+  "author": "anisirji",
+  "license": "ISC",
+  "keywords": [
+    "remote-control",
+    "terminal",
+    "claude-code",
+    "codex",
+    "phone",
+    "self-hosted",
+    "multi-device"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
+    "postinstall": "node scripts/postinstall.js",
     "start": "node server.js",
     "qr": "node scripts/qr.js",
     "admin": "node scripts/admin.js open",
@@ -19,11 +34,6 @@
     "sleep": "scripts/sleep.sh",
     "shutdown": "scripts/shutdown.sh"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "Control your Mac from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
-  "private": true,
   "type": "module",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.139",
@@ -43,10 +53,12 @@
     "README.md",
     "ACCESS.md",
     "docs/CHALLENGES.md",
-    "docs/VALIDATION.md"
+    "LICENSE"
   ],
   "os": [
-    "darwin"
+    "darwin",
+    "linux",
+    "win32"
   ],
   "engines": {
     "node": ">=22"

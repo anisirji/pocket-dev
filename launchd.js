@@ -1,16 +1,11 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { execFile, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { platform } from './platform.js';
 
-const run = promisify(execFile);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 // Tests install a throwaway job under another label; the service scripts read the same variable.
 export const LABEL = process.env.LABEL || 'dev.pocket.server';
-const DOMAIN = `gui/${process.getuid()}`;
-const PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', `${LABEL}.plist`);
 const STARTED_AT = Date.now() - process.uptime() * 1000;
 const CODE_DIRS = ['.', 'chat', 'public', 'scripts'];
 const CODE_FILE = /\.(js|mjs|css|html|sh|json)$/;
@@ -28,59 +23,52 @@ export function updateReady() {
   }
   return newest > STARTED_AT + 1000;
 }
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-async function launchctl(...args) {
-  try {
-    return (await run('launchctl', args)).stdout;
-  } catch {
-    return null;
-  }
-}
-
-// `launchctl print-disabled` lists overrides as `"label" => disabled` (older macOS: `=> true`). No entry means enabled.
+// Whether the background service is installed, set to start at login, and running. On a system with no way to run a
+// service the answer is "not installed" plus `unsupported`, the reason.
 export async function serviceStatus() {
-  const [overrides, job] = await Promise.all([launchctl('print-disabled', DOMAIN), launchctl('print', `${DOMAIN}/${LABEL}`)]);
-  const override = new RegExp(`"${escapeRe(LABEL)}" => (\\w+)`).exec(overrides ?? '')?.[1];
-  const installed = fs.existsSync(PLIST);
-  const pid = Number(/^\tpid = (\d+)$/m.exec(job ?? '')?.[1]) || null;
+  const cap = platform.capabilities().service;
+  const status = cap.available ? await platform.serviceStatus({ label: LABEL }) : { installed: false, autostart: false, running: false, pid: null };
+  const { installed, pid } = status;
   return {
     label: LABEL,
     installed,
-    autostart: installed && override !== 'disabled' && override !== 'true',
-    running: pid !== null,
+    autostart: installed && status.autostart,
+    running: status.running,
     pid,
     // The job runs node directly; a plist from before the power feature ran it under caffeinate, so accept the parent too.
-    isThisServer: pid !== null && (pid === process.pid || pid === process.ppid),
+    // A system that cannot give the pid (the Windows task) marks the service's own process with POCKET_DEV_SERVICE.
+    isThisServer: pid !== null
+      ? pid === process.pid || pid === process.ppid
+      : installed && status.running && process.env.POCKET_DEV_SERVICE === LABEL,
     updateReady: updateReady(),
+    ...(cap.available ? {} : { unsupported: cap.reason }),
   };
 }
 
 // Enabling or disabling changes only what happens at the next login; it never starts or stops the running job.
 export async function setAutostart(enabled) {
-  await run('launchctl', [enabled ? 'enable' : 'disable', `${DOMAIN}/${LABEL}`]);
+  await platform.setAutostart(enabled, { label: LABEL });
 }
 
 export async function installService({ port, force }) {
   try {
-    const { stdout, stderr } = await run(path.join(ROOT, 'scripts', 'install-service.sh'), force ? ['--force'] : [], {
-      cwd: ROOT, env: { ...process.env, LABEL, PORT: String(port) }, timeout: 60_000,
-    });
-    return { ok: true, output: (stdout + stderr).trim() };
+    return { ok: true, output: await platform.installService({ port, force, label: LABEL }) };
   } catch (err) {
-    return { ok: false, output: `${err.stdout ?? ''}${err.stderr ?? ''}`.trim() || err.message };
+    return { ok: false, output: err.output ?? err.message };
   }
 }
 
-// Exiting is the restart: launchd's KeepAlive starts the service again on whatever code is on disk, within about 10 s.
+// Exiting is the restart: the service manager (KeepAlive, Restart=always, the Windows task's loop) starts it again on
+// whatever code is on disk, within about 10 s.
 export function restartThisServer() {
   process.exit(0);
 }
 
-// launchd would restart a service that just exits (KeepAlive), so a service unloads itself instead.
+// The service manager would restart a service that just exits, so a service unloads itself instead.
 export async function stopThisServer() {
   if ((await serviceStatus()).isThisServer) {
-    spawn('launchctl', ['bootout', `${DOMAIN}/${LABEL}`], { detached: true, stdio: 'ignore' }).unref();
+    platform.stopService({ label: LABEL });
   } else {
     process.exit(0);
   }

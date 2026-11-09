@@ -1,5 +1,5 @@
 // The "This Mac" part of the phone's Settings sheet: phone access and starting at login. A phone can disconnect but
-// never connect (once closed, nothing reaches the Mac), and stopping Pocket Dev is left to the Mac's admin page.
+// never connect (once closed, nothing reaches the device), and stopping Pocket Dev is left to the device's admin page.
 // `api(method, url, body)` resolves to the JSON reply and throws an Error carrying the server's message.
 const STYLE = `
 .sv-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 6px 0 12px; }
@@ -34,18 +34,18 @@ function addStyle() {
 export async function renderServiceSection(container, api = window.api) {
   addStyle();
   const err = h('p', 'st-err');
-  const title = h('h3', null, 'This Mac');
+  const title = h('h3', null, 'This device');
 
   const access = h('div', 'sv-row');
   const accessText = h('div', 'sv-text');
-  accessText.append(h('b', 'sv-live', 'Connected'), h('small', null, `Your phone reaches the Mac at ${location.host}.`));
+  accessText.append(h('b', 'sv-live', 'Connected'), h('small', null, `Your phone reaches this device at ${location.host}.`));
   const disconnect = h('button', 'st-btn st-danger', 'Disconnect');
   disconnect.type = 'button';
   disconnect.onclick = async () => {
-    if (!confirm('Disconnect this phone and every other device? You can reconnect only from the Mac.')) return;
+    if (!confirm('Disconnect this phone and every other device? You can reconnect only from the device itself.')) return;
     try {
       await api('POST', '/api/access/disconnect', {});
-      accessText.replaceChildren(h('b', null, 'Disconnected'), h('small', null, 'Reconnect from the admin page on the Mac (npm run admin).'));
+      accessText.replaceChildren(h('b', null, 'Disconnected'), h('small', null, 'Reconnect from the admin page on the device (npm run admin).'));
       disconnect.remove();
     } catch (e) {
       err.textContent = e.message;
@@ -56,7 +56,7 @@ export async function renderServiceSection(container, api = window.api) {
   const auto = h('div', 'sv-row');
   const autoText = h('label', 'sv-text');
   autoText.htmlFor = 'sv-autostart';
-  autoText.append(h('b', null, 'Start automatically when the Mac starts'), h('small', null, "Turning this off doesn't stop Pocket Dev now; it only stays off after the next restart."));
+  autoText.append(h('b', null, 'Start automatically when this device starts'), h('small', null, "Turning this off doesn't stop Pocket Dev now; it only stays off after the next restart."));
   const toggle = h('input', 'sv-switch');
   Object.assign(toggle, { type: 'checkbox', id: 'sv-autostart', disabled: true });
   toggle.setAttribute('role', 'switch');
@@ -92,7 +92,7 @@ export async function renderServiceSection(container, api = window.api) {
     busy = false;
     restartBtn.textContent = 'Restart';
     restartBtn.disabled = false;
-    restartText.lastChild.textContent = 'Pocket Dev has not come back yet. Check the Mac (pocket-dev service status), then try again.';
+    restartText.lastChild.textContent = 'Pocket Dev has not come back yet. Check the device (pocket-dev service status), then try again.';
   }
   // Says what an update will and will not interrupt, so nothing is lost by surprise.
   async function restartWarning() {
@@ -135,13 +135,13 @@ export async function renderServiceSection(container, api = window.api) {
     restartBtn.classList.toggle('sv-update', canRestart && svc.updateReady);
     restartBtn.textContent = svc.updateReady ? 'Update' : 'Restart';
     restartText.lastChild.textContent = !canRestart
-      ? 'Pocket Dev is not running as the background service, so it cannot restart itself. Install the service from the admin page on the Mac.'
-      : svc.updateReady ? 'Newer code is on the Mac. Update to start using it.' : 'Loads the latest code on the Mac. Nothing newer is waiting right now.';
+      ? 'Pocket Dev is not running as the background service, so it cannot restart itself. Install the service from the admin page on the device.'
+      : svc.updateReady ? 'Newer code is on this device. Update to start using it.' : 'Loads the latest code on this device. Nothing newer is waiting right now.';
     toggle.checked = svc.autostart;
     toggle.disabled = !svc.installed;
     autoText.lastChild.textContent = svc.installed
       ? "Turning this off doesn't stop Pocket Dev now; it only stays off after the next restart."
-      : 'Pocket Dev is not installed as a service yet. Install it from the admin page on the Mac (npm run admin).';
+      : 'Pocket Dev is not installed as a service yet. Install it from the admin page on the device (npm run admin).';
   };
   toggle.onchange = async () => {
     err.textContent = '';

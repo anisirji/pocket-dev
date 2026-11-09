@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { claudeLimitNotice } from './limits.js';
 import { findBin, engineEnv, ENGINE_SETTINGS, cap, lineDiff, INPUT_MAX } from './env.js';
 import { saveToolImages, resultText } from './tool-images.js';
 
@@ -240,13 +241,43 @@ export function createClaudeEngine(chat) {
     return { behavior: 'allow', updatedInput: toolInput };
   }
 
+  // A helper agent's own tool calls arrive tagged with the Agent call that started it. They are not shown as events of
+  // their own; the Agent entry counts them and keeps the latest, so the phone can say what each helper is doing.
+  function onHelperMessage(m) {
+    if (m.type !== 'assistant') return;
+    const parent = chat.find(m.parent_tool_use_id);
+    if (!parent) return;
+    const uses = m.message.content.filter((b) => b.type === 'tool_use');
+    if (!uses.length) return;
+    const last = uses.at(-1);
+    chat.update(parent.id, { activeAt: Date.now(), steps: (parent.steps ?? 0) + uses.length, latest: cap(`${last.name} ${summarize(last.name, last.input)}`.trim(), 200) });
+  }
+
+  // A background agent's Agent call returns "launched" at once, so its tool result says nothing about the work. The SDK
+  // reports the real life of the agent as task messages that name the Agent call; they are kept on that call's event as
+  // agentStatus (running, completed, failed, stopped) so the phone can show it for as long as it actually runs.
+  const TASK_STATUS = { completed: 'completed', failed: 'failed', killed: 'stopped', stopped: 'stopped', running: 'running' };
+  function onBackgroundTask(m) {
+    const ev = (m.tool_use_id && chat.find(m.tool_use_id)) || chat.events.find((e) => m.task_id && e.taskId === m.task_id);
+    if (!ev || ev.type !== 'tool-run') return;
+    if (m.subtype === 'task_started') chat.update(ev.id, { taskId: m.task_id, agentStatus: 'running' });
+    else if (m.subtype === 'task_progress') {
+      const latest = cap([m.last_tool_name, m.summary || m.description].filter(Boolean).join(' '), 200);
+      chat.update(ev.id, { taskId: m.task_id, agentStatus: 'running', steps: m.usage?.tool_uses ?? ev.steps, ...(latest && { latest }) });
+    } else if (m.subtype === 'task_updated' && TASK_STATUS[m.patch?.status]) chat.update(ev.id, { agentStatus: TASK_STATUS[m.patch.status] });
+    else if (m.subtype === 'task_notification') chat.update(ev.id, { agentStatus: TASK_STATUS[m.status] ?? 'completed', ...(m.usage && { steps: m.usage.tool_uses }) });
+  }
+
   function onToolUse(block) {
     if (block.name === 'AskUserQuestion') return;
     const { id, name, input: toolInput } = block;
     if (DIFF[name]) {
       chat.emit({ id, type: 'file-edit', path: toolInput.file_path ?? toolInput.notebook_path ?? '', diff: cap(DIFF[name](toolInput)), status: 'running' });
     } else {
-      chat.emit({ id, type: 'tool-run', name, summary: summarize(name, toolInput), input: describeInput(name, toolInput), output: '', status: 'running' });
+      const todos = name === 'TodoWrite' && Array.isArray(toolInput.todos)
+        ? toolInput.todos.slice(0, 50).map((t) => ({ text: cap(String(t.content ?? t.activeForm ?? ''), 200), status: t.status }))
+        : undefined;
+      chat.emit({ id, type: 'tool-run', name, summary: summarize(name, toolInput), input: describeInput(name, toolInput), output: '', status: 'running', ...(todos && { todos }) });
     }
   }
 
@@ -294,12 +325,23 @@ export function createClaudeEngine(chat) {
   }
 
   function onMessage(m) {
-    if (m.parent_tool_use_id) return;
+    if (m.parent_tool_use_id) return onHelperMessage(m);
+    // Claude can work without being asked: a background helper finishing wakes it, and a message sent mid-turn
+    // interrupts the old turn and begins another. Work that arrives with no turn counted is a turn, so the chat shows
+    // Stop and the list says running for as long as Claude is actually working.
+    const working = m.type === 'assistant' || m.type === 'stream_event' || (m.type === 'user' && Array.isArray(m.message?.content));
+    if (working && !chat.turn) chat.startTurn();
     switch (m.type) {
       case 'system':
         if (m.subtype === 'init') chat.setSession(m.session_id);
+        else if (m.subtype.startsWith('task_')) onBackgroundTask(m);
         else if (m.subtype === 'compact_boundary') chat.emit({ type: 'status', text: 'Conversation compacted' });
         return;
+      case 'rate_limit_event': {
+        const notice = claudeLimitNotice(m.rate_limit_info, (chat.limitSeen ??= new Map()));
+        if (notice) chat.emit(notice);
+        return;
+      }
       case 'stream_event':
         return onStreamEvent(m);
       case 'assistant':

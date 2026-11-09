@@ -80,3 +80,36 @@ test('the production phone dispatcher refuses guests and unauthenticated callers
   assert.equal((await call()).status, 403);
   assert.equal(scans, 1, 'only the owner request reaches filesystem navigation');
 });
+
+test('folders sort by name, date modified or date created, ascending or descending', async (t) => {
+  const { home, get } = fixture(t);
+  const dir = path.join(home, 'sorted');
+  for (const name of ['b', 'a', 'c']) fs.mkdirSync(path.join(dir, name), { recursive: true });
+  fs.utimesSync(path.join(dir, 'a'), 3, 3);
+  fs.utimesSync(path.join(dir, 'b'), 1, 1);
+  fs.utimesSync(path.join(dir, 'c'), 2, 2);
+  const names = async (params) => (await get({ path: dir, ...params })).entries.map((e) => e.name);
+  assert.deepEqual(await names(), ['a', 'b', 'c']);
+  assert.deepEqual(await names({ order: 'desc' }), ['c', 'b', 'a']);
+  assert.deepEqual(await names({ sort: 'modified' }), ['b', 'c', 'a']);
+  assert.deepEqual(await names({ sort: 'modified', order: 'desc' }), ['a', 'c', 'b']);
+  assert.equal((await names({ sort: 'created' })).length, 3);
+  assert.deepEqual(await names({ sort: 'bogus' }), ['a', 'b', 'c']);
+  assert.deepEqual(Object.keys((await get({ path: dir, sort: 'modified' })).entries[0]), ['name', 'path']);
+});
+
+test('create makes a folder or an empty file, and refuses bad names and duplicates', async (t) => {
+  const { home, root } = fixture(t);
+  const browse = createFolderBrowser({ home });
+  const make = (body) => browse.create({ parent: home, ...body });
+  assert.equal((await make({ name: ' new dir ', kind: 'folder' })).name, 'new dir');
+  assert.ok(fs.statSync(path.join(home, 'new dir')).isDirectory());
+  await make({ name: 'a.txt', kind: 'file' });
+  assert.equal(fs.readFileSync(path.join(home, 'a.txt'), 'utf8'), '');
+  for (const [body, status] of [[{ name: 'a.txt', kind: 'file' }, 409], [{ name: 'new dir', kind: 'folder' }, 409], [{ name: '../x', kind: 'folder' }, 400],
+    [{ name: '..', kind: 'folder' }, 400], [{ name: '  ', kind: 'folder' }, 400], [{ name: 'x', kind: 'link' }, 400], [{ name: 'x', kind: 'folder', parent: path.join(home, 'a.txt') }, 400],
+    [{ name: 'x', kind: 'folder', parent: path.join(root, 'nope') }, 404]]) {
+    await assert.rejects(make(body), (e) => e.status === status, JSON.stringify(body));
+  }
+  assert.ok(!fs.existsSync(path.join(root, 'x')));
+});

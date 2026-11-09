@@ -238,6 +238,133 @@ async function status({ repo }) {
   return parseStatus(await git(repo, ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all']));
 }
 
+const MESSAGE_MAX = 4000;
+
+// Never forces: a branch that moved on the remote is refused with git's own words and nothing is overwritten.
+async function pushCurrent(repo, { branch, upstream }) {
+  if (!branch) throw new HttpError(400, 'HEAD is detached. Switch to a branch before pushing.');
+  await git(repo, upstream ? ['push'] : ['push', '-u', 'origin', branch], { status: 502, timeout: PUSH_TIMEOUT_MS });
+}
+
+// Stages every change (what the card on the Changes tab says), commits it, and optionally pushes. A failed push leaves
+// the commit in place and says so, because the commit is the part that cannot be redone by tapping again.
+async function commitChanges({ repo, body }) {
+  const message = typeof body.message === 'string' ? body.message.trim() : '';
+  const before = await status({ repo });
+  if (before.files.length) {
+    if (!message) throw new HttpError(400, 'Write a commit message.');
+    if (message.length > MESSAGE_MAX) throw new HttpError(400, `The commit message is longer than ${MESSAGE_MAX} characters.`);
+    await git(repo, ['add', '-A'], { status: 409 });
+    await git(repo, ['commit', '-m', message], { status: 409 });
+  } else if (!(body.push === true && before.ahead > 0)) {
+    throw new HttpError(400, 'Nothing to commit.');
+  }
+  const after = await status({ repo });
+  const commit = (await git(repo, ['rev-parse', '--short', 'HEAD'])).trim();
+  const result = { committed: before.files.length > 0, commit, branch: after.branch, pushed: false };
+  if (body.push === true) {
+    try {
+      await pushCurrent(repo, after);
+      result.pushed = true;
+    } catch (err) {
+      result.pushError = err.message;
+    }
+  }
+  return result;
+}
+
+async function pushOnly({ repo }) {
+  const s = await status({ repo });
+  if (s.upstream && s.ahead === 0) throw new HttpError(400, 'Nothing to push.');
+  await pushCurrent(repo, s);
+  return { pushed: true, branch: s.branch };
+}
+
+const DIRTY = 'You have uncommitted changes. Commit or stash them first.';
+
+async function refExists(repo, ref) {
+  try {
+    await git(repo, ['show-ref', '--verify', '--quiet', ref]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// A local branch is switched to; a branch that exists only on the remote gets a local branch that tracks it.
+// Uncommitted changes are never carried across: the owner stashes or commits first.
+async function switchBranch({ repo, body }) {
+  const name = typeof body.name === 'string' ? body.name : '';
+  if (!name || name.startsWith('-')) throw new HttpError(400, 'Name a branch to switch to.');
+  if ((await status({ repo })).files.length) throw new HttpError(409, DIRTY);
+  if (await refExists(repo, `refs/heads/${name}`)) await git(repo, ['switch', name], { status: 409 });
+  else if (await refExists(repo, `refs/remotes/${name}`)) {
+    const local = name.slice(name.indexOf('/') + 1);
+    if (await refExists(repo, `refs/heads/${local}`)) await git(repo, ['switch', local], { status: 409 });
+    else await git(repo, ['switch', '--track', name], { status: 409 });
+  } else throw new HttpError(400, `Unknown branch: ${name}`);
+  return { branch: (await status({ repo })).branch };
+}
+
+// A new branch at a commit, switched to at once. Changes only come along when the commit is the one already checked out.
+async function createBranch({ repo, body }) {
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (!name || name.startsWith('-')) throw new HttpError(400, 'Give the new branch a name.');
+  await git(repo, ['check-ref-format', '--branch', name]).catch(() => { throw new HttpError(400, `"${name}" is not a valid branch name.`); });
+  const from = body.from === undefined ? 'HEAD' : parseHash(body.from);
+  const target = (await git(repo, ['rev-parse', '--verify', `${from}^{commit}`], { status: 400 })).trim();
+  const head = (await git(repo, ['rev-parse', 'HEAD'])).trim();
+  if (target !== head && (await status({ repo })).files.length) throw new HttpError(409, DIRTY);
+  await git(repo, ['switch', '-c', name, target], { status: 409 });
+  return { branch: name };
+}
+
+const STASH_REF = /^stash@\{(\d+)\}$/;
+const stashIndex = (value) => {
+  if (!Number.isInteger(value) || value < 0 || value > 1000) throw new HttpError(400, 'index must be a stash number');
+  return `stash@{${value}}`;
+};
+
+async function stashes({ repo }) {
+  const out = await git(repo, ['stash', 'list', '--format=%gd%x1f%H%x1f%P%x1f%ct%x1f%gs']);
+  return out.split('\n').filter(Boolean).map((line) => {
+    const [ref, hash, parents, time, subject] = line.split('\x1f');
+    return {
+      index: Number(STASH_REF.exec(ref)?.[1]),
+      hash,
+      base: parents.split(' ')[0] ?? null,
+      time: Number(time),
+      message: subject.replace(/^(On|WIP on) [^:]+: /, ''),
+      branch: /^(?:On|WIP on) ([^:]+):/.exec(subject)?.[1] ?? null,
+    };
+  });
+}
+
+// Untracked files go in too, so a stash leaves a clean tree.
+async function stashPush({ repo, body }) {
+  if (!(await status({ repo })).files.length) throw new HttpError(400, 'No changes to stash.');
+  const message = typeof body.message === 'string' ? body.message.trim().slice(0, 200) : '';
+  await git(repo, ['stash', 'push', '--include-untracked', ...(message ? ['-m', message] : [])], { status: 409 });
+  return { stashed: true };
+}
+
+// git prints a page when a stash does not apply cleanly; say it in a line and name the files.
+const stashAction = (verb) => async ({ repo, body }) => {
+  try {
+    await git(repo, ['stash', verb, stashIndex(body.index)], { status: 409 });
+  } catch (err) {
+    const overlap = /would be overwritten by (?:merge|checkout)/.test(err.message);
+    if (overlap) {
+      const named = [...err.message.matchAll(/^\t(.+)$/gm)].map((m) => m[1].trim());
+      throw new HttpError(409, `Your uncommitted changes overlap with the stash${named.length ? ` (${named.join(', ')})` : ''}. Commit or stash them first.`);
+    }
+    const files = [...new Set([...err.message.matchAll(/CONFLICT \([^)]*\): .*? in (.+)/g)].map((m) => m[1].trim()))];
+    if (!files.length) throw err;
+    throw new HttpError(409, `The stash conflicts with the current files: ${files.join(', ')}. The conflicts are marked inside them (see Changes), and the stash is kept.`);
+  }
+  return { ok: true, verb };
+};
+
 async function defaultBranch(repo) {
   try {
     const { defaultBranchRef } = await ghJson(repo, ['repo', 'view', '--json', 'defaultBranchRef']);
@@ -389,6 +516,15 @@ const ROUTES = {
   'GET prs': prs,
   'GET pr': pr,
   'GET pr/diff': prDiff,
+  'POST commit': commitChanges,
+  'POST switch': switchBranch,
+  'POST branch': createBranch,
+  'GET stashes': stashes,
+  'POST stash': stashPush,
+  'POST stash/apply': stashAction('apply'),
+  'POST stash/pop': stashAction('pop'),
+  'POST stash/drop': stashAction('drop'),
+  'POST push': pushOnly,
   'POST prs': createPr,
   'POST pr/review': reviewPr,
   'POST pr/merge': mergePr,

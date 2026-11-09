@@ -1,5 +1,12 @@
 (() => {
   let nextId = 0;
+  const SORT_KEY = 'pocketdev.folderSort';
+  const readSort = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SORT_KEY));
+      return { sort: ['name', 'modified', 'created'].includes(saved?.sort) ? saved.sort : 'name', order: saved?.order === 'desc' ? 'desc' : 'asc' };
+    } catch { return { sort: 'name', order: 'asc' }; }
+  };
   const node = (tag, cls, text) => {
     const element = document.createElement(tag);
     if (cls) element.className = cls;
@@ -12,7 +19,7 @@
     return element;
   };
 
-  function create({ api, onSelect, onCancel = () => {}, onClose = () => {}, selectLabel = 'Select this folder', title = 'Choose a folder on your Mac' }) {
+  function create({ api, onSelect, onCancel = () => {}, onClose = () => {}, selectLabel = 'Select this folder', title = 'Choose a folder on this device' }) {
     const element = node('section', 'fp-browser');
     element.hidden = true;
     element.setAttribute('aria-label', title);
@@ -26,7 +33,32 @@
     const hiddenLabel = node('label', 'fp-hidden');
     const hidden = node('input'); hidden.type = 'checkbox';
     hiddenLabel.append(hidden, node('span', '', 'Hidden folders'));
-    toolbar.append(back, up, hiddenLabel);
+    const sortSelect = node('select', 'fp-sort');
+    sortSelect.setAttribute('aria-label', 'Sort folders by');
+    for (const [value, text] of [['name', 'Name'], ['modified', 'Date modified'], ['created', 'Date created']]) {
+      const option = node('option', '', text); option.value = value; sortSelect.append(option);
+    }
+    const saved = readSort();
+    sortSelect.value = saved.sort;
+    let descending = saved.order === 'desc';
+    const order = button('', () => { descending = !descending; syncOrder(); saveSort(); reload(); }, 'fp-order');
+    const syncOrder = () => {
+      order.textContent = descending ? '↓' : '↑';
+      order.setAttribute('aria-label', descending ? 'Descending. Switch to ascending' : 'Ascending. Switch to descending');
+    };
+    syncOrder();
+    const saveSort = () => { try { localStorage.setItem(SORT_KEY, JSON.stringify({ sort: sortSelect.value, order: descending ? 'desc' : 'asc' })); } catch { /* Private mode keeps the choice for this picker only. */ } };
+    const create_ = button('+ New', () => { newForm.hidden = !newForm.hidden; if (!newForm.hidden) newName.focus(); }, 'fp-new');
+    create_.setAttribute('aria-label', 'Create a new folder or file here');
+    toolbar.append(back, up, sortSelect, order, create_, hiddenLabel);
+    const newForm = node('form', 'fp-newform'); newForm.hidden = true;
+    const newName = node('input', 'fp-newname'); newName.type = 'text'; newName.placeholder = 'Name'; newName.setAttribute('aria-label', 'New item name');
+    newName.autocapitalize = 'off'; newName.autocomplete = 'off'; newName.spellcheck = false;
+    const kindSelect = node('select', 'fp-sort'); kindSelect.setAttribute('aria-label', 'Create a');
+    for (const [value, text] of [['folder', 'Folder'], ['file', 'File']]) { const o = node('option', '', text); o.value = value; kindSelect.append(o); }
+    const make = button('Create', () => submitNew(), 'fp-primary');
+    newForm.append(newName, kindSelect, make);
+    newForm.onsubmit = (event) => { event.preventDefault(); submitNew(); };
     const crumbs = node('nav', 'fp-crumbs'); crumbs.setAttribute('aria-label', 'Folder location');
     const search = node('input', 'fp-search');
     search.type = 'search'; search.placeholder = 'Find a folder here'; search.setAttribute('aria-label', 'Find a folder here');
@@ -43,7 +75,7 @@
     }, 'fp-primary');
     const cancel = button('Cancel', () => { close(); onCancel(); });
     footer.append(selected, cancel, choose);
-    element.append(heading, locations, toolbar, crumbs, search, status, list, footer);
+    element.append(heading, locations, toolbar, newForm, crumbs, search, status, list, footer);
     let current = null, sequence = 0, history = [], timer, opener = null, browsingPath = '';
     const sync = () => {
       back.disabled = !history.length;
@@ -59,7 +91,7 @@
       status.textContent = 'Loading folders…';
       list.replaceChildren();
       try {
-        const params = new URLSearchParams({ ...(path && { path }), ...(hidden.checked && { hidden: '1' }), ...(query && { q: query }) });
+        const params = new URLSearchParams({ ...(path && { path }), ...(hidden.checked && { hidden: '1' }), ...(query && { q: query }), sort: sortSelect.value, order: descending ? 'desc' : 'asc' });
         const data = await api('GET', `/api/folders/browse?${params}`);
         if (request !== sequence || element.hidden) return;
         if (remember && previous && previous.path !== data.path) history.push(previous.path);
@@ -71,10 +103,11 @@
           if (entry.path === data.path) crumb.setAttribute('aria-current', 'location');
           return crumb;
         }));
+        crumbs.scrollLeft = crumbs.scrollWidth;
         locations.replaceChildren(...data.shortcuts.map((entry) => button(entry.name, () => navigate(entry.path))));
         list.replaceChildren(...data.entries.map((entry) => {
           const row = button('', () => navigate(entry.path), 'fp-row');
-          row.append(node('span', 'fp-folder-icon', '▱'), node('span', 'fp-folder-name', entry.name), node('span', 'fp-chevron', '›'));
+          row.append(node('span', 'fp-folder-icon'), node('span', 'fp-folder-name', entry.name), node('span', 'fp-chevron', '›'));
           row.children[0].setAttribute('aria-hidden', 'true'); row.children[2].setAttribute('aria-hidden', 'true');
           row.setAttribute('aria-label', `Open folder ${entry.name}`);
           return row;
@@ -95,11 +128,27 @@
         if (request === sequence) { element.setAttribute('aria-busy', 'false'); sync(); }
       }
     }
+    async function submitNew() {
+      const name = newName.value.trim();
+      if (!current || make.disabled) return;
+      if (!name) { status.textContent = 'Enter a name.'; newName.focus(); return; }
+      const parent = current.path, kind = kindSelect.value;
+      make.disabled = true;
+      try {
+        const made = await api('POST', '/api/folders/create', { parent, name, kind });
+        newName.value = ''; newForm.hidden = true;
+        if (kind === 'folder') { await navigate(made.path); }
+        else { await load(parent, { query: '' }); status.textContent = `Created file ${made.name}`; }
+      } catch (err) { status.textContent = err.message; newName.focus(); }
+      finally { make.disabled = false; }
+    }
     function navigate(path, remember = true) {
       clearTimeout(timer); search.value = '';
       return load(path, { remember });
     }
-    hidden.onchange = () => { clearTimeout(timer); load(browsingPath, { query: search.value.trim() }); };
+    const reload = () => { clearTimeout(timer); load(browsingPath, { query: search.value.trim() }); };
+    hidden.onchange = reload;
+    sortSelect.onchange = () => { saveSort(); reload(); };
     search.oninput = () => {
       clearTimeout(timer);
       const path = browsingPath;
@@ -116,7 +165,7 @@
       opener?.focus();
     }
     return { element, close, open(path, from) {
-      opener = from ?? document.activeElement; history = []; search.value = ''; current = null;
+      opener = from ?? document.activeElement; history = []; search.value = ''; current = null; newForm.hidden = true; newName.value = '';
       element.hidden = false;
       const result = navigate(path || '');
       heading.focus();
@@ -132,7 +181,7 @@
     const caption = node('label', 'fp-label', label); caption.setAttribute('for', input.id);
     const controls = node('div', 'fp-controls');
     let browse;
-    const browser = create({ api, title: `Choose ${label.toLowerCase()} on your Mac`, onClose: () => browse?.setAttribute('aria-expanded', 'false'), onSelect: (path) => {
+    const browser = create({ api, title: `Choose ${label.toLowerCase()} on this device`, onClose: () => browse?.setAttribute('aria-expanded', 'false'), onSelect: (path) => {
       input.value = path;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       return onSelect(path);

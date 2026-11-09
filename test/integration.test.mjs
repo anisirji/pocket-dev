@@ -193,7 +193,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     assert.ok(res.data.cpu.usedPercent === null || (res.data.cpu.usedPercent >= 0 && res.data.cpu.usedPercent <= 100), 'CPU counters remain available independently of top');
     assert.equal(res.data.memory, null);
     assert.equal(res.data.memoryFreePercent, null, 'unreadable memory pressure is unknown, not zero');
-    assert.equal(res.data.pocketDev.version, '1.0.0');
+    assert.equal(res.data.pocketDev.version, JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version, 'the version comes from package.json');
   });
   await t.test('vitals: a light reading with limits and alerts, behind login', async () => {
     assert.equal((await request('GET', '/api/power/vitals')).status, 401);
@@ -412,7 +412,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     const migrated = (await local('GET', '/api/state')).data;
     assert.equal(migrated.devices.find((d) => d.id === currentId).role, 'admin');
     assert.ok(migrated.devices.filter((d) => d.id !== currentId && d.status !== 'blocked').every((d) => d.status === 'pending'));
-    assert.equal((await request('POST', '/api/settings/qr-key', { cookie: A.cookie, body: {} })).status, 403, 'Admin pairing stays Mac-local');
+    assert.equal((await request('POST', '/api/settings/qr-key', { cookie: A.cookie, body: {} })).status, 200, 'an Admin device may make a login QR');
     const passwordLogin = await login();
     assert.equal(passwordLogin.data.pending, true, 'the password never bypasses local Admin review');
     const created = await request('POST', '/api/collaborators', { cookie: A.cookie, body: draft });

@@ -9,22 +9,35 @@
 .fp-browser { min-width: 0; width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
 .fp-browser[hidden] { display: none !important; }
 .fp-heading { display: block; margin-bottom: 10px; font-size: 15px; }
-.fp-locations, .fp-toolbar, .fp-crumbs, .fp-footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.fp-locations { margin-bottom: 10px; }
+.fp-locations, .fp-toolbar, .fp-crumbs, .fp-footer, .fp-newform { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fp-locations, .fp-crumbs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.fp-locations::-webkit-scrollbar, .fp-crumbs::-webkit-scrollbar { display: none; }
+.fp-locations { margin-bottom: 8px; }
+.fp-locations .fp-button, .fp-crumbs .fp-button { flex: none; white-space: nowrap; }
+.fp-locations .fp-button { min-height: 36px; border-radius: 999px; }
+.fp-toolbar .fp-button, .fp-toolbar .fp-sort { min-height: 40px; }
+.fp-newform { margin: 8px 0; padding: 8px; border: 1px dashed var(--line); border-radius: 8px; }
+.fp-newform[hidden] { display: none !important; }
+.fp-browser .fp-newname { flex: 1 1 140px; min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; font-size: 16px; }
+.fp-new { color: var(--accent); }
 .fp-locations .fp-button, .fp-crumbs .fp-button { padding-inline: 9px; font-size: 13px; }
+.fp-browser .fp-sort { min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2, var(--panel)); color: var(--text); font: inherit; font-size: 13px; }
+.fp-order { min-width: 44px; padding-inline: 0; }
 .fp-hidden { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; min-height: 44px; font-size: 13px; }
 .fp-browser .fp-hidden > input { width: 18px; height: 18px; min-height: 0; margin: 0; }
-.fp-crumbs { gap: 2px; margin: 8px 0; max-height: 110px; overflow: auto; }
-.fp-crumbs .fp-button { border-color: transparent; min-width: 0; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.fp-crumbs { gap: 2px; margin: 6px 0; }
+.fp-crumbs .fp-button { min-height: 36px; border-color: transparent; text-align: left; }
+.fp-crumbs .fp-button + .fp-button::before { content: '›'; color: var(--muted); margin-right: 8px; }
 .fp-crumbs [aria-current] { color: var(--accent); }
 .fp-browser .fp-search { display: block; width: 100%; min-width: 0; min-height: 44px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; font-size: 16px; }
 .fp-status { color: var(--muted); margin: 8px 0; font-size: 13px; overflow-wrap: anywhere; }
-.fp-list { max-height: min(36dvh, 320px); overflow: auto; overscroll-behavior: contain; }
-.fp-browser .fp-row { display: flex; width: 100%; justify-content: flex-start; gap: 10px; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; text-align: left; background: transparent; }
-.fp-folder-icon { flex: none; color: var(--accent); font-size: 22px; }
+.fp-list { max-height: min(48dvh, 440px); overflow: auto; overscroll-behavior: contain; }
+.fp-browser .fp-row { display: flex; width: 100%; min-height: 48px; align-items: center; justify-content: flex-start; gap: 12px; padding: 6px 4px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; text-align: left; background: transparent; }
+.fp-folder-icon { flex: none; position: relative; width: 24px; height: 18px; margin-top: 2px; border-radius: 3px 3px 3px 3px; background: var(--accent); opacity: .85; }
+.fp-folder-icon::before { content: ''; position: absolute; left: 0; top: -4px; width: 10px; height: 5px; border-radius: 3px 3px 0 0; background: inherit; }
 .fp-folder-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .fp-chevron { flex: none; color: var(--muted); }
-.fp-footer { margin-top: 12px; }
+.fp-footer { position: sticky; bottom: 0; margin-top: 8px; padding-top: 8px; background: var(--bg); }
 .fp-selected { flex: 1 1 100%; min-width: 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .fp-browser .fp-primary { margin-left: auto; background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
 .co-folder > .fp-field { grid-column: 1 / -1; }
