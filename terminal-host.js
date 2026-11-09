@@ -34,7 +34,7 @@ function main(socketPath) {
   }
 
   function quit() {
-    fs.rmSync(socketPath, { force: true });
+    if (process.platform !== 'win32') fs.rmSync(socketPath, { force: true });
     process.exit(0);
   }
 
@@ -119,7 +119,13 @@ function main(socketPath) {
   });
 
   process.umask(0o077);
-  server.listen(socketPath, () => fs.chmodSync(socketPath, 0o600));
+  // Two hosts started at the same moment both find nobody listening; the one that loses the address has nothing to do.
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') process.exit(0);
+    console.error(`host error: ${err.stack}`);
+  });
+  // A Windows pipe lives in the pipe namespace, not the file system: it has no file to chmod or remove.
+  server.listen(socketPath, () => { if (process.platform !== 'win32') fs.chmodSync(socketPath, 0o600); });
 
   // With nothing running and nobody connected for a while, the host has no reason to stay.
   setInterval(() => {
@@ -144,6 +150,6 @@ if (!socketPath) {
 const probe = net.connect(socketPath);
 probe.once('connect', () => process.exit(0));
 probe.once('error', () => {
-  fs.rmSync(socketPath, { force: true });
+  if (process.platform !== 'win32') fs.rmSync(socketPath, { force: true });
   main(socketPath);
 });
