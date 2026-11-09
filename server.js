@@ -33,6 +33,7 @@ import { createForward } from './forward.js';
 import { createModes } from './modes.js';
 import { createTasks } from './tasks.js';
 import { createRoomSync } from './room-sync.js';
+import { createPeerGuard } from './peer-guard.js';
 import { createFolderBrowser } from './folder-browser.js';
 import { readNetwork, readToken, createSameNetwork } from './network.js';
 import { sameOrigin, fromConnector, clientIp, cookieHost } from './transport.js';
@@ -106,6 +107,7 @@ collaborators = createCollaborators({ config, auth, urls });
 const room = createRoom({ config, urls, grants: collaborators, intervalMs: Number(process.env.POCKET_DEV_ROOM_PING_MS) || undefined });
 const modes = createModes({ room, log: (type, f) => auth.admin.log(type, f), approvalMs: Number(process.env.POCKET_DEV_APPROVAL_MS) || undefined });
 const roomSync = createRoomSync({ room });
+const peerGuard = createPeerGuard();
 const tasks = createTasks({ room, sync: roomSync });
 
 const HOME = os.homedir();
@@ -549,7 +551,10 @@ function readJsonOnce(req) {
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > BODY_MAX) { reject(new Error('body too large')); req.destroy(); return; }
+      if (size > BODY_MAX) {
+        // The rest is read and thrown away (Node's request timeout bounds it) so the reply reaches the sender and the connection stays usable.
+        reject(httpError(413, 'body too large')); req.removeAllListeners('data'); req.resume(); return;
+      }
       chunks.push(c);
     });
     req.on('end', () => {
@@ -614,10 +619,10 @@ async function handleApi(req, res, url) {
   }
 
   // Join codes and room secrets are the credentials for the three peer routes, so another device can use them without a login.
-  if (resource === 'room' && ['ping', 'accept', 'notify'].includes(key) && req.method === 'POST') return room.handleApi(req, res, url, { readJson, sendJson });
+  if (resource === 'room' && ['ping', 'accept', 'notify'].includes(key) && req.method === 'POST') return room.handleApi(req, res, url, { readJson, sendJson, guard: peerGuard });
 
   // Sync between room devices (tasks, messages, chats): the room secret is the credential, same reasoning as the peer routes above.
-  if (resource === 'room' && key === 'sync' && req.method === 'POST') return roomSync.handleApi(req, res, url, { readJson, sendJson });
+  if (resource === 'room' && key === 'sync' && req.method === 'POST') return roomSync.handleApi(req, res, url, { readJson, sendJson, guard: peerGuard });
 
   const authReply = await auth.handleApi(req, url.pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
@@ -808,7 +813,7 @@ function servePage(req, res, pathname) {
   fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
 }
 
-const forward = createForward({ room, auth, collaborators, sendJson, modes });
+const forward = createForward({ room, auth, collaborators, sendJson, modes, guard: peerGuard });
 
 const server = http.createServer(async (req, res) => {
   if (insecureRemote(req)) {
@@ -858,6 +863,7 @@ server.on('upgrade', async (req, socket, head) => {
   const refused = forward.identify(req);
   if (refused) return rejectUpgrade(socket, refused.status, 'Forbidden');
   const target = new URL(req.url, 'http://localhost');
+  forward.watch(req, socket);
   if (forward.isForward(target.pathname)) return forward.upgrade(req, socket, head, target, rejectUpgrade);
   if (target.pathname === '/ws/messages') return messages.handleUpgrade(req, socket, head);
   if (req.roomPeer && /^\/ws\/(chat\/)?[0-9a-f]+$/.test(target.pathname)) {

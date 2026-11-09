@@ -150,7 +150,7 @@ function parseDeviceName(v) {
 }
 
 // Counts wrong passwords per IP address. LOGIN_MAX_FAILURES inside the window lock that address out for one window.
-function createLoginLimiter() {
+export function createLoginLimiter({ max = LOGIN_MAX_FAILURES, windowMs = LOGIN_WINDOW_MS } = {}) {
   const byIp = new Map();
   return {
     lockedForMs(ip) {
@@ -160,12 +160,12 @@ function createLoginLimiter() {
     fail(ip) {
       const now = Date.now();
       const entry = byIp.get(ip) ?? { failures: [], lockedUntil: 0 };
-      entry.failures = entry.failures.filter((t) => now - t < LOGIN_WINDOW_MS);
+      entry.failures = entry.failures.filter((t) => now - t < windowMs);
       entry.failures.push(now);
       byIp.set(ip, entry);
-      if (entry.failures.length < LOGIN_MAX_FAILURES) return false;
+      if (entry.failures.length < max) return false;
       entry.failures = [];
-      entry.lockedUntil = now + LOGIN_WINDOW_MS;
+      entry.lockedUntil = now + windowMs;
       return true;
     },
     succeed(ip) {

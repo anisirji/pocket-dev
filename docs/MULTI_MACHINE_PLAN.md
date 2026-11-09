@@ -88,9 +88,8 @@ Decisions made without the owner; change them here if they are wrong.
 ### Not done or not verified
 
 - Not checked in a browser or on two real machines. Tests run three servers on one Mac over 127.0.0.1.
-- Chat (`/ws/chat/<id>`) and messages (`/ws/messages`) sockets use the same pipe as the terminal socket, but only the terminal socket and a Range download are covered by tests. HTTPS addresses (tunnel) use `https.request` and were not run.
+- HTTPS addresses (tunnel) use `https.request` and were not run. (Chat and messages sockets are now covered, see Hardening.)
 - The pages do not know about `/m/`: absolute `/api/...` and `/ws/...` URLs in the pages, redirects with a `Location` header, and per-machine storage keys all need the shim from step 5 (UI).
-- A kick does not close sockets that are already open through a forward; new requests are refused at once. A front device that is logged out does close its forwarded sockets.
 - Rank lookups on a member use the member list it last got from the host, so a very recent change can take up to one ping interval to reach it. The host checks membership live.
 - An admin peer reaching a device can use the device's collaborator-management routes, as any admin device can (the target owner chose that when granting admin level).
 - If role-based sharing is off on a collaborator-level target, the member gets the usual "expired" answer for guests. The open authentication question above is answered by this design for forwarded requests; a member opening another device's address directly in a browser still has no login there.
@@ -154,12 +153,9 @@ Decisions made without the owner; change them here if they are wrong.
 ### Not done or not verified
 
 - Checked in headless Chrome at 390x844 against three local test servers (this device, an admin device, a collaborator device, one killed to show offline). Not on real hardware or a real phone, not over the tunnel.
-- Not exercised in the browser: Git view and Chat view on a remote device, image downloads and the upload XHR on a remote device (rewrite covered only by unit tests), Messages view.
+- Git, Chat, Messages and Files on a remote device were later checked in headless Chrome (see Hardening). Still not exercised in the browser: image downloads and the upload XHR on a remote device (rewrite covered only by unit tests).
 - `location.replace('/login.html')` calls in individual scripts cannot be patched; they only fire on a real 401 on this device or on 403 from `macstatus.js` for allowed calls.
-- The status strip and battery show the remote device's readings; its text still says "Mac".
 - Ports of a remote device and Settings of a remote device are not reachable from the phone.
-- The `Location` rewrite in `forward.js` has no test.
-- Files and Chat screens cover the header, so the chip is not visible while they are open.
 - `login.html`, `guest.html`, `invite.html` and `admin.html` do not load the shim: login and invite belong to the device that is opened, admin runs on a local-only port.
 
 ## Room pages (built 2026-11-09, branch mm-room-pages)
@@ -207,3 +203,22 @@ Decisions made without the owner; change them if he disagrees.
 - **Summary text.** `modes.js` now puts the folder or file in an approval's one-line summary for mkdir, rename and similar requests (`dir`+`name`, `from`, `dir`, `cwd`, `repo`), so the card can say "Create folder x".
 
 Not verified or left open: the real iPhone Safari (only headless Chrome at 390 x 844 was driven), the bell and sheets with the on-screen keyboard (the bell takes the Tasks button's place in the header while something waits: no room for both at 390 px), a collaborator-level device's own phone (no folder grants were used in the browser run), the assigned person's device going offline mid-answer (the card shows a plain error), and the "Work on" switcher sheet: it opened once by itself during a scripted run after closing Settings; this was not traced to this change.
+
+## Hardening pass (built 2026-11-09, branch mm-harden)
+
+Decisions made without the owner; change them here if they are wrong.
+
+- **Sockets follow the room.** `room.js` has `onChange` (called when members, host or this device's membership change: kick, leave, handover, members list, ping catch-up, drop) and `snapshot()`. `forward.js` keeps every socket that exists because of the room: the pipes it passes on (front and relaying host) and sockets that arrived with a room credential (`forward.watch`, called from the upgrade handler). A socket is closed when the room id or host changed, or when its origin member, or the target of a pipe, is no longer a member. So a kick closes the kicked member's sockets on the host, the front pipe on the kicked device, and the sockets the host opened on another member for it; a handover closes everything that went through the old host (they reconnect through the new one). Plain HTTP requests in flight are not cut.
+- **Host down.** A member's own device keeps working. A request for another device gets a 502 JSON that names the host when it is the host that cannot be reached ("Host, the host, is not reachable right now, so Beta cannot be reached through it.") and returns at once on a refused connection. A target that accepts the connection and then says nothing gets a 502 after 30 s (`answerMs`) counted from when the whole request was handed over, so a slow upload is not cut; an open response is cut after 60 s of silence as before. In the device list a member marks every device except itself offline while the host is offline, because nothing else is reachable.
+- **Abuse limits.** Failed attempts (403) on `/api/room/ping|accept|notify`, `/api/room/sync/*` and on forwarded requests carrying `x-room-*` are counted with the login limiter (`createLoginLimiter`, now exported with parameters) in `peer-guard.js`: 10 failures per address and claimed device (sender, or the joiner's id for a join code), 40 per address whatever it claims; then 429 for the window (15 min, `POCKET_DEV_PEER_LOCK_MS`). A success never clears a count. The lock covers the right secret too, as the login does. A 429 is not treated as "arrived" by the host's outbox, so a kick note is retried. A device that spoofs another's id from the same address can lock that id out from that address only. JSON bodies over 64 KB (all JSON routes) now get a 413 with a reason instead of a reset. All secret comparisons in the room code go through `same()` (timing-safe, on hashes); join codes and tokens are looked up by hash. Forwarded bodies have no limit here (the target applies its own; uploads stream).
+- **Wording.** `PocketMachine.sayFor/say` rewrites "the Mac", "this Mac", "Mac", "your Mac password" in the status strip, the health sheet and the power texts to the remote device's name (to "the device" if the name is not cached yet; it is cached once the list has loaded, so only a hand-set `pd.machine` shows that). Readings (values, the device's own name) are not rewritten.
+- **Chip while Files, Chat or Messages are open.** Those screens cover the header. The status strip stays above them, so its first word is now the switcher: it shows the device name with a small arrow whenever the room has two or more devices (on this device too), and a tap opens the same sheet. The header chip is unchanged.
+
+### Not done or not verified (hardening)
+
+- The tests run three servers over 127.0.0.1, so the per-address limit sees one address; the real address logic (`cf-connecting-ip` through a tunnel) is the login's and is not retested.
+- Headless Chrome at 390x844 on one Mac: Git, Chat list, Messages list and Files on the host as seen from a member, and the switcher opened from Files. Not driven: typing in a chat, the Git diff and Changes tabs, a member to member remote, offline states in the browser, a real phone, the tunnel.
+- The Messages view of a remote device lists the directory entries of that device ("Mac", "Unknown device"); that naming comes from messages.js and was not changed.
+- Role access is covered with each device's phone kept as Admin through the local enable route. A phone left waiting is refused as a front door (tested). Other approval flows between forwarded devices are not tested.
+- Sockets opened by a plain HTTP stream (downloads) are not closed on a kick; the request ends by itself.
+- Flaky: no failure seen in the forwarding tests in three full-file runs while other agents were running suites, but the host-down test relies on timers (1.5 s ping) and could be slow under heavy load; it only gets stricter, not looser, when delayed.
