@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { isIP } from 'node:net';
 import { STATE_DIR } from './paths.js';
+import { findBin } from './chat/env.js';
 
 export const INTERNET_KINDS = ['off', 'quick', 'domain'];
 export const TOKEN_PATH = path.join(STATE_DIR, 'tunnel-token');
@@ -53,7 +54,7 @@ export function writeToken(token) {
   fs.renameSync(tmp, TOKEN_PATH);
 }
 
-export const findCloudflared = () => [process.env.POCKET_DEV_CLOUDFLARED, ...CLOUDFLARED_PATHS].find((p) => p && fs.existsSync(p)) ?? null;
+export const findCloudflared = () => [process.env.POCKET_DEV_CLOUDFLARED, ...CLOUDFLARED_PATHS].find((p) => p && fs.existsSync(p)) ?? findBin('cloudflared');
 
 // The first 64 bits of an IPv6 address as four groups, or null for anything else (IPv4-mapped addresses included).
 export function ipv6Prefix(ip) {
