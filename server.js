@@ -6,7 +6,6 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
-import pty from 'node-pty';
 import { WebSocketServer } from 'ws';
 import { createGitApi } from './git.js';
 import { createHistoryApi } from './history.js';
@@ -25,6 +24,7 @@ import { platform } from './platform.js';
 import { createCollaborators } from './collaborators.js';
 import { captureScreen } from './screen.js';
 import { collectHealth } from './health.js';
+import { getPty, terminalsError } from './pty-loader.js';
 import { collectPerformance } from './performance.js';
 import { createTunnel } from './tunnel.js';
 import { createMessages } from './messages.js';
@@ -299,6 +299,12 @@ function typeWhenIdle(proc, text) {
 // update. If the host cannot start, terminals are plain child processes of this server and end with it.
 let terminalHost = null;
 
+// node-pty is optional. Without it the server runs and everything but terminals works (see pty-loader.js).
+const ptyStatus = await getPty();
+const terminalsView = () => ({ available: ptyStatus.available, reason: ptyStatus.reason, ...(!ptyStatus.available && { hint: ptyStatus.hint, command: ptyStatus.command }) });
+if (!ptyStatus.available) console.warn(`Warning: terminals are off: ${ptyStatus.reason}. Fix: ${ptyStatus.command} (then restart Pocket Dev). Everything else works.`);
+const ptyUnavailable = () => httpError(503, terminalsError(ptyStatus));
+
 function wireSession(session) {
   session.pty.onData((d) => {
     session.activeAt = Date.now();
@@ -312,7 +318,7 @@ function wireSession(session) {
 }
 
 async function connectTerminalHost() {
-  if (process.env.POCKET_DEV_TERMINAL_HOST === 'off') return null;
+  if (process.env.POCKET_DEV_TERMINAL_HOST === 'off' || !ptyStatus.available) return null;
   try {
     const host = await openTerminalHost(STATE_DIR);
     // A host that stops answering took its shells with it; their tabs show as exited instead of hanging.
@@ -349,6 +355,7 @@ async function adoptTerminals() {
 
 // `command`, when given, is typed into the new shell once its prompt is up.
 async function createSession(cwd, base = folderName(cwd), command) {
+  if (!ptyStatus.available) throw ptyUnavailable();
   const shell = platform.defaultShell();
   // launchd and nohup start node without LANG, which makes ls print non-ASCII filenames as ???.
   const env = { ...process.env, LANG: 'en_US.UTF-8', LC_CTYPE: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', TERM: 'xterm-256color' };
@@ -364,7 +371,7 @@ async function createSession(cwd, base = folderName(cwd), command) {
     }
   }
   const remote = proc !== null;
-  proc ??= pty.spawn(shell, platform.shellArgs(shell), { name: 'xterm-256color', cols: 80, rows: 24, cwd, env });
+  proc ??= ptyStatus.pty.spawn(shell, platform.shellArgs(shell), { name: 'xterm-256color', cols: 80, rows: 24, cwd, env });
   const session = {
     id, title, cwd, pty: proc, remote, scrollback: '', clients: new Set(), exitCode: null, startedAt: Date.now(), activeAt: Date.now(),
   };
@@ -660,7 +667,7 @@ async function handleApi(req, res, url) {
     case 'GET performance':
       return sendJson(res, 200, await collectPerformance());
     case 'GET health':
-      return sendJson(res, 200, await collectHealth());
+      return sendJson(res, 200, { ...(await collectHealth()), terminals: { available: ptyStatus.available, reason: ptyStatus.reason } });
     case 'GET screen': {
       if (config.read().screenView === false) return sendJson(res, 403, { error: `Screen view is turned off. On ${platform.host.the}, run: pocket-dev config set screenView true` });
       try {
@@ -671,6 +678,8 @@ async function handleApi(req, res, url) {
         return sendJson(res, 503, { error: err.message });
       }
     }
+    case 'GET terminals':
+      return sendJson(res, 200, terminalsView());
     case 'GET sessions':
       return sendJson(res, 200, [...sessions.values()].map(sessionView));
     case 'POST sessions': {
@@ -793,7 +802,7 @@ const PAGES = {
   '/messages.js': 'messages.js', '/messages.css': 'messages.css',
   '/collaborators.js': 'collaborators.js', '/collaborators.css': 'collaborators.css',
   '/room-pages.js': 'room-pages.js', '/room-pages.css': 'room-pages.css', '/room-screen.js': 'room-screen.js', '/room-invite.js': 'room-invite.js', '/room.css': 'room.css',
-  '/modes-core.js': 'modes-core.js', '/room-modes.js': 'room-modes.js', '/room-modes.css': 'room-modes.css', '/room-approvals.js': 'room-approvals.js', '/room-approvals.css': 'room-approvals.css', '/room-banner.js': 'room-banner.js', '/room-banner.css': 'room-banner.css', '/vendor/qrcode/qrcode.js': 'vendor/qrcode/qrcode.js', '/vendor/jsqr/jsQR.js': 'vendor/jsqr/jsQR.js', '/room-scan.js': 'room-scan.js',
+  '/modes-core.js': 'modes-core.js', '/room-modes.js': 'room-modes.js', '/room-modes.css': 'room-modes.css', '/room-approvals.js': 'room-approvals.js', '/room-approvals.css': 'room-approvals.css', '/room-banner.js': 'room-banner.js', '/room-banner.css': 'room-banner.css', '/vendor/qrcode/qrcode.js': 'vendor/qrcode/qrcode.js', '/vendor/jsqr/jsQR.js': 'vendor/jsqr/jsQR.js', '/room-scan.js': 'room-scan.js', '/terminals-off.js': 'terminals-off.js',
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
 };
 const PUBLIC_PAGES = new Set(['login.html', 'invite.html', 'invite.js', 'guest.css']);
@@ -879,6 +888,7 @@ server.on('upgrade', async (req, socket, head) => {
   if (!sameOrigin(req)) return rejectUpgrade(socket, 403, 'Forbidden');
   const chatMatch = /^\/ws\/chat\/([0-9a-f]{12})$/.exec(pathname);
   if (chatMatch) return chatApi.handleUpgrade(req, socket, head, chatMatch[1], (ws) => auth.trackSocket(device, ws));
+  if (match && !ptyStatus.available) return rejectUpgrade(socket, 503, 'Terminals Not Available');
   const session = match && sessions.get(match[1]);
   if (!session) return rejectUpgrade(socket, 404, 'Not Found');
   wss.handleUpgrade(req, socket, head, (ws) => {

@@ -29,7 +29,7 @@ export const TOOLS = [
   { id: 'gh', title: 'GitHub CLI', level: 'optional', bin: 'gh', status: ['auth', 'status'], login: ['auth', 'login'], why: 'Pull requests in Git.' },
   { id: 'cloudflared', title: 'cloudflared', level: 'optional', bin: 'cloudflared', why: 'The internet link (Cloudflare tunnel).' },
 ];
-export const STEP_IDS = [...TOOLS.map((t) => t.id), 'password', 'network', 'autostart', 'finish'];
+export const STEP_IDS = [...TOOLS.map((t) => t.id), 'terminals', 'password', 'network', 'autostart', 'finish'];
 const toolById = (id) => TOOLS.find((t) => t.id === id);
 
 const NAMES = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' };
@@ -59,13 +59,14 @@ export function assertNoSecret(argv) {
 }
 
 // Resolves { code, stdout, stderr, timedOut, error } and never rejects. `inherit` hands the terminal to the program.
-export function realRun(cmd, args, { timeout = 0, inherit = false, env } = {}) {
+export function realRun(cmd, args, { timeout = 0, inherit = false, env, cwd } = {}) {
   assertNoSecret([cmd, ...args]);
   return new Promise((resolve) => {
     const win = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
     let child;
     try {
-      child = spawn(cmd, args, { stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'], env, shell: win, windowsHide: !inherit });
+      // A shell joins the command and arguments into one line, so a path with a space (C:\Program Files\nodejs\npm.cmd) needs quotes.
+      child = spawn(win && /\s/.test(cmd) ? `"${cmd}"` : cmd, args, { stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'], env, cwd, shell: win, windowsHide: !inherit });
     } catch (error) { return resolve({ code: null, stdout: '', stderr: '', timedOut: false, error }); }
     let stdout = '', stderr = '', timedOut = false, settled = false;
     const done = (r) => { if (!settled) { settled = true; clearTimeout(timer); resolve({ stdout, stderr, timedOut, error: null, ...r }); } };
@@ -389,6 +390,19 @@ async function networkStep(ctx, opts, cloudflaredInstalled) {
   return next;
 }
 
+// Terminals need node-pty, which npm treats as optional so that a failed build never fails the install. Without
+// ctx.terminals (tests, the phone's status) this step does nothing.
+async function terminalsStep(ctx, opts) {
+  if (!ctx.terminals) return true;
+  ctx.out('Terminals (node-pty)');
+  const status = await ctx.terminals.check();
+  if (status.available) { ctx.out(`  ✓ Works: ${status.detail ?? 'a shell started'}.`); return true; }
+  ctx.out(`  ✗ Terminals are not available: ${status.reason}.`);
+  if (opts.dry) { ctx.out('  (dry run: would offer to repair it, same as: pocket-dev doctor --fix)'); return false; }
+  if (!(await yes(ctx, opts, '  Repair it now?'))) { ctx.out('  Skipped. Later: pocket-dev doctor --fix'); return false; }
+  return ctx.terminals.repair({ yes: opts.yes });
+}
+
 async function autostartStep(ctx, opts) {
   ctx.out('Start at login');
   const svc = ctx.service;
@@ -493,6 +507,11 @@ export async function runSetup(args, ctx) {
   if (check) {
     const states = await detectAll(ctx, toolIds);
     checkTable(ctx, states, { ...facts, npmFound: facts.npm !== null });
+    if (ctx.terminals && (!opts.only || opts.only === 'terminals')) {
+      const t = await ctx.terminals.check();
+      ctx.out('');
+      ctx.out(t.available ? '✓ Terminals (node-pty): works' : `✗ Terminals (node-pty): ${t.reason}. Fix: pocket-dev doctor --fix`);
+    }
     const required = states.filter((d) => d.level === 'required');
     const ok = required.every((d) => d.status === 'ok');
     ctx.out('');
@@ -509,7 +528,8 @@ export async function runSetup(args, ctx) {
       const d = await toolStep(ctx, opts, tool, { ...facts, npmFound: facts.npm !== null });
       if (id === 'node') nodeOk = d.status === 'ok';
       if (id === 'cloudflared') cloudflaredReady = d.installed;
-    } else if (id === 'password') await passwordStep(ctx, opts);
+    } else if (id === 'terminals') await terminalsStep(ctx, opts);
+    else if (id === 'password') await passwordStep(ctx, opts);
     else if (id === 'network') {
       cloudflaredReady ??= !!ctx.find(toolById('cloudflared'));
       await networkStep(ctx, opts, cloudflaredReady);
@@ -578,6 +598,12 @@ export async function createRealContext(extra = {}) {
   };
   ctx.saveNetwork = async (network) => (await store()).update({ network });
   ctx.qr = terminalQr;
+  if (!extra.noTerminals) {
+    const doctor = await import('./doctor.js');
+    const defaults = await doctor.doctorDefaults();
+    doctor.withDoctorDefaults(ctx, defaults);
+    ctx.terminals = { check: () => ctx.probeTerminals(), repair: (opts) => doctor.repairTerminals(ctx, opts) };
+  }
   ctx.localApi = async (method, endpoint, body) => (await import('./scripts/local-api.js')).localRequest(method, endpoint, body);
   ctx.remoteUrl = async () => {
     const { url } = JSON.parse(fs.readFileSync(path.join(STATE_DIR, 'admin.json'), 'utf8'));

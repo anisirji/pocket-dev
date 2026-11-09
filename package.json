@@ -18,7 +18,6 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "postinstall": "node scripts/postinstall.js",
     "start": "node server.js",
     "qr": "node scripts/qr.js",
     "admin": "node scripts/admin.js open",
@@ -37,9 +36,11 @@
   "type": "module",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.139",
-    "node-pty": "^1.1.0",
     "qrcode": "^1.5.4",
     "ws": "^8.22.1"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0"
   },
   "bin": {
     "pocket-dev": "bin/pocket-dev.js"

@@ -5,14 +5,14 @@
 import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
-import pty from 'node-pty';
+import { getPty } from './pty-loader.js';
 
 export const PROTOCOL = 1;
 const SCROLLBACK_MAX = 500_000;
 const IDLE_EXIT_MS = Number(process.env.POCKET_DEV_HOST_IDLE_MS) || 10 * 60_000;
 const isDim = (n) => Number.isInteger(n) && n >= 10 && n <= 500;
 
-function main(socketPath) {
+function main(socketPath, pty) {
   const terminals = new Map();
   let client = null;
   let lastSeen = Date.now();
@@ -151,5 +151,10 @@ const probe = net.connect(socketPath);
 probe.once('connect', () => process.exit(0));
 probe.once('error', () => {
   if (process.platform !== 'win32') fs.rmSync(socketPath, { force: true });
-  main(socketPath);
+  // Without node-pty there is nothing to hold; the server falls back to its own message about terminals.
+  getPty().then((status) => {
+    if (status.available) return main(socketPath, status.pty);
+    console.error(`terminal host: ${status.reason}`);
+    process.exit(1);
+  });
 });
