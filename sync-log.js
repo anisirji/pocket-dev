@@ -45,12 +45,13 @@ const valid = (c) => c && typeof c.device === 'string' && Number.isInteger(c.cou
   && c.id === `${c.device}:${c.counter}` && c.at && Number.isFinite(c.at.w) && Number.isFinite(c.at.l)
   && typeof c.type === 'string' && typeof c.key === 'string';
 
-export function createSyncLog({ device, code = defaultCode(device), file = null, now = Date.now } = {}) {
+// `floor`: counters up to this number were used by an earlier copy of this log (a room that was left), so never reuse them.
+export function createSyncLog({ device, code = defaultCode(device), file = null, now = Date.now, floor = 0 } = {}) {
   if (!device) throw new Error('device id required');
   const byId = new Map();
   const cursors = {}; // device -> highest counter n with 1..n all present
   const clock = { w: 0, l: 0 };
-  let own = 0;
+  let own = floor;
   let state = new Map();
   let winners = new Map();
 

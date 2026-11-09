@@ -139,7 +139,9 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
   const announce = (skip) => Promise.all(data.room.members.filter((m) => m.deviceId !== data.deviceId && m.deviceId !== skip)
     .map((m) => tellOrQueue(m, 'members', { hostId: data.room.hostId, members: publicMembers(), revoked: data.room.revoked })));
 
-  function drop() { data.room = null; persist(); reconcile(); }
+  // Whoever keeps data of the room (task, message and chat copies) registers here and wipes it when this device is out.
+  const dropHandlers = [];
+  function drop() { data.room = null; persist(); reconcile(); for (const fn of dropHandlers) fn(); }
 
   async function create(body) {
     if (data.room) fail(409, 'This device is already in a room. Leave it first.');
@@ -374,5 +376,5 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
 
   reconcile();
 
-  return { handleApi, view, tick, isTrustedAdmin: (deviceId) => trustedAdmins().includes(deviceId), grantsReady: () => grantQueue, close: stopTimer, deviceId: () => data.deviceId, peers, authPeer };
+  return { handleApi, view, tick, isTrustedAdmin: (deviceId) => trustedAdmins().includes(deviceId), grantsReady: () => grantQueue, close: stopTimer, deviceId: () => data.deviceId, peers, authPeer, onDrop: (fn) => dropHandlers.push(fn) };
 }
