@@ -241,3 +241,24 @@ Decisions made without the owner after he tried it on real devices; change them 
 - Real phones and a real Windows PC. Headless Chrome 390x844 on one Mac only. Camera tested with Chrome's fake camera fed a Y4M of the invite QR (decoded and filled the field); a real lens, focus and glare were not tested. The "secure page" explanation is covered by a unit test, not shown in a browser on a non-localhost address.
 - Firewall behaviour on Windows. The "host cannot call you back" case is tested with a dead address, not a real firewall.
 - `navigator.share` sheet (the Share button appears in headless Chrome but the system sheet cannot be driven).
+
+## Final UI pass (branch mm-final-ui, 2026-11-09)
+
+Checked in headless Chrome at 360, 390 and 430 px wide by 844, against three real test servers in one room (host, an admin member with a long name, a collaborator), with a Bypass banner, a held approval and two tasks present. Screenshots were read, not only measured.
+
+### Decisions
+- **Device name.** The status strip's first word is now a pill (dot, name, caret, 26 px tall, tap area about 44 px) that opens the same "Work on" sheet. The strip sits above every screen, so the current device is visible on Files, Chat, Messages, Settings and the rest. At home it shows only when the device is in a room; with no room it reads "This device" and does nothing.
+- **Header chip.** Measured: at 360 px the header holds the five view buttons, Resume, Room, Settings and Ports with 4 px to spare, so no chip can keep a readable width there at home. The header chip is therefore shown only while working on another device, where Ports and Settings are hidden and free about 80 px; it has a minimum width of 84 px (94 px at 360, 124 at 390, 160 at 430). Before: a dot and a cut-off letter at 390; kept in `shots/chip-before` of the test run (not in the repo).
+- **Sheet opening by itself.** Not reproduced without a tap: 6 s soak at each width left it closed. Two causes found by reading: (1) the chip appeared asynchronously after the room list loaded and moved the header buttons, so a scripted tap at a stored position hit the chip; the home header no longer changes when the room list loads. (2) The strip name opened the sheet and the rest of the strip opens Device health, so a script tapping the left of the strip got the sheet. The pill is now an obvious separate control. Also: the sheet starts hidden on every page show, closes on `pageshow`, and owns one history entry. Checked: a tap on the right of the strip opens Health and not the sheet; chip tap opens it; back closes it. No in-repo test (the behaviour lives in browser code that node:test cannot run); the wording function is covered by `test/machine.test.mjs`.
+- **Wording.** `PocketMachine.say` now words text for this device too: with the room's name for it ("Home not responding"), or "Device"/"the device" with no room. Literal "Mac" was replaced by "device" in Settings, phone access, restart text, network prompts, Files, Chat, Messages, Resume, folder picker, collaborators and the page-load error messages. Kept as Mac: the Screen Recording hint (a macOS setting), "Open on Mac" in Resume (about a terminal on a Mac), the Admin page notes, login page. The Messages participant named "Mac" in the data is shown as "Admin page".
+- **Back gesture.** The Room sheets, the mode sheets, the approvals inbox, Tasks/Room chats and the device sheet each own one history entry through `pocketDev.overlays`. Checked: back closes the sheet and leaves the Room open; a second back closes the Room.
+- **Keyboard.** One handler in machine.js scrolls a focused field of the Room, Tasks, mode, approvals and device sheets into view after the keyboard appears.
+- **Tap targets.** Tasks status buttons, Bypass "End now", the offline banner button and Settings buttons are 44 px tall. Settings rows keep their own layout.
+- **Mode text.** "This device on X" in Permissions is now "Access for this device" under the heading "On X".
+- **Wrapped, not cut.** Device names wrap in the Room list and Permissions (nothing is lost); they truncate with an ellipsis in the pill, chip, sheet and Tasks.
+
+### Not done or not verified
+- power.js, health.js and the Mac-only words in their texts were left to the Windows work; strings there that do not go through `say()` still say "Mac" ("Shut down Mac", "Keep Mac awake", "Mac health" title).
+- Real keyboard, real Android back, real safe-area insets, and real touch were not exercised; Chrome's touch emulation and `history.back()` stood in.
+- The admin page (this device only) keeps its Mac wording.
+- Settings still has a few 40 px rows from before this project; the new ones are 44 px.
