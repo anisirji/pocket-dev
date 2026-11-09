@@ -1136,7 +1136,10 @@
   // Helper agents and the todo list, pinned above the composer so they stay in view while the log scrolls.
   const HELPERS = new Set(['Agent', 'Task']);
   // A background agent's call finishes at once; the SDK's task messages say whether the agent itself is still working.
-  const helperState = (ev) => ev.agentStatus ?? ev.status;
+  // Agents resumed or started before the SDK sent task messages have no agentStatus; a helper that did something in the
+  // last minute and a half is still working.
+  const ACTIVE_MS = 90_000;
+  const helperState = (ev) => ev.agentStatus ?? (ev.status !== 'running' && ev.activeAt && Date.now() - ev.activeAt < ACTIVE_MS ? 'running' : ev.status);
   const MARK = { completed: '✓', in_progress: '▶', pending: '○' };
   let workOpen = false;
   let workKey = '';
@@ -1428,7 +1431,7 @@
     thinking: (ev) => fold(ev, 'chat-thinking', [el('span', 'chat-fold-name', 'Thinking…'), ...(ev.streaming ? [spinner()] : [])],
       () => el('div', 'chat-thinking-text', ev.text || '')),
     'tool-run': (ev) => fold(ev, 'chat-tool',
-      [el('span', 'chat-fold-name', ev.name), el('span', 'chat-fold-summary', ev.summary || ''), ev.agentStatus === 'running' ? spinner() : runIcon(ev.status)],
+      [el('span', 'chat-fold-name', ev.name), el('span', 'chat-fold-summary', ev.summary || ''), helperState(ev) === 'running' ? spinner() : runIcon(ev.status)],
       () => {
         const body = el('div', 'chat-fold-body');
         if (ev.input) body.append(el('div', 'chat-io-label', 'Input'), el('pre', 'chat-io chat-pre', ev.input));
@@ -1557,6 +1560,10 @@
   setInterval(() => {
     if (convo.id && convo.chat?.runningSince && !document.hidden) renderStatusLine();
   }, 1000);
+  // An agent that goes quiet stops counting as running without any event arriving, so look again now and then.
+  setInterval(() => {
+    if (convo.id && !document.hidden) renderWork();
+  }, 15_000);
 
   function renderConn() {
     ui.conn.hidden = convo.online;

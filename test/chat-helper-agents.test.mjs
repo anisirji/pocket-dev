@@ -22,6 +22,7 @@ test('helper agents show what they are doing, and the todo list is kept', { time
   assert.equal(h1.steps, 2, 'two of the first helper\'s tool calls are counted');
   assert.match(h1.latest, /^Grep needle/, 'the latest one is kept');
   assert.equal(h2.steps, 1);
+  assert.ok(Math.abs(Date.now() - h2.activeAt) < 5000, 'the time of the helper\'s last action is kept');
   assert.match(h2.latest, /^Bash npm test/);
   assert.equal(events.some((e) => e.id === 'toolu_c1'), false, 'a helper\'s own tool calls are not events of their own');
 
