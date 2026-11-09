@@ -56,20 +56,20 @@ exec sleep 300
   return file;
 }
 
-export async function startServer(t, { network, devices, token, lanIpFile = true, traceUrl, env: extraEnv } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-internet-'));
+export async function startServer(t, { network, devices, token, lanIpFile = true, traceUrl, env: extraEnv, reuse } = {}) {
+  // `reuse` ({ root, port }) restarts a server on its old state folder and port, as if the machine had been off.
+  const root = reuse?.root ?? fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-internet-'));
   const home = path.join(root, 'home'), state = path.join(root, 'state'), record = path.join(root, 'cloudflared-record');
-  fs.mkdirSync(home);
-  fs.mkdirSync(path.join(home, 'Desktop'));
-  fs.mkdirSync(state, { mode: 0o700 });
-  fs.mkdirSync(record);
+  fs.mkdirSync(path.join(home, 'Desktop'), { recursive: true });
+  fs.mkdirSync(state, { mode: 0o700, recursive: true });
+  fs.mkdirSync(record, { recursive: true });
   const config = path.join(root, 'config.json');
   fs.writeFileSync(config, JSON.stringify({ password: 'test-password', awake: 'off', fileRoots: [home], maxDevices: 20, ...(network && { network }) }));
   if (devices) fs.writeFileSync(path.join(state, 'devices.json'), JSON.stringify({ devices }));
   if (token) fs.writeFileSync(path.join(state, 'tunnel-token'), `${token}\n`, { mode: 0o600 });
   const lanIp = path.join(root, 'lan-ip');
   fs.writeFileSync(lanIp, '127.0.0.1');
-  const port = await freePort(), adminPort = await freePort();
+  const port = reuse?.port ?? await freePort(), adminPort = await freePort();
   const stub = path.join(root, 'read-only-stub');
   fs.writeFileSync(stub, '#!/bin/sh\nprintf "No\\n"\n', { mode: 0o700 });
   const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: isolatedEnv(home, {

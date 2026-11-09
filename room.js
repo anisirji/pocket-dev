@@ -237,6 +237,11 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     return out;
   }
 
+  // For tasks.js: who this device syncs with and with which secret (host: every member; member: the host), and who may sync with it.
+  const peers = () => data.room && { roomId: data.room.id, deviceId: data.deviceId, isHost: isHost(), members: publicMembers(),
+    list: (isHost() ? data.room.members.filter((m) => m.deviceId !== data.deviceId).map((m) => ({ ...publicMember(m), secret: m.hostSecret })) : [{ ...publicMember(hostName()), secret: data.room.memberSecret }]).filter((p) => p.secret) };
+  const authPeer = (body) => (data.room && (isHost() ? asMember(body) : fromHost(body)) ? body.from : null);
+
   async function handleApi(req, res, url, { readJson, sendJson, loggedIn }) {
     const name = url.pathname.split('/')[3];
     const peer = req.method === 'POST' && (name === 'ping' || name === 'accept' || name === 'notify');
@@ -255,5 +260,5 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     } catch (err) { return sendJson(res, err.status || 400, { error: err.message }); }
   }
 
-  return { handleApi, view, deviceId: () => data.deviceId };
+  return { handleApi, view, deviceId: () => data.deviceId, peers, authPeer };
 }
