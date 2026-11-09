@@ -60,6 +60,21 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     after(900, () => { assistant('resumed'); result(); });
     return;
   }
+  if (text.includes('docsdemo')) {
+    // A short, realistic conversation for the documentation screenshots: reading and searching (folded), one edit with a diff, a summary.
+    const use = (id, name, input) => send({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', model: 'fake', content: [{ type: 'tool_use', id, name, input }] }, parent_tool_use_id: null, session_id: session });
+    const res = (id, content) => send({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content }] }, parent_tool_use_id: null, session_id: session });
+    const root = process.cwd();
+    assistant('Sure. I will look at how the theme is set up first.');
+    use('toolu_d1', 'Grep', { pattern: 'theme', path: 'src' }); res('toolu_d1', 'src/App.jsx:4\nsrc/styles.css:1');
+    use('toolu_d2', 'Read', { file_path: `${root}/src/styles.css` }); res('toolu_d2', ':root { --bg: #fff; }');
+    assistant('The colours live in two CSS variables, so a toggle only has to flip a class on the page. Adding it now.');
+    use('toolu_d3', 'Edit', { file_path: `${root}/src/App.jsx`, old_string: "  const [count, setCount] = useState(0);\n  return <main>", new_string: "  const [count, setCount] = useState(0);\n  const [dark, setDark] = useState(false);\n  return <main className={dark ? 'dark' : ''}>" });
+    res('toolu_d3', 'The file has been updated.');
+    use('toolu_d4', 'Bash', { command: 'npm test --silent', description: 'Run the tests' }); res('toolu_d4', 'Tests: 12 passed');
+    after(300, () => { assistant('Done. The app now has a dark mode toggle and all 12 tests still pass. Want me to remember the choice between visits?'); result(); });
+    return;
+  }
   if (text.includes('helpers')) {
     // Two helper agents and a todo list; the second helper's tool calls are tagged with its parent's id.
     const use = (id, name, input, parent = null) => send({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', model: 'fake', content: [{ type: 'tool_use', id, name, input }] }, parent_tool_use_id: parent, session_id: session });
