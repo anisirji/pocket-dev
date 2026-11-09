@@ -250,7 +250,7 @@ export function createClaudeEngine(chat) {
     const uses = m.message.content.filter((b) => b.type === 'tool_use');
     if (!uses.length) return;
     const last = uses.at(-1);
-    chat.update(parent.id, { steps: (parent.steps ?? 0) + uses.length, latest: cap(`${last.name} ${summarize(last.name, last.input)}`.trim(), 200) });
+    chat.update(parent.id, { activeAt: Date.now(), steps: (parent.steps ?? 0) + uses.length, latest: cap(`${last.name} ${summarize(last.name, last.input)}`.trim(), 200) });
   }
 
   // A background agent's Agent call returns "launched" at once, so its tool result says nothing about the work. The SDK
