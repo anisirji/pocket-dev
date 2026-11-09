@@ -13,7 +13,7 @@ export const STOP_GRACE_MS = 5000;
 const POLL_MS = 100;
 const TOOL_LABELS = { claude: 'Claude', codex: 'Codex' };
 
-export const NOT_FOUND = "Couldn't find the program that has this conversation open. Close it on the Mac, then try again.";
+export const NOT_FOUND = `Couldn't find the program that has this conversation open. Close it on ${platform.host.the}, then try again.`;
 
 // Only these programs write conversations. Everything else that mentions an id (grep, tail, an editor, a shell) is a reader.
 const PROGRAMS = [
@@ -209,7 +209,7 @@ export async function stopProcesses(procs, { kill: send, isAlive, sleep, force =
 }
 
 function where(copies) {
-  if (copies.some((c) => c.kind === 'process')) return 'on the Mac';
+  if (copies.some((c) => c.kind === 'process')) return `on ${platform.host.the}`;
   if (copies.some((c) => c.kind === 'terminal')) return 'in a Pocket Dev terminal';
   return 'in a Pocket Dev chat';
 }
@@ -277,7 +277,7 @@ export function createTakeover({
         code: 'still-running', busy, canForce, stopped, remaining: left.map(copyView),
         error: canForce
           ? `${names} did not close when asked. Force quit stops it at once, and its last reply may be lost.`
-          : `${names} did not close. Close it on the Mac, then try again.`,
+          : `${names} did not close. Close it on ${platform.host.the}, then try again.`,
       });
     }
     log('conversation-taken-over', { tool, conversationId: id, pids, stopped: stopped.map((s) => s.kind), force, ...who });

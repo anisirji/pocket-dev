@@ -5,6 +5,7 @@ import readline from 'node:readline/promises';
 import { ADMIN_URL_PATH } from './admin.js';
 import { listProcesses, findCopies, readClaudeSessions, copyView } from './takeover.js';
 import { findConversation, resumeArgv, claudeSessionsDir } from './history.js';
+import { platform } from './platform.js';
 
 // `pocket-dev takeover <id>` and `--last`: continue a conversation in this Mac terminal. Pocket Dev's own copy (a phone
 // terminal or chat) closes first, through the running server's Admin API, so only one program writes the conversation.
@@ -89,7 +90,7 @@ export async function takeoverCommand(args, {
       }
       if (!closed.gone) out(`Closed Pocket Dev's copy: ${item.details[0]}.`);
     } else if (!state) {
-      out('Pocket Dev is not running. Checking this Mac only.');
+      out(`Pocket Dev is not running. Checking ${platform.host.this} only.`);
     }
 
     const left = findCopies({ processes: await list(), uid, selfPid, sessions: claudeSessions() })

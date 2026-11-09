@@ -49,10 +49,10 @@ function bounded(read, fallback, timeoutMs) {
 export function performanceState({ cpu, memory, disk, eventLoopDelayMs, busyForMs = 0 }) {
   const limit = PERFORMANCE_LIMITS;
   const alerts = [];
-  if (memory.freePercent !== null && memory.freePercent < limit.memoryLow) alerts.push({ key: 'memory', level: memory.freePercent < limit.memoryCritical ? 'critical' : 'warning', text: `Mac memory is tight (${memory.freePercent}% free). Open apps to find what is using it.` });
-  if (disk.freeGB !== null && disk.freeGB < limit.diskLowGB) alerts.push({ key: 'disk', level: disk.freeGB < limit.diskCriticalGB ? 'critical' : 'warning', text: `Mac storage is low (${disk.freeGB.toFixed(1)} GB free). Free up space on the Mac.` });
-  if (eventLoopDelayMs !== null && eventLoopDelayMs >= limit.responseDelayMs) alerts.push({ key: 'response', level: 'warning', text: 'Pocket Dev has been slow to respond. The Mac may be under heavy load.' });
-  if (cpu.usedPercent !== null && cpu.usedPercent >= limit.cpuBusy && busyForMs >= BUSY_ALERT_MS) alerts.push({ key: 'cpu', level: 'warning', text: `Mac CPU has stayed busy (${cpu.usedPercent}% in use). Open apps to check what is running.` });
+  if (memory.freePercent !== null && memory.freePercent < limit.memoryLow) alerts.push({ key: 'memory', level: memory.freePercent < limit.memoryCritical ? 'critical' : 'warning', text: `${platform.host.Mac} memory is tight (${memory.freePercent}% free). Open apps to find what is using it.` });
+  if (disk.freeGB !== null && disk.freeGB < limit.diskLowGB) alerts.push({ key: 'disk', level: disk.freeGB < limit.diskCriticalGB ? 'critical' : 'warning', text: `${platform.host.Mac} storage is low (${disk.freeGB.toFixed(1)} GB free). Free up space on ${platform.host.the}.` });
+  if (eventLoopDelayMs !== null && eventLoopDelayMs >= limit.responseDelayMs) alerts.push({ key: 'response', level: 'warning', text: `Pocket Dev has been slow to respond. ${platform.host.The} may be under heavy load.` });
+  if (cpu.usedPercent !== null && cpu.usedPercent >= limit.cpuBusy && busyForMs >= BUSY_ALERT_MS) alerts.push({ key: 'cpu', level: 'warning', text: `${platform.host.Mac} CPU has stayed busy (${cpu.usedPercent}% in use). Open apps to check what is running.` });
   alerts.sort((a, b) => (a.level === 'critical' ? 0 : 1) - (b.level === 'critical' ? 0 : 1));
   const first = alerts[0];
   if (first) return { status: first.key, level: first.level, alerts };
@@ -63,7 +63,7 @@ export function performanceState({ cpu, memory, disk, eventLoopDelayMs, busyForM
 
 // All clients share one in-flight sample and a five-second cache. Memory pressure is sampled less often, never with
 // its stress-test flags. CPU comes from counter deltas rather than repeatedly spawning top.
-export function createPerformanceMonitor({ cpus = os.cpus, load = () => os.loadavg()[0], disk = readDiskSpace,
+export function createPerformanceMonitor({ cpus = os.cpus, load = () => (platform.platform === 'win32' ? null : os.loadavg()[0]), disk = readDiskSpace,
   memory = () => platform.memoryFreePercent(), lag = () => null, now = Date.now, timeoutMs = 2500 } = {}) {
   let cached = null, pending = null, before = null, beforeAt = null, busySince = null;
   let memoryAt = -Infinity, memoryValue = null;

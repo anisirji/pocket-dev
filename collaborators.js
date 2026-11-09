@@ -6,6 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { STATE_DIR } from './paths.js';
 import { svgQr } from './qr.js';
+import { platform } from './platform.js';
 
 const COOKIE = 'pd_collaborator';
 const INVITE_MS = 10 * 60_000;
@@ -189,13 +190,13 @@ export function createCollaborators({ config, auth, urls, stateDir = STATE_DIR, 
 
   async function ownerApi(method, pathname, body = {}, local = false) {
     if (pathname === '/api/collaborators/enable' && method === 'POST') {
-      if (!local) fail(403, 'Review trusted Admin devices on the Mac before enabling role-based sharing.');
+      if (!local) fail(403, `Review trusted Admin devices on ${platform.host.the} before enabling role-based sharing.`);
       const result = auth.admin.enableRoles(body.adminDeviceIds);
       if (result.status !== 200) return result;
       return { status: 200, body: summary() };
     }
     if (pathname === '/api/collaborators' && method === 'GET') return { status: 200, body: summary() };
-    if (!enabled()) fail(409, 'Enable role-based sharing from Admin on the Mac first.');
+    if (!enabled()) fail(409, `Enable role-based sharing from Admin on ${platform.host.the} first.`);
     const match = /^\/api\/collaborators(?:\/([0-9a-f]{16})(?:\/(invite))?)?$/.exec(pathname);
     if (!match) fail(404, 'Not found');
     const grant = match[1] && find(match[1]);

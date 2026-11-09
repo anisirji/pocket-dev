@@ -15,7 +15,7 @@ async function take() {
     await platform.resizeImage({ input: raw, output: small, side: MAX_WIDTH, quality: 60, onlyShrink: true });
     return fs.readFileSync(small);
   } catch (err) {
-    throw new Error(`Could not capture the screen. The display may be asleep or the Mac locked. ${err.stderr?.trim() ?? ''}`.trim());
+    throw new Error(`Could not capture the screen. The display may be asleep or ${platform.host.the} locked. ${err.stderr?.trim() ?? ''}`.trim());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

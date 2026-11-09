@@ -97,7 +97,7 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
     }
     fs.rmSync(root, { recursive: true, force: true });
   });
-  await until(() => { assert.equal(proc.exitCode, null, `server exited during startup:\n${logs}`); return logs.includes('Admin (this Mac only)'); });
+  await until(() => { assert.equal(proc.exitCode, null, `server exited during startup:\n${logs}`); return /Admin \(this (Mac|computer) only\)/.test(logs); });
   const base = `http://127.0.0.1:${port}`, admin = `http://127.0.0.1:${adminPort}`;
 
   // `via: 'tunnel'` sends what the connector on the Mac would: a loopback connection carrying the proxy headers.

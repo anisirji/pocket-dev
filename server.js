@@ -493,7 +493,7 @@ function moveForward(fwd, port, host) {
 }
 
 async function openForward(port) {
-  if (!WIFI) throw new Error('Wi-Fi access is off, so nothing on the network could reach a forwarded port. Turn Wi-Fi access on in Admin on the Mac first.');
+  if (!WIFI) throw new Error(`Wi-Fi access is off, so nothing on the network could reach a forwarded port. Turn Wi-Fi access on in Admin on ${platform.host.the} first.`);
   const existing = forwards.get(port);
   if (existing) return forwardView(port, existing);
   const fwd = { server: null, host: null, sockets: new Set(), state: 'waiting', error: null, closed: false, moving: Promise.resolve() };
@@ -570,7 +570,7 @@ function parsePort(value) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) return { error: 'Port must be a whole number from 1 to 65535.' };
   if (port === PORT) return { error: `Port ${port} is Pocket Dev itself.` };
   // A forward connects from loopback with any Host the client chooses, which is all the Admin page checks.
-  if (port === admin.port) return { error: `Port ${port} is Pocket Dev’s Admin page, which only this Mac may open.` };
+  if (port === admin.port) return { error: `Port ${port} is Pocket Dev’s Admin page, which only ${platform.host.this} may open.` };
   return { port };
 }
 
@@ -627,7 +627,7 @@ async function handleApi(req, res, url) {
   const authReply = await auth.handleApi(req, url.pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
   if (resource === 'local' && key === 'power') {
-    if (req.roomPeer || !auth.isLocalRequest(req)) return sendJson(res, 403, { error: 'Only a script run on the Mac can use this.' });
+    if (req.roomPeer || !auth.isLocalRequest(req)) return sendJson(res, 403, { error: `Only a script run on ${platform.host.the} can use this.` });
     return handlePowerApi(req, res, url.pathname.split('/')[4], { readJson, sendJson, wss, sessions });
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
@@ -636,7 +636,7 @@ async function handleApi(req, res, url) {
   // Switching between addresses exists only once internet access is on; before that these routes are not there.
   if ((resource === 'handoff' || resource === 'connection') && !internetOn()) return sendJson(res, 404, { error: 'Not found' });
   if (resource === 'collaborators') {
-    if (!auth.isTrustedAdmin(req) && !(req.method === 'GET' && url.pathname === '/api/collaborators' && config.read().roleAccessEnabled !== true)) return sendJson(res, 403, { error: 'Only a reviewed Admin device may manage collaborators. Enable access from Admin on the Mac.' });
+    if (!auth.isTrustedAdmin(req) && !(req.method === 'GET' && url.pathname === '/api/collaborators' && config.read().roleAccessEnabled !== true)) return sendJson(res, 403, { error: `Only a reviewed Admin device may manage collaborators. Enable access from Admin on ${platform.host.the}.` });
     const r = await collaborators.ownerApi(req.method, url.pathname, ['POST', 'PUT', 'PATCH'].includes(req.method) ? await readJson(req) : {});
     return sendJson(res, r.status, r.body);
   }
@@ -662,7 +662,7 @@ async function handleApi(req, res, url) {
     case 'GET health':
       return sendJson(res, 200, await collectHealth());
     case 'GET screen': {
-      if (config.read().screenView === false) return sendJson(res, 403, { error: 'Screen view is turned off. On the Mac, run: pocket-dev config set screenView true' });
+      if (config.read().screenView === false) return sendJson(res, 403, { error: `Screen view is turned off. On ${platform.host.the}, run: pocket-dev config set screenView true` });
       try {
         const jpeg = await captureScreen();
         res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': jpeg.length, 'cache-control': 'no-store' });
@@ -751,7 +751,7 @@ async function handleApi(req, res, url) {
       if (direction === 'to-lan') {
         if (!network().wifi) return sendJson(res, 403, { error: 'Wi-Fi access is off, so there is no local address to switch to.' });
         if (!fromConnector(req)) return sendJson(res, 403, { error: 'Switch to local is only offered on the internet address.' });
-        if (!lanIp()) return sendJson(res, 409, { error: 'The Mac has no Wi-Fi address right now.' });
+        if (!lanIp()) return sendJson(res, 409, { error: `${platform.host.The} has no Wi-Fi address right now.` });
         return sendJson(res, 200, { url: `http://${lanIp()}:${PORT}/?h=${auth.mintHandoff(device, { direction, host: 'lan' })}` });
       }
       if (direction === 'to-remote') {
@@ -831,7 +831,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (forward.isForward(url.pathname)) await forward.http(req, res, url);
     else if (url.pathname === '/' && url.searchParams.has('k')) {
-      if (collaborators.guest(req)) return sendJson(res, 403, { error: 'Log out collaborator access before pairing an Admin device on the Mac.' });
+      if (collaborators.guest(req)) return sendJson(res, 403, { error: `Log out collaborator access before pairing an Admin device on ${platform.host.the}.` });
       const { status, headers, body } = auth.redeemQrKey(req, url.searchParams.get('k'));
       res.writeHead(status, { 'cache-control': 'no-store', ...headers });
       res.end(body);
@@ -954,7 +954,7 @@ const adminSections = {
       const battery = p.battery === null ? (p.onAC ? 'On power adapter' : 'No battery') : `Battery ${p.battery}%${p.charging ? ', charging' : p.onAC ? ', plugged in' : ''}`;
       return [{
         id: 'awake',
-        label: `Keep awake: ${AWAKE_LABELS[p.awake]}${p.stayingAwake ? ' (holding the Mac awake)' : ''}`,
+        label: `Keep awake: ${AWAKE_LABELS[p.awake]}${p.stayingAwake ? ` (holding ${platform.host.the} awake)` : ''}`,
         details: [battery, p.lidClosed ? 'Lid closed' : 'Lid open', `Lid sleep ${p.lidSleepDisabled ? 'off' : 'on'}`],
       }];
     },

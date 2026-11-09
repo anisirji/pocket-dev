@@ -90,8 +90,8 @@ export function alertsFor({ onAC, charging, battery, temperature }, limits) {
       key: 'battery',
       level: critical ? 'critical' : 'warning',
       text: critical
-        ? `Mac battery is critically low (${battery}%). It may shut down and you could lose open work. Plug it in now.`
-        : `Mac battery is ${battery}% and not charging. Save your work and plug it in.`,
+        ? `${platform.host.Mac} battery is critically low (${battery}%). It may shut down and you could lose open work. Plug it in now.`
+        : `${platform.host.Mac} battery is ${battery}% and not charging. Save your work and plug it in.`,
     });
   }
   const { batteryC, thermal } = temperature;
@@ -103,7 +103,7 @@ export function alertsFor({ onAC, charging, battery, temperature }, limits) {
     alerts.push({
       key: 'hot',
       level: critical ? 'critical' : 'warning',
-      text: `Mac is ${critical ? 'very hot' : 'hot'} (${detail}). Close heavy apps or let it cool.`,
+      text: `${platform.host.Mac} is ${critical ? 'very hot' : 'hot'} (${detail}). Close heavy apps or let it cool.`,
     });
   }
   return alerts.sort((a, b) => (a.level === 'critical' ? 0 : 1) - (b.level === 'critical' ? 0 : 1));

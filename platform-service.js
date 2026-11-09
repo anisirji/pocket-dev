@@ -78,39 +78,62 @@ WantedBy=default.target
 
 // Task Scheduler cannot restart a program that exits cleanly, and Pocket Dev restarts itself by exiting, so the task
 // runs this small loop, which is launchd's KeepAlive with its 10 second throttle.
+//  - The PATH is rebuilt from the registry on every start, so a tool installed after login (git, claude, cloudflared)
+//    is found without logging out; node's own folder comes first.
+//  - node runs under cmd.exe so its output is appended to the log as the UTF-8 it writes; PowerShell 5.1's own
+//    redirection would write UTF-16.
+//  - Waiting is on that one process, not Start-Process -Wait, which in PowerShell 5.1 also waits for every process it
+//    started: the terminal host is meant to outlive the server.
+//  - The file is saved with a UTF-8 byte order mark, because PowerShell 5.1 reads a script without one as ANSI.
 function windowsRunner({ node, repo, port, label, log, extraEnv }) {
   const env = { PORT: String(port), LABEL: label, POCKET_DEV_SERVICE: label, ...extraEnv };
   return `${Object.entries(env).map(([k, v]) => `$env:${k} = ${psQuote(v)}`).join('\n')}
+$node = ${psQuote(node)}
+$server = ${psQuote(`${repo}\\server.js`)}
+$log = ${psQuote(log)}
 Set-Location -LiteralPath ${psQuote(repo)}
-New-Item -ItemType Directory -Force -Path (Split-Path -Parent ${psQuote(log)}) | Out-Null
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null
+$cmdLine = '/d /s /c ""{0}" "{1}" >> "{2}" 2>&1"' -f $node, $server, $log
 while ($true) {
-  & ${psQuote(node)} ${psQuote(`${repo}\\server.js`)} *>> ${psQuote(log)}
+  $registry = foreach ($scope in 'Machine', 'User') { [Environment]::GetEnvironmentVariable('Path', $scope) }
+  $env:Path = ((@(Split-Path -Parent $node) + $registry + $env:Path) | Where-Object { $_ } | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) }) -join ';'
+  if ((Test-Path -LiteralPath $log) -and ((Get-Item -LiteralPath $log).Length -gt 20MB)) { Move-Item -LiteralPath $log "$log.1" -Force }
+  $process = Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine -WorkingDirectory ${psQuote(repo)} -WindowStyle Hidden -PassThru
+  $process.WaitForExit()
   Start-Sleep -Seconds 10
 }
 `;
 }
 
-function windowsTask({ label, runnerPath, repo }) {
+// Schema: https://learn.microsoft.com/windows/win32/taskschd/task-scheduler-schema. The user is named in the trigger and
+// the principal, or the task would start at every account's login. Priority 5 is normal; the default, 7, runs a
+// server at below-normal priority. The window of powershell.exe can still flash once at login: -WindowStyle Hidden
+// only hides it after it opens.
+function windowsTask({ label, runnerPath, repo, userId }) {
+  const who = userId ? `<UserId>${escapeXml(userId)}</UserId>` : '';
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Description>Pocket Dev (${escapeXml(label)}): starts at login and restarts after it stops.</Description></RegistrationInfo>
-  <Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers>
-  <Principals><Principal id="Author"><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
+  <Triggers><LogonTrigger><Enabled>true</Enabled>${who}</LogonTrigger></Triggers>
+  <Principals><Principal id="Author">${who}<LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>
   <Settings>
     <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <AllowHardTerminate>true</AllowHardTerminate>
     <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
     <AllowStartOnDemand>true</AllowStartOnDemand>
     <Enabled>true</Enabled>
     <Hidden>false</Hidden>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>5</Priority>
+    <RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure>
   </Settings>
   <Actions Context="Author">
     <Exec>
       <Command>powershell.exe</Command>
-      <Arguments>-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "${escapeXml(runnerPath)}"</Arguments>
+      <Arguments>-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "${escapeXml(runnerPath)}"</Arguments>
       <WorkingDirectory>${escapeXml(repo)}</WorkingDirectory>
     </Exec>
   </Actions>
@@ -153,8 +176,8 @@ export function servicePlan({ platform, label = DEFAULT_LABEL, node, repo, port,
     return {
       kind: 'schtasks', unit: label, log: logFile,
       files: [
-        { path: runnerPath, content: windowsRunner(opts) },
-        { path: taskPath, content: windowsTask({ label, runnerPath, repo }), encoding: 'utf16le' },
+        { path: runnerPath, content: windowsRunner(opts), encoding: 'utf8bom' },
+        { path: taskPath, content: windowsTask({ label, runnerPath, repo, userId: env.USERNAME ? `${env.USERDOMAIN ? `${env.USERDOMAIN}\\` : ''}${env.USERNAME}` : '' }), encoding: 'utf16le' },
       ],
       commands: {
         install: [['schtasks', ['/Create', '/TN', label, '/XML', taskPath, '/F']], ['schtasks', ['/Run', '/TN', label]]],

@@ -8,7 +8,7 @@ import { servicePlan, parseServiceStatus } from '../platform-service.js';
 import { startServer } from './helpers/server.mjs';
 
 // `files` is the set of programs found on PATH (as /usr/bin/<name>) and `sys` maps /sys and /proc paths to text.
-function fake({ os: system, files = [], sys = {}, answer = () => ({ code: 0, stdout: '', stderr: '' }), env = {}, nics, mem } = {}) {
+function fake({ os: system, files = [], sys = {}, answer = () => ({ code: 0, stdout: '', stderr: '' }), env = {}, nics, mem, cpus } = {}) {
   const calls = [];
   const launched = [];
   const p = createPlatform({
@@ -21,6 +21,7 @@ function fake({ os: system, files = [], sys = {}, answer = () => ({ code: 0, std
     networkInterfaces: () => nics ?? {},
     memory: () => mem ?? { total: 8 * 1024 ** 3, free: 2 * 1024 ** 3 },
     hostname: () => 'My-Box',
+    ...(cpus && { cpus, delay: async () => {} }),
   });
   return { p, calls, launched };
 }
@@ -125,7 +126,7 @@ test('health: top and memory_pressure on Mac, os memory elsewhere', async () => 
   assert.deepEqual(await mac.p.cpuMemory(), { cpuUsedPercent: 10, memory: { usedMB: 7514, wiredMB: 1220, compressedMB: 3272 } });
   assert.equal(await mac.p.memoryFreePercent(), 37);
   assert.deepEqual(mac.calls[0].args, ['-l', '2', '-n', '0', '-s', '1']);
-  const linux = fake({ os: 'linux' });
+  const linux = fake({ os: 'linux', cpus: () => [] });
   assert.deepEqual(await linux.p.cpuMemory(), { cpuUsedPercent: null, memory: { usedMB: 6144, wiredMB: null, compressedMB: null } });
   assert.equal(await linux.p.memoryFreePercent(), 25);
   assert.equal(linux.calls.length, 0);
@@ -210,7 +211,7 @@ test('service definitions: launchd plist, systemd user unit and Task Scheduler t
   const [runner, task] = win.files;
   assert.match(runner.content, /\$env:PORT = '7777'/);
   assert.match(runner.content, /Start-Sleep -Seconds 10/);
-  assert.match(runner.content, /& 'C:\\node\\node.exe' 'C:\\pd\\server.js'/);
+  assert.match(runner.content, /\$node = 'C:\\node\\node.exe'\n\$server = 'C:\\pd\\server.js'/);
   assert.equal(task.encoding, 'utf16le');
   assert.match(task.content, /<LogonTrigger>/);
   assert.match(task.content, /powershell.exe/);

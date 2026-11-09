@@ -48,7 +48,9 @@ class FileError extends Error {
 }
 const fail = (status, message) => { throw new FileError(status, message); };
 
-const PERMISSION_HINT = 'macOS blocked access. To allow it, give node Full Disk Access in System Settings > Privacy & Security.';
+const PERMISSION_HINT = platform.platform === 'darwin'
+  ? 'macOS blocked access. To allow it, give node Full Disk Access in System Settings > Privacy & Security.'
+  : 'The system blocked access to this location. Check its permissions.';
 const ERRNO = {
   ENOENT: [404, 'Not found.'],
   ENOTDIR: [400, 'Not a folder.'],
@@ -56,7 +58,7 @@ const ERRNO = {
   EEXIST: [409, 'Something with that name already exists.'],
   EACCES: [403, PERMISSION_HINT],
   EPERM: [403, PERMISSION_HINT],
-  ENOSPC: [507, 'The Mac is out of disk space.'],
+  ENOSPC: [507, `${platform.host.The} is out of disk space.`],
   ENAMETOOLONG: [400, 'Name is too long.'],
 };
 
@@ -325,7 +327,7 @@ export function createFilesApi({ sendJson, readJson, config }) {
     if (targets.some((t) => path.dirname(t) !== parent)) fail(400, 'Zip items from one folder at a time.');
     const { names, bytes, skipped, complete } = await collect(parent, targets);
     if (q.get('check') === '1') return { bytes, files: names.filter((n) => !n.endsWith('/')).length, skipped, complete, max: zipMax };
-    if (!complete) fail(413, `Too many files to zip (over ${ZIP_MAX_ENTRIES.toLocaleString('en')}). Zip it on the Mac instead.`);
+    if (!complete) fail(413, `Too many files to zip (over ${ZIP_MAX_ENTRIES.toLocaleString('en')}). Zip it on ${platform.host.the} instead.`);
     if (bytes > zipMax) fail(413, `That is ${(bytes / GB).toFixed(1)} GB; the zip limit is ${(zipMax / GB).toFixed(1)} GB.`);
     const base = targets.length === 1 ? path.basename(targets[0]) : path.basename(parent) || 'files';
     const zipper = platform.zipCommand();
