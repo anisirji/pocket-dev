@@ -338,15 +338,22 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
 
   function show(s) {
     shown = s;
+    const off = s.unsupported ?? {};
+    const note = (key) => `Not available on this system. ${off[key]}`;
+    for (const b of buttons) b.disabled = Boolean(off.keepAwake);
+    lid.hidden = Boolean(off.lid || off.lidSleep);
     for (const b of buttons) b.setAttribute('aria-checked', String(b.dataset.mode === s.awake));
-    hint.textContent = MODES.find((m) => m.id === s.awake).hint;
+    hint.textContent = off.keepAwake ? note('keepAwake') : MODES.find((m) => m.id === s.awake).hint;
     statusText.textContent = statusLine(s);
     status.classList.toggle('awake', s.stayingAwake);
     temp.textContent = temperatureLine(s.temperature);
     temp.classList.toggle('hot', s.temperature?.thermal === 'serious' || s.temperature?.thermal === 'critical');
     temp.hidden = !temp.textContent;
     showLid(s);
-    sleepButton.disabled = shutdownButton.disabled = s.updateInProgress;
+    sleepButton.disabled = s.updateInProgress || Boolean(off.sleepNow);
+    shutdownButton.disabled = s.updateInProgress || Boolean(off.shutDown);
+    sleepButton.title = off.sleepNow ? note('sleepNow') : '';
+    shutdownButton.title = off.shutDown ? note('shutDown') : '';
     updateWarn.hidden = !s.updateInProgress;
     if (s.updateInProgress) {
       sleepConfirm.close();

@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { platform } from './platform.js';
 
 const HOST_FILE = fileURLToPath(new URL('./terminal-host.js', import.meta.url));
 const PROTOCOL = 1;
@@ -13,6 +14,7 @@ const SOCKET_PATH_MAX = 90;
 
 // A unix socket path is limited to about 100 characters; a long state folder falls back to a short name in the temp folder.
 export function hostSocketPath(stateDir) {
+  if (platform.platform === 'win32') return `\\\\.\\pipe\\pocket-dev-${crypto.createHash('sha1').update(stateDir).digest('hex').slice(0, 12)}`;
   const preferred = path.join(stateDir, 'terminals.sock');
   if (preferred.length <= SOCKET_PATH_MAX) return preferred;
   return path.join(os.tmpdir(), `pd-${crypto.createHash('sha1').update(stateDir).digest('hex').slice(0, 12)}.sock`);

@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile, spawn } from 'node:child_process';
-import { probeWindowAccess, snapshot } from './apps.js';
+import { execFile } from 'node:child_process';
+import { snapshot } from './apps.js';
+import { platform } from './platform.js';
 import { findBin } from './chat/env.js';
 
-const OSASCRIPT = process.env.POCKET_DEV_OSASCRIPT || '/usr/bin/osascript';
 const FIREWALL = process.env.POCKET_DEV_FIREWALL || '/usr/libexec/ApplicationFirewall/socketfilterfw';
 const PANE = 'x-apple.systempreferences:com.apple.preference.security?';
 const ASK_WAIT_MS = 60_000;
@@ -70,7 +70,8 @@ const others = list.filter((w) => w.kCGWindowOwnerPID !== mine && w.kCGWindowLay
 JSON.stringify({ windows: others.length, titled: others.filter((w) => w.kCGWindowName).length });`;
 
 async function screenRecordingState(host) {
-  const { err, out } = await run(OSASCRIPT, ['-l', 'JavaScript', '-e', SCREEN_PROBE]);
+  const r = await platform.macScript(SCREEN_PROBE, { timeout: 8000 });
+  const err = r.code !== 0, out = `${r.stdout}${r.stderr}`;
   let seen;
   try { seen = JSON.parse(out.trim().split('\n').pop()); } catch { seen = null; }
   if (err || !seen) return { state: 'unknown', detail: 'The check failed to run.' };
@@ -124,10 +125,15 @@ const ITEMS = [
 ];
 
 // A plain check never waits on a prompt for long. `ask` is for the button that is meant to raise the prompt.
+// Only a Mac has per-app privacy permissions. Elsewhere the list holds just the command-line tools the chats and Git need.
 export async function checkPermissions({ ask = false } = {}) {
+  if (!platform.capabilities().permissions.available) {
+    const tools = await toolStates();
+    return ITEMS.filter((item) => item.group === 'tools').map((item) => ({ ...item, ...tools[item.id] }));
+  }
   const host = hostName();
   const [probe, hostLabel, screenRecording, firewall, tools] = await Promise.all([
-    probeWindowAccess(ask ? ASK_WAIT_MS : CHECK_WAIT_MS), host, host.then(screenRecordingState), firewallState(), toolStates(),
+    platform.probeWindowAccess(ask ? ASK_WAIT_MS : CHECK_WAIT_MS), host, host.then(screenRecordingState), firewallState(), toolStates(),
   ]);
   const found = { ...windowAccessItems(probe, hostLabel), fullDisk: fullDiskState(), screenRecording, firewall, ...tools };
   return ITEMS.map((item) => ({ ...item, ...found[item.id] }));
@@ -135,5 +141,5 @@ export async function checkPermissions({ ask = false } = {}) {
 
 // Opens the System Settings page where the person turns a permission on. Only the Mac's own admin page calls this.
 export function openPane(pane) {
-  spawn('open', [`${PANE}${pane}`], { stdio: 'ignore', detached: true }).unref();
+  if (platform.capabilities().permissions.available) platform.openUrl(`${PANE}${pane}`);
 }

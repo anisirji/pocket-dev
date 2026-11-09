@@ -1,19 +1,15 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
-import { execFile } from 'node:child_process';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { platform } from './platform.js';
+
+export { parseMemoryFree } from './platform.js';
 
 const GB = 1024 ** 3;
 export const PERFORMANCE_LIMITS = { cpuBusy: 90, memoryLow: 10, memoryCritical: 5, diskLowGB: 10, diskCriticalGB: 3, responseDelayMs: 1000 };
 export const SAMPLE_MS = 5000;
 const MEMORY_MS = 20_000;
 const BUSY_ALERT_MS = 15_000;
-
-export function parseMemoryFree(text) {
-  const match = /free percentage: (\d+)%/.exec(text);
-  const value = match ? Number(match[1]) : NaN;
-  return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
-}
 
 export function cpuSnapshot(cores) {
   if (!Array.isArray(cores) || !cores.length) return null;
@@ -42,11 +38,6 @@ export async function readDiskSpace({ location = os.homedir(), statfs = fs.statf
   } catch { return { freeGB: null, totalGB: null }; }
 }
 
-function memoryFree() {
-  return new Promise((resolve) => execFile(process.env.POCKET_DEV_MEMORY_PRESSURE || '/usr/bin/memory_pressure', [],
-    { timeout: 2000, maxBuffer: 256_000 }, (err, out) => resolve(err ? null : parseMemoryFree(String(out)))));
-}
-
 function bounded(read, fallback, timeoutMs) {
   let timer;
   return Promise.race([
@@ -73,7 +64,7 @@ export function performanceState({ cpu, memory, disk, eventLoopDelayMs, busyForM
 // All clients share one in-flight sample and a five-second cache. Memory pressure is sampled less often, never with
 // its stress-test flags. CPU comes from counter deltas rather than repeatedly spawning top.
 export function createPerformanceMonitor({ cpus = os.cpus, load = () => os.loadavg()[0], disk = readDiskSpace,
-  memory = memoryFree, lag = () => null, now = Date.now, timeoutMs = 2500 } = {}) {
+  memory = () => platform.memoryFreePercent(), lag = () => null, now = Date.now, timeoutMs = 2500 } = {}) {
   let cached = null, pending = null, before = null, beforeAt = null, busySince = null;
   let memoryAt = -Infinity, memoryValue = null;
   async function sample() {
