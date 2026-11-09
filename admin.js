@@ -22,6 +22,7 @@ const FILES = {
   '/': ['admin.html', 'text/html; charset=utf-8'],
   '/admin.css': ['admin.css', 'text/css; charset=utf-8'],
   '/admin-client.js': ['admin-client.js', 'text/javascript; charset=utf-8'],
+  '/admin-nav.js': ['admin-nav.js', 'text/javascript; charset=utf-8'],
   '/admin-heartbeat.js': ['admin-heartbeat.js', 'text/javascript; charset=utf-8'],
   '/admin-permissions.js': ['admin-permissions.js', 'text/javascript; charset=utf-8'],
   '/collaborators.js': ['collaborators.js', 'text/javascript; charset=utf-8'],

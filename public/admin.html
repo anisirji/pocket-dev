@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="/admin.css">
 <link rel="stylesheet" href="/collaborators.css">
 <link rel="stylesheet" href="/messages.css">
+<script src="/admin-nav.js"></script>
 <script src="/admin-client.js" defer></script>
 <script src="/admin-permissions.js" defer></script>
 </head>
@@ -18,7 +19,7 @@
   <div class="brand">
     <span class="logo" aria-hidden="true"></span>
     <h1>Pocket Dev <span>Admin</span></h1>
-    <span class="pill">This Mac only</span>
+    <span class="pill">This computer only</span>
   </div>
   <div class="top-actions">
     <p class="updated" id="updated" aria-live="polite"></p>
@@ -27,26 +28,25 @@
 </header>
 
 <div class="layout">
-  <nav class="side" aria-label="Sections">
-    <a href="#connection">Connection</a>
-    <a href="#internet">Internet</a>
-    <a href="#sharing">Share &amp; login</a>
-    <a href="#messages">Messages</a>
-    <a href="#pending" data-nav="pending">Waiting <b id="navPending"></b></a>
-    <a href="#devices">Devices</a>
-    <a href="#collaborators">Collaborators</a>
-    <a href="#log">Security log</a>
-    <a href="#password">Password</a>
-    <a href="#settings">Settings</a>
-    <a href="#live">Live</a>
-    <a href="#permissions">Permissions</a>
-    <a href="#service">Service</a>
-    <a href="#lockdown" class="nav-danger">Lockdown</a>
-  </nav>
+  <nav class="nav" id="nav" aria-label="Sections">
+  <a href="#overview" data-group="overview"><span>Overview</span><b class="badge" data-badge="overview" hidden></b></a>
+  <a href="#devices" data-group="devices"><span>Devices &amp; access</span><b class="badge" data-badge="devices" hidden></b></a>
+  <a href="#internet" data-group="internet"><span>Internet</span><b class="badge" data-badge="internet" hidden></b></a>
+  <a href="#messages" data-group="messages"><span>Messages</span><b class="badge" data-badge="messages" hidden></b></a>
+  <a href="#security" data-group="security"><span>Security</span><b class="badge" data-badge="security" hidden></b></a>
+  <a href="#computer" data-group="computer"><span>This computer</span><b class="badge" data-badge="computer" hidden></b></a>
+</nav>
 
-  <main>
+  <main id="main">
     <p class="offline" id="offline" hidden>Can't reach Pocket Dev on this Mac. It may have stopped. Start it again with <code>npm start</code>; this page reconnects by itself.</p>
 
+    <div class="group" id="group-overview" role="region" aria-labelledby="gt-overview" hidden>
+      <div class="group-head"><h2 id="gt-overview" tabindex="-1">Overview</h2><p>Is everything working, and does anything need you?</p></div>
+      <section id="attention" class="attention" aria-labelledby="attTitle">
+        <h2 id="attTitle">Needs attention</h2>
+        <ul id="attList" class="att-list"></ul>
+        <p class="att-clear" id="attClear" hidden>All clear. Nothing needs your attention right now.</p>
+      </section>
     <section id="connection" class="conn" aria-labelledby="connTitle">
       <div class="conn-main">
         <span class="conn-dot" aria-hidden="true"></span>
@@ -62,10 +62,64 @@
         <span><b>Keep connection open</b><small>On: stays open after you close this page and after a restart. Off: closes about 30 s after this page is closed.</small></span>
       </label>
     </section>
+    <section id="cards" class="cards" aria-label="Overview">
+      <div class="card"><span class="card-label">Logged in</span><b id="cLogged">–</b><small id="cLoggedSub"></small></div>
+      <div class="card"><span class="card-label">Online now</span><b id="cOnline">–</b><small id="cOnlineSub">with a terminal open or active in the last minute</small></div>
+      <div class="card" id="cPendingCard"><span class="card-label">Waiting for approval</span><b id="cPending">–</b><small id="cPendingSub"></small></div>
+      <div class="card" id="cFailedCard"><span class="card-label">Failed logins</span><b id="cFailed">–</b><small>in the last hour</small></div>
+    </section>
+    </div>
 
+
+    <div class="group" id="group-devices" role="region" aria-labelledby="gt-devices" hidden>
+      <div class="group-head"><h2 id="gt-devices" tabindex="-1">Devices &amp; access</h2><p>Who can use Pocket Dev, and how new people get in.</p></div>
+    <section id="pending" class="panel" hidden>
+      <div class="panel-head"><h2>Waiting for approval</h2></div>
+      <p class="note">These browsers typed the right password. Check the code on the phone matches before you approve it. Requests expire after <span id="pendingTtl">10</span> minutes. With <a href="#settings">Approve from a logged-in phone</a> on, your other phones see this list too.</p>
+      <div class="rows" id="pendingRows"></div>
+    </section>
+
+    <section id="devices" class="panel">
+      <div class="panel-head"><h2>Devices</h2><span class="count" id="devCount"></span></div>
+      <p class="desc">Phones and browsers that are logged in, and ones you have blocked.</p>
+      <div class="rows table" id="deviceRows"></div>
+      <p class="note">Block keeps the device listed and refuses everything it sends, now and after restarts. A blocked browser that clears its cookies looks like a new device, so it could log in again with the password. To stop that, turn on <a href="#settings">Approve new devices</a> or change the password.</p>
+    </section>
+
+    <section id="sharing" class="panel" aria-labelledby="sharingTitle">
+      <div class="panel-head"><h2 id="sharingTitle">Share &amp; login</h2></div>
+      <p class="desc">Show a QR code so a phone can open Pocket Dev or log in.</p>
+      <p class="note" id="sharingNote">Scan from a phone on the same Wi-Fi as this Mac.</p>
+      <div class="setting">
+        <div class="setting-text"><b>Share Pocket Dev</b><small>Opens Pocket Dev. A new device still needs the password and any required approval.</small></div>
+        <button type="button" class="btn" id="shareQrBtn" aria-controls="shareQr" aria-expanded="false" disabled>Show share QR</button>
+      </div>
+      <div class="qr" id="shareQr" hidden>
+        <div class="qr-code" id="shareQrCode" role="img" aria-label="QR code for the Pocket Dev address"></div>
+        <div class="qr-details"><code id="shareQrUrl"></code><button type="button" class="btn btn-sm" id="shareQrCopy">Copy link</button></div>
+      </div>
+      <div class="setting">
+        <div class="setting-text"><b>Log in without a password</b><small>Works once, expires in <span id="qrTtl">10</span> minutes, and skips approval. Anyone with this link can log in.</small></div>
+        <button type="button" class="btn" id="qrBtn" aria-controls="qr" aria-expanded="false" disabled>Show login QR</button>
+      </div>
+      <div class="qr" id="qr" hidden>
+        <div class="qr-code" id="qrCode" role="img" aria-label="QR code for a one-time Pocket Dev login"></div>
+        <div class="qr-details"><code id="qrUrl"></code><p class="note" id="qrExpiry" role="status"></p><button type="button" class="btn btn-sm" id="qrCopy">Copy login link</button></div>
+      </div>
+      <p class="note" id="qrUnavailable" role="status">Checking connection…</p>
+      <p class="err" id="qrErr" role="alert"></p>
+    </section>
+
+    <section id="collaborators" class="panel"></section>
+    </div>
+
+
+    <div class="group" id="group-internet" role="region" aria-labelledby="gt-internet" hidden>
+      <div class="group-head"><h2 id="gt-internet" tabindex="-1">Internet</h2><p>Optional ways to reach Pocket Dev when you are not on your Wi-Fi.</p></div>
     <section id="internet" class="panel" aria-labelledby="internetTitle">
       <div class="panel-head"><h2 id="internetTitle">Internet access</h2><span class="count" id="netCount"></span></div>
-      <p class="note">Optional. Pocket Dev works on your Wi-Fi without any of this. With internet access on, phones on the same Wi-Fi still have the Wi-Fi address and can switch between the two.</p>
+      <p class="desc">Optional. Reach Pocket Dev from anywhere, not only your Wi-Fi.</p>
+      <p class="note"> Pocket Dev works on your Wi-Fi without any of this. With internet access on, phones on the same Wi-Fi still have the Wi-Fi address and can switch between the two.</p>
       <div class="seg net-kinds" role="group" aria-label="Internet access">
         <button type="button" data-kind="off" aria-pressed="true">Off</button>
         <button type="button" data-kind="quick" aria-pressed="false">Quick link</button>
@@ -109,31 +163,9 @@
       <p class="err" id="netErr" role="alert"></p>
     </section>
 
-    <section id="sharing" class="panel" aria-labelledby="sharingTitle">
-      <div class="panel-head"><h2 id="sharingTitle">Share &amp; login</h2></div>
-      <p class="note" id="sharingNote">Scan from a phone on the same Wi-Fi as this Mac.</p>
-      <div class="setting">
-        <div class="setting-text"><b>Share Pocket Dev</b><small>Opens Pocket Dev. A new device still needs the password and any required approval.</small></div>
-        <button type="button" class="btn" id="shareQrBtn" aria-controls="shareQr" aria-expanded="false" disabled>Show share QR</button>
-      </div>
-      <div class="qr" id="shareQr" hidden>
-        <div class="qr-code" id="shareQrCode" role="img" aria-label="QR code for the Pocket Dev address"></div>
-        <div class="qr-details"><code id="shareQrUrl"></code><button type="button" class="btn btn-sm" id="shareQrCopy">Copy link</button></div>
-      </div>
-      <div class="setting">
-        <div class="setting-text"><b>Log in without a password</b><small>Works once, expires in <span id="qrTtl">10</span> minutes, and skips approval. Anyone with this link can log in.</small></div>
-        <button type="button" class="btn" id="qrBtn" aria-controls="qr" aria-expanded="false" disabled>Show login QR</button>
-      </div>
-      <div class="qr" id="qr" hidden>
-        <div class="qr-code" id="qrCode" role="img" aria-label="QR code for a one-time Pocket Dev login"></div>
-        <div class="qr-details"><code id="qrUrl"></code><p class="note" id="qrExpiry" role="status"></p><button type="button" class="btn btn-sm" id="qrCopy">Copy login link</button></div>
-      </div>
-      <p class="note" id="qrUnavailable" role="status">Checking connection…</p>
-      <p class="err" id="qrErr" role="alert"></p>
-    </section>
-
     <section id="quickLink" class="panel" aria-labelledby="quickLinkTitle">
       <div class="panel-head"><h2 id="quickLinkTitle">Remote quick link</h2></div>
+      <p class="desc">A one-time login code for a phone that is away from your Wi-Fi.</p>
       <p class="note" id="quickLinkStatus" role="status">Checking for a running Quick link…</p>
       <div class="setting">
         <div class="setting-text"><b>Log in over the internet</b><small>Scan with the phone camera, on Wi-Fi or mobile data. Works once, expires in 10 minutes, and skips approval.</small></div>
@@ -145,46 +177,22 @@
       </div>
       <p class="err" id="quickLinkErr" role="alert"></p>
     </section>
+    </div>
 
+
+    <div class="group" id="group-messages" role="region" aria-labelledby="gt-messages" hidden>
+      <div class="group-head"><h2 id="gt-messages" tabindex="-1">Messages</h2><p>Send messages and files between this computer and your devices.</p></div>
+    <section id="messages" class="panel"></section>
+    </div>
+
+
+    <div class="group" id="group-security" role="region" aria-labelledby="gt-security" hidden>
+      <div class="group-head"><h2 id="gt-security" tabindex="-1">Security</h2><p>Your password, the record of what happened, and the emergency button.</p></div>
     <div class="banner" id="guessing" hidden role="alert"></div>
 
-    <section id="messages" class="panel"></section>
-
-    <section class="cards" aria-label="Overview">
-      <div class="card"><span class="card-label">Logged in</span><b id="cLogged">–</b><small id="cLoggedSub"></small></div>
-      <div class="card"><span class="card-label">Online now</span><b id="cOnline">–</b><small id="cOnlineSub">with a terminal open or active in the last minute</small></div>
-      <div class="card" id="cPendingCard"><span class="card-label">Waiting for approval</span><b id="cPending">–</b><small id="cPendingSub"></small></div>
-      <div class="card" id="cFailedCard"><span class="card-label">Failed logins</span><b id="cFailed">–</b><small>in the last hour</small></div>
-    </section>
-
-    <section id="pending" class="panel" hidden>
-      <div class="panel-head"><h2>Waiting for approval</h2></div>
-      <p class="note">These browsers typed the right password. Check the code on the phone matches before you approve it. Requests expire after <span id="pendingTtl">10</span> minutes. With <a href="#settings">Approve from a logged-in phone</a> on, your other phones see this list too.</p>
-      <div class="rows" id="pendingRows"></div>
-    </section>
-
-    <section id="devices" class="panel">
-      <div class="panel-head"><h2>Devices</h2><span class="count" id="devCount"></span></div>
-      <div class="rows table" id="deviceRows"></div>
-      <p class="note">Block keeps the device listed and refuses everything it sends, now and after restarts. A blocked browser that clears its cookies looks like a new device, so it could log in again with the password. To stop that, turn on <a href="#settings">Approve new devices</a> or change the password.</p>
-    </section>
-
-    <section id="log" class="panel">
-      <div class="panel-head">
-        <h2>Security log</h2>
-        <div class="seg" role="group" aria-label="Filter the log">
-          <button type="button" data-filter="all" aria-pressed="true">All</button>
-          <button type="button" data-filter="failures" aria-pressed="false">Failures</button>
-          <button type="button" data-filter="changes" aria-pressed="false">Changes</button>
-        </div>
-      </div>
-      <div class="log" id="logRows"></div>
-      <p class="note">Latest 200 events. The full log is <code id="logPath">security.log</code> in Pocket Dev's state folder.</p>
-    </section>
-
-    <div class="split">
       <section id="password" class="panel">
         <div class="panel-head"><h2>Password</h2></div>
+        <p class="desc">Change the password phones use to log in.</p>
         <form id="pwForm" class="form" autocomplete="off">
           <p class="note" id="pwNote">You're at the Mac, so the current password isn't needed.</p>
           <input type="password" name="next" autocomplete="new-password" placeholder="New password (6+ characters)" minlength="6" required aria-label="New password">
@@ -202,8 +210,42 @@
         </div>
       </section>
 
+    <section id="log" class="panel">
+      <div class="panel-head">
+        <h2>Security log</h2>
+        <div class="seg" role="group" aria-label="Filter the log">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="failures" aria-pressed="false">Failures</button>
+          <button type="button" data-filter="changes" aria-pressed="false">Changes</button>
+        </div>
+      </div>
+      <p class="desc">Who logged in, what changed, and anything that failed.</p>
+      <div class="log" id="logRows"></div>
+      <button type="button" class="btn btn-sm log-more" id="logMore" hidden>Show more</button>
+      <p class="note">Latest 200 events. The full log is <code id="logPath">security.log</code> in Pocket Dev's state folder.</p>
+    </section>
+
+      <section class="danger-zone" aria-labelledby="dzTitle">
+        <div class="dz-head"><h2 id="dzTitle">Danger zone</h2><p>These actions cut people off. You are asked to confirm before anything happens.</p></div>
+    <section id="lockdown" class="panel panel-danger" aria-labelledby="lockTitle">
+      <div class="lock">
+        <div>
+          <h2 id="lockTitle">Lockdown</h2>
+          <p>Disconnects phone access, logs out every device (including ones waiting for approval), stops every port forward, and cancels every login QR code. Blocked devices stay blocked. Terminals keep running on the Mac unless you tick the box. Phones get back in only after you press Connect; if the password leaked, change it in the same step.</p>
+          <div id="lockOptions"></div>
+        </div>
+        <button type="button" class="btn btn-lock" id="lockBtn">Lock down now</button>
+      </div>
+    </section>
+      </section>
+    </div>
+
+
+    <div class="group" id="group-computer" role="region" aria-labelledby="gt-computer" hidden>
+      <div class="group-head"><h2 id="gt-computer" tabindex="-1">This computer</h2><p>Settings and status for the computer that runs Pocket Dev.</p></div>
       <section id="settings" class="panel">
         <div class="panel-head"><h2>Settings</h2></div>
+        <p class="desc">How many devices may log in, whether new ones need approval, and the addresses phones use.</p>
         <div class="setting">
           <div class="setting-text"><b>Device limit</b><small id="limitNote"></small></div>
           <div class="form-row">
@@ -229,12 +271,10 @@
         </div>
         <p class="err" id="settingsErr"></p>
       </section>
-    </div>
-
-    <section id="collaborators" class="panel"></section>
 
     <section id="live" class="panel">
       <div class="panel-head"><h2>Live</h2></div>
+      <p class="desc">What is running right now: terminals, port forwards, chats and apps. Close things here.</p>
       <div class="live" id="liveSections"></div>
     </section>
 
@@ -250,6 +290,7 @@
 
     <section id="service" class="panel">
       <div class="panel-head"><h2>Service</h2><span class="count" id="svcLabel"></span></div>
+      <p class="desc">Keeps Pocket Dev running in the background and lets it update itself.</p>
       <div id="svcBody"></div>
       <pre class="output" id="svcOutput" hidden></pre>
       <p class="err" id="svcErr"></p>
@@ -258,17 +299,9 @@
         <button type="button" class="btn btn-danger-outline" id="stopBtn">Stop Pocket Dev now</button>
       </div>
     </section>
+    </div>
 
-    <section id="lockdown" class="panel panel-danger">
-      <div class="lock">
-        <div>
-          <h2>Lockdown</h2>
-          <p>Disconnects phone access, logs out every device (including ones waiting for approval), stops every port forward, and cancels every login QR code. Blocked devices stay blocked. Terminals keep running on the Mac unless you tick the box. Phones get back in only after you press Connect; if the password leaked, change it in the same step.</p>
-          <div id="lockOptions"></div>
-        </div>
-        <button type="button" class="btn btn-lock" id="lockBtn">Lock down now</button>
-      </div>
-    </section>
+
     <footer class="foot">This page has no password on purpose: only this Mac can reach it, and anyone using this Mac account can open it. Lock the Mac when you step away.</footer>
   </main>
 </div>
