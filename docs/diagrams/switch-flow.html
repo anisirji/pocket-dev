@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><style>
+html,body{margin:0;background:#0b0f17}
+svg{display:block;font-family:-apple-system,"SF Pro Text","Helvetica Neue",Arial,sans-serif}
+.t{fill:#e6edf7;font-size:20px;font-weight:600}.s{fill:#8d9bb3;font-size:15px}.h{fill:#e6edf7;font-size:26px;font-weight:700}
+.c{fill:#121a29;stroke:#25314a;stroke-width:1.5}.a{fill:#16294a;stroke:#4c8dff;stroke-width:2}
+.l{stroke:#4c8dff;stroke-width:2.5;fill:none}.d{stroke:#5c6b86;stroke-width:2;fill:none;stroke-dasharray:7 6}
+.acc{fill:#6ea3ff;font-size:15px;font-weight:600}.g{fill:#4cc38a}.r{fill:#ff6b6b}.y{fill:#f5b942}
+</style>
+<svg width="1200" height="520" viewBox="0 0 1200 520" xmlns="http://www.w3.org/2000/svg"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#4c8dff"/></marker><marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5c6b86"/></marker></defs><rect width="1200" height="520" fill="#0b0f17"/><text x="40" y="52" class="h">Switching to another computer</text>
+<rect x="40" y="110" width="220" height="150" rx="14" class="c"/><text x="150" y="165" text-anchor="middle" class="t">Phone</text><text x="150" y="195" text-anchor="middle" class="s">logged in to the</text><text x="150" y="215" text-anchor="middle" class="s">front device only</text>
+<rect x="340" y="110" width="220" height="150" rx="14" class="c"/><text x="450" y="165" text-anchor="middle" class="t">Front device</text><text x="450" y="195" text-anchor="middle" class="s">where you logged in</text><text x="450" y="215" text-anchor="middle" class="s">/m/&lt;device&gt;/…</text>
+<rect x="640" y="110" width="220" height="150" rx="14" class="a"/><text x="750" y="165" text-anchor="middle" class="t">Host</text><text x="750" y="195" text-anchor="middle" class="s">relays one hop</text><text x="750" y="215" text-anchor="middle" class="s">(skipped if front = host)</text>
+<rect x="940" y="110" width="220" height="150" rx="14" class="c"/><text x="1050" y="165" text-anchor="middle" class="t">Target</text><text x="1050" y="195" text-anchor="middle" class="s">files, terminal,</text><text x="1050" y="215" text-anchor="middle" class="s">Git, chat, messages</text>
+<path d="M260 185 L340 185" class="l" marker-end="url(#ar)" marker-start="url(#ar)"/><path d="M560 185 L640 185" class="l" marker-end="url(#ar)" marker-start="url(#ar)"/><path d="M860 185 L940 185" class="l" marker-end="url(#ar)" marker-start="url(#ar)"/>
+<text x="40" y="320" class="acc">Where the checks happen</text>
+<circle cx="52" cy="352" r="7" class="g"/><text x="72" y="358" class="s" style="font-size:16px">Front device: your login cookie, device limit and approval. Private headers (cookie, host) are not passed on.</text>
+<circle cx="52" cy="386" r="7" class="g"/><text x="72" y="392" class="s" style="font-size:16px">Between devices: each request carries the pair's room secret. Wrong secrets are rate limited.</text>
+<circle cx="52" cy="420" r="7" class="g"/><text x="72" y="426" class="s" style="font-size:16px">Target: has the final say. Its own mode (Read-only to Bypass) and shared folders decide; risky changes wait in its Approvals.</text>
+<text x="40" y="474" class="s" style="font-size:14px">If the host is off, members cannot reach each other: the host is a single point of failure for member-to-member work.</text></svg>
