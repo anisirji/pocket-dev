@@ -33,18 +33,10 @@ export function detectInstall(ctx, globalRoot) {
   const P = pathsFor(ctx.platform);
   const root = ctx.realpath(ctx.packageRoot);
   const segments = root.split(/[\\/]/);
-  const resolved = () => {
-    for (const file of [P.join(globalRoot ?? '', '.package-lock.json')]) {
-      try {
-        const lock = JSON.parse(ctx.readFile(file));
-        const entry = lock.packages?.[`node_modules/${PACKAGE.name}`];
-        if (entry?.resolved) return /^git\+|github\.com/.test(entry.resolved) ? 'github' : 'registry';
-      } catch {}
-    }
-    return null;
-  };
+  // The npm registry package holds only the files listed in package.json "files"; a GitHub install holds the whole repository.
+  const origin = () => (ctx.exists(P.join(root, 'test')) || ctx.exists(P.join(root, '.gitattributes')) ? 'github' : 'registry');
   if (segments.includes('_npx')) return { kind: 'npx', from: null };
-  if (globalRoot && inside(ctx.platform, root, ctx.realpath(globalRoot))) return { kind: 'global', from: resolved() };
+  if (globalRoot && inside(ctx.platform, root, ctx.realpath(globalRoot))) return { kind: 'global', from: origin() };
   const at = segments.lastIndexOf('node_modules');
   if (at !== -1) return { kind: 'local', from: null, where: segments.slice(0, at).join(P.sep) || P.sep };
   if (ctx.exists(P.join(root, '.git'))) return { kind: 'checkout', from: null };
@@ -301,7 +293,6 @@ export async function doctorDefaults() {
   return {
     packageRoot: PACKAGE_ROOT, stateDir: STATE_DIR, port: configuredPort(),
     realpath: (p) => { try { return fs.realpathSync(p); } catch { return p; } },
-    readFile: (p) => fs.readFileSync(p, 'utf8'),
     checkWritable, portFree,
     probeTerminals: () => probeTerminals({ shell, shellArgs: host.shellArgs(shell) }),
   };

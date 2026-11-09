@@ -82,8 +82,9 @@ Written for Linux and not yet tested on a real machine. Tell us what breaks.
 | `npm i anisirji/pocket-dev` was used | That installs from GitHub into the current folder and makes no command. Delete the stray `node_modules` and `package.json` it created, then run `npm install -g @anisirji/pocket-dev`. |
 | Windows: `ENOENT`, `TAR_ENTRY_ERROR` or `spawn cmd.exe ... node-pty` | Files went missing while npm unpacked. See the Windows ENOENT entry in [Troubleshooting](#troubleshooting). |
 | The phone cannot open the address | Same Wi-Fi? Firewall prompt answered? See [Troubleshooting](#troubleshooting). |
+| The phone's Terminal view says "Terminals are not available on this computer" | The optional terminal part (`node-pty`) is missing. On the computer run **`pocket-dev doctor --fix`**, then restart Pocket Dev. Everything else works meanwhile. |
 
-**Something not working?** See [Troubleshooting](#troubleshooting).
+**Something not working?** Run **`pocket-dev doctor`** on the computer. It checks Node, npm's PATH, terminals, tools and the port, and prints the exact command for each problem. See also [Troubleshooting](#troubleshooting).
 
 ## Why Pocket Dev
 
@@ -284,13 +285,18 @@ The Admin page has a **Permissions** panel that shows each of these. Details: [d
 
 **Firewall.** Windows: when the prompt appeared you must choose **Private networks**. If you dismissed it, open Windows Defender Firewall, Allow an app, and allow Node.js on Private. macOS: allow incoming connections for `node`. Linux: allow TCP 7777 from your network.
 
-**`pocket-dev` is not recognized / command not found.** You skipped `-g`, or the terminal was opened before the install. Open a new terminal and run `npm config get prefix` to see where npm puts global commands; that folder (or its `bin`) must be on your PATH.
+**`pocket-dev doctor`.** Run it on the computer where Pocket Dev is installed. It prints a table of ticks and crosses (Node version, how Pocket Dev was installed, npm's global folder on PATH, the `pocket-dev` command, terminals, Git/Claude Code/Codex/GitHub CLI/cloudflared, the settings folder, port 7777) with the exact next command for each cross. It exits 0 when everything required works and 1 otherwise. `pocket-dev doctor --fix` repairs terminals after showing the command and asking `[Y/n]` (`--yes` skips the question); it never uses `sudo`.
+
+**`pocket-dev` is not recognized / command not found.** You skipped `-g`, or the terminal was opened before the install. Open a new terminal and run `npm config get prefix` to see where npm puts global commands; that folder (or its `bin`) must be on your PATH. `pocket-dev doctor` shows that folder and the command that adds it; if the command itself is missing, run `npx -y @anisirji/pocket-dev doctor` instead.
+
+**Terminals are not available on this computer.** `node-pty`, the part that runs shells, is an optional dependency: if npm cannot download or build it, the install still succeeds and Pocket Dev starts with everything except terminals. The phone's Terminal view then shows a card with the repair command. Run **`pocket-dev doctor --fix`** on the computer, then restart Pocket Dev. If the repair reports a missing compiler: macOS `xcode-select --install`; Windows Visual Studio Build Tools (C++ workload) and Python 3; Linux `sudo apt install build-essential python3`.
 
 **Windows: ENOENT / TAR_ENTRY_ERROR / spawn cmd.exe ... node-pty.** npm lost files while unpacking (antivirus or a bad cache; installs from GitHub make it likelier). In PowerShell:
 
 1. Remove the half-installed folder: `Remove-Item -Recurse -Force "$env:APPDATA\npm\node_modules\@anisirji"`
 2. `npm cache clean --force`
-3. Retry with the scoped name and see the real error: `npm install -g @anisirji/pocket-dev --foreground-scripts`
+3. Retry with the scoped name (not `anisirji/pocket-dev`, which installs from GitHub) and see the real error: `npm install -g @anisirji/pocket-dev --foreground-scripts`. A failing `node-pty` no longer fails the install.
+   Then run `pocket-dev doctor --fix` to add the terminals back.
 4. Pause real-time antivirus for the install, or add an exclusion for the npm folders (`%APPDATA%\npm` and `%LOCALAPPDATA%\npm-cache`).
 5. If `node-pty` has to build, install Visual Studio Build Tools (C++ workload) and Python 3, then retry.
 6. If it still fails, run it without installing: `npx -y @anisirji/pocket-dev start`.
@@ -331,7 +337,7 @@ npm start          # run in the foreground
 npm test           # node --test test/*.test.mjs
 ```
 
-`postinstall` marks node-pty's `spawn-helper` as executable, because node-pty 1.1.0 ships it without the execute bit. The first start writes `~/.pocket-dev/config.json` (mode 0600) and prints the password once, a login QR and the URL. Other `npm run` scripts (`qr`, `admin`, `connect`, `disconnect`, `awake`, `lid`, `sleep`, `shutdown`, `service:*`, `autostart`) are listed in [docs/REFERENCE.md](docs/REFERENCE.md#commands). To try a build as a package: `npm pack`, then `npm install -g ./anisirji-pocket-dev-*.tgz`; or `npm link` to use your working copy as `pocket-dev`.
+Pocket Dev has no npm install scripts, so an install cannot fail on one; node-pty 1.1.0 ships its `spawn-helper` without the execute bit and `pty-loader.js` fixes that when it loads node-pty. The first start writes `~/.pocket-dev/config.json` (mode 0600) and prints the password once, a login QR and the URL. Other `npm run` scripts (`qr`, `admin`, `connect`, `disconnect`, `awake`, `lid`, `sleep`, `shutdown`, `service:*`, `autostart`) are listed in [docs/REFERENCE.md](docs/REFERENCE.md#commands). To try a build as a package: `npm pack`, then `npm install -g ./anisirji-pocket-dev-*.tgz`; or `npm link` to use your working copy as `pocket-dev`.
 
 The suite starts disposable phone and Admin listeners, uses fixture folders, stubbed power commands and a stand-in for `cloudflared`, and exercises authentication, Host/Origin/CSRF checks, terminals, chat persistence, Files, devices, lockdown, the tunnel kinds, rooms and modes. It makes no model calls, opens no real tunnel, and does not install a service or quit user apps.
 

@@ -118,6 +118,10 @@ Settings has a **Tools on this computer** section: a tick or cross for Node, Git
 
 ## Troubleshooting
 
+- **Something is wrong with the installation.** Run `pocket-dev doctor`. It checks Node, npm's global folder on PATH, the `pocket-dev` command, terminals (it starts a shell for a second), the tools, the settings folder and port 7777, and prints the exact next command for each problem. Exit code 0 means everything required works, 1 means something required is missing. `pocket-dev setup` runs the same terminal check as a step.
+- **"Terminals are not available on this computer".** `node-pty` is optional, so a failed download or build never fails the install. Run `pocket-dev doctor --fix` (it shows each command and asks `[Y/n]` first; it never uses `sudo` or downloads scripts), then restart Pocket Dev.
+- **Windows install failed with `ENOENT`, `TAR_ENTRY_ERROR` or `spawn cmd.exe ... node-pty`.** In PowerShell: `Remove-Item -Recurse -Force "$env:APPDATA\npm\node_modules\@anisirji"`, then `npm cache clean --force`, then `npm install -g @anisirji/pocket-dev` (keep the `@anisirji/` and the `-g`; `npm i anisirji/pocket-dev` installs from GitHub into the current folder), then `pocket-dev doctor --fix`. Antivirus that deletes files while npm unpacks can cause this; add an exclusion for `%APPDATA%\npm` and `%LOCALAPPDATA%\npm-cache`.
+- **`pocket-dev doctor` says "local" or "npx".** That copy is not installed for the whole computer. Install it with `npm install -g @anisirji/pocket-dev`; the doctor prints the command that removes the stray copy.
 - **"This is not an interactive terminal"** You ran setup from a pipe, a script or an editor task. Open a real terminal and run `pocket-dev setup`.
 - **Installed, but this window cannot see it yet.** The installer updated PATH for new windows only. Open a new terminal and run `pocket-dev setup` again.
 - **`EACCES` or "npm cannot write to its global folder".** Run the printed `sudo npm install -g ...` yourself, or install Node with nvm or fnm so npm writes to your home folder.
