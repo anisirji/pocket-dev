@@ -1,7 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { platform } from './platform.js';
 import { fileURLToPath } from 'node:url';
 import { PROXY_HEADERS, STATE_DIR, deviceName } from './auth.js';
 import { EVENT_KINDS, isLogFilter } from './security-log.js';
@@ -433,7 +433,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
     line: `Admin (this Mac only): ${url}`,
     openPage() {
       if (process.env.POCKET_DEV_NO_OPEN) return;
-      spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
+      if (!platform.openUrl(url)) console.warn(`Not available on this system: ${platform.capabilities().openUrl.reason} Open ${url} yourself.`);
     },
     async phoneApi(req, pathname, readBody) {
       const found = phoneRoute(req.method, pathname);
