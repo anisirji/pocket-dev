@@ -74,6 +74,55 @@ test('a device without a room reports no members and the timer does nothing', as
   assert.equal((await a.api('GET', '')).data.room, null);
 });
 
+test('retry: a kick for a device that is offline is queued and arrives when it returns', async (t) => {
+  const a = await device(t), b = await device(t);
+  await hostRoom(a);
+  const bId = await join(a, b);
+  await until(async () => (await a.member(bId)).status === 'online');
+  await b.stop();
+  const kicked = await a.api('POST', '/kick', { deviceId: bId });
+  assert.equal(kicked.status, 200);
+  assert.equal(kicked.data.notified, false);
+  assert.equal(kicked.data.room.members.length, 1);
+  assert.equal(a.stored().outbox.length, 1, 'the kick waits in the outbox');
+  assert.equal(a.stored().outbox[0].body.type, 'kicked');
+  assert.ok(b.stored().room, 'the dead device still believes it is in the room');
+
+  const back = await restart(t, b);
+  await until(() => back.stored().room === null, 5000);
+  await until(() => a.stored().outbox.length === 0, 5000);
+});
+
+test('retry: a member list for an offline member is queued, replaced by a newer one, and sent fresh', async (t) => {
+  const a = await device(t), b = await device(t), c = await device(t), d = await device(t);
+  await hostRoom(a);
+  const bId = await join(a, b), cId = await join(a, c);
+  await until(async () => (await a.member(bId)).status === 'online');
+  await c.stop();
+  const dId = await join(a, d);
+  await until(() => a.stored().outbox.some((i) => i.deviceId === cId), 3000);
+  await a.api('POST', '/kick', { deviceId: dId });
+  await until(async () => (await a.members()).length === 3);
+  assert.equal(a.stored().outbox.filter((i) => i.deviceId === cId && i.body.type === 'members').length, 1, 'one list per device');
+  const back = await restart(t, c);
+  await until(async () => (await back.members())?.length === 3 && !(await back.members()).some((m) => m.deviceId === dId), 5000);
+  await until(() => a.stored().outbox.length === 0, 5000);
+});
+
+test('retry: a member that leaves while the host is down tells it when the host returns', async (t) => {
+  const a = await device(t), b = await device(t);
+  await hostRoom(a);
+  const bId = await join(a, b);
+  await a.stop();
+  assert.equal((await b.api('POST', '/leave')).data.room, null);
+  assert.equal(b.stored().outbox.length, 1);
+  const back = await restart(t, a);
+  await until(async () => (await back.members()).length === 1, 5000);
+  assert.equal((await back.api('GET', '')).data.room.revoked[0].reason, 'left');
+  assert.equal(b.stored().outbox.length, 0, 'the delivered leave left the outbox');
+  assert.equal((await back.api('GET', '')).data.room.revoked[0].deviceId, bId);
+});
+
 // In process, with a fake clock, a fake timer and a fake network: no real waiting.
 import os from 'node:os';
 import { createRoom } from '../room.js';

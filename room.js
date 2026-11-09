@@ -20,11 +20,11 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
   every = (fn, ms) => { const timer = setInterval(fn, ms); timer.unref?.(); return () => clearInterval(timer); } }) {
   fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   const file = path.join(stateDir, 'room.json');
-  let data = { deviceId: crypto.randomBytes(8).toString('hex'), room: null };
+  let data = { deviceId: crypto.randomBytes(8).toString('hex'), room: null, outbox: [] };
   try {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (typeof saved.deviceId !== 'string') throw new Error('Invalid room state');
-    data = { deviceId: saved.deviceId, room: saved.room ?? null };
+    data = { deviceId: saved.deviceId, room: saved.room ?? null, outbox: Array.isArray(saved.outbox) ? saved.outbox : [] };
   } catch (err) { if (err.code !== 'ENOENT') throw new Error(`Cannot load room state safely: ${err.message}`); }
   const invitations = new Map();
   // Peers this device could not reach on its last try. Local only; the lastSeen age covers a device that stays silent.
@@ -75,9 +75,38 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
   }
   // The host tells one member something. The room id and the member's own secret travel with it.
   const tell = (member, type, extra = {}) => send(member, 'notify', { roomId: data.room.id, from: data.deviceId, secret: member.hostSecret, type, ...extra });
+
+  // Anything that gets an answer is done, even a refusal: the device decided. No answer, or a server error, means try again later.
+  const arrived = (r) => r.status > 0 && r.status < 500;
+  // A message nobody could receive waits in the outbox (saved in room.json, so a restart keeps it) and goes out on the timer.
+  // A newer 'members' list replaces an older one for the same device.
+  function queue(to, body) {
+    data.outbox = data.outbox.filter((i) => !(i.deviceId === to.deviceId && i.body.type === 'members' && body.type === 'members'));
+    data.outbox.push({ deviceId: to.deviceId, addresses: to.addresses, body });
+    persist();
+  }
+  async function tellOrQueue(member, type, extra) {
+    const r = await tell(member, type, extra);
+    if (!arrived(r)) queue(member, { roomId: data.room.id, from: data.deviceId, secret: member.hostSecret, type, ...extra });
+    return r;
+  }
+  // A list or handover for a device that is no longer in the room is moot. A kick or a leave still has to arrive.
+  const moot = (item) => ['members', 'handover'].includes(item.body.type) && !data.room?.members.some((m) => m.deviceId === item.deviceId);
+  async function flush() {
+    if (!data.outbox.length) return;
+    const items = data.outbox.filter((i) => !moot(i));
+    for (const item of items) {
+      if (item.body.type === 'members' && data.room && isHost()) Object.assign(item.body, { hostId: data.room.hostId, members: publicMembers(), revoked: data.room.revoked });
+    }
+    const results = await Promise.all(items.map((item) => send(item, 'notify', item.body)));
+    const pending = items.filter((_, i) => !arrived(results[i]));
+    // Items queued while we were sending stay.
+    data.outbox = data.outbox.filter((i) => pending.includes(i) || (!items.includes(i) && !moot(i)));
+    persist();
+  }
   const hostName = () => data.room.members.find((m) => m.deviceId === data.room.hostId);
   const announce = (skip) => Promise.all(data.room.members.filter((m) => m.deviceId !== data.deviceId && m.deviceId !== skip)
-    .map((m) => tell(m, 'members', { hostId: data.room.hostId, members: publicMembers(), revoked: data.room.revoked })));
+    .map((m) => tellOrQueue(m, 'members', { hostId: data.room.hostId, members: publicMembers(), revoked: data.room.revoked })));
 
   function drop() { data.room = null; persist(); }
 
@@ -126,6 +155,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     if (data.room.members.some((m) => m.deviceId === deviceId)) fail(409, 'This device is already in the room.');
     invitations.delete(key);
     const memberSecret = secret();
+    data.outbox = data.outbox.filter((i) => !(i.deviceId === deviceId && i.body.type === 'kicked'));
     data.room.revoked = data.room.revoked.filter((r) => r.deviceId !== deviceId);
     data.room.members.push({ deviceId, ...info, role: 'member', joinedAt: now(), hostSecret, secretHash: hash(memberSecret) });
     persist();
@@ -142,7 +172,8 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     const host = hostName();
     const note = { roomId: data.room.id, from: data.deviceId, secret: data.room.memberSecret, type: 'leave' };
     drop();
-    await send(host, 'notify', note);
+    const r = await send(host, 'notify', note);
+    if (!arrived(r)) queue(host, note);
     return view();
   }
 
@@ -151,7 +182,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     const target = data.room.members.find((m) => m.deviceId === body.deviceId);
     if (!target) fail(404, 'No such device in the room.');
     if (target.deviceId === data.deviceId) fail(400, 'The host cannot kick itself. Hand over or leave.');
-    const told = await tell(target, 'kicked');
+    const told = await tellOrQueue(target, 'kicked');
     removeMember(target, 'kicked');
     await announce();
     return { ...view(), notified: told.status === 200 };
@@ -224,9 +255,11 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
   // The timer. The host pings every member; a member pings the host.
   let ticking = false;
   async function tick() {
-    if (ticking || !data.room) return;
+    if (ticking) return;
     ticking = true;
     try {
+      await flush();
+      if (!data.room) return;
       const peers = isHost() ? data.room.members.filter((m) => m.deviceId !== data.deviceId) : [hostName()];
       await Promise.all(peers.map((m) => pingPeer(m).catch(() => {})));
     } finally { ticking = false; }
