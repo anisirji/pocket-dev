@@ -30,7 +30,7 @@
 .rp-title { font-weight: 600; overflow-wrap: anywhere; }
 .rp-s-done .rp-title { color: var(--muted, #7d8799); text-decoration: line-through; }
 .rp-meta { color: var(--muted, #7d8799); font-size: 12.5px; overflow-wrap: anywhere; }
-.rp-status button { min-height: 36px; padding: 4px 6px; font-size: 13px; }
+.rp-status button { min-height: 44px; padding: 4px 6px; font-size: 14px; }
 .rp-sheet { position: absolute; inset: 0; z-index: 2; display: flex; align-items: flex-end; background: #000a; }
 .rp-form { width: 100%; max-height: 92%; overflow: auto; display: grid; gap: 12px; padding: 16px; border-radius: 14px 14px 0 0; background: var(--panel, #131823); border-top: 1px solid var(--line, #252d3c); }
 .rp-form h3 { margin: 0; font-size: 17px; }

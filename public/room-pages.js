@@ -104,15 +104,18 @@ if (typeof document !== 'undefined') {
     const body = el('div', 'rp-body');
     overlay.append(head, body);
     document.body.append(overlay);
+    window.pocketDev?.overlays?.open('room-page', finish);
     const view = (page === 'tasks' ? tasksPage : chatsPage)(body, { actions, title, back });
     overlay.stop = view?.stop;
   }
-  function close() {
+  function finish() {
     clearInterval(closeTimer);
     if (!overlay) return;
     overlay.stop?.();
     overlay.remove(); overlay = null;
   }
+  // The page owns one history entry, so the Android back gesture closes it and lands on the screen below.
+  function close() { if (overlay) window.pocketDev?.overlays?.close('room-page'); finish(); }
 
   const roomInfo = async () => {
     const s = await call('GET', '/api/room');

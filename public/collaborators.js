@@ -40,7 +40,7 @@ export function mountCollaborators(container, { api, local = false, devices = ()
   function renderEnable() {
     enable.replaceChildren();
     if (state.enabled) return;
-    enable.append(el('p', 'co-note', local ? 'Select only your own trusted devices to keep as Admin. Other devices will need review on this Mac. New password logins will require Mac approval.' : 'On the Mac, open Admin → Collaborators, review your trusted devices, and enable role-based sharing.'));
+    enable.append(el('p', 'co-note', local ? 'Select only your own trusted devices to keep as Admin. Other devices will need review on this device. New password logins will require approval there.' : 'On the device itself, open Admin → Collaborators, review your trusted devices, and enable role-based sharing.'));
     if (!local) return;
     const checked = new Set();
     for (const device of devices().filter((d) => d.status === 'active')) {
@@ -88,7 +88,7 @@ export function mountCollaborators(container, { api, local = false, devices = ()
     role.onchange = syncRole; syncRole();
     const footer = el('div', 'co-actions'), save = el('button', 'co-primary', grant ? 'Save access' : 'Create collaborator'); save.type = 'submit';
     footer.append(save, button('Cancel', () => { if (!busy) form.hidden = true; }));
-    form.append(field('Name', label), field('Role', role), chooseFolder(repo, 'Repository'), repos, scopeNote, aiLabel, aiNote, el('h4', '', 'Related folders'), related, addFolder, field('Access duration', duration), el('p', 'co-note', grant ? 'Changing access ends current transfers and invalidates outstanding invitations. Developer changes will start in a fresh project copy; the old copy remains on the Mac for review.' : 'The invitation works once within 10 minutes. Access duration starts when it is accepted.'), footer);
+    form.append(field('Name', label), field('Role', role), chooseFolder(repo, 'Repository'), repos, scopeNote, aiLabel, aiNote, el('h4', '', 'Related folders'), related, addFolder, field('Access duration', duration), el('p', 'co-note', grant ? 'Changing access ends current transfers and invalidates outstanding invitations. Developer changes will start in a fresh project copy; the old copy remains on the device for review.' : 'The invitation works once within 10 minutes. Access duration starts when it is accepted.'), footer);
     form.onsubmit = (event) => {
       event.preventDefault();
       if (!form.reportValidity()) return;
@@ -111,7 +111,7 @@ export function mountCollaborators(container, { api, local = false, devices = ()
     const next = await api('POST', `/api/collaborators/${grant.id}/invite`, {});
     clearInvitation(); invitation = next;
     result.hidden = false;
-    result.append(el('h4', '', 'Share invitation'), el('p', 'co-note', 'Works once within 10 minutes. Recipient must be able to reach the Mac, usually on the same Wi-Fi. Use a trusted private connection.'));
+    result.append(el('h4', '', 'Share invitation'), el('p', 'co-note', 'Works once within 10 minutes. Recipient must be able to reach this device, usually on the same Wi-Fi. Use a trusted private connection.'));
     const url = el('textarea'); url.value = next.url; url.readOnly = true; url.rows = 3; url.setAttribute('aria-label', 'Invitation link');
     const qr = el('div'); qr.innerHTML = next.svg; qr.hidden = true;
     const controls = el('div', 'co-actions');
@@ -137,7 +137,7 @@ export function mountCollaborators(container, { api, local = false, devices = ()
       controls.append(button('Edit access', () => edit(grant)), button('New invitation', () => act(() => showInvite(grant))), button('Revoke', () => act(async () => { await api('DELETE', `/api/collaborators/${grant.id}`); clearInvitation(); }), 'co-danger'));
       if (grant.workspace) controls.append(button('Review project copy', () => {
         if (window.openFiles) window.openFiles(`${grant.workspace}/project`);
-        else { copy(`${grant.workspace}/project`).then(() => { error.textContent = 'Project-copy path copied. Open it in Files or Finder on the Mac.'; }, (err) => { error.textContent = err.message; }); }
+        else { copy(`${grant.workspace}/project`).then(() => { error.textContent = 'Project-copy path copied. Open it in Files or Finder on this device.'; }, (err) => { error.textContent = err.message; }); }
       }));
       if (grant.revoked) controls.querySelectorAll('button').forEach((b) => { if (b.textContent !== 'Edit access' && b.textContent !== 'Review project copy') b.disabled = true; });
       row.append(head, detail, controls); list.append(row);
