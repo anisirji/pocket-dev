@@ -7,6 +7,9 @@ const CONNECT_MS = 3000;
 const IDLE_MS = 60_000;
 // How long the target may take to start answering; a device that accepts the connection and then says nothing is as good as down.
 const ANSWER_MS = 30_000;
+// A change can wait for the target owner's approval (up to five minutes), so a request that changes something gets longer
+// before it counts as unanswered. Reads keep the short limit.
+const WRITE_ANSWER_MS = 5 * 60_000 + 20_000;
 const CACHE_MS = 20_000;
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const HOP = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'proxy-connection']);
@@ -17,7 +20,7 @@ const PATH = /^\/m\/([0-9a-f]{4,64})(\/.*)?$/;
 // Working on another device through the room. The phone logs in on one device (the front); `/m/<deviceId>/<path>` on the
 // front is passed to that device. The room is a star, so a member reaches another member through the host (one hop) and
 // the host reaches everyone directly. The target decides what the originating member may do (room.authPeerRequest).
-export function createForward({ room, auth, collaborators, sendJson, modes, guard, answerMs = ANSWER_MS, idleMs = IDLE_MS }) {
+export function createForward({ room, auth, collaborators, sendJson, modes, guard, answerMs = ANSWER_MS, writeAnswerMs = WRITE_ANSWER_MS, idleMs = IDLE_MS }) {
   const good = new Map(); // deviceId -> { url, at }: the address that answered last
 
   // Sockets that exist because of the room: the pipes this device passes on, and sockets a member opened to this device.
@@ -143,7 +146,7 @@ export function createForward({ room, auth, collaborators, sendJson, modes, guar
       ur.pipe(res);
     });
     // The clock starts when the whole request has been handed over, so a slow upload is not cut short.
-    up.on('finish', () => { answer = setTimeout(() => up.destroy(new Error('no answer')), answerMs); });
+    up.on('finish', () => { answer = setTimeout(() => up.destroy(new Error('no answer')), MUTATING.has(req.method) ? Math.max(answerMs, writeAnswerMs) : answerMs); });
     up.on('timeout', () => up.destroy(new Error('timed out')));
     up.on('error', fail);
     res.on('close', () => { clearTimeout(answer); up.destroy(); });

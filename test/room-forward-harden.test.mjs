@@ -171,7 +171,7 @@ test('a target that accepts the connection and never answers gives a 502 after t
   await new Promise((r) => silent.listen(0, '127.0.0.1', r));
   t.after(() => { silent.closeAllConnections(); silent.close(); });
   const room = { deviceId: () => 'front', route: () => ({ roomId: 'r', sender: 'front', deviceId: 'abcd', name: 'Quiet', addresses: [`http://127.0.0.1:${silent.address().port}`], secret: 's', relayTo: null }) };
-  const forward = createForward({ room, auth: { deviceFor: () => ({ id: 'd' }) }, collaborators: { guest: () => null }, answerMs: 300,
+  const forward = createForward({ room, auth: { deviceFor: () => ({ id: 'd' }) }, collaborators: { guest: () => null }, answerMs: 300, writeAnswerMs: 300,
     sendJson: (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); } });
   const front = http.createServer((req, res) => forward.http(req, res, new URL(req.url, 'http://x')));
   await new Promise((r) => front.listen(0, '127.0.0.1', r));
