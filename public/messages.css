@@ -144,3 +144,5 @@
 .mx-storage-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 
 #viewSwitch [data-view="messages"], #messagesBtn { position: relative; }
+
+.mx-origin { flex: none; padding: 0 6px; border: 1px solid currentColor; border-radius: 8px; font-size: 10.5px; line-height: 16px; opacity: .85; font-weight: 500; }

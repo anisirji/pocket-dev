@@ -775,7 +775,7 @@ const PAGES = {
   '/folder-picker.js': 'folder-picker.js', '/folder-picker.css': 'folder-picker.css',
   '/messages.js': 'messages.js', '/messages.css': 'messages.css',
   '/collaborators.js': 'collaborators.js', '/collaborators.css': 'collaborators.css',
-  '/room-screen.js': 'room-screen.js', '/room.css': 'room.css', '/vendor/qrcode/qrcode.js': 'vendor/qrcode/qrcode.js',
+  '/room-pages.js': 'room-pages.js', '/room-pages.css': 'room-pages.css', '/room-screen.js': 'room-screen.js', '/room.css': 'room.css', '/vendor/qrcode/qrcode.js': 'vendor/qrcode/qrcode.js',
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
 };
 const PUBLIC_PAGES = new Set(['login.html', 'invite.html', 'invite.js', 'guest.css']);
