@@ -34,7 +34,7 @@ class Refusal extends Error {
 export async function takeoverCommand(args, {
   adminUrl = readAdminUrl, fetch: request = fetch, run = spawnSync, listProcesses: list = listProcesses,
   claudeSessions = () => readClaudeSessions(claudeSessionsDir()), lookup = findConversation, ask = askYesNo,
-  out = console.log, err = console.error, uid = process.getuid(), selfPid = process.pid, home = os.homedir(),
+  out = console.log, err = console.error, uid = process.getuid?.() ?? 0, selfPid = process.pid, home = os.homedir(),
 } = {}) {
   const [target, ...extra] = args;
   if (!target || extra.length || (target !== '--last' && !ID_RE.test(target))) {

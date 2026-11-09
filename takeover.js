@@ -219,7 +219,7 @@ function where(copies) {
 // stops one's engine. `log(type, fields)` writes the security log.
 export function createTakeover({
   listProcesses: list = listProcesses, claudeSessions = () => [], kill: send = kill, isAlive, sleep = sleepFor, now = Date.now,
-  uid = process.getuid(), selfPid = process.pid, log = () => {},
+  uid = process.getuid?.() ?? 0, selfPid = process.pid, log = () => {},
   terminals = () => [], endTerminal = () => false, chats = () => [], releaseChat = async () => false,
 }) {
   isAlive ??= async (proc) => {
