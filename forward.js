@@ -18,6 +18,26 @@ const PATH = /^\/m\/([0-9a-f]{4,64})(\/.*)?$/;
 export function createForward({ room, auth, collaborators, sendJson }) {
   const good = new Map(); // deviceId -> { url, at }: the address that answered last
 
+  // Sockets that exist because of the room: the pipes this device passes on, and sockets a member opened to this device.
+  // When the room, its host, or either end's membership changes they are closed, not just refused next time.
+  const held = new Set();
+  const stale = (e) => { const s = room.snapshot?.(); return !s || s.id !== e.roomId || s.hostId !== e.hostId || !s.ids.includes(e.origin) || Boolean(e.target && !s.ids.includes(e.target)); };
+  function sweep() { for (const e of [...held]) if (stale(e)) { held.delete(e); e.close(); } }
+  room.onChange?.(sweep);
+  function hold(entry) {
+    const s = room.snapshot?.();
+    if (!s) return () => {};
+    const e = { ...entry, roomId: s.id, hostId: s.hostId };
+    held.add(e);
+    return () => held.delete(e);
+  }
+  // Called for an upgrade that arrived with a room credential, before it is handled.
+  function watch(req, socket) {
+    if (!req.roomPeer) return;
+    const release = hold({ origin: req.roomPeer.origin, close: () => socket.destroy() });
+    socket.once('close', release);
+  }
+
   // Called for every request first. Returns null for an ordinary request, an error to refuse, and otherwise marks `req` as
   // coming from a room member: admin level becomes a virtual owner device, collaborator level a guest (see collaborators.guest).
   function identify(req) {
@@ -139,7 +159,8 @@ export function createForward({ room, auth, collaborators, sendJson }) {
         if (uhead.length) socket.write(uhead);
         if (head.length) usock.write(head);
         usock.pipe(socket); socket.pipe(usock);
-        const stop = () => { usock.destroy(); socket.destroy(); };
+        const release = hold({ origin: p.origin, target: targetId, close: () => stop() });
+        const stop = () => { release(); usock.destroy(); socket.destroy(); };
         usock.on('error', stop); socket.on('error', stop); usock.on('close', stop); socket.on('close', stop);
       });
       up.on('response', (ur) => { ur.resume(); reject(socket, ur.statusCode, ur.statusMessage || 'Refused'); });
@@ -148,5 +169,5 @@ export function createForward({ room, auth, collaborators, sendJson }) {
     }, () => reject(socket, 502, 'Bad Gateway'));
   }
 
-  return { identify, http: http_, upgrade, isForward: (pathname) => pathname.startsWith('/m/') };
+  return { identify, http: http_, upgrade, watch, isForward: (pathname) => pathname.startsWith('/m/') };
 }

@@ -141,7 +141,10 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
 
   // Whoever keeps data of the room (task, message and chat copies) registers here and wipes it when this device is out.
   const dropHandlers = [];
-  function drop() { data.room = null; persist(); reconcile(); for (const fn of dropHandlers) fn(); }
+  function drop() { data.room = null; persist(); reconcile(); for (const fn of dropHandlers) fn(); changed(); }
+  // Whoever holds a connection that was opened because of the room (forward.js) looks again when the members or the host change.
+  const changeHandlers = [];
+  const changed = () => { for (const fn of changeHandlers) { try { fn(); } catch { /* a listener must not break the room */ } } };
 
   async function create(body) {
     if (data.room) fail(409, 'This device is already in a room. Leave it first.');
@@ -227,6 +230,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     data.room.revoked.push({ deviceId: target.deviceId, name: target.name, reason, at: now() });
     persist();
     reconcile();
+    changed();
   }
 
   async function handover(body) {
@@ -244,6 +248,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     for (const m of data.room.members) { delete m.hostSecret; delete m.secretHash; }
     me().role = 'member'; target.role = 'host';
     persist();
+    changed();
     return view();
   }
 
@@ -280,6 +285,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
         data.room.members = r.body.members.map(publicMember);
         data.room.revoked = Array.isArray(r.body.revoked) ? r.body.revoked : data.room.revoked;
         data.room.hostId = r.body.hostId;
+        changed();
         await reconcile();
       }
       const entry = data.room.members.find((m) => m.deviceId === peer.deviceId);
@@ -319,6 +325,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
       data.room.revoked = Array.isArray(body.revoked) ? body.revoked : [];
       data.room.hostId = body.hostId;
       persist();
+      changed();
       await reconcile();
       return { ok: true };
     }
@@ -334,6 +341,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
       mine.role = 'host'; delete mine.hostSecret; delete mine.secretHash;
       data.room = { id: data.room.id, hostId: data.deviceId, revoked: body.room.revoked || [], members: list };
       persist();
+      changed();
       await reconcile();
       return { ok: true, hostSecret };
     }
@@ -419,5 +427,6 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
 
   reconcile();
 
-  return { handleApi, view, tick, isTrustedAdmin: (deviceId) => trustedAdmins().includes(deviceId), grantsReady: () => grantQueue, close: stopTimer, deviceId: () => data.deviceId, peers, authPeer, authPeerRequest, route, onDrop: (fn) => dropHandlers.push(fn) };
+  return { handleApi, view, tick, isTrustedAdmin: (deviceId) => trustedAdmins().includes(deviceId), grantsReady: () => grantQueue, close: stopTimer, deviceId: () => data.deviceId, peers, authPeer, authPeerRequest, route, onDrop: (fn) => dropHandlers.push(fn),
+    onChange: (fn) => changeHandlers.push(fn), snapshot: () => data.room && { id: data.room.id, hostId: data.room.hostId, ids: data.room.members.map((m) => m.deviceId) } };
 }

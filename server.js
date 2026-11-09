@@ -845,6 +845,7 @@ server.on('upgrade', (req, socket, head) => {
   const refused = forward.identify(req);
   if (refused) return rejectUpgrade(socket, refused.status, 'Forbidden');
   const target = new URL(req.url, 'http://localhost');
+  forward.watch(req, socket);
   if (forward.isForward(target.pathname)) return forward.upgrade(req, socket, head, target, rejectUpgrade);
   if (target.pathname === '/ws/messages') return messages.handleUpgrade(req, socket, head);
   if (collaborators.guest(req)) return rejectUpgrade(socket, 403, 'Forbidden');
