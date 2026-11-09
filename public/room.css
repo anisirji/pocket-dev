@@ -1,0 +1,7 @@
+.rm .rm-name { display: flex; align-items: center; min-width: 0; overflow-wrap: anywhere; }
+.rm-dot { flex: none; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; background: var(--muted); }
+.rm-online { background: var(--ok, #7ee787); }
+.rm-offline { background: transparent; border: 2px solid var(--muted); box-sizing: border-box; }
+.rm .co-actions { margin-top: 10px; }
+.rm .co-result textarea { font: 600 14px/1.4 ui-monospace, Menlo, monospace; }
+.rm .co-form .co-field > span { color: var(--muted); font-size: 13px; }

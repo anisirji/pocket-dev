@@ -40,6 +40,7 @@
       <section data-mount="connection" hidden></section>
       <section data-mount="service"></section>
       <section data-mount="collaborators"></section>
+      <section data-mount="room"></section>
       <section>
         <h3>Devices</h3>
         <p class="st-summary"></p>
@@ -111,6 +112,7 @@
   let editingId = null;
   let timer = 0;
   let collaborators;
+  let room;
 
   function renderDevices() {
     const { devices, currentDeviceId } = settings;
@@ -405,6 +407,10 @@
       collaborators ||= m.mountCollaborators($('[data-mount="collaborators"]'), { api });
       collaborators.refresh();
     }).catch((err) => { $('[data-mount="collaborators"]').textContent = `Could not load Collaborators: ${err.message}. Restart Pocket Dev and reload.`; });
+    import('/room-screen.js').then((m) => {
+      room ||= m.mountRoom($('[data-mount="room"]'), { api });
+      room.refresh();
+    }).catch((err) => { $('[data-mount="room"]').textContent = `Could not load Room: ${err.message}. Reload this page.`; });
     mountPower();
     await refresh();
   }
