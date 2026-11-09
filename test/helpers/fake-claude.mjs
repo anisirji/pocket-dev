@@ -27,6 +27,19 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     send({ type: 'system', subtype: 'init', session_id: session, cwd: process.cwd(), tools: [], model: 'fake', permissionMode: 'default', apiKeySource: 'none', mcp_servers: [], slash_commands: [], output_style: 'default' });
   }
   const text = JSON.stringify(m.message?.content ?? '');
+  if (text.includes('helpers')) {
+    // Two helper agents and a todo list; the second helper's tool calls are tagged with its parent's id.
+    const use = (id, name, input, parent = null) => send({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', model: 'fake', content: [{ type: 'tool_use', id, name, input }] }, parent_tool_use_id: parent, session_id: session });
+    use('toolu_todo', 'TodoWrite', { todos: [{ content: 'Write plan', status: 'completed', activeForm: 'Writing plan' }, { content: 'Build it', status: 'in_progress', activeForm: 'Building' }] });
+    use('toolu_h1', 'Agent', { description: 'Search the codebase', prompt: 'look' });
+    use('toolu_h2', 'Agent', { description: 'Write the tests', prompt: 'write' });
+    use('toolu_c1', 'Read', { file_path: '/tmp/a.js' }, 'toolu_h1');
+    use('toolu_c2', 'Grep', { pattern: 'needle' }, 'toolu_h1');
+    use('toolu_c3', 'Bash', { command: 'npm test' }, 'toolu_h2');
+    after(700, () => send({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_h1', content: 'found it' }] }, parent_tool_use_id: null, session_id: session }));
+    after(text.includes('linger') ? 60000 : 900, () => { assistant('helpers done'); result(); });
+    return;
+  }
   assistant('first answer');
   result();
   if (text.includes('background')) {
