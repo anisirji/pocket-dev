@@ -1,6 +1,6 @@
 # Pocket Dev
 
-<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/hero.png" width="760" alt="Pocket Dev on a phone: terminal, Git, Files and Chat controlling a computer"></p>
+<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/hero.png" width="760" alt="Pocket Dev on a phone: terminal, Git, Files and Chat controlling a computer"></p>
 
 <p align="center"><b>Control your computers from your phone's browser: terminals, Claude Code and Codex chats, Git, files and more. Several computers, one phone, no cloud account.</b></p>
 
@@ -15,13 +15,15 @@ Pocket Dev is one Node.js server that runs on a computer as your user. Your phon
 
 ## Set it up in 5 minutes
 
-<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/diagrams/install-flow.png" width="860" alt="Five steps: install Node, install Pocket Dev, start it, open the address on the phone, log in"></p>
+<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/diagrams/install-flow.png" width="860" alt="Five steps: install Node, install Pocket Dev, start it, open the address on the phone, log in"></p>
 
 You need a computer (Mac, Windows 11 or Linux) and a phone on the same Wi-Fi. You do not need to know Node. Pick your system, follow the numbered steps, and compare what you see with the line under each step.
 
 > **Use the name with the `@` and `-g`: `npm install -g @anisirji/pocket-dev`.** `npm i anisirji/pocket-dev` (no `@`) installs from GitHub, not from npm, into the current folder, and does not create the `pocket-dev` command.
 
 Want to try it first without installing? `npx -y @anisirji/pocket-dev start` runs it once and leaves nothing behind (it is slower to start).
+
+> **Guided setup of the extras.** After it is installed, run **`pocket-dev setup`**. It checks Node, Git, Claude Code, Codex, the GitHub CLI and Cloudflare's `cloudflared`, shows the exact command before it installs anything, hands over to each tool's own login (`claude auth login`, `codex login`, `gh auth login`), then sets your password, the phone access and start-at-login. `pocket-dev setup --check` only shows the status; `--dry-run` shows the plan. Details: [docs/SETUP.md](docs/SETUP.md). The same checklist is in Settings, under **Tools on this computer**.
 
 ### macOS
 
@@ -70,7 +72,7 @@ Written for Linux and not yet tested on a real machine. Tell us what breaks.
 
 ### What you should see
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/01-login.png" width="240" alt="The Pocket Dev login page on a phone"><br><sub>Log in with the printed password</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/02-terminal.png" width="240" alt="A terminal tab on a phone with the key bar"><br><sub>Your first terminal</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/10-settings.png" width="240" alt="The Settings screen with Connection and Room"><br><sub>Settings</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/01-login.png" width="240" alt="The Pocket Dev login page on a phone"><br><sub>Log in with the printed password</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/02-terminal.png" width="240" alt="A terminal tab on a phone with the key bar"><br><sub>Your first terminal</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/10-settings.png" width="240" alt="The Settings screen with Connection and Room"><br><sub>Settings</sub></td></tr></table>
 
 ### Common first-time mistakes
 
@@ -89,7 +91,7 @@ Written for Linux and not yet tested on a real machine. Tell us what breaks.
 - **No cloud in the middle.** Each computer runs its own server and talks to your phone over your Wi-Fi. Nothing is installed on the phone. Internet access is optional and off by default.
 - **Several computers, one phone.** Join them into a room, switch between them, share tasks and messages, and decide per device how much it may do.
 
-<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/diagrams/architecture.png" width="860" alt="Phone talking to a Mac, a Windows PC and a Linux box over Wi-Fi, each running its own Pocket Dev"></p>
+<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/diagrams/architecture.png" width="860" alt="Phone talking to a Mac, a Windows PC and a Linux box over Wi-Fi, each running its own Pocket Dev"></p>
 
 ## Tour
 
@@ -97,43 +99,43 @@ Details for every feature are in [docs/REFERENCE.md](docs/REFERENCE.md). A one-p
 
 ### Terminals
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/02-terminal.png" width="240" alt="Terminal tab with the key bar"><br><sub>Terminal with the compact key bar</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/02-terminal.png" width="240" alt="Terminal tab with the key bar"><br><sub>Terminal with the compact key bar</sub></td></tr></table>
 
 Each tab is a login shell in a real pty (zsh or your `$SHELL` on macOS and Linux, PowerShell on Windows). Terminals keep running when the phone sleeps or you change tabs, and reconnect with recent output replayed. A folder picker, shortcuts, uploads and a Copy view are built in. Terminals do not survive a computer restart.
 
 ### Files
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/03-files.png" width="240" alt="Files browser"><br><sub>Browse and upload</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/04-files-preview.png" width="240" alt="File preview"><br><sub>Preview a file</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/03-files.png" width="240" alt="Files browser"><br><sub>Browse and upload</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/04-files-preview.png" width="240" alt="File preview"><br><sub>Preview a file</sub></td></tr></table>
 
 Browse the folders you allow (your home folder by default), upload several files with progress (2 GB each, never overwriting), download or zip, rename, search by name, and move to the Trash or Recycle Bin. Previews cover images, video, audio, PDF and text, in a sandbox. Every path is checked again after symlinks resolve.
 
 ### Git
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/05-git-changes.png" width="240" alt="Git changes tab"><br><sub>Changes, commit and push</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/06-git-history.png" width="240" alt="Git history graph"><br><sub>History graph</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/05-git-changes.png" width="240" alt="Git changes tab"><br><sub>Changes, commit and push</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/06-git-history.png" width="240" alt="Git history graph"><br><sub>History graph</sub></td></tr></table>
 
 A commit graph of all branches, per-file diffs, and a Changes tab that commits everything with your message and pushes (never forcing). Switch and create branches, stash and apply stashes, and work with GitHub pull requests: review, merge, close, reopen and create (through `gh`).
 
 ### Chat with Claude Code and Codex
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/07-chat.png" width="240" alt="Chat with an approval card"><br><sub>Chat with approval cards</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/08-chat-agents.png" width="240" alt="The agents panel in a chat"><br><sub>Agents panel</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/07-chat.png" width="240" alt="Chat with an approval card"><br><sub>Chat with approval cards</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/08-chat-agents.png" width="240" alt="The agents panel in a chat"><br><sub>Agents panel</sub></td></tr></table>
 
 Start or continue Claude Code and Codex conversations from the phone, with your existing logins. Approval cards (**Allow once**, **Always allow in this chat**, **Deny**), permission modes, a message queue, limits notices and a Copy button are built in. New in 1.1: an agents panel in the chat. You can also resume any conversation from the terminal and take it over from the Mac with `pocket-dev takeover`.
 
 ### Messages
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/09-messages.png" width="240" alt="Messages between devices"><br><sub>WhatsApp-style messages</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/09-messages.png" width="240" alt="Messages between devices"><br><sub>WhatsApp-style messages</sub></td></tr></table>
 
 A WhatsApp-style chat between your computers, your phones and the people you invite: text, photos, videos and files. Direct and group chats, delete for everyone, hide for me. From a terminal: `pocket-dev message "build finished"`.
 
 ### Open apps, health and power
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/11-health.png" width="240" alt="Health panel with battery and CPU"><br><sub>Health and alerts</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/12-power.png" width="240" alt="Power screen with keep awake and sleep"><br><sub>Power</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/11-health.png" width="240" alt="Health panel with battery and CPU"><br><sub>Health and alerts</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/12-power.png" width="240" alt="Power screen with keep awake and sleep"><br><sub>Power</sub></td></tr></table>
 
 Open apps lists what is running with memory and CPU and can quit or force quit. The health panel and the strip at the top show battery, temperature, CPU, memory and disk, with alerts when something is off. Power can keep the computer awake (`off`, `plugged`, `always`), put it to sleep or shut it down. **Screen view** shows a read-only picture of the main display.
 
 ### Collaborators and the Admin page
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/24-collaborators.png" width="240" alt="Collaborators sharing one project"><br><sub>One-project access with expiry</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/25-admin.png" width="240" alt="The Admin page on the computer"><br><sub>Admin page (computer only)</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/24-collaborators.png" width="240" alt="Collaborators sharing one project"><br><sub>One-project access with expiry</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/25-admin.png" width="240" alt="The Admin page on the computer"><br><sub>Admin page (computer only)</sub></td></tr></table>
 
 Share one project with someone for 1 hour, 1 day or 7 days through a QR invitation: a Viewer previews and downloads, a Developer edits a separate copy, and neither can reach your terminals, chats or other folders. The Admin page runs on `http://localhost:7778` and only a process on the computer can open it: devices, security log, internet access, service, lockdown.
 
@@ -141,35 +143,35 @@ Share one project with someone for 1 hour, 1 day or 7 days through a QR invitati
 
 Install Pocket Dev on each computer. A **room** joins them so the phone can switch between them, share tasks and messages, and approve what other devices do. The room has one host. Each device keeps its own files, terminals and logins, and nothing private is shared unless its owner allows it.
 
-<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/diagrams/room-star.png" width="860" alt="The host in the middle, members around it, a secret for every pair, control going from host to member only"></p>
+<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/diagrams/room-star.png" width="860" alt="The host in the middle, members around it, a secret for every pair, control going from host to member only"></p>
 
 **1. Host a room.** On the computer that will be the host: **Settings, Room**, start a room.
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/13-room-start.png" width="240" alt="Starting a room on the host"><br><sub>Start a room</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/14-room-add-device.png" width="240" alt="Add a device: code and QR"><br><sub>Add a device shows a code and QR</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/13-room-start.png" width="240" alt="Starting a room on the host"><br><sub>Start a room</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/14-room-add-device.png" width="240" alt="Add a device: code and QR"><br><sub>Add a device shows a code and QR</sub></td></tr></table>
 
 **2. Add a device.** On the host choose **Add a device**. It shows a short code such as `ABCD-EFGH`, the host's Wi-Fi address and a QR. The code works once, for 10 minutes.
 
 **3. Join.** On the other computer: **Settings, Room, Join a room**. Join any of three ways: paste the invite line or type the address and code, **scan the QR with the camera**, or **choose a photo of the QR**. Then pick what the room may do on this device: **Admin** (everything) or **Collaborator** (chosen folders only).
 
-<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/diagrams/join-flow.png" width="860" alt="The new device sends the code, the host accepts and returns a secret, the host calls back, both are online"></p>
+<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/diagrams/join-flow.png" width="860" alt="The new device sends the code, the host accepts and returns a secret, the host calls back, both are online"></p>
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/15-room-join.png" width="240" alt="Joining by code, scan or photo"><br><sub>Join by code, camera or photo</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/16-room-members.png" width="240" alt="The member list with online status"><br><sub>Members and who is online</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/15-room-join.png" width="240" alt="Joining by code, scan or photo"><br><sub>Join by code, camera or photo</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/16-room-members.png" width="240" alt="The member list with online status"><br><sub>Members and who is online</sub></td></tr></table>
 
 **4. Switch.** Tap the **Work on** switcher (the device name in the top strip) to open another device's Files, Terminal, Git, Chat and Messages through the host. Offline devices are marked and say why.
 
-<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/diagrams/switch-flow.png" width="860" alt="The phone talks to the front device, which passes requests through the host to the target; checks happen at each hop"></p>
+<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/diagrams/switch-flow.png" width="860" alt="The phone talks to the front device, which passes requests through the host to the target; checks happen at each hop"></p>
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/17-switcher.png" width="240" alt="The Work on switcher"><br><sub>Work on another device</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/18-remote-files.png" width="240" alt="Files of another computer"><br><sub>Files of a remote computer</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/17-switcher.png" width="240" alt="The Work on switcher"><br><sub>Work on another device</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/18-remote-files.png" width="240" alt="Files of another computer"><br><sub>Files of a remote computer</sub></td></tr></table>
 
 **5. Tasks, messages and chats.** A simple board with ids like `LAP-14` (To do, Doing, Done, assignee) syncs between devices and catches up after a device was off. Messages to everyone and AI chats from admin-level devices are copied to the others as read-only mirrors (Room chats).
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/19-tasks.png" width="240" alt="The shared task board"><br><sub>Shared tasks</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/20-room-chats.png" width="240" alt="Chats mirrored from other devices"><br><sub>Room chats</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/21-approvals.png" width="240" alt="The approvals inbox"><br><sub>Approvals inbox</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/19-tasks.png" width="240" alt="The shared task board"><br><sub>Shared tasks</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/20-room-chats.png" width="240" alt="Chats mirrored from other devices"><br><sub>Room chats</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/21-approvals.png" width="240" alt="The approvals inbox"><br><sub>Approvals inbox</sub></td></tr></table>
 
 **6. Modes per device.** For each other device you choose Read-only, Plan, Ask, Auto or Bypass. The device's own owner sets it, and risky actions (deleting a folder, running unknown programs, anything outside the shared folders) ask first, except in Bypass. Bypass lasts 1, 2, 3 or 4 hours or Always, shows a red banner on the device, and only that device's owner can turn it on.
 
-<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/diagrams/modes.png" width="860" alt="Five modes from Read-only to Bypass as a ladder of increasing access"></p>
+<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/diagrams/modes.png" width="860" alt="Five modes from Read-only to Bypass as a ladder of increasing access"></p>
 
-<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/22-permissions.png" width="240" alt="Choosing a mode per device"><br><sub>Per-device modes</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@__VERSION__/docs/screenshots/23-bypass-banner.png" width="240" alt="The red Bypass banner"><br><sub>Bypass banner</sub></td></tr></table>
+<table><tr><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/22-permissions.png" width="240" alt="Choosing a mode per device"><br><sub>Per-device modes</sub></td><td align="center" valign="top"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/screenshots/23-bypass-banner.png" width="240" alt="The red Bypass banner"><br><sub>Bypass banner</sub></td></tr></table>
 
 **7. Approve.** Requests that need a yes wait in the **Approvals** inbox on the device concerned. The first answer wins.
 
