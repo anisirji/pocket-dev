@@ -284,6 +284,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
   const hasCookieFor = (device, host) => device.tokenHashes.some((c) => c.host === host);
 
   function deviceFor(req) {
+    if (req.roomPeer) return req.roomDevice; // set only for a room member with admin level here, never from a cookie
     const device = lookup(req);
     return device && isActive(device) ? device : undefined;
   }

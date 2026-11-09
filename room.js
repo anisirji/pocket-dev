@@ -354,6 +354,48 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     list: (isHost() ? data.room.members.filter((m) => m.deviceId !== data.deviceId).map((m) => ({ ...publicMember(m), secret: m.hostSecret })) : [{ ...publicMember(hostName()), secret: data.room.memberSecret }]).filter((p) => p.secret) };
   const authPeer = (body) => (data.room && (isHost() ? asMember(body) : fromHost(body)) ? body.from : null);
 
+  // A request from another device of this room, proven by headers instead of a login. The sender is the device that holds
+  // the secret; the origin is the member on whose behalf it acts. A member sending to the host acts only for itself. The host
+  // sending to a member may vouch for any member (or itself). Either way the rank is what THIS device's owner chose at join.
+  function authPeerRequest(h) {
+    const [roomId, sender, secret, from] = ['x-room-id', 'x-room-sender', 'x-room-secret', 'x-room-from'].map((k) => h[k]);
+    if (![roomId, sender, secret, from].every((v) => typeof v === 'string' && v)) fail(403, 'Not a member of this room.');
+    if (!data.room || roomId !== data.room.id) fail(403, 'Not a member of this room.');
+    const mine = me();
+    const principal = (origin) => ({ roomId, origin: origin.deviceId, name: origin.name, level: mine.level, folders: mine.folders });
+    if (isHost()) {
+      const member = asMember({ roomId, from: sender, secret });
+      if (!member) fail(403, data.room.revoked.some((r) => r.deviceId === sender) ? 'This device was removed from the room.' : 'Not a member of this room.');
+      if (from !== sender) fail(403, 'A member can only act for itself.');
+      return { ...principal(member), relay: true };
+    }
+    if (!fromHost({ roomId, from: sender, secret })) fail(403, 'Only the host can vouch for a member.');
+    const origin = data.room.members.find((m) => m.deviceId === from);
+    if (!origin || origin.deviceId === data.deviceId) fail(403, 'Not a member of this room.');
+    return { ...principal(origin), relay: false };
+  }
+
+  // How this device reaches `targetId`: straight, or through the host (a member holds a secret for the host only).
+  function route(targetId) {
+    need();
+    const target = data.room.members.find((m) => m.deviceId === targetId);
+    if (!target) fail(404, 'No such device in the room.');
+    if (target.deviceId === data.deviceId) fail(400, 'That is this device.');
+    const base = { roomId: data.room.id, sender: data.deviceId, deviceId: target.deviceId, name: target.name };
+    if (isHost()) return target.hostSecret ? { ...base, addresses: target.addresses, secret: target.hostSecret, relayTo: null } : fail(409, 'This device has no secret for that member.');
+    const host = hostName();
+    return { ...base, addresses: host.addresses, secret: data.room.memberSecret, relayTo: target === host ? null : target.deviceId };
+  }
+
+  // For the machine switcher: every device, whether it answers, and the rank this device's user has there.
+  async function devices(fresh) {
+    if (!data.room) return { devices: [] };
+    if (fresh) await live();
+    return { deviceId: data.deviceId, devices: publicMembers().map((m) => ({ deviceId: m.deviceId, name: m.name, role: m.role, online: m.status === 'online',
+      self: m.deviceId === data.deviceId, rank: m.deviceId === data.deviceId ? 'owner' : m.level, ...(m.level === 'collaborator' && m.deviceId !== data.deviceId && { folders: m.folders }),
+      path: m.deviceId === data.deviceId || isHost() || m.role === 'host' ? 'direct' : 'host' })) };
+  }
+
   async function handleApi(req, res, url, { readJson, sendJson, loggedIn }) {
     const name = url.pathname.split('/')[3];
     const peer = req.method === 'POST' && (name === 'ping' || name === 'accept' || name === 'notify');
@@ -362,6 +404,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
       const body = req.method === 'POST' && req.headers['content-type'] ? await readJson(req) : {};
       const routes = {
         'GET ': () => url.searchParams.get('live') ? live() : view(),
+        'GET devices': () => devices(url.searchParams.get('live')),
         'POST create': () => create(body), 'POST invite': invite, 'POST join': () => join(body), 'POST leave': leave,
         'POST kick': () => kick(body), 'POST handover': () => handover(body),
         'POST ping': () => ping(body), 'POST accept': () => accept(body), 'POST notify': () => notify(body),
@@ -374,5 +417,5 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
 
   reconcile();
 
-  return { handleApi, view, tick, isTrustedAdmin: (deviceId) => trustedAdmins().includes(deviceId), grantsReady: () => grantQueue, close: stopTimer, deviceId: () => data.deviceId, peers, authPeer };
+  return { handleApi, view, tick, isTrustedAdmin: (deviceId) => trustedAdmins().includes(deviceId), grantsReady: () => grantQueue, close: stopTimer, deviceId: () => data.deviceId, peers, authPeer, authPeerRequest, route };
 }
