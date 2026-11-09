@@ -21,6 +21,7 @@ import { startAdmin } from './admin.js';
 import { createPhoneAccess } from './access.js';
 import { createChatApi } from './chat/index.js';
 import { createFilesApi } from './files.js';
+import { platform } from './platform.js';
 import { createCollaborators } from './collaborators.js';
 import { captureScreen } from './screen.js';
 import { collectHealth } from './health.js';
@@ -352,7 +353,7 @@ async function adoptTerminals() {
 
 // `command`, when given, is typed into the new shell once its prompt is up.
 async function createSession(cwd, base = folderName(cwd), command) {
-  const shell = process.env.SHELL || '/bin/zsh';
+  const shell = platform.defaultShell();
   // launchd and nohup start node without LANG, which makes ls print non-ASCII filenames as ???.
   const env = { ...process.env, LANG: 'en_US.UTF-8', LC_CTYPE: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', TERM: 'xterm-256color' };
   const id = crypto.randomBytes(6).toString('hex');

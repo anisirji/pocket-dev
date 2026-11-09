@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { platform } from './platform.js';
 import { pipeline } from 'node:stream/promises';
 
 const GB = 1024 ** 3;
@@ -121,33 +122,6 @@ const isDirish = (e) => e.type === 'dir' || e.linkType === 'dir';
 
 const positive = (v) => (Number.isFinite(v) && v > 0 ? v : undefined);
 const expandHome = (p, home) => (p === '~' || p.startsWith('~/') ? home + p.slice(1) : p);
-
-// NSFileManager's trashItemAtURL needs no permission and uses the Trash of the item's own volume. Asking Finder
-// through osascript ("tell application Finder to delete") needs an Automation grant, which a launchd agent cannot
-// get from a phone. Paths arrive as argv, so nothing is spliced into the script.
-const TRASH_SCRIPT = `function run(argv) {
-  ObjC.import('Foundation');
-  const fm = $.NSFileManager.defaultManager;
-  return JSON.stringify(argv.map((p) => {
-    const res = $(), err = $();
-    return fm.trashItemAtURLResultingItemURLError($.NSURL.fileURLWithPath(p), res, err)
-      ? { trashPath: ObjC.unwrap(res.path) }
-      : { error: ObjC.unwrap(err.localizedDescription) };
-  }));
-}`;
-
-function moveToTrash(paths) {
-  return new Promise((resolve, reject) => {
-    const child = spawn('/usr/bin/osascript', ['-l', 'JavaScript', '-e', TRASH_SCRIPT, ...paths], { stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '', err = '';
-    child.stdout.on('data', (d) => { out += d; });
-    child.stderr.on('data', (d) => { err += d; });
-    child.on('error', reject);
-    child.on('close', (code) => {
-      try { resolve(JSON.parse(out)); } catch { reject(new Error(`Could not move to the Trash: ${err.trim() || `osascript exited ${code}`}`)); }
-    });
-  });
-}
 
 const DEFAULT_UPLOAD_MAX = 2 * GB;
 const DEFAULT_ZIP_MAX = 4 * GB;
@@ -354,8 +328,9 @@ export function createFilesApi({ sendJson, readJson, config }) {
     if (!complete) fail(413, `Too many files to zip (over ${ZIP_MAX_ENTRIES.toLocaleString('en')}). Zip it on the Mac instead.`);
     if (bytes > zipMax) fail(413, `That is ${(bytes / GB).toFixed(1)} GB; the zip limit is ${(zipMax / GB).toFixed(1)} GB.`);
     const base = targets.length === 1 ? path.basename(targets[0]) : path.basename(parent) || 'files';
-    // -nw reads each name literally, so a "[" or "*" in a file name is not a wildcard.
-    const child = spawn('/usr/bin/zip', ['-q', '-nw', '-@', '-'], { cwd: parent, stdio: ['pipe', 'pipe', 'pipe'] });
+    const zipper = platform.zipCommand();
+    if (!zipper.available) fail(501, zipper.reason);
+    const child = spawn(zipper.cmd, zipper.args, { cwd: parent, stdio: ['pipe', 'pipe', 'pipe'] });
     let stderr = '';
     child.stderr.on('data', (d) => { stderr = (stderr + d).slice(-2000); });
     child.on('error', (err) => { stderr = err.message; });
@@ -458,7 +433,7 @@ export function createFilesApi({ sendJson, readJson, config }) {
         errors.push({ path: p, error: describe(err)[1] });
       }
     }
-    const results = scope ? await Promise.all(valid.map(async (p) => { assertActive(); await fsp.rm(p, { recursive: true }); return { trashPath: null }; })) : valid.length ? await moveToTrash(valid) : [];
+    const results = scope ? await Promise.all(valid.map(async (p) => { assertActive(); await fsp.rm(p, { recursive: true }); return { trashPath: null }; })) : valid.length ? await platform.trash(valid) : [];
     const trashed = [];
     results.forEach((r, i) => (r.error ? errors.push({ path: valid[i], error: r.error }) : trashed.push({ path: valid[i], trashPath: r.trashPath })));
     return { trashed, errors };
