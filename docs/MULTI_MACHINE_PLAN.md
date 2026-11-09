@@ -95,3 +95,28 @@ Decisions made without the owner; change them here if they are wrong.
 - An admin peer reaching a device can use the device's collaborator-management routes, as any admin device can (the target owner chose that when granting admin level).
 - If role-based sharing is off on a collaborator-level target, the member gets the usual "expired" answer for guests. The open authentication question above is answered by this design for forwarded requests; a member opening another device's address directly in a browser still has no login there.
 - Messages and tasks are not forwarded: they already sync through the room.
+
+
+## Phone side: machine switcher and page shim (built 2026-11-09, branch mm-switcher)
+
+Decisions made without the owner; change them here if they are wrong.
+
+- **One shim, no call-site edits.** `public/machine.js` is the first script on `index.html`. It patches `fetch`, `XMLHttpRequest.open`, the `WebSocket` constructor, the `src` and `href` setters (img, media, iframe, source, a) and `setAttribute`, and `Storage.prototype` get/set/remove. Pure parts (`PocketMachine.rewriteUrl`, `storageKey`, `blockedFor`, `allowedViews`) are tested in `test/machine.test.mjs`.
+- **Switching reloads the page.** The choice is stored in `localStorage` key `pd.machine` (global, per phone) and the page reloads without its hash, so terminal, git, chat, files and messages all start fresh against the new device. If the remembered device is no longer in the room, the page goes back to this device.
+- **What is forwarded.** Same-origin `/api/...` and `/ws/...` become `/m/<id>/...`. Always kept on this device: `/api/room`, `login`, `logout`, `devices`, `local`, `network`, `settings`, `invitations`, `collaborators`.
+- **Settings and Ports are hidden on a remote device.** They describe the device the phone is logged in on; ports links would also point at the wrong host. Switch back to change them.
+- **Storage.** On a remote device every key is stored as `m.<id>:<key>`; on this device keys are unchanged, so existing users lose nothing. `pd.machine` and the cached device list are global.
+- **401 and 403.** A forwarded 401 is turned into a 403 unless this device's own `/api/room/devices` also says 401, so a refusal from the other device does not send the phone to the login page. A 502 with this device's id in the body shows the "<name> is not answering" banner with "Back to this device"; any later good answer hides it. `forward.js` now prefixes a root-relative `Location` with `/m/<id>`.
+- **Collaborator rank.** On that device Terminal, Git, Chat, Settings, Ports and Resume are hidden, the page opens Files, and a small home with Files and Messages buttons replaces the terminal. Calls outside files, messages, status and folders are answered locally with 404 and never sent: the status strip treated a 403 as "logged out" and sent the phone into a login loop (seen in the browser check).
+- **Chip.** Hidden when the room has fewer than two devices. Offline devices are greyed and cannot be picked; the reason is "Not answering right now" (the device list carries no last-seen time).
+
+### Not done or not verified
+
+- Checked in headless Chrome at 390x844 against three local test servers (this device, an admin device, a collaborator device, one killed to show offline). Not on real hardware or a real phone, not over the tunnel.
+- Not exercised in the browser: Git view and Chat view on a remote device, image downloads and the upload XHR on a remote device (rewrite covered only by unit tests), Messages view.
+- `location.replace('/login.html')` calls in individual scripts cannot be patched; they only fire on a real 401 on this device or on 403 from `macstatus.js` for allowed calls.
+- The status strip and battery show the remote device's readings; its text still says "Mac".
+- Ports of a remote device and Settings of a remote device are not reachable from the phone.
+- The `Location` rewrite in `forward.js` has no test.
+- Files and Chat screens cover the header, so the chip is not visible while they are open.
+- `login.html`, `guest.html`, `invite.html` and `admin.html` do not load the shim: login and invite belong to the device that is opened, admin runs on a local-only port.

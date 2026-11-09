@@ -5,7 +5,7 @@ html[data-machine="remote"] .mc-chip { border-color: var(--accent); }
 .mc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mc-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: #7ee787; }
 .mc-dot.off { background: transparent; border: 2px solid var(--muted); }
-.mc-sheet { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; background: rgba(0, 0, 0, .55); }
+.mc-sheet { position: fixed; inset: 0; z-index: 3050; display: flex; align-items: flex-end; background: rgba(0, 0, 0, .55); }
 .mc-panel { width: 100%; max-height: 80dvh; overflow: auto; padding: 8px 8px calc(12px + env(safe-area-inset-bottom)); border-radius: 14px 14px 0 0; background: var(--panel); border-top: 1px solid var(--line); }
 .mc-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 8px; }
 .mc-head h2 { margin: 0; font-size: 16px; }
@@ -19,7 +19,7 @@ html[data-machine="remote"] .mc-chip { border-color: var(--accent); }
 .mc-text small { color: var(--muted); font-size: 12px; }
 .mc-check { color: var(--accent); font-weight: 700; }
 .mc-note { margin: 10px 6px 0; color: var(--muted); font-size: 12px; }
-.mc-banner { position: fixed; left: 8px; right: 8px; top: 8px; z-index: 70; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #3a2323; border: 1px solid var(--danger); }
+.mc-banner { position: fixed; left: 8px; right: 8px; top: 8px; z-index: 3100; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #3a2323; border: 1px solid var(--danger); }
 .mc-banner-text { flex: 1; min-width: 0; }
 .mc-banner .primary { flex: none; height: 36px; padding: 0 12px; border-radius: 8px; }
 /* Settings and Ports describe the device the phone is logged in on, so they stay with it. */

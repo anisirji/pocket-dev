@@ -38,7 +38,7 @@
 
   // This device first, then online devices, then the rest by name.
   function sortDevices(devices) {
-    return [...devices].sort((a, b) => (b.self - a.self) || (b.online - a.online) || String(a.name).localeCompare(String(b.name)));
+    return [...devices].sort((a, b) => (!!b.self - !!a.self) || (!!b.online - !!a.online) || String(a.name).localeCompare(String(b.name)));
   }
 
   // True when a request should not be sent at all: the device would refuse it, and the page treats a refusal on some
