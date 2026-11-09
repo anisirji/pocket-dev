@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,6 +25,7 @@ Usage: pocket-dev <command>
   setup [--check] [--yes] [--dry-run] [--only <step>]
                                                    Guided setup: install and log in Git, Claude Code, Codex, GitHub CLI,
                                                    cloudflared, then password, phone access and start at login
+  doctor [--fix] [--yes]                           Check this installation (Node, PATH, terminals, tools, port); --fix repairs terminals
   qr                                               Print a one-time login QR code
   admin                                            Open the admin page (this computer only)
   connect | disconnect                             Open or close phone access
@@ -183,12 +183,20 @@ async function setup(args) {
   }
 }
 
+// `doctor` shares setup's detection and its terminal question-and-answer plumbing.
+async function doctor(args) {
+  const { createRealContext } = await import('../setup.js');
+  const { doctorCommand } = await import('../doctor.js');
+  return doctorCommand(args, await createRealContext());
+}
+
 const [command, ...args] = process.argv.slice(2);
 switch (command) {
   case 'start': await start(args); break;
   case 'config': config(args); break;
   case 'service': service(args); break;
   case 'setup': process.exit(await setup(args)); break;
+  case 'doctor': process.exit(await doctor(args)); break;
   case 'qr': runScript('qr.js'); break;
   case 'admin': runScript('admin.js', ['open']); break;
   case 'connect': case 'disconnect': runScript('admin.js', [command]); break;

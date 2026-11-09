@@ -17,7 +17,7 @@ function fixture(t) {
   for (const file of ['paths.js', 'config.js', 'config-keys.js', 'network.js', 'platform.js', 'platform-service.js', 'package.json']) fs.copyFileSync(path.join(REPO, file), path.join(pkg, file));
   fs.mkdirSync(path.join(pkg, 'chat'));
   fs.copyFileSync(path.join(REPO, 'chat', 'env.js'), path.join(pkg, 'chat', 'env.js'));
-  fs.copyFileSync(path.join(REPO, 'bin', 'pocket-dev.js'), path.join(pkg, 'bin', 'pocket-dev.js'));
+  for (const file of ['pocket-dev.js', 'cli.js']) fs.copyFileSync(path.join(REPO, 'bin', file), path.join(pkg, 'bin', file));
   const state = path.join(root, 'state');
   const env = { ...process.env, POCKET_DEV_STATE_DIR: state };
   delete env.POCKET_DEV_CONFIG;
