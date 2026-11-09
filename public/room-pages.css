@@ -1,4 +1,4 @@
-.rp { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: var(--bg, #0b0e14); color: var(--text, #d7dce5); font: 14px/1.45 system-ui, sans-serif; }
+.rp { position: fixed; inset: auto 0 0 0; top: calc(var(--viewport-top, 0px) + var(--status-h, 0px)); height: max(0px, calc(var(--viewport-h, 100dvh) - var(--status-h, 0px))); z-index: 60; display: flex; flex-direction: column; background: var(--bg, #0b0e14); color: var(--text, #d7dce5); font: 14px/1.45 system-ui, sans-serif; }
 .rp [hidden] { display: none !important; }
 .rp-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--line, #252d3c); background: var(--panel, #131823); }
 .rp-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
