@@ -16,7 +16,8 @@ const text = (v, max = 80) => typeof v === 'string' && v.trim() && v.length <= m
 // Control flows host to member only: the host keeps one secret per member (hostSecret) and presents it when it tells
 // a member something. A member keeps only the secret the host minted for it at join (memberSecret), which lets it
 // report liveness or leave. Leaving or being kicked deletes the room from room.json, secrets included.
-export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fetchImpl = fetch, now = Date.now }) {
+export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fetchImpl = fetch, now = Date.now, intervalMs = 30_000,
+  every = (fn, ms) => { const timer = setInterval(fn, ms); timer.unref?.(); return () => clearInterval(timer); } }) {
   fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   const file = path.join(stateDir, 'room.json');
   let data = { deviceId: crypto.randomBytes(8).toString('hex'), room: null };
@@ -26,6 +27,10 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     data = { deviceId: saved.deviceId, room: saved.room ?? null };
   } catch (err) { if (err.code !== 'ENOENT') throw new Error(`Cannot load room state safely: ${err.message}`); }
   const invitations = new Map();
+  // Peers this device could not reach on its last try. Local only; the lastSeen age covers a device that stays silent.
+  const unreachable = new Set();
+  // A peer that has not answered for two intervals (plus a little slack for a slow answer) counts as offline.
+  const offlineAfter = () => 2 * intervalMs + Math.min(intervalMs, PEER_TIMEOUT_MS);
 
   function persist() {
     fs.writeFileSync(`${file}.tmp`, JSON.stringify(data, null, 2) + '\n', { mode: 0o600 });
@@ -39,7 +44,11 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
   const needHost = () => { need(); if (!isHost()) fail(403, 'Only the host can do this.'); };
   const myAddresses = () => [urls().remote, urls().lan, urls().local].filter(Boolean);
   const publicMember = ({ deviceId, name, addresses, role, joinedAt, level, folders, lastSeen }) => ({ deviceId, name, addresses, role, joinedAt, level, folders, ...(lastSeen && { lastSeen }) });
-  const publicMembers = () => data.room.members.map(publicMember);
+  const statusOf = (m) => m.deviceId === data.deviceId || (!unreachable.has(m.deviceId) && m.lastSeen && now() - m.lastSeen <= offlineAfter()) ? 'online' : 'offline';
+  const publicMembers = () => data.room.members.map((m) => {
+    const entry = publicMember(m);
+    return { ...entry, ...(m.deviceId === data.deviceId && { lastSeen: now() }), status: statusOf(m) };
+  });
   const view = () => data.room
     ? { deviceId: data.deviceId, room: { id: data.room.id, hostId: data.room.hostId, role: me().role, members: publicMembers(), revoked: data.room.revoked } }
     : { deviceId: data.deviceId, room: null };
@@ -187,9 +196,42 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
       }
       member.lastSeen = now();
       persist();
+      return { ok: true, deviceId: data.deviceId, roomId: data.room.id, hostId: data.room.hostId, members: publicMembers(), revoked: data.room.revoked };
     } else if (!fromHost(body)) fail(403, 'Not the host of this room.');
     return { ok: true, deviceId: data.deviceId, roomId: data.room.id, hostId: data.room.hostId };
   }
+
+  // One ping to one peer. A success refreshes lastSeen; a member also takes the host's current list from the answer, which is
+  // how a member that missed an announcement catches up. A host that says this device was removed ends its access here too.
+  async function pingPeer(peer) {
+    const host = isHost();
+    const r = await send(peer, 'ping', { roomId: data.room.id, from: data.deviceId, secret: host ? peer.hostSecret : data.room.memberSecret });
+    if (!host && r.status === 403 && /removed/.test(r.body.error || '')) { drop(); return r; }
+    if (r.status === 200) {
+      unreachable.delete(peer.deviceId);
+      if (!host && Array.isArray(r.body.members) && r.body.members.some((m) => m.deviceId === data.deviceId)) {
+        data.room.members = r.body.members.map(publicMember);
+        data.room.revoked = Array.isArray(r.body.revoked) ? r.body.revoked : data.room.revoked;
+        data.room.hostId = r.body.hostId;
+      }
+      const entry = data.room.members.find((m) => m.deviceId === peer.deviceId);
+      if (entry) entry.lastSeen = now();
+      persist();
+    } else if (r.status === 0) unreachable.add(peer.deviceId);
+    return r;
+  }
+
+  // The timer. The host pings every member; a member pings the host.
+  let ticking = false;
+  async function tick() {
+    if (ticking || !data.room) return;
+    ticking = true;
+    try {
+      const peers = isHost() ? data.room.members.filter((m) => m.deviceId !== data.deviceId) : [hostName()];
+      await Promise.all(peers.map((m) => pingPeer(m).catch(() => {})));
+    } finally { ticking = false; }
+  }
+  const stopTimer = every(() => { tick().catch(() => {}); }, intervalMs);
 
   function notify(body) {
     if (data.room && isHost()) {
@@ -230,8 +272,8 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
   async function live() {
     if (!data.room) return view();
     const peers = isHost() ? data.room.members.filter((m) => m.deviceId !== data.deviceId) : [hostName()];
-    const results = await Promise.all(peers.map((m) => send(m, 'ping', { roomId: data.room.id, from: data.deviceId, secret: isHost() ? m.hostSecret : data.room.memberSecret })));
-    if (!isHost() && results[0].status === 403 && /removed/.test(results[0].body.error || '')) { drop(); return view(); }
+    const results = await Promise.all(peers.map((m) => pingPeer(m)));
+    if (!data.room) return view();
     const out = view();
     peers.forEach((m, i) => { out.room.members.find((x) => x.deviceId === m.deviceId).online = results[i].status === 200; });
     return out;
@@ -255,5 +297,5 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     } catch (err) { return sendJson(res, err.status || 400, { error: err.message }); }
   }
 
-  return { handleApi, view, deviceId: () => data.deviceId };
+  return { handleApi, view, tick, close: stopTimer, deviceId: () => data.deviceId };
 }
