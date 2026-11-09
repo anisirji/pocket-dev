@@ -298,12 +298,21 @@ Open: is "reload the link and land on a live device" good enough, or must the pa
 - Open: a device that was offline during the join must be told later, and leaving the room must remove the entry on every device.
 - Open: failover of the domain itself (the same tunnel on several devices away from home, a saved address list at home). Not tested.
 
+## Decisions from 2026-11-09 (later)
+
+- **Bypass duration is configurable.** When Bypass is chosen, the user picks 1 hour, 2 hours, 3 hours, 4 hours or always. A warning banner shows while it is on, on the device and on the phone. When the time ends the device returns to Auto.
+- **Chat copy** works like ChatGPT: copy one message you sent, copy one message the agent sent, or copy the whole conversation. This is a separate task that the owner gave to another agent (worktree `chat-copy` exists). It is not part of this design. It does not answer the storage question of whether agent chat text is replicated to all members.
+- **Domain failover** is tested later on the owner's devices.
+- **Cross-OS rule:** Pocket Dev is a layer between systems. Every feature that works on one device works on every OS, with the same interface and the same options on Linux, Windows and Mac. Only the configuration and the code underneath differ per OS. There is no "smallest version" for other systems. This replaces the earlier "smallest node mode" idea.
+- Known cost: today's macOS-only calls (power, health, performance, launchd, apps, permissions, screen, files trash, admin) each need an equivalent per OS behind one interface. Where an OS has no equivalent, the option must say so clearly instead of silently failing. Not yet scoped or tested on any non-Mac machine.
+- Unclear, to ask: "Pocket Dev itself can be a separate OS that we can run on the phone". Not understood yet.
+
 ## Open questions
 
 1. ~~Is a room permanent?~~ Decided: permanent until revoked.
 2. ~~More than one room per device?~~ Decided: one device, one room.
 3. ~~One host or several?~~ Decided: one host, which can be handed over.
-4. Bypass guardrails (time limit and warning banner): still to confirm.
+4. Decided: Bypass duration is configurable (1, 2, 3, 4 hours, always) with a warning banner.
 5. Decided: Bypass reaches the private zone.
 10. Tasks for people: plain messages, or Jira-like tasks with a done tick? The owner wants a simple Jira-like task page.
 11. Whether full agent chat text is copied to all members or only a summary.
