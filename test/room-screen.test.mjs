@@ -31,8 +31,8 @@ test('join form problems and server errors are explained without jargon', () => 
   assert.match(joinProblem({ code: 'c', host: '', level: 'admin', folders: [] }), /address/);
   assert.match(joinProblem({ code: 'c', host: 'h', level: 'collaborator', folders: [' '] }), /folder/);
   assert.equal(joinProblem({ code: 'c', host: 'h', level: 'admin', folders: [] }), '');
-  assert.match(friendlyError('That join code is not valid. Ask the host for a new one.'), /wrong or has expired/);
-  assert.match(friendlyError('fetch failed'), /Could not reach/);
-  assert.match(friendlyError('anything', { offline: true }), /phone is offline/);
+  assert.match(friendlyError('That code has expired. Ask the host for a new code.'), /expired/);
+  assert.match(friendlyError('Could not reach the host at http://10.0.0.5:7777.'), /Could not reach the host at 10.0.0.5:7777/);
+  assert.match(friendlyError('anything', { offline: true }), /is offline/);
   assert.equal(friendlyError('Only the host can do this.'), 'Only the host can do this.');
 });

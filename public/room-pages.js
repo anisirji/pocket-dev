@@ -338,9 +338,9 @@ if (typeof document !== 'undefined') {
   const head = document.querySelector('header');
   const gear = document.getElementById('settingsBtn');
   if (head && gear) {
-    const b = el('button', 'icon-btn glyph', '☑');
-    b.id = 'roomTasksBtn'; b.type = 'button'; b.hidden = true; b.title = 'Room tasks'; b.setAttribute('aria-label', 'Room tasks and chats');
-    b.onclick = () => open('tasks');
+    const b = el('button', 'icon-btn glyph', '⇄');
+    b.id = 'roomTasksBtn'; b.type = 'button'; b.hidden = true; b.title = 'Room'; b.setAttribute('aria-label', 'Room');
+    b.onclick = () => import('/room-screen.js').then((m) => m.openRoom());
     gear.before(b);
     const check = async () => { try { b.hidden = !(await roomInfo()).inRoom; } catch { /* keep the last state */ } };
     check(); setInterval(check, 30000);
