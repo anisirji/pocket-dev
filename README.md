@@ -78,7 +78,7 @@ Written for Linux and not yet tested on a real machine. Tell us what breaks.
 | --- | --- |
 | `pocket-dev` is "not recognized" or "command not found" | You skipped `-g`, or the terminal is older than the install. Open a **new** terminal. Check that npm's global folder is on your PATH: `npm config get prefix` (the command lives there, in `bin` or the folder itself on Windows). |
 | `npm i anisirji/pocket-dev` was used | That installs from GitHub into the current folder and makes no command. Delete the stray `node_modules` and `package.json` it created, then run `npm install -g @anisirji/pocket-dev`. |
-| Windows: `ENOENT`, `TAR_ENTRY_ERROR` or `spawn cmd.exe ... node-pty` | Files went missing while npm unpacked. See [the Windows install error](#windows-enoent--tar_entry_error--spawn-cmdexe--node-pty). |
+| Windows: `ENOENT`, `TAR_ENTRY_ERROR` or `spawn cmd.exe ... node-pty` | Files went missing while npm unpacked. See the Windows ENOENT entry in [Troubleshooting](#troubleshooting). |
 | The phone cannot open the address | Same Wi-Fi? Firewall prompt answered? See [Troubleshooting](#troubleshooting). |
 
 **Something not working?** See [Troubleshooting](#troubleshooting).
