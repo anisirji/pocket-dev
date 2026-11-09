@@ -72,7 +72,7 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
     if (token) fs.writeFileSync(path.join(state, 'tunnel-token'), `${token}\n`, { mode: 0o600 });
     fs.writeFileSync(lanIp, '127.0.0.1');
   }
-  const port = reuse ? reuse.port : await freePort(), adminPort = reuse ? reuse.adminPort : await freePort();
+  const port = reuse ? reuse.port : await freePort(), adminPort = reuse?.adminPort ?? await freePort();
   const stub = path.join(root, 'read-only-stub');
   fs.writeFileSync(stub, '#!/bin/sh\nprintf "No\\n"\n', { mode: 0o700 });
   const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: isolatedEnv(home, {

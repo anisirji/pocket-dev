@@ -29,6 +29,7 @@ import { collectPerformance } from './performance.js';
 import { createTunnel } from './tunnel.js';
 import { createMessages } from './messages.js';
 import { createRoom } from './room.js';
+import { createTasks } from './tasks.js';
 import { createFolderBrowser } from './folder-browser.js';
 import { readNetwork, readToken, createSameNetwork } from './network.js';
 import { sameOrigin, fromConnector, clientIp, cookieHost } from './transport.js';
@@ -115,6 +116,7 @@ const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE,
 });
 collaborators = createCollaborators({ config, auth, urls });
 const room = createRoom({ config, urls, grants: collaborators, intervalMs: Number(process.env.POCKET_DEV_ROOM_PING_MS) || undefined });
+const tasks = createTasks({ room });
 
 const HOME = os.homedir();
 const RECENT_MAX = 5;
@@ -611,6 +613,9 @@ async function handleApi(req, res, url) {
   // Join codes and room secrets are the credentials for the three peer routes, so another device can use them without a login.
   if (resource === 'room' && ['ping', 'accept', 'notify'].includes(key) && req.method === 'POST') return room.handleApi(req, res, url, { readJson, sendJson });
 
+  // Task sync between room devices: the room secret is the credential, same reasoning as the peer routes above.
+  if (resource === 'room' && key === 'sync' && req.method === 'POST') return tasks.handleApi(req, res, url, { readJson, sendJson });
+
   const authReply = await auth.handleApi(req, url.pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
   if (resource === 'local' && key === 'power') {
@@ -639,6 +644,7 @@ async function handleApi(req, res, url) {
   if (resource === 'chat') return chatApi.handleApi(req, res, url.pathname);
   if (resource === 'files') return handleFiles(req, res, url);
   if (resource === 'messages') return messages.handleApi(req, res);
+  if (resource === 'room' && key === 'tasks') return tasks.handleApi(req, res, url, { readJson, sendJson, loggedIn: true });
   if (resource === 'room') return room.handleApi(req, res, url, { readJson, sendJson, loggedIn: true });
 
   switch (route) {
@@ -867,6 +873,7 @@ setInterval(() => {
 
 await adoptTerminals();
 startPower(config);
+tasks.start();
 watchLanIp();
 if (internetOn()) sameNetwork.refresh();
 
