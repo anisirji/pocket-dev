@@ -58,6 +58,8 @@
     "docs/screenshots",
     "docs/diagrams",
     "docs/SETUP.md",
+    "docs/INSTALL_BEGINNERS.md",
+    "docs/install-guide",
     "LICENSE"
   ],
   "os": [

@@ -19,11 +19,25 @@ Pocket Dev is one Node.js server that runs on a computer as your user. Your phon
 
 You need a computer (Mac, Windows 11 or Linux) and a phone on the same Wi-Fi. You do not need to know Node. Pick your system, follow the numbered steps, and compare what you see with the line under each step.
 
+> **New to the terminal? Follow the picture-by-picture beginner guide:** the full guide ships inside the package at `docs/INSTALL_BEGINNERS.md`. Its contents and first three steps are right below, under **Beginner guide**.
+
 > **Use the name with the `@` and `-g`: `npm install -g @anisirji/pocket-dev`.** `npm i anisirji/pocket-dev` (no `@`) installs from GitHub, not from npm, into the current folder, and does not create the `pocket-dev` command.
 
 Want to try it first without installing? `npx -y @anisirji/pocket-dev start` runs it once and leaves nothing behind (it is slower to start).
 
 > **Guided setup of the extras.** After it is installed, run **`pocket-dev setup`**. It checks Node, Git, Claude Code, Codex, the GitHub CLI and Cloudflare's `cloudflared`, shows the exact command before it installs anything, hands over to each tool's own login (`claude auth login`, `codex login`, `gh auth login`), then sets your password, the phone access and start-at-login. `pocket-dev setup --check` only shows the status; `--dry-run` shows the plan. Details: [docs/SETUP.md](docs/SETUP.md). The same checklist is in Settings, under **Tools on this computer**.
+
+### Beginner guide
+
+<p align="center"><img src="https://unpkg.com/@anisirji/pocket-dev@1.1.1/docs/install-guide/open-powershell.png" width="520" alt="Illustration: Windows search with PowerShell typed"></p>
+
+The full guide (Windows, Mac and Linux, with pictures, a glossary and a fix for each common error) is the file `docs/INSTALL_BEGINNERS.md` in this package. The pictures are drawings that show what to look for. In short:
+
+1. **Open the command window.** Windows: press the Windows key, type **PowerShell**, press Enter (not "as administrator"). Mac: press Cmd+Space, type **Terminal**, press Enter. Linux: press Ctrl+Alt+T. It is safe: it does only what you type.
+2. **Check Node.js.** Type **`node -v`** and press Enter. `v22` or higher is good. "Not recognized" or "command not found" means it is not installed.
+3. **Install Node.js** (skip if step 2 was good). Open [nodejs.org](https://nodejs.org), click the big green **LTS** button, run the installer (Next, Next, Next; tick nothing special), then **close the window and open a new one** and check `node -v` again. Windows can also use `winget install OpenJS.NodeJS.LTS`; Mac can use `brew install node`; Linux can use [nvm](https://github.com/nvm-sh/nvm) and `nvm install 22`.
+
+Then: **4** `npm install -g @anisirji/pocket-dev`, **5** `pocket-dev start` (copy the one-time password), **6** allow it through the firewall, **7** open the address on your phone, **8** start by itself (optional), **9** `pocket-dev setup` (optional), **10** add a second computer (optional). Then, if stuck: **If something goes wrong** and **How to ask for help**, both in the guide.
 
 ### macOS
 
