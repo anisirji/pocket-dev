@@ -113,10 +113,9 @@ test('wrong installs are named: local project folder, npx, GitHub, source checko
   assert.deepEqual(local, { kind: 'local', from: null, where: 'C:\\Users\\ROHIT\\Desktop' });
   const npx = detectInstall({ ...win, packageRoot: 'C:\\Users\\ROHIT\\AppData\\Local\\npm-cache\\_npx\\abc123\\node_modules\\@anisirji\\pocket-dev' }, globalRoot);
   assert.equal(npx.kind, 'npx');
-  const github = detectInstall({
-    ...win, packageRoot: `${globalRoot}\\@anisirji\\pocket-dev`,
-    readFile: () => JSON.stringify({ packages: { 'node_modules/@anisirji/pocket-dev': { resolved: 'git+ssh://git@github.com/anisirji/pocket-dev.git#abc' } } }),
-  }, globalRoot);
+  const registry = detectInstall({ ...win, packageRoot: `${globalRoot}\\@anisirji\\pocket-dev` }, globalRoot);
+  assert.deepEqual(registry, { kind: 'global', from: 'registry' });
+  const github = detectInstall({ ...win, packageRoot: `${globalRoot}\\@anisirji\\pocket-dev`, exists: (f) => f.endsWith('\\pocket-dev\\test') }, globalRoot);
   assert.deepEqual(github, { kind: 'global', from: 'github' });
   const checkout = detectInstall({ platform: 'linux', packageRoot: '/home/u/pocket-dev', realpath: (p) => p, exists: (f) => f === '/home/u/pocket-dev/.git', readFile: () => '' }, '/usr/lib/node_modules');
   assert.equal(checkout.kind, 'checkout');
