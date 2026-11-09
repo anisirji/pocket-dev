@@ -24,7 +24,7 @@ export async function launchChrome() {
   for (let i = 0; i < 100; i++) {
     try { await getJson(`http://127.0.0.1:${port}/json/version`); break; } catch { await pause(100); }
   }
-  const close = async () => { proc.kill('SIGKILL'); fs.rmSync(profile, { recursive: true, force: true }); };
+  const close = async () => { proc.kill('SIGKILL'); await pause(500); fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); };
   return { port, proc, close };
 }
 
@@ -104,6 +104,11 @@ export class Tab {
   async type(selector, value) {
     await this.eval(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); e.focus(); const set = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e), 'value').set; set.call(e, ${JSON.stringify(value)}); e.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   }
+  // Draws a picture with canvas code (a function body that gets ctx, w, h) and returns PNG bytes.
+  async draw(w, h, body) {
+    const url = await this.eval(`(() => { const c = document.createElement('canvas'); c.width = ${w}; c.height = ${h}; const ctx = c.getContext('2d'); (function (ctx, w, h) { ${body} })(ctx, ${w}, ${h}); return c.toDataURL('image/png'); })()`);
+    return Buffer.from(url.split(',')[1], 'base64');
+  }
   text() { return this.eval('document.body.innerText'); }
   // Scrub, check nothing private is left, then write the PNG.
   async shot(file) {
@@ -129,20 +134,22 @@ function sanitiserSource(config) {
   return `(() => {
   const C = ${JSON.stringify(config)};
   const esc = (s) => s.replace(/[.*+?^$()|[\\]{}\\\\]/g, '\\\\$&');
-  const rules = C.replace.map(([from, to]) => [new RegExp(esc(from), 'gi'), to]);
+  const rules = [...C.replace.map(([from, to]) => [new RegExp(esc(from), 'gi'), to]), [/\\b(?:10\\.\\d+|192\\.168|172\\.(?:1[6-9]|2\\d|3[01]))\\.\\d+\\.\\d+\\b/g, C.demoIp], [/\\b(?:127\\.0\\.0\\.1|localhost):\\d+/g, C.demoIp + ':7681']];
   const scrub = (s) => { let out = s; for (const [re, to] of rules) out = out.replace(re, to); return out; };
   const walk = (root) => {
     if (!root) return;
     const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let n; while ((n = w.nextNode())) { const v = scrub(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
     for (const e of (root.querySelectorAll ? root.querySelectorAll('input,textarea,[title],[aria-label],[placeholder]') : [])) {
-      if ('value' in e && typeof e.value === 'string') { const v = scrub(e.value); if (v !== e.value) e.value = v; }
+      if ((e.tagName === 'INPUT' || e.tagName === 'TEXTAREA') && typeof e.value === 'string') { const v = scrub(e.value); if (v !== e.value) e.value = v; }
       for (const a of ['title', 'aria-label', 'placeholder']) { const x = e.getAttribute(a); if (x) { const v = scrub(x); if (v !== x) e.setAttribute(a, v); } }
     }
   };
   const pin = () => {
     const set = (sel, text) => { const e = document.querySelector(sel); if (e && e.textContent !== text) e.textContent = text; };
     set('#macStatus .ms-cpu', 'CPU 12%'); set('#macStatus .ms-storage', '18.4 GB free'); set('#macStatus .ms-age', 'Updated 2s ago');
+    const fixedRows = { 'Processor': '12% in use of 8 cores', 'Disk free': '18.4 GB of 245 GB', 'Pocket Dev delay': '8 ms', 'Name': 'Home Mac' };
+    for (const r of document.querySelectorAll('.health-row')) { const l = r.querySelector('.health-label')?.textContent; const v = r.querySelector('.health-value'); if (fixedRows[l] && v && v.textContent !== fixedRows[l]) v.textContent = fixedRows[l]; }
     const st = document.querySelector('#macStatus .ms-state'); if (st && !/Normal|Busy/.test(st.textContent)) st.textContent = 'Normal';
     if (st) st.className = 'ms-state ok';
     for (const e of document.querySelectorAll('#macStatus .ms-item:not(.ms-cpu):not(.ms-storage)')) e.hidden = true;
