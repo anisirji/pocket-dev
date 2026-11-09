@@ -1,6 +1,21 @@
 {
-  "name": "pocket-dev",
+  "name": "@anisirji/pocket-dev",
   "version": "1.1.0",
+  "description": "Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
+  "author": "anisirji",
+  "license": "ISC",
+  "keywords": [
+    "remote-control",
+    "terminal",
+    "claude-code",
+    "codex",
+    "phone",
+    "self-hosted",
+    "multi-device"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "postinstall": "node scripts/postinstall.js",
@@ -19,11 +34,6 @@
     "sleep": "scripts/sleep.sh",
     "shutdown": "scripts/shutdown.sh"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
-  "private": true,
   "type": "module",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.139",
@@ -43,7 +53,7 @@
     "README.md",
     "ACCESS.md",
     "docs/CHALLENGES.md",
-    "docs/VALIDATION.md"
+    "LICENSE"
   ],
   "os": [
     "darwin",
