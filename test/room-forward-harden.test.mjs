@@ -140,3 +140,51 @@ test('a member reaches another member through the host, with role access on at t
   const waiting = (await b.login()).cookie;
   assert.equal((await b.request('GET', `/m/${a.id}/api/sessions`, { cookie: waiting })).status, 401);
 });
+
+test('when the host is down a member still serves itself, says so for the others, and lists them offline', async (t) => {
+  // B was seen a moment ago, so only its dependence on the host can make it offline (its age would need seconds).
+  const { h, a, b } = await trio(t, { env: { POCKET_DEV_ROOM_PING_MS: '1500' } });
+  await until(async () => (await a.api('GET', '')).data.room.members.find((m) => m.deviceId === b.id).lastSeen, 8000);
+  h.proc.kill('SIGTERM');
+  await new Promise((r) => h.proc.once('exit', r));
+  assert.equal((await a.request('GET', '/api/status', { cookie: a.cookie })).status, 200, 'its own device keeps working');
+  const started = Date.now();
+  for (const target of [b, h]) {
+    const down = await a.to(target, 'GET', '/api/files/places');
+    assert.equal(down.status, 502, JSON.stringify(down.data));
+    assert.equal(down.data.deviceId, target.id);
+    assert.match(down.data.error, /Host.*not reachable/);
+  }
+  assert.ok(Date.now() - started < 4000, 'a refused connection answers at once');
+  assert.match((await a.to(b, 'GET', '/api/files/places')).data.error, /Beta/, 'and says which device cannot be reached');
+  const list = (await a.api('GET', '/devices?live=1')).data.devices;
+  const by = Object.fromEntries(list.map((d) => [d.deviceId, d]));
+  assert.equal(by[a.id].online, true);
+  assert.equal(by[h.id].online, false);
+  assert.equal(by[b.id].online, false, 'B is only reachable through the host');
+  assert.equal(by[b.id].path, 'host');
+  assert.equal((await a.api('GET', '/devices')).data.devices.find((d) => d.deviceId === b.id).online, false, 'the plain list agrees');
+});
+
+test('a target that accepts the connection and never answers gives a 502 after the limit, not a hang', async (t) => {
+  const silent = http.createServer(() => {});
+  await new Promise((r) => silent.listen(0, '127.0.0.1', r));
+  t.after(() => { silent.closeAllConnections(); silent.close(); });
+  const room = { deviceId: () => 'front', route: () => ({ roomId: 'r', sender: 'front', deviceId: 'abcd', name: 'Quiet', addresses: [`http://127.0.0.1:${silent.address().port}`], secret: 's', relayTo: null }) };
+  const forward = createForward({ room, auth: { deviceFor: () => ({ id: 'd' }) }, collaborators: { guest: () => null }, answerMs: 300,
+    sendJson: (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); } });
+  const front = http.createServer((req, res) => forward.http(req, res, new URL(req.url, 'http://x')));
+  await new Promise((r) => front.listen(0, '127.0.0.1', r));
+  t.after(() => front.close());
+  const started = Date.now();
+  const res = await fetch(`http://127.0.0.1:${front.address().port}/m/abcd/api/x`, { signal: AbortSignal.timeout(5000) });
+  assert.equal(res.status, 502);
+  assert.match((await res.json()).error, /Quiet did not answer/);
+  assert.ok(Date.now() - started < 3000);
+  // A slow upload is not cut short by that limit: the clock starts after the body was handed over.
+  const sending = Date.now();
+  const slow = await fetch(`http://127.0.0.1:${front.address().port}/m/abcd/api/up`, { method: 'POST', headers: { 'x-pocket-dev': '1' }, signal: AbortSignal.timeout(5000),
+    duplex: 'half', body: new ReadableStream({ async start(c) { for (let i = 0; i < 4; i++) { c.enqueue(new Uint8Array(10)); await new Promise((r) => setTimeout(r, 200)); } c.close(); } }) });
+  assert.equal(slow.status, 502, 'only after the body was sent and nothing came back');
+  assert.ok(Date.now() - sending >= 1000, 'the 800 ms upload finished before the 300 ms limit counted');
+});

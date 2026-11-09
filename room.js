@@ -44,7 +44,12 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
   const needHost = () => { need(); if (!isHost()) fail(403, 'Only the host can do this.'); };
   const myAddresses = () => [urls().remote, urls().lan, urls().local].filter(Boolean);
   const publicMember = ({ deviceId, name, addresses, role, joinedAt, level, folders, grantRole, lastSeen }) => ({ deviceId, name, addresses, role, joinedAt, level, folders, ...(grantRole && { grantRole }), ...(lastSeen && { lastSeen }) });
-  const statusOf = (m) => m.deviceId === data.deviceId || (!unreachable.has(m.deviceId) && m.lastSeen && now() - m.lastSeen <= offlineAfter()) ? 'online' : 'offline';
+  // A member only reaches the other members through the host, so while the host is out of reach they all count as offline.
+  const statusOf = (m) => {
+    if (m.deviceId === data.deviceId) return 'online';
+    if (!isHost() && m.deviceId !== data.room.hostId && statusOf(hostName()) !== 'online') return 'offline';
+    return !unreachable.has(m.deviceId) && m.lastSeen && now() - m.lastSeen <= offlineAfter() ? 'online' : 'offline';
+  };
   const publicMembers = () => data.room.members.map((m) => {
     const entry = publicMember(m);
     return { ...entry, ...(m.deviceId === data.deviceId && { lastSeen: now() }), status: statusOf(m) };
@@ -394,7 +399,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     const base = { roomId: data.room.id, sender: data.deviceId, deviceId: target.deviceId, name: target.name };
     if (isHost()) return target.hostSecret ? { ...base, addresses: target.addresses, secret: target.hostSecret, relayTo: null } : fail(409, 'This device has no secret for that member.');
     const host = hostName();
-    return { ...base, addresses: host.addresses, secret: data.room.memberSecret, relayTo: target === host ? null : target.deviceId };
+    return { ...base, addresses: host.addresses, secret: data.room.memberSecret, relayTo: target === host ? null : target.deviceId, ...(target !== host && { via: host.name }) };
   }
 
   // For the machine switcher: every device, whether it answers, and the rank this device's user has there.

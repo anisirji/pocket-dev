@@ -5,6 +5,8 @@ import { sameOrigin } from './transport.js';
 
 const CONNECT_MS = 3000;
 const IDLE_MS = 60_000;
+// How long the target may take to start answering; a device that accepts the connection and then says nothing is as good as down.
+const ANSWER_MS = 30_000;
 const CACHE_MS = 20_000;
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const HOP = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'proxy-connection']);
@@ -15,7 +17,7 @@ const PATH = /^\/m\/([0-9a-f]{4,64})(\/.*)?$/;
 // Working on another device through the room. The phone logs in on one device (the front); `/m/<deviceId>/<path>` on the
 // front is passed to that device. The room is a star, so a member reaches another member through the host (one hop) and
 // the host reaches everyone directly. The target decides what the originating member may do (room.authPeerRequest).
-export function createForward({ room, auth, collaborators, sendJson }) {
+export function createForward({ room, auth, collaborators, sendJson, answerMs = ANSWER_MS, idleMs = IDLE_MS }) {
   const good = new Map(); // deviceId -> { url, at }: the address that answered last
 
   // Sockets that exist because of the room: the pipes this device passes on, and sockets a member opened to this device.
@@ -105,7 +107,8 @@ export function createForward({ room, auth, collaborators, sendJson }) {
     return out;
   }
   const pathFor = (p, targetId, rest, search) => `${p.route.relayTo ? `/m/${p.route.relayTo}` : ''}${rest}${search}`;
-  const unreachable = (p) => ({ status: 502, error: `${p.route.name} is not reachable right now.`, deviceId: p.route.deviceId });
+  const unreachable = (p) => ({ status: 502, deviceId: p.route.deviceId,
+    error: p.route.via ? `${p.route.via}, the host, is not reachable right now, so ${p.route.name} cannot be reached through it.` : `${p.route.name} is not reachable right now.` });
 
   async function http_(req, res, url) {
     const [, targetId, rest = '/'] = PATH.exec(url.pathname) ?? [];
@@ -115,13 +118,16 @@ export function createForward({ room, auth, collaborators, sendJson }) {
     const base = await reach(p.route);
     if (!base) { const u = unreachable(p); return sendJson(res, u.status, { error: u.error, deviceId: u.deviceId }); }
     const lib = base.protocol === 'https:' ? https : http;
+    let answer;
     const fail = (err) => {
+      clearTimeout(answer);
       good.delete(p.route.deviceId);
       if (!res.headersSent) sendJson(res, 502, { error: `${p.route.name} did not answer: ${err.message}`, deviceId: p.route.deviceId });
       else res.destroy();
     };
     const up = lib.request({ protocol: base.protocol, hostname: base.hostname.replace(/^\[|\]$/g, ''), port: base.port || undefined, method: req.method,
-      path: pathFor(p, targetId, rest, url.search), headers: headersFor(req, p, base, rest, false), timeout: IDLE_MS }, (ur) => {
+      path: pathFor(p, targetId, rest, url.search), headers: headersFor(req, p, base, rest, false), timeout: idleMs }, (ur) => {
+      clearTimeout(answer);
       const headers = {};
       const dropped = new Set(String(ur.headers.connection ?? '').split(',').map((v) => v.trim().toLowerCase()));
       for (const [k, v] of Object.entries(ur.headers)) if (!HOP.has(k) && !dropped.has(k) && k !== 'set-cookie') headers[k] = v;
@@ -131,9 +137,11 @@ export function createForward({ room, auth, collaborators, sendJson }) {
       ur.on('error', () => res.destroy());
       ur.pipe(res);
     });
+    // The clock starts when the whole request has been handed over, so a slow upload is not cut short.
+    up.on('finish', () => { answer = setTimeout(() => up.destroy(new Error('no answer')), answerMs); });
     up.on('timeout', () => up.destroy(new Error('timed out')));
     up.on('error', fail);
-    res.on('close', () => up.destroy());
+    res.on('close', () => { clearTimeout(answer); up.destroy(); });
     req.pipe(up);
   }
 
