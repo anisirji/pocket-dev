@@ -1,0 +1,26 @@
+.ap-bell { position: relative; }
+.ap-bell[hidden] { display: none; }
+.ap-count { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: #ff7b72; color: #0b0e14; font: 700 11px/17px system-ui, sans-serif; text-align: center; }
+.ap-bell { color: #ffb86b; border-color: #ffb86b66; }
+
+.ap { position: fixed; inset: auto 0 0 0; top: calc(var(--viewport-top, 0px) + var(--status-h, 0px)); height: max(0px, calc(var(--viewport-h, 100dvh) - var(--status-h, 0px))); z-index: 65; display: flex; flex-direction: column; background: var(--bg, #0b0e14); color: var(--text, #d7dce5); font: 14px/1.45 system-ui, -apple-system, Roboto, sans-serif; }
+.ap-head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 6px 16px; border-bottom: 1px solid var(--line, #252d3c); background: var(--panel, #131823); }
+.ap-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.ap-close { width: 44px; height: 44px; border-radius: 8px; color: var(--muted, #7d8799); font-size: 16px; }
+.ap-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 16px 32px; }
+.ap p { margin: 0; overflow-wrap: anywhere; }
+.ap .co-note { color: var(--muted, #7d8799); font-size: 13px; margin: 6px 0; }
+.ap .co-error { color: var(--danger, #ff7b72); margin: 6px 0; }
+.ap-list { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.ap-card { padding: 12px; border: 1px solid var(--line, #252d3c); border-left: 4px solid #ffb86b; border-radius: 10px; background: var(--panel, #131823); }
+.ap-gone { border-left-color: var(--muted, #7d8799); opacity: .85; }
+.ap-who { color: var(--muted, #7d8799); font-size: 13px; }
+.ap-title { margin-top: 2px !important; font-size: 16px; font-weight: 600; }
+.ap-risk { margin-top: 8px !important; padding: 8px 10px; border-radius: 8px; background: #2a2210; color: #f0c674; font-size: 13px; }
+.ap-answered { margin-top: 8px !important; color: var(--text, #d7dce5); }
+.ap-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.ap button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line, #252d3c); border-radius: 8px; background: var(--panel-2, #1b2130); color: inherit; font: inherit; cursor: pointer; }
+.ap button:disabled { opacity: .5; }
+.ap button:focus-visible { outline: 2px solid var(--accent, #6aa9ff); outline-offset: 2px; }
+.ap .ap-allow { background: var(--accent, #6aa9ff); color: var(--bg, #0b0e14); font-weight: 600; border-color: transparent; }
+.ap .ap-deny { color: var(--danger, #ff7b72); }
