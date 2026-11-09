@@ -18,7 +18,6 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "postinstall": "node scripts/postinstall.js",
     "start": "node server.js",
     "qr": "node scripts/qr.js",
     "admin": "node scripts/admin.js open",
