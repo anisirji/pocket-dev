@@ -149,6 +149,12 @@ export function createCollaborators({ config, auth, urls, stateDir = STATE_DIR, 
   }
 
   function guest(req) {
+    // A room member reaching this device through the room (see room.authPeerRequest): its grant is the only thing it has.
+    if (req.roomPeer) {
+      if (req.roomPeer.level !== 'collaborator') return null;
+      const grant = data.grants.find((g) => g.room?.id === req.roomPeer.roomId && g.room.deviceId === req.roomPeer.origin && !g.roomEnded);
+      return { session: { peer: true }, grant, active: !!active(grant) };
+    }
     const token = readCookie(req);
     if (token === undefined) return null;
     const session = /^[0-9a-f]{64}$/.test(token) && data.sessions.find((s) => s.tokenHash === hash(token));

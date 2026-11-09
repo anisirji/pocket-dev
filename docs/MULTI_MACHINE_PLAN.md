@@ -71,3 +71,27 @@ A grant is bound to a device id, but a person opening another device's link has 
 3. A room-wide login (earlier idea, replaced in the decisions above) with its shared-cookie problem.
 
 Also open: whether `trustedAdmins` members skip the Mac's approval step, and what a member sees when the grant is `inactive` because role-based sharing is off.
+
+
+## Forwarding through the room (built 2026-11-09, branch mm-fwd)
+
+Decisions made without the owner; change them here if they are wrong.
+
+- **Shape.** The phone logs in at any device it can reach (the front). `/m/<deviceId>/<path>` on the front is passed to that device, for HTTP (any method, streamed bodies, Range, status and headers) and WebSocket upgrades. The room is a star: the host forwards to any member with the host's secret for it; a member forwards to the host with its member secret, and the host forwards to the target with the host secret. At most one hop through the host; a path that itself starts with `/m/`, a request to oneself, and a relay by a member are refused with 508 or 400.
+- **How the target knows who is asking.** Headers `x-room-id`, `x-room-sender` (who holds the secret), `x-room-secret`, `x-room-from` (the member the request is for). A member sending to the host can only name itself. The host sending to a member may name any member of the room (it vouches). Bad or missing secret, a member that is gone or removed, or an unknown origin: 403. Requests with none of these headers are handled exactly as before (the test "requests without the room secret behave as before").
+- **Rank at the target is the target owner's choice at join.** `admin` level: the request acts as a virtual owner device (`auth.deviceFor` returns it, only for that request, never from a cookie). `collaborator` level: `collaborators.guest(req)` returns the member's room grant, so the existing guest policy applies (files and messages, granted folders, viewer or developer, same path checks and revocation). A host that relays for a member gives it no host power: the host's own rank on the target is the target's `level` too.
+- **Never reachable through a peer request, whatever the rank:** `/api/room/*` (kick, leave, handover, invite), `/api/local/power`, and the login-owned routes (`/api/devices`, settings that need a cookie). `GET /api/status` answers `active` for an admin peer so a page can start.
+- **Front checks.** On the front, `/m/` requires: `x-pocket-dev: 1` and same origin on mutating methods, a logged-in owner device (a collaborator cookie is refused), then forwards. The front's cookie, Host, Origin, Referer, `x-forwarded-*`, `cf-*` and any `x-room-*` the client sent are dropped; the target's `set-cookie` and hop-by-hop headers are dropped on the way back. Origin is rewritten to the target's only when the client sent one.
+- **Addresses.** The target's `addresses` list is tried in order with a 3 s TCP probe; the one that answered is remembered for 20 s. No answer: 502 with `{ error: "<name> is not reachable right now.", deviceId }`. An upstream that stalls for 60 s or fails mid-way is a 502 if nothing has been sent, otherwise the connection is cut.
+- **`GET /api/room/devices`** (`?live=1` pings first): `deviceId` and `devices[]` with `name`, `role`, `online`, `self`, `rank` (`owner` for self, otherwise the level that device gave: `admin` or `collaborator`, plus `folders` for a collaborator), and `path` (`direct` or `host`).
+
+### Not done or not verified
+
+- Not checked in a browser or on two real machines. Tests run three servers on one Mac over 127.0.0.1.
+- Chat (`/ws/chat/<id>`) and messages (`/ws/messages`) sockets use the same pipe as the terminal socket, but only the terminal socket and a Range download are covered by tests. HTTPS addresses (tunnel) use `https.request` and were not run.
+- The pages do not know about `/m/`: absolute `/api/...` and `/ws/...` URLs in the pages, redirects with a `Location` header, and per-machine storage keys all need the shim from step 5 (UI).
+- A kick does not close sockets that are already open through a forward; new requests are refused at once. A front device that is logged out does close its forwarded sockets.
+- Rank lookups on a member use the member list it last got from the host, so a very recent change can take up to one ping interval to reach it. The host checks membership live.
+- An admin peer reaching a device can use the device's collaborator-management routes, as any admin device can (the target owner chose that when granting admin level).
+- If role-based sharing is off on a collaborator-level target, the member gets the usual "expired" answer for guests. The open authentication question above is answered by this design for forwarded requests; a member opening another device's address directly in a browser still has no login there.
+- Messages and tasks are not forwarded: they already sync through the room.
