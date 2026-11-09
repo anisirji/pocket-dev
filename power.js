@@ -1,29 +1,21 @@
-import { spawn, execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
+import { platform } from './platform.js';
 
-const run = promisify(execFile);
+export { parseBatteryC, parseThermal } from './platform.js';
+
 const REPO_DIR = path.dirname(fileURLToPath(import.meta.url));
-// Overridable so tests can stub the system tools; the defaults are the real ones.
-const PMSET = process.env.POCKET_DEV_PMSET || '/usr/bin/pmset';
-const IOREG = process.env.POCKET_DEV_IOREG || '/usr/sbin/ioreg';
-const OSASCRIPT = process.env.POCKET_DEV_OSASCRIPT || '/usr/bin/osascript';
-const UPDATE_CHECK = process.env.POCKET_DEV_UPDATE_CHECK || path.join(REPO_DIR, 'scripts', 'update-check.sh');
 // Still running this long after asking macOS to shut down means an app (usually "Save changes?") stopped it.
 const SHUTDOWN_BLOCKED_MS = Number(process.env.POCKET_DEV_SHUTDOWN_BLOCKED_MS) || 45_000;
 const SESSION_EXIT_MS = 5000;
-const AUTOMATION_HELP = 'macOS needs permission: on the Mac, allow node to control System Events (System Settings → Privacy & Security → Automation).';
-const CAFFEINATE = '/usr/bin/caffeinate';
 const RESPAWN_MS = 1000;
 const SLEEP_DELAY_MS = 2000;
 // A power request this long after a sleep request means the Mac woke up, or never slept.
 const WAKE_GRACE_MS = 10_000;
 
-// -s holds the system awake only while on AC power; -i also blocks idle sleep on battery.
-// -w <pid> (added at spawn) makes caffeinate exit with the server, so it can never outlive Pocket Dev.
-const MODE_FLAGS = { off: null, plugged: ['-s'], always: ['-i', '-s'] };
-const AWAKE_MODES = Object.keys(MODE_FLAGS);
+// The program that holds the system awake exits with the server (platform.keepAwakeCommand), so it can never outlive Pocket Dev.
+const AWAKE_MODES = ['off', 'plugged', 'always'];
 const DEFAULT_MODE = 'plugged';
 
 let config;
@@ -37,24 +29,26 @@ let shutdown = null;
 const wantedMode = () => (sleepRequestedAt ? 'off' : mode);
 
 function spawnChild(target) {
-  const flags = MODE_FLAGS[target];
-  if (!flags) return;
-  const proc = spawn(CAFFEINATE, [...flags, '-w', String(process.pid)], { stdio: 'ignore' });
+  const command = platform.keepAwakeCommand(target, process.pid);
+  if (!command) return;
+  const proc = spawn(command.cmd, command.args, { stdio: 'ignore' });
   const own = { proc, mode: target };
   child = own;
   proc.on('error', (err) => {
-    console.error(`caffeinate failed to start: ${err.message}`);
+    console.error(`keep-awake program failed to start: ${err.message}`);
     if (child === own) child = null;
   });
   proc.on('exit', (code, signal) => {
     if (child !== own) return;
-    console.error(`caffeinate exited unexpectedly (${signal ?? code}); restarting it`);
+    console.error(`keep-awake program exited unexpectedly (${signal ?? code}); restarting it`);
     child = null;
     setTimeout(converge, RESPAWN_MS);
   });
 }
 
+// A system without a way to hold itself awake runs nothing and says so in powerStatus().unsupported.
 function converge() {
+  if (!platform.capabilities().keepAwake.available) return;
   const target = wantedMode();
   if ((child?.mode ?? 'off') === target) return;
   if (child) {
@@ -79,56 +73,7 @@ function setAwake(next) {
   converge();
 }
 
-const pmset = async (...args) => (await run(PMSET, args, { timeout: 5000 })).stdout;
-// Only an explicit "idle" from update-check.sh counts as no update; a broken check refuses sleep and shutdown.
-async function updateInProgress() {
-  try {
-    return (await run(UPDATE_CHECK, [], { timeout: 10_000 })).stdout.trim() !== 'idle';
-  } catch {
-    return true;
-  }
-}
 const updateRefusal = (doing) => `A macOS update is being installed. ${doing} now could interrupt it. Try again after it finishes.`;
-
-// Macs without a lid have no AppleClamshellState key, which reads as open.
-const lidClosed = async () => /"AppleClamshellState" = Yes/.test((await run(IOREG, ['-r', '-k', 'AppleClamshellState', '-d', '4'], { timeout: 5000 })).stdout);
-
-// "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1)\t82%; charging; 0:45 remaining present: true"
-function parseBatt(text) {
-  const onAC = text.includes("'AC Power'");
-  const m = /InternalBattery[^\t]*\t(\d+)%; ([^;]+);(?: (\d+):(\d+) remaining)?/.exec(text);
-  if (!m) return { onAC, battery: null, charging: false, timeRemaining: null };
-  const [, percent, state, hours, minutes] = m;
-  const estimating = state === 'charging' || state === 'discharging';
-  return {
-    onAC,
-    battery: Number(percent),
-    charging: state === 'charging',
-    timeRemaining: estimating && hours !== undefined ? Number(hours) * 60 + Number(minutes) : null,
-  };
-}
-
-// ioreg reports the battery's temperature in hundredths of a degree. It is the only temperature a Mac gives a normal
-// user; CPU and chip sensors need sudo (powermetrics) or a third-party tool.
-export function parseBatteryC(text) {
-  const raw = Number(/"Temperature" = (\d+)/.exec(text)?.[1]);
-  return Number.isFinite(raw) && raw > 0 ? Math.round(raw) / 100 : null;
-}
-
-// macOS's own thermal pressure (NSProcessInfo.thermalState): how hard it is throttling to cool down.
-const THERMAL = ['nominal', 'fair', 'serious', 'critical'];
-export function parseThermal(text) {
-  const level = text.trim();
-  return /^[0-3]$/.test(level) ? THERMAL[Number(level)] : null;
-}
-
-async function temperatures() {
-  const [battery, thermal] = await Promise.all([
-    run(IOREG, ['-r', '-n', 'AppleSmartBattery'], { timeout: 5000 }).then((r) => parseBatteryC(r.stdout), () => null),
-    run(OSASCRIPT, ['-l', 'JavaScript', '-e', "ObjC.import('Foundation'); $.NSProcessInfo.processInfo.thermalState"], { timeout: 5000 }).then((r) => parseThermal(r.stdout), () => null),
-  ]);
-  return { batteryC: battery, thermal };
-}
 
 const BATTERY_ALERT_DEFAULT = 20;
 const BATTERY_CRITICAL = 10;
@@ -166,8 +111,7 @@ export function alertsFor({ onAC, charging, battery, temperature }, limits) {
 
 // The small, cheap reading the phone polls every 30 s: battery, temperature, and any alerts. powerStatus is heavier.
 export async function vitals() {
-  const [batt, temperature] = await Promise.all([pmset('-g', 'batt'), temperatures()]);
-  const power = parseBatt(batt);
+  const [power, temperature] = await Promise.all([platform.battery(), platform.temperatures()]);
   const saved = config.read();
   const limits = {
     batteryPercent: wholeNumber(saved.batteryAlertPercent, 5, 90, BATTERY_ALERT_DEFAULT),
@@ -176,34 +120,27 @@ export async function vitals() {
   return { ...power, temperature, limits, alerts: alertsFor({ ...power, temperature }, limits) };
 }
 
-function parseAssertions(text, caffeinatePid) {
-  const count = (name) => Number(new RegExp(`^\\s+${name}\\s+(\\d+)$`, 'm').exec(text)?.[1] ?? 0);
-  const ownLine = new RegExp(`^\\s+pid ${caffeinatePid}\\(caffeinate\\): \\S+ \\S+ (\\w+)`, 'gm');
-  return {
-    PreventSystemSleep: count('PreventSystemSleep'),
-    PreventUserIdleSystemSleep: count('PreventUserIdleSystemSleep'),
-    heldByPocketDev: caffeinatePid ? [...text.matchAll(ownLine)].map((m) => m[1]) : [],
-  };
-}
+// What the phone's power screen offers; any of these this system cannot do is listed in powerStatus().unsupported.
+const POWER_FEATURES = ['keepAwake', 'sleepNow', 'shutDown', 'temperature', 'lid', 'lidSleep'];
 
 export async function powerStatus() {
   const caffeinatePid = child?.proc.pid ?? null;
-  const [batt, settings, assertions, closed, updating, temperature] = await Promise.all([
-    pmset('-g', 'batt'), pmset('-g'), pmset('-g', 'assertions'), lidClosed(), updateInProgress(), temperatures(),
+  const [power, lid, assertions, updating, temperature] = await Promise.all([
+    platform.battery(), platform.lid(), platform.sleepHolds(caffeinatePid), platform.updateInProgress(), platform.temperatures(),
   ]);
-  const power = parseBatt(batt);
   return {
     awake: mode,
     caffeinatePid,
     ...power,
     stayingAwake: caffeinatePid !== null && (mode === 'always' || power.onAC),
-    lidSleepDisabled: /^\s*SleepDisabled\s+1\s*$/m.test(settings),
-    lidClosed: closed,
+    lidSleepDisabled: lid.sleepDisabled ?? false,
+    lidClosed: lid.closed ?? false,
     repoDir: REPO_DIR,
     shutdown,
     updateInProgress: updating,
     temperature,
-    assertions: parseAssertions(assertions, caffeinatePid),
+    assertions,
+    unsupported: platform.unsupported(POWER_FEATURES),
   };
 }
 
@@ -213,7 +150,7 @@ function sleepNow(wss) {
   converge();
   setTimeout(() => {
     for (const ws of wss.clients) ws.close(1001, 'mac-sleeping');
-    run(PMSET, ['sleepnow']).catch((err) => console.error(`pmset sleepnow failed: ${err.message}`));
+    platform.sleepNow().catch((err) => console.error(`Sleep failed: ${err.message}`));
   }, SLEEP_DELAY_MS);
 }
 
@@ -221,16 +158,6 @@ function restoreAfterSleep() {
   if (!sleepRequestedAt || Date.now() - sleepRequestedAt < WAKE_GRACE_MS) return;
   sleepRequestedAt = null;
   converge();
-}
-
-const osascript = (script) => run(OSASCRIPT, ['-e', script], { timeout: 60_000 });
-
-function osascriptError(err) {
-  const text = `${err.stderr ?? ''}${err.message}`;
-  if (/-1743|Not authorized to send Apple events/.test(text)) return AUTOMATION_HELP;
-  // The first shutdown makes macOS ask on the Mac; nobody answers it from the phone, so osascript times out.
-  if (err.killed) return `macOS may be asking on the Mac for permission. ${AUTOMATION_HELP}`;
-  return `osascript failed: ${text.trim()}`;
 }
 
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -250,16 +177,16 @@ async function shutDown({ wss, sessions }) {
   await endSessions(sessions);
   for (const ws of wss.clients) ws.close(1001, 'mac-shutting-down');
   try {
-    await osascript('tell application "System Events" to shut down');
+    await platform.shutDown();
   } catch (err) {
-    shutdown = { state: 'error', at, error: osascriptError(err) };
+    shutdown = { state: 'error', at, error: err.message };
     return;
   }
   setTimeout(async () => {
     if (shutdown?.at !== at) return;
     let apps = [];
     try {
-      apps = (await osascript('tell application "System Events" to get name of (processes where background only is false)')).stdout.trim().split(', ').filter(Boolean);
+      apps = await platform.openAppNames();
     } catch {}
     shutdown = { state: 'blocked', at, apps };
   }, SHUTDOWN_BLOCKED_MS).unref();
@@ -269,7 +196,10 @@ async function shutDown({ wss, sessions }) {
 export async function handlePowerApi(req, res, action, { readJson, sendJson, wss, sessions }) {
   restoreAfterSleep();
   const route = `${req.method} ${action ?? ''}`;
-  if ((route === 'POST sleep' || route === 'POST shutdown') && await updateInProgress()) {
+  const feature = { 'POST sleep': 'sleepNow', 'POST shutdown': 'shutDown', 'PUT ': 'keepAwake' }[route];
+  const cap = feature && platform.capabilities()[feature];
+  if (cap && !cap.available) return sendJson(res, 501, { error: `Not available on this system: ${cap.reason}`, unsupported: true });
+  if ((route === 'POST sleep' || route === 'POST shutdown') && await platform.updateInProgress()) {
     return sendJson(res, 409, { error: updateRefusal(action === 'sleep' ? 'Sleeping' : 'Shutting down'), updateInProgress: true });
   }
   if (route === 'POST sleep') {

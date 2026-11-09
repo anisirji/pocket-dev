@@ -22,43 +22,10 @@ NODE="$(command -v node)" || { echo "node is not on PATH" >&2; exit 1; }
 PORT="${PORT:-$("$NODE" bin/pocket-dev.js config get port 2>/dev/null | grep -E '^[0-9]+$' || echo 7777)}"
 LOG="${LOG:-$HOME/Library/Logs/pocket-dev.log}"
 
-extra_env=""
-for var in POCKET_DEV_CONFIG POCKET_DEV_STATE_DIR POCKET_DEV_ADMIN_PORT; do
-  [ -n "${!var:-}" ] && extra_env="$extra_env    <key>$var</key><string>${!var}</string>
-"
-done
-
+# The plist text comes from platform.js (see platform-service.js). POCKET_DEV_CONFIG, POCKET_DEV_STATE_DIR and
+# POCKET_DEV_ADMIN_PORT pass through to the service when set.
 render_plist() {
-cat <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>$NODE</string>
-    <string>$REPO/server.js</string>
-  </array>
-  <key>WorkingDirectory</key><string>$REPO</string>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>ThrottleInterval</key><integer>10</integer>
-  <key>StandardOutPath</key><string>$LOG</string>
-  <key>StandardErrorPath</key><string>$LOG</string>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-    <key>LANG</key><string>en_US.UTF-8</string>
-    <key>HOME</key><string>$HOME</string>
-    <key>SHELL</key><string>/bin/zsh</string>
-    <key>USER</key><string>$(id -un)</string>
-    <key>PORT</key><string>$PORT</string>
-    <key>LABEL</key><string>$LABEL</string>
-$extra_env  </dict>
-</dict>
-</plist>
-PLIST
+  LABEL="$LABEL" PORT="$PORT" LOG="$LOG" "$NODE" scripts/service-plist.js --node "$NODE" --repo "$REPO"
 }
 
 if [ "$PRINT" = 1 ]; then

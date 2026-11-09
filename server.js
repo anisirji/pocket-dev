@@ -47,29 +47,14 @@ const internetOn = () => network().internet.kind !== 'off';
 const WIFI = network().wifi;
 const sameNetwork = createSameNetwork();
 
-// Every IPv4 address the Mac has on a network, en0 first. POCKET_DEV_LAN_IP_FILE replaces the interface lookup in
-// tests: the file holds one address, empty means no network.
-function lanIps() {
-  if (process.env.POCKET_DEV_LAN_IP_FILE) {
-    let ip = '';
-    try { ip = fs.readFileSync(process.env.POCKET_DEV_LAN_IP_FILE, 'utf8').trim(); } catch {}
-    return ip ? [ip] : [];
-  }
-  const ifaces = os.networkInterfaces();
-  const names = ['en0', ...Object.keys(ifaces).filter((n) => n !== 'en0')];
-  return names.flatMap((name) => (ifaces[name] ?? []).filter((a) => a.family === 'IPv4' && !a.internal).map((a) => a.address));
-}
+const lanIps = () => platform.lanIps();
 const lanIp = () => lanIps()[0] ?? null;
-
-const localName = () => {
-  const name = os.hostname().toLowerCase();
-  return name.endsWith('.local') ? name : `${name}.local`;
-};
+const localName = () => platform.localName();
 let tunnel;
 // With Wi-Fi access off the listener is on loopback, so the LAN and .local addresses reach nothing.
 const urls = () => ({
   lan: WIFI && lanIp() ? `http://${lanIp()}:${PORT}` : null,
-  local: WIFI ? `http://${localName()}:${PORT}` : null,
+  local: WIFI && localName() ? `http://${localName()}:${PORT}` : null,
   remote: tunnel?.view().url ?? null,
 });
 const LOCAL_NOTE = 'same Wi-Fi only; some Android phones cannot open .local names';
@@ -366,13 +351,13 @@ async function createSession(cwd, base = folderName(cwd), command) {
   let proc = null;
   if (terminalHost) {
     try {
-      proc = await terminalHost.create({ id, title, cwd, shell, env, cols: 80, rows: 24 });
+      proc = await terminalHost.create({ id, title, cwd, shell, args: platform.shellArgs(shell), env, cols: 80, rows: 24 });
     } catch (err) {
       console.warn(`Could not start the terminal in the host, starting it here instead: ${err.message}`);
     }
   }
   const remote = proc !== null;
-  proc ??= pty.spawn(shell, ['-l'], { name: 'xterm-256color', cols: 80, rows: 24, cwd, env });
+  proc ??= pty.spawn(shell, platform.shellArgs(shell), { name: 'xterm-256color', cols: 80, rows: 24, cwd, env });
   const session = {
     id, title, cwd, pty: proc, remote, scrollback: '', clients: new Set(), exitCode: null, startedAt: Date.now(), activeAt: Date.now(),
   };
@@ -938,7 +923,8 @@ const adminSections = {
     title: 'Open apps',
     empty: 'No open apps.',
     async list() {
-      const { apps } = await cachedApps();
+      const { apps, unsupported } = await cachedApps();
+      if (unsupported) return [{ id: 'count', label: 'Not available on this system', details: [unsupported] }];
       return [{ id: 'count', label: plural(apps.length, 'app') + ' open', details: ['Quit or force quit them from the phone: Settings, Open apps'] }];
     },
   },
@@ -985,7 +971,7 @@ if (opened.error) {
   if (lan ?? local) {
     console.log(await terminalQr(auth.mintQrUrl()));
     console.log(`Pocket Dev running at ${lan ?? local}`);
-    if (lan) console.log(`Also at ${local} (${LOCAL_NOTE})`);
+    if (lan && local) console.log(`Also at ${local} (${LOCAL_NOTE})`);
   }
   if (internet.kind === 'domain') console.log(`Internet link: https://${internet.hostname} (${tunnel.view().status})`);
   if (internet.kind === 'quick') console.log('Internet link: Quick link, turn it on in Admin.');

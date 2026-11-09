@@ -1,22 +1,13 @@
 const HEARTBEAT_TIMEOUT_MS = Number(process.env.POCKET_DEV_HEARTBEAT_TIMEOUT_MS) || 30_000;
 const HEARTBEAT_EVERY_MS = Math.min(10_000, Math.round(HEARTBEAT_TIMEOUT_MS / 3));
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { platform } from './platform.js';
 
-const run = promisify(execFile);
 const savedAccess = (a) => ({ connected: a?.connected !== false, keepOpen: a?.keepOpen !== false });
 
-// `lsof -F pc` prints p<pid> and c<command> lines for each listener.
 async function portOwner(port) {
-  try {
-    const { stdout } = await run('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-F', 'pc']);
-    const pid = /^p(\d+)$/m.exec(stdout)?.[1];
-    const command = /^c(.+)$/m.exec(stdout)?.[1];
-    return pid ? ` by ${command ?? 'a process'} (pid ${pid})` : '';
-  } catch {
-    return '';
-  }
+  const owner = await platform.portOwner(port);
+  return owner ? ` by ${owner.command ?? 'a process'} (pid ${owner.pid})` : '';
 }
 
 async function listenError(err, port) {

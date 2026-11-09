@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { platform } from './platform.js';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 
@@ -111,6 +112,7 @@ const fixtureFile = () => process.env.POCKET_DEV_PROCESS_FIXTURE;
 
 export async function listProcesses() {
   if (fixtureFile()) return JSON.parse(fs.readFileSync(fixtureFile(), 'utf8')).processes;
+  if (!platform.capabilities().processScan.available) return [];
   const [status, args] = await Promise.all([ps('pid=,ppid=,uid=,stat=,lstart=,comm='), ps('pid=,args=')]);
   return parsePs(status, args);
 }
