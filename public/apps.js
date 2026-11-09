@@ -112,6 +112,7 @@
     const { windows } = state;
     if (!windows) items.push(el('p', 'apps-note', 'Loading…'));
     else if (windows.error) items.push(banner({ kind: 'error', text: windows.error }));
+    else if (windows.unsupported) items.push(el('p', 'apps-note', `Not available on this system: ${windows.unsupported}`));
     else if (windows.windowAccess !== 'ok') items.push(banner({ kind: 'warn', text: windows.help }));
     else if (!windows.windows.length) items.push(el('p', 'apps-note', 'No windows found. Windows on another Space may not be listed.'));
     else {
@@ -139,9 +140,9 @@
 
   async function loadList() {
     try {
-      const { apps } = await api('GET', '/api/apps');
+      const { apps, unsupported } = await api('GET', '/api/apps');
       state.apps = apps;
-      state.listError = null;
+      state.listError = unsupported ? `Not available on this system: ${unsupported}` : null;
     } catch (err) {
       state.listError = `Could not list apps: ${err.message}`;
     }

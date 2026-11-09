@@ -704,7 +704,7 @@ $src.Dispose()`;
 
   // Login shells take -l; PowerShell and cmd have no such flag.
   function shellArgs(shell) {
-    const name = path.basename(shell).toLowerCase().replace(/\.exe$/, '');
+    const name = shell.split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '');
     if (name === 'powershell' || name === 'pwsh') return ['-NoLogo'];
     if (name === 'cmd' || win) return [];
     return ['-l'];

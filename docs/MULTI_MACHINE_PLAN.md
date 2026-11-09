@@ -71,3 +71,25 @@ A grant is bound to a device id, but a person opening another device's link has 
 3. A room-wide login (earlier idea, replaced in the decisions above) with its shared-cookie problem.
 
 Also open: whether `trustedAdmins` members skip the Mac's approval step, and what a member sees when the grant is `inactive` because role-based sharing is off.
+
+## Step 3, part 2: the platform layer (decisions)
+
+All system calls go through `platform.js` (`createPlatform`, with injected `run`, `exists`, `readText`, `listDir`, `networkInterfaces`, `memory`). `POCKET_DEV_PLATFORM=linux|win32|darwin` makes a server behave as that system. `platform.capabilities()` returns `{ available, reason }` for every capability; an action called without its capability rejects with `Not available on this system: <reason>` (HTTP 501 from the power routes; 503 for the screen). `GET /api/power` and `GET /api/health` carry `unsupported: { capability: reason }`, and the Power, Health and Open apps screens show "Not available on this system".
+
+Decisions made without the owner:
+
+- Mac behavior is unchanged: the same programs, arguments and timeouts. The `POCKET_DEV_PMSET`, `_IOREG`, `_OSASCRIPT`, `_TOP`, `_MEMORY_PRESSURE`, `_SCREENCAPTURE`, `_SIPS`, `_UPDATE_CHECK` overrides still work. `install-service.sh --print` was compared byte for byte with the old script for three environments.
+- Keep awake: Linux `systemd-inhibit ... tail --pid=<server>`; Windows a PowerShell holding `SetThreadExecutionState`, waiting on the server pid. Neither can tell "while plugged in" from "always", so both hold in either mode.
+- Sleep and shut down: `systemctl suspend|poweroff`, `rundll32 powrprof.dll,SetSuspendState` and `shutdown.exe /s /t 0`. The macOS update refusal is Mac only.
+- Battery: `/sys/class/power_supply` on Linux, `Win32_Battery` on Windows. Temperature: Linux battery sensor only, none on Windows. Battery wear: Linux from sysfs, none on Windows. Lid state: Mac and Linux (`/proc/acpi/button/lid`); the "stay awake with the lid closed" switch is Mac only and is hidden elsewhere.
+- Health: processor and disk were already portable (`os.cpus`, `fs.statfs`). Memory off Mac is the free share of installed memory, with no wired or compressed split.
+- Open apps: Linux needs `wmctrl` (X11 only), Windows uses `Get-Process`. Quit is `kill -TERM` / `CloseMainWindow`. Window names are Mac only. Protected system apps are listed per system.
+- Permissions: off Mac the list holds only the Claude, Codex and GitHub tool checks (not Mac permissions). The Mac probes stay in `permissions.js`; they were routed through `platform.macScript`, `platform.probeWindowAccess` and `platform.openUrl`, not moved.
+- Screenshot and resize: Mac `screencapture` and `sips`; Linux a capture tool (grim, scrot, maim, ImageMagick `import`, gnome-screenshot) plus ImageMagick to shrink; Windows PowerShell and System.Drawing. Without both on Linux the Screen view says so.
+- Service: Mac launchd (the install script remains, but its plist text now comes from `platform-service.js`); Linux a systemd user unit (`Restart=always`, 10 s); Windows a Task Scheduler task at logon that runs a PowerShell loop (the task cannot restart a clean exit, and Pocket Dev restarts by exiting). Files go in the user's own folders, no admin rights. A Windows service cannot report its pid, so the service sets `POCKET_DEV_SERVICE=<label>` and `isThisServer` uses that.
+- Network: only a Mac announces `<name>.local`; elsewhere `urls().local` is null and the address is used. Docker, VM and VPN-style interfaces are listed last (Linux) or skipped (Windows names).
+- Terminals: `platform.shellArgs` gives `-l` for login shells, `-NoLogo` for PowerShell, none for cmd. `args` is a new optional field of the host's create message; a host started before this change ignores it and uses `-l`. On Windows the host listens on a named pipe.
+- Port owner: `lsof`, else `ss` (Linux), PowerShell `Get-NetTCPConnection` (Windows). Takeover's process scan is off on Windows (listed as unsupported).
+- `package.json`: `os` allows darwin, linux, win32; `postinstall` is now `node scripts/postinstall.js`, which never fails.
+
+Not verified (no Linux or Windows here): every Linux and Windows command and PowerShell script was only checked as text with an injected runner; the real output formats of `wmctrl`, `ss`, `systemctl show`, `Get-CimInstance Win32_Battery`, `Get-ScheduledTask`, ConPTY terminals and the named pipe are assumed. Still Mac only: `scripts/lid.sh`, `sleep.sh`, `shutdown.sh`, `status.sh`, `autostart.sh`, `uninstall-service.sh` and `bin/pocket-dev.js service ...` (they call launchctl or pmset); `pocket-dev service install` on Linux or Windows has no CLI route yet, only the admin page route through `installService`. `folder-browser.js` still lists Mac folders (`/Volumes`).

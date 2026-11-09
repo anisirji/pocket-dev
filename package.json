@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
+    "postinstall": "node scripts/postinstall.js",
     "start": "node server.js",
     "qr": "node scripts/qr.js",
     "admin": "node scripts/admin.js open",
@@ -22,7 +22,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "Control your Mac from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
+  "description": "Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
   "private": true,
   "type": "module",
   "dependencies": {
@@ -46,7 +46,9 @@
     "docs/VALIDATION.md"
   ],
   "os": [
-    "darwin"
+    "darwin",
+    "linux",
+    "win32"
   ],
   "engines": {
     "node": ">=22"

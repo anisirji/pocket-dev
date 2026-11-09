@@ -72,6 +72,7 @@
     const m = h.memory;
     const memoryFreePercent = m?.freePercent ?? h.memoryFreePercent ?? null;
     const cond = b.condition;
+    const na = (key) => h.unsupported?.[key] && `Not available on this system. ${h.unsupported[key]}`;
 
     ui.scroll.replaceChildren(
       verdict, ...issues,
@@ -79,22 +80,24 @@
         row('Charge', b.percent === null ? unknown : `${b.percent}%${b.charging ? ', charging' : plugged ? ', plugged in' : ', on battery'}`,
           !plugged && b.percent !== null && b.percent <= h.limits.batteryPercent ? 'warn' : ''),
         b.timeRemaining != null && row(b.charging ? 'Time to full' : 'Time left', hours(b.timeRemaining)),
+        na('batteryCondition') && row('Condition', 'Not available on this system'),
         cond && row('Condition', `${cond.capacityPercent}% of original capacity`, cond.capacityPercent < 80 ? 'warn' : ''),
         cond && row('Charge cycles', cond.designCycles ? `${cond.cycles} of ${cond.designCycles}` : String(cond.cycles))),
       group('Temperature',
-        row('Battery', heat.batteryC === null ? unknown : `${heat.batteryC.toFixed(1)} °C`, hot ? 'warn' : ''),
-        row('Thermal state', heat.thermal ? THERMAL[heat.thermal] : unknown, hot ? 'warn' : ''),
+        row('Battery', na('temperature') && heat.batteryC === null ? 'Not available on this system' : heat.batteryC === null ? unknown : `${heat.batteryC.toFixed(1)} °C`, hot ? 'warn' : ''),
+        row('Thermal state', heat.thermal ? THERMAL[heat.thermal] : na('temperature') ? 'Not available on this system' : unknown, hot ? 'warn' : ''),
         row('Alert at', `${h.limits.temperatureC} °C or ${h.limits.batteryPercent}% battery`)),
       group('Performance',
         row('Processor', h.cpu.usedPercent === null ? unknown : `${h.cpu.usedPercent}% in use of ${h.cpu.cores} cores`, h.cpu.usedPercent >= 90 ? 'warn' : ''),
         row('Memory free', memoryFreePercent !== null ? `${memoryFreePercent}%` : unknown, memoryFreePercent !== null && memoryFreePercent < 10 ? 'warn' : ''),
-        m && row('Memory used', `${gb(m.usedMB)} (${gb(m.compressedMB)} compressed)`),
+        m && row('Memory used', m.compressedMB == null ? gb(m.usedMB) : `${gb(m.usedMB)} (${gb(m.compressedMB)} compressed)`),
         h.eventLoopDelayMs != null && row('Pocket Dev delay', `${h.eventLoopDelayMs} ms`, h.eventLoopDelayMs >= 1000 ? 'warn' : ''),
         row('Disk free', h.disk.freeGB === null ? unknown : `${h.disk.freeGB} GB of ${h.disk.totalGB} GB`, h.disk.freeGB !== null && h.disk.freeGB < 10 ? 'warn' : '')),
       group('Staying awake',
-        row('Keep awake', { always: 'Always', plugged: 'When plugged in', off: 'Off' }[h.power.awake] ?? h.power.awake),
+        na('keepAwake') && row('Keep awake', 'Not available on this system'),
+        !na('keepAwake') && row('Keep awake', { always: 'Always', plugged: 'When plugged in', off: 'Off' }[h.power.awake] ?? h.power.awake),
         row('Right now', h.power.stayingAwake ? 'Staying awake' : 'The Mac may sleep'),
-        row('Lid', h.power.lidClosed ? (h.power.lidSleepDisabled ? 'Closed, awake' : 'Closed') : 'Open')),
+        row('Lid', na('lid') ? 'Not available on this system' : h.power.lidClosed ? (h.power.lidSleepDisabled ? 'Closed, awake' : 'Closed') : 'Open')),
       group('This Mac',
         row('Name', h.mac.name),
         row('Up for', span(h.mac.uptimeSec)),
