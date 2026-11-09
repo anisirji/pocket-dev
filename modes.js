@@ -16,6 +16,9 @@ const within = (p, dir) => { const r = path.relative(dir, p); return r === '' ||
 
 // Routes that change the machine or who can reach it, whatever the folder.
 const SYSTEM = /^\/api\/(power|apps|forwards|admin|devices|collaborators|handoff|connection|network|settings|local)(\/|$)/;
+// What a collaborator-level device lets a member use at all (see server.js, the guest branch). Anything else is refused there
+// whatever the mode, so it is not worth an approval.
+const GUEST_ROUTES = /^\/api\/(files\/(places|list|download|zip|search|upload|mkdir|rename|trash)|messages(\/.*)?|status|current-access|logout)$/;
 const READ_POST = /^\/api\/files\/(places|list|download|zip|search)$/;
 const DOWNLOAD_RUN = /\b(curl|wget|scp|rsync|nc|ncat)\b|\|\s*(sudo\s+)?(ba|z)?sh\b|\bchmod\s+(-\w+\s+)?\+?[0-7x]*x|\bsh\s+-c\b|\beval\b|\bnpx\b|\bdocker\s+run\b|\bgit\s+clone\b|(^|[;&|]\s*)\.\/\S+/;
 const INSTALL = /\b(brew|apt|apt-get|dnf|yum|pacman|choco|winget|port)\s+(install|upgrade|remove|uninstall)\b|\b(npm|pnpm|yarn)\s+(i|install|add)\s+(-g|--global)\b|\b(pip3?|gem|cargo|go)\s+install\b|\bnpm\s+(i|install)\b|\bsudo\b|\bdefaults\s+write\b|\b(launchctl|systemsetup|networksetup|pmset|scutil|csrutil|spctl)\b/;
@@ -149,6 +152,13 @@ export function createModes({ stateDir = STATE_DIR, room, log = () => {}, now = 
   async function gate(req, r) {
     const principal = req.roomPeer;
     const entry = modeOf(principal.origin);
+    if (principal.level === 'collaborator' && entry.mode !== 'bypass') {
+      const grant = selfMember()?.grantRole;
+      if (!GUEST_ROUTES.test(r.path) || (grant !== 'developer' && /^\/api\/files\//.test(r.path) && !READ_POST.test(r.path))) {
+        log('room-action', { device: room.deviceId(), member: principal.origin, name: principal.name, mode: entry.mode, action: `${r.method} ${r.path}`, result: 'refused by the role policy' });
+        return null;
+      }
+    }
     const verdict = classify({ method: r.method, path: r.path, query: r.query, body: r.body, mode: entry.mode, folders: principal.folders, statSync });
     const summary = `${r.method} ${r.path}${r.body?.path ? ` ${r.body.path}` : r.body?.paths ? ` ${r.body.paths.join(', ')}` : ''}${typeof r.body?.command === 'string' ? ` : ${r.body.command}` : ''}`.slice(0, 300);
     const audit = (result, extra = {}) => log('room-action', { device: room.deviceId(), member: principal.origin, name: principal.name, mode: entry.mode, action: summary, result, ...extra });
