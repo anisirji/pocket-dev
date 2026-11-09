@@ -8,6 +8,7 @@ import { sameOrigin, fromConnector } from './transport.js';
 import { rangeOf, disposition } from './files.js';
 import { thumbnailOf } from './chat/tool-images.js';
 import { BLOB_MAX } from './room-sync.js';
+import { platform } from './platform.js';
 
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
@@ -64,7 +65,7 @@ const kindOf = (type) => INLINE[type] ?? (type === 'image/heic' ? 'image' : 'fil
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 const sizeText = (n) => (n >= GB ? `${(n / GB).toFixed(1)} GB` : `${Math.max(0.1, n / MB).toFixed(1)} MB`);
-const overInternet = (size) => `Over the internet you can send files up to 100 MB. This file is ${size ? sizeText(size) : 'larger'}. Connect on the same Wi-Fi as the Mac to send it.`;
+const overInternet = (size) => `Over the internet you can send files up to 100 MB. This file is ${size ? sizeText(size) : 'larger'}. Connect on the same Wi-Fi as ${platform.host.the} to send it.`;
 // null on the Wi-Fi route and the Admin page, where any size goes.
 const fileMaxFor = (req, mac) => (!mac && fromConnector(req) ? CONNECTOR_FILE_MAX : null);
 
@@ -177,9 +178,9 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
   async function diskRefusal(size, more = 0) {
     const free = await freeBytes();
     if (size + more > LARGE_FILE && free < reserve()) {
-      return `Your Mac is low on space (${sizeText(free)} free). Files over 50 MB are paused until there's more than ${sizeText(reserve())} free. Text and files up to 50 MB still work.`;
+      return `Your ${platform.host.mac} is low on space (${sizeText(free)} free). Files over 50 MB are paused until there's more than ${sizeText(reserve())} free. Text and files up to 50 MB still work.`;
     }
-    if (free - more < DISK_FLOOR) return `Your Mac is almost out of space (${sizeText(free)} free). Free up space on the Mac or delete messages.`;
+    if (free - more < DISK_FLOOR) return `Your ${platform.host.mac} is almost out of space (${sizeText(free)} free). Free up space on ${platform.host.the} or delete messages.`;
     return null;
   }
 
@@ -588,7 +589,7 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
       for (const [method, re, handler, only] of ROUTES) {
         const match = req.method === method && re.exec(rest);
         if (!match) continue;
-        if (only === 'mac' && !mac) throw httpError(403, 'Only the Admin page on the Mac can do this.');
+        if (only === 'mac' && !mac) throw httpError(403, `Only the Admin page on ${platform.host.the} can do this.`);
         const reply = await handler({ v, req, res, url, match, mac, headers });
         if (reply) json(...reply);
         return;

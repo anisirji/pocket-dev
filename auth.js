@@ -7,6 +7,7 @@ import { createSecurityLog } from './security-log.js';
 import { STATE_DIR } from './paths.js';
 import { clientIp, cookieHost, fromConnector, secureCookie } from './transport.js';
 import { ipv6Prefix } from './network.js';
+import { platform } from './platform.js';
 
 export { STATE_DIR };
 const DEVICES_PATH = path.join(STATE_DIR, 'devices.json');
@@ -70,8 +71,8 @@ const newPasswordError = (next) => (typeof next !== 'string' || next.length < MI
 // A device is exactly one of these. Only active devices may use the API, open terminals, or count toward the limit.
 const STATUSES = ['pending', 'active', 'blocked'];
 const REFUSALS = {
-  pending: { error: 'Waiting for approval on the Mac.', pending: true },
-  blocked: { error: 'This device is blocked. Ask the Mac owner to unblock it.', blocked: true },
+  pending: { error: `Waiting for approval on ${platform.host.the}.`, pending: true },
+  blocked: { error: `This device is blocked. Ask ${platform.host.the} owner to unblock it.`, blocked: true },
 };
 
 const OS_NAMES = [
@@ -546,7 +547,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       }
       const max = maxDevices();
       if (totalActiveCount() >= max) {
-        if (!by || !activeCount()) return reply(403, { error: `Device limit reached (${max}). Log out a device in Settings on a logged-in device, or scan the QR code from the Mac.` });
+        if (!by || !activeCount()) return reply(403, { error: `Device limit reached (${max}). Log out a device in Settings on a logged-in device, or scan the QR code from ${platform.host.the}.` });
         evictLeastRecent();
       }
       const status = by || !(requireApproval() || rolesEnabled()) ? 'active' : 'pending';
@@ -561,7 +562,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       return reply(200, d ? { status: d.status, name: d.name, code: d.id.slice(-4) } : { status: 'none' });
     },
     'POST /api/qr-key'({ req }) {
-      if (!isLocalRequest(req)) return reply(403, { error: 'Only the Mac itself can create login keys.' });
+      if (!isLocalRequest(req)) return reply(403, { error: `Only ${platform.host.the} itself can create login keys.` });
       return reply(200, { url: mintQrUrl(), expiresInMin: QR_TTL_MIN });
     },
     'POST /api/logout'({ device }) {
@@ -579,13 +580,13 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     },
     // The same path as approval on the Mac, so the limit, roles and the log behave the same; `by` names the phone.
     'POST /api/devices/:id/:action'({ device, id, action }) {
-      if (!approveFromDevices()) return reply(403, { error: 'Approving from a phone is off. Turn it on in Admin on the Mac.' });
+      if (!approveFromDevices()) return reply(403, { error: `Approving from a phone is off. Turn it on in Admin on ${platform.host.the}.` });
       if (!mayApprove(device)) return reply(403, { error: 'Only an Admin device may approve logins.' });
       return admin.deviceAction(id, action, `device ${device.name} (${device.id.slice(-4)})`);
     },
     async 'PUT /api/settings/approve-from-devices'({ body }) {
       const { on } = await body();
-      if (on !== false) return reply(403, { error: 'Only the Mac can turn this on. Use Admin on the Mac or pocket-dev config set approveFromDevices true.' });
+      if (on !== false) return reply(403, { error: `Only ${platform.host.the} can turn this on. Use Admin on ${platform.host.the} or pocket-dev config set approveFromDevices true.` });
       setApproveFromDevices(false, 'phone');
       return reply(200, { approveFromDevices: false });
     },
@@ -605,7 +606,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       return reply(204, undefined, id === device.id ? { 'set-cookie': CLEAR_COOKIE } : {});
     },
     async 'POST /api/settings/password'({ device, body }) {
-      if (envPassword) return reply(409, { error: 'The password comes from POCKET_DEV_PASSWORD on the Mac. Change it there.' });
+      if (envPassword) return reply(409, { error: `The password comes from POCKET_DEV_PASSWORD on ${platform.host.the}. Change it there.` });
       const { current, next, logoutOthers = false } = await body();
       if (typeof current !== 'string' || typeof next !== 'string' || typeof logoutOthers !== 'boolean') {
         return reply(400, { error: 'Send current and next as text and logoutOthers as true or false.' });
@@ -639,7 +640,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     const body = async () => asObject(await readBody());
     if (PUBLIC_ROUTES.has(route)) return handler({ req, body });
     const device = lookup(req);
-    if (device && !isActive(device) && !(route === 'POST /api/logout' && device.status === 'pending')) return reply(403, REFUSALS[device.status] || { error: 'Review this device in Admin on the Mac before giving it Admin access.', pending: true });
+    if (device && !isActive(device) && !(route === 'POST /api/logout' && device.status === 'pending')) return reply(403, REFUSALS[device.status] || { error: `Review this device in Admin on ${platform.host.the} before giving it Admin access.`, pending: true });
     if (!handler) return null;
     if (!device) return reply(401, { error: 'Not logged in' });
     return handler({ req, body, device, id: deviceRoute?.[1], action: deviceRoute?.[2] });

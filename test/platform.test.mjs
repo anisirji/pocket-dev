@@ -112,10 +112,10 @@ test('zip: Mac keeps /usr/bin/zip and its exact arguments; Linux uses zip when p
   assert.deepEqual(fake({ os: 'linux', files: ['/bin/zip'] }).p.zipCommand(), { available: true, cmd: '/bin/zip', args });
 });
 
-test('zip reports clearly when it cannot run: Windows needs a node zip library, Linux needs the zip program', () => {
+test('zip reports clearly when it cannot run: Windows needs tar.exe, Linux needs the zip program', () => {
   const win = fake({ os: 'win32' }).p.zipCommand();
   assert.deepEqual(win, { available: false, reason: NO_WINDOWS_ZIP });
-  assert.match(win.reason, /node zip library/);
+  assert.match(win.reason, /tar\.exe/);
   const linux = fake({ os: 'linux' }).p.zipCommand();
   assert.equal(linux.available, false);
   assert.match(linux.reason, /zip program/);

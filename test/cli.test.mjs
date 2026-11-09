@@ -14,7 +14,7 @@ function fixture(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const pkg = path.join(root, 'pkg');
   fs.mkdirSync(path.join(pkg, 'bin'), { recursive: true });
-  for (const file of ['paths.js', 'config.js', 'config-keys.js', 'network.js', 'package.json']) fs.copyFileSync(path.join(REPO, file), path.join(pkg, file));
+  for (const file of ['paths.js', 'config.js', 'config-keys.js', 'network.js', 'platform.js', 'platform-service.js', 'package.json']) fs.copyFileSync(path.join(REPO, file), path.join(pkg, file));
   fs.copyFileSync(path.join(REPO, 'bin', 'pocket-dev.js'), path.join(pkg, 'bin', 'pocket-dev.js'));
   const state = path.join(root, 'state');
   const env = { ...process.env, POCKET_DEV_STATE_DIR: state };

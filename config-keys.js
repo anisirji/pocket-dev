@@ -21,15 +21,15 @@ const hostList = (text) => {
 
 export const KEYS = {
   port: { parse: integer(1024, 65535), restart: true, help: 'Phone port (default 7777)' },
-  adminPort: { parse: integer(1024, 65535), restart: true, help: 'Admin page port on this Mac (default: port + 1)' },
-  awake: { parse: oneOf('off', 'plugged', 'always'), restart: false, help: 'Keep the Mac awake: off, plugged, always' },
-  requireApproval: { parse: boolean, restart: false, help: 'New devices wait for approval on the Mac: true or false' },
+  adminPort: { parse: integer(1024, 65535), restart: true, help: 'Admin page port on this computer (default: port + 1)' },
+  awake: { parse: oneOf('off', 'plugged', 'always'), restart: false, help: 'Keep this computer awake: off, plugged, always' },
+  requireApproval: { parse: boolean, restart: false, help: 'New devices wait for approval on the host computer: true or false' },
   approveFromDevices: { parse: boolean, restart: false, help: 'Let a logged-in phone approve waiting logins: true or false (default false)' },
   maxDevices: { parse: integer(1, 20), restart: false, help: 'Most devices that can be logged in (1 to 20)' },
   chatIdleMinutes: { parse: integer(1, 1440), restart: false, help: 'Minutes before an idle chat engine stops (default 10)' },
-  batteryAlertPercent: { parse: integer(5, 90), restart: false, help: 'Alert the phone when the Mac battery is at or below this percent and not charging (default 20)' },
-  temperatureAlertC: { parse: integer(30, 70), restart: false, help: 'Alert the phone when the Mac battery temperature reaches this many \u00b0C (default 40)' },
-  screenView: { parse: boolean, restart: false, help: 'Let a logged-in phone see this Mac\u2019s screen: true or false (default true)' },
+  batteryAlertPercent: { parse: integer(5, 90), restart: false, help: 'Alert the phone when the battery is at or below this percent and not charging (default 20)' },
+  temperatureAlertC: { parse: integer(30, 70), restart: false, help: 'Alert the phone when the battery temperature reaches this many \u00b0C (default 40)' },
+  screenView: { parse: boolean, restart: false, help: 'Let a logged-in phone see this computer\u2019s screen: true or false (default true)' },
   allowedHosts: { parse: hostList, restart: false, help: 'Extra Host names to accept, comma separated (a tunnel domain)' },
-  messagesReserveGB: { parse: integer(0, 1000), restart: false, help: 'Refuse Messages uploads that would leave less than this many GB free on the Mac (default 5)' },
+  messagesReserveGB: { parse: integer(0, 1000), restart: false, help: 'Refuse Messages uploads that would leave less than this many GB free on this computer (default 5)' },
 };
