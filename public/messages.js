@@ -329,7 +329,7 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     items[0].focus({ preventScroll: true });
   }
   async function drop(m, everyone) {
-    if (everyone && !confirm('Delete this message for everyone? Its files are deleted from the Mac too.')) return;
+    if (everyone && !confirm('Delete this message for everyone? Its files are deleted from the device too.')) return;
     try {
       await api(everyone ? 'DELETE' : 'POST', everyone ? `/api/messages/${m.seq}` : `/api/messages/${m.seq}/hide`, everyone ? undefined : {});
       remove([m.seq]);
@@ -491,8 +491,8 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   // Refusals the server would give, shown before a byte is sent: Cloudflare answers an oversized body with its own page.
   function refusalFor(file) {
     const { fileMax, lowSpace, largeFile, freeBytes, reserveBytes } = state.limits;
-    if (fileMax && file.size > fileMax) return `Over the internet you can send files up to 100 MB. This file is ${sizeText(file.size)}. Connect on the same Wi-Fi as the Mac to send it.`;
-    if (lowSpace && file.size > largeFile) return `Your Mac is low on space (${sizeText(freeBytes)} free). Files over 50 MB are paused until there's more than ${sizeText(reserveBytes)} free. Text and files up to 50 MB still work.`;
+    if (fileMax && file.size > fileMax) return `Over the internet you can send files up to 100 MB. This file is ${sizeText(file.size)}. Connect on the same Wi-Fi as the device to send it.`;
+    if (lowSpace && file.size > largeFile) return `The device is low on space (${sizeText(freeBytes)} free). Files over 50 MB are paused until there's more than ${sizeText(reserveBytes)} free. Text and files up to 50 MB still work.`;
     return null;
   }
 
@@ -668,7 +668,7 @@ export function mountMacMessages(section, { api, toast = () => {} }) {
 
   async function renderStorage() {
     const s = await api('GET', '/api/messages/storage');
-    usage.textContent = `${sizeText(s.usage)} of files · ${sizeText(s.freeBytes)} free on this Mac`;
+    usage.textContent = `${sizeText(s.usage)} of files · ${sizeText(s.freeBytes)} free on this device`;
     storageBody.replaceChildren();
     if (s.lowSpace) storageBody.append(el('p', 'err', `Low on space: files over 50 MB wait until more than ${sizeText(s.reserveBytes)} is free.`));
     for (const c of s.chats) {

@@ -76,7 +76,7 @@
   // Wi-Fi only, where its internet cookie is no login, and the reply to the closing request may never arrive.
   async function turnOffInternet() {
     const remote = info.route === 'remote';
-    if (!confirm(remote ? 'Turn off internet access? This phone then reaches the Mac only on its Wi-Fi, and switches there now.' : 'Turn off internet access? Only the Mac can turn it back on.')) return;
+    if (!confirm(remote ? 'Turn off internet access? This phone then reaches the device only on its Wi-Fi, and switches there now.' : 'Turn off internet access? Only the device itself can turn it back on.')) return;
     const next = remote && info.lanUrl ? (await window.api('POST', '/api/handoff', { direction: 'to-lan' })).url + fragment() : null;
     try { await window.api('PUT', '/api/network', { internet: { kind: 'off' } }); } catch {}
     if (next) location.assign(next);
@@ -93,8 +93,8 @@
   document.getElementById('clientError').after(banner);
 
   const PROMPTS = {
-    local: { text: () => 'You’re on the same Wi-Fi as your Mac. Switch to local?', action: 'Switch', go: () => switchToLocal(), later: () => info?.networkKey && store.set(`pd.net.notNow.${info.networkKey}`, '1') },
-    remote: { text: () => 'Can’t reach your Mac on Wi-Fi. Switch to remote?', action: 'Switch to remote', go: () => switchToRemote() },
+    local: { text: () => 'You’re on the same Wi-Fi as the device. Switch to local?', action: 'Switch', go: () => switchToLocal(), later: () => info?.networkKey && store.set(`pd.net.notNow.${info.networkKey}`, '1') },
+    remote: { text: () => 'Can’t reach the device on Wi-Fi. Switch to remote?', action: 'Switch to remote', go: () => switchToRemote() },
     link: { text: () => `Link this phone to ${hostOf(info.remoteUrl)} so you won’t need to log in when you’re away.`, action: 'Link', go: () => linkToRemote(), later: () => store.set(`pd.net.linkNotNow.${hostOf(info.remoteUrl)}`, '1') },
     linked: { text: () => `Linked. This phone now opens ${hostOf(info.remoteUrl)} without logging in.`, action: 'OK', go: () => showPrompt(null) },
   };

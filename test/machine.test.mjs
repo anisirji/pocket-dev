@@ -63,3 +63,12 @@ test('status wording names the remote device instead of the Mac', () => {
   assert.equal(sayFor('Beta', 'Open the lid on the Mac'), 'Open the lid on Beta');
   assert.equal(sayFor('Beta', 'MacBook'), 'MacBook', 'a word that only starts with Mac is left alone');
 });
+
+test('status wording is generic for a device without a name, and keeps macOS-only words', () => {
+  assert.equal(sayFor(null, 'Mac not responding'), 'Device not responding');
+  assert.equal(sayFor(null, 'The Mac replied, but its readings are unavailable.'), 'The device replied, but its readings are unavailable.');
+  assert.equal(sayFor(null, 'Available on the Mac’s home disk'), 'Available on the device’s home disk');
+  assert.equal(sayFor(null, 'Type your Mac password in the new terminal.'), 'Type the password for this device in the new terminal.');
+  assert.equal(sayFor(null, 'MacBook'), 'MacBook');
+  assert.equal(sayFor('Home', 'Mac may sleep'), 'Home may sleep');
+});

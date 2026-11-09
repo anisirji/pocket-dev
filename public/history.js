@@ -131,7 +131,7 @@
       if (seq !== listSeq) return;
       if (!items.length) {
         const where = filter === 'all' ? '~/.claude or ~/.codex' : filter === 'claude' ? '~/.claude' : '~/.codex';
-        status(ui.list, `No conversations found in ${where} on this Mac.`);
+        status(ui.list, `No conversations found in ${where} on this device.`);
       } else {
         ui.list.replaceChildren(...items.map(card));
       }

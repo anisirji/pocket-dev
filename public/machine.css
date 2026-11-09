@@ -1,5 +1,5 @@
 /* Machine switcher (machine.js): the header chip, the device sheet, the "not answering" banner. */
-.mc-chip { flex: 0 1 auto; min-width: 36px; max-width: 132px; height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 7px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); font-size: 13px; }
+.mc-chip { flex: 0 1 auto; min-width: 84px; max-width: 160px; height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 7px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); font-size: 13px; }
 html[data-machine="remote"] .mc-chip { border-color: var(--accent); }
 .mc-chip[hidden], .mc-sheet[hidden], .mc-banner[hidden] { display: none; }
 .mc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -19,9 +19,9 @@ html[data-machine="remote"] .mc-chip { border-color: var(--accent); }
 .mc-text small { color: var(--muted); font-size: 12px; }
 .mc-check { color: var(--accent); font-weight: 700; }
 .mc-note { margin: 10px 6px 0; color: var(--muted); font-size: 12px; }
-.mc-banner { position: fixed; left: 8px; right: 8px; top: 8px; z-index: 3100; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #3a2323; border: 1px solid var(--danger); }
+.mc-banner { position: fixed; left: 8px; right: 8px; top: calc(8px + var(--status-h, 0px) + var(--viewport-top, 0px)); z-index: 3100; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #3a2323; border: 1px solid var(--danger); }
 .mc-banner-text { flex: 1; min-width: 0; }
-.mc-banner .primary { flex: none; height: 36px; padding: 0 12px; border-radius: 8px; }
+.mc-banner .primary { flex: none; min-height: 44px; padding: 0 12px; border-radius: 8px; }
 /* Settings and Ports describe the device the phone is logged in on, so they stay with it. */
 html[data-machine="remote"] :is(#settingsBtn, #portsBtn) { display: none; }
 html[data-machine="remote"][data-rank="collaborator"] :is(#resumeBtn, #viewSwitch [data-view="terminal"], #viewSwitch [data-view="git"], #viewSwitch [data-view="chat"], #tabbar, #terms, #inputBar, #keys) { display: none; }
@@ -30,4 +30,11 @@ html[data-machine="remote"][data-rank="collaborator"] :is(#resumeBtn, #viewSwitc
 .mc-home p { margin: 0 0 8px; color: var(--muted); }
 .mc-home .primary { width: 200px; height: 44px; border-radius: 10px; }
 html:not([data-machine="remote"]) .mc-home { display: none; }
-.ms-label.mc-switch { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; padding: 8px 6px; margin: -8px -6px; }
+.ms-label.mc-switch { position: relative; display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; max-width: 62%; height: 26px; margin: 1px 0; padding: 0 10px; border-radius: 13px; border: 1px solid var(--line); background: var(--bg); color: var(--text); letter-spacing: 0; cursor: pointer; }
+html[data-machine="remote"] .ms-label.mc-switch { border-color: var(--accent); }
+/* The pill is 26 px tall; its tap area reaches 44 px without making the strip taller. */
+.ms-label.mc-switch::after { content: ""; position: absolute; inset: -9px -4px; }
+.ms-label .mc-name { flex: 0 1 auto; min-width: 0; }
+.mc-caret { flex: none; color: var(--muted); font-size: 11px; }
+.mc-chip .mc-name { flex: 1; min-width: 0; text-align: left; }
+.mc-sheet .icon-btn { min-width: 44px; height: 44px; }
