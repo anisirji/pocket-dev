@@ -45,7 +45,7 @@ function fixture(t) {
     el, baseName: (p) => path.basename(p), keepFocus: () => {},
     button: (cls, text, onclick) => Object.assign(el('button', cls, text), { onclick }),
     removeQueued: (id) => { chat.unqueue(id); runtime.renderQueue(); },
-    IMAGE_EXT: /\.(png|jpg)$/i, attachedImage: () => el('img', 'chat-user-img'),
+    IMAGE_EXT: /\.(png|jpg)$/i, attachedImage: () => el('img', 'chat-user-img'), copyButton: () => el('button', 'chat-copy'),
   };
   vm.createContext(runtime);
   vm.runInContext(`${draftView}\n${composer}\n${queueView}\nObject.assign(this, {renderQueue, renderComposer, editQueued, saveQueuedEdit, finishQueueEdit, saveDraft, restoreQueueEdit, reconcileQueueEdit}); this.patchRoute = ({${patchRoute}})['PATCH :id/queue']; this.renderUser = ({${messageView}})['user-text'];`, runtime);

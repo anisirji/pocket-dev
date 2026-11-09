@@ -727,6 +727,19 @@
     const main = el('span', 'chat-set-row-main');
     main.append(el('span', 'chat-set-row-title', 'Permissions'), el('span', 'chat-set-row-hint', 'What runs without asking'));
     perms.append(main, el('span', 'chat-set-chev', '›'));
+    const copyChat = button('chat-set-row', null, async () => {
+      const text = chatTranscript();
+      if (!text) return toast('Nothing to copy yet');
+      try {
+        await copyText(text);
+        toast('Chat copied');
+      } catch {
+        toast('Could not copy');
+      }
+    });
+    const copyMain = el('span', 'chat-set-row-main');
+    copyMain.append(el('span', 'chat-set-row-title', 'Copy chat'), el('span', 'chat-set-row-hint', 'The whole conversation as text'));
+    copyChat.append(copyMain);
     const del = button('chat-danger-link', 'Delete chat', async () => {
       if (!confirm(`Delete "${c.title}"? Its history is removed from Pocket Dev.`)) return;
       convo.leaving = true;
@@ -740,7 +753,7 @@
       }
     });
     const body = el('div', 'chat-sheet-body');
-    body.append(where, perms, del);
+    body.append(where, perms, copyChat, del);
     sheet.replaceChildren(sheetHead('Chat settings'), body);
   }
 
@@ -1339,6 +1352,46 @@
     return link;
   }
 
+  // Plain http on the LAN is not a secure context, so navigator.clipboard is missing there.
+  function copyText(text) {
+    if (window.isSecureContext && navigator.clipboard) return navigator.clipboard.writeText(text);
+    const ta = el('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok ? Promise.resolve() : Promise.reject(new Error('Copy failed'));
+  }
+  const COPY_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/></svg>';
+  const CHECK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  // The small copy icon at the end of a message bubble. It shows a tick for a moment after the copy.
+  function copyButton(text) {
+    const b = button('chat-copy', null, async () => {
+      try {
+        await copyText(text);
+        b.innerHTML = CHECK_ICON;
+        setTimeout(() => { b.innerHTML = COPY_ICON; }, 1200);
+        toast('Copied');
+      } catch {
+        toast('Could not copy');
+      }
+    });
+    b.innerHTML = COPY_ICON;
+    b.title = b.ariaLabel = 'Copy message';
+    keepFocus(b);
+    return b;
+  }
+  // The whole conversation as plain text: what you said and what the assistant answered, in order.
+  function chatTranscript() {
+    const who = TOOLS[convo.chat?.tool] || 'Assistant';
+    return convo.events
+      .filter((ev) => (ev.type === 'user-text' && !ev.removed && !ev.queued && ev.text) || (ev.type === 'assistant-text' && ev.text))
+      .map((ev) => `${ev.type === 'user-text' ? 'You' : who}:\n${ev.text}`)
+      .join('\n\n');
+  }
+
   const RENDER = {
     'user-text': (ev) => {
       if (ev.removed || ev.queued) {
@@ -1356,6 +1409,11 @@
       if (ev.notSent) {
         node.append(el('div', 'chat-queued-tag chat-queued-lost', 'Not sent: the turn failed or the server restarted'));
       }
+      if (ev.text) {
+        const foot = el('div', 'chat-bubble-foot');
+        foot.append(copyButton(ev.text));
+        node.append(foot);
+      }
       return node;
     },
     'assistant-text': (ev) => {
@@ -1367,11 +1425,14 @@
         else if (tail?.matches('.chat-codewrap')) tail = tail.querySelector('pre');
         (tail || node).append(el('span', 'chat-caret-blink'));
       }
+      const foot = el('div', 'chat-bubble-foot');
       if (ev.model) {
         const model = el('div', 'chat-model', shortModel(ev.model));
         model.title = ev.model;
-        node.append(model);
+        foot.append(model);
       }
+      if (!ev.streaming && ev.text) foot.append(copyButton(ev.text));
+      if (foot.firstChild) node.append(foot);
       return node;
     },
     thinking: (ev) => fold(ev, 'chat-thinking', [el('span', 'chat-fold-name', 'Thinking…'), ...(ev.streaming ? [spinner()] : [])],
