@@ -2,6 +2,10 @@
 // Pocket Dev from starting. Everything that needs a pty asks here. This module never throws.
 // POCKET_DEV_FORCE_NO_PTY=1 makes it report "not available" without touching node-pty (for tests).
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+
 export const REPAIR_COMMAND = 'pocket-dev doctor --fix';
 const DOCS = 'docs/SETUP.md (Troubleshooting)';
 
@@ -25,9 +29,30 @@ export function unavailable(reason) {
   return { available: false, pty: null, reason, hint: `On this computer, run:  ${REPAIR_COMMAND}   then restart Pocket Dev. More help: ${DOCS}.`, command: REPAIR_COMMAND };
 }
 
+// npm runs postinstall to make node-pty's prebuilt spawn-helper executable, but `npm install --ignore-scripts` skips it
+// and the shell then fails with "posix_spawnp failed". Doing it here makes that harmless. Returns the files it changed.
+export function fixHelperPermissions(platform = process.platform, from = import.meta.url) {
+  if (platform === 'win32') return [];
+  const changed = [];
+  try {
+    const root = path.join(path.dirname(createRequire(from).resolve('node-pty/package.json')), 'prebuilds');
+    for (const dir of fs.readdirSync(root)) {
+      const helper = path.join(root, dir, 'spawn-helper');
+      try {
+        if ((fs.statSync(helper).mode & 0o111) !== 0o111) { fs.chmodSync(helper, 0o755); changed.push(helper); }
+      } catch {}
+    }
+  } catch {}
+  return changed;
+}
+
 // `importer` and `env` are injected by tests. Resolves { available, pty, reason, hint, command }.
-export async function loadPty({ importer = () => import('node-pty'), env = process.env } = {}) {
+export async function loadPty({ importer, env = process.env } = {}) {
   if (env.POCKET_DEV_FORCE_NO_PTY === '1') return unavailable('terminals were switched off for this run (POCKET_DEV_FORCE_NO_PTY)');
+  if (!importer) {
+    fixHelperPermissions();
+    importer = () => import('node-pty');
+  }
   try {
     const mod = await importer();
     const pty = mod?.default ?? mod;

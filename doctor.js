@@ -130,7 +130,8 @@ export async function probeTerminals({ shell, shellArgs, cwd = os.homedir(), env
   try {
     proc = status.pty.spawn(shell, shellArgs, { name: 'xterm-256color', cols: 80, rows: 24, cwd, env });
   } catch (err) {
-    return { available: false, reason: `the terminal component loaded but could not start ${shell}: ${String(err.message).split('\n')[0]}` };
+    const helper = /posix_spawnp/.test(err.message) ? ' (its helper file may not be executable, or the shell path is wrong)' : '';
+    return { available: false, reason: `the terminal component loaded but could not start ${shell}: ${String(err.message).split('\n')[0]}${helper}` };
   }
   const outcome = await new Promise((resolve) => {
     const timer = setTimeout(() => resolve('running'), wait);

@@ -47,3 +47,21 @@ test('the real node-pty loads here', async () => {
   const status = await loadPty({ env: {} });
   assert.equal(status.available, true, status.reason);
 });
+
+test('fixHelperPermissions makes a non-executable spawn-helper executable and leaves Windows alone', async (t) => {
+  const fs = await import('node:fs'), os = await import('node:os'), path = await import('node:path');
+  const { fixHelperPermissions } = await import('../pty-loader.js');
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pd-helper-')));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const pty = path.join(root, 'node_modules', 'node-pty');
+  fs.mkdirSync(path.join(pty, 'prebuilds', 'darwin-arm64'), { recursive: true });
+  fs.writeFileSync(path.join(pty, 'package.json'), '{"name":"node-pty","version":"1.0.0"}');
+  const helper = path.join(pty, 'prebuilds', 'darwin-arm64', 'spawn-helper');
+  fs.writeFileSync(helper, '#!/bin/sh\n', { mode: 0o644 });
+  const from = new URL(`file://${root}/x.js`).href;
+  assert.deepEqual(fixHelperPermissions('win32', from), []);
+  assert.deepEqual(fixHelperPermissions('darwin', from), [helper]);
+  assert.equal(fs.statSync(helper).mode & 0o111, 0o111);
+  assert.deepEqual(fixHelperPermissions('darwin', from), [], 'idempotent');
+  assert.deepEqual(fixHelperPermissions('darwin', new URL('file:///nonexistent/x.js').href), [], 'no node-pty: nothing, no throw');
+});
