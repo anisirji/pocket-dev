@@ -411,7 +411,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   }
   // Browsers may resolve localhost to ::1 first. A Mac without IPv6 loopback still has 127.0.0.1.
   await listen('::1').catch(() => {});
-  fs.writeFileSync(ADMIN_URL_PATH, JSON.stringify({ url }) + '\n', { mode: 0o600 });
+  fs.writeFileSync(ADMIN_URL_PATH, JSON.stringify({ url, pid: process.pid }) + '\n', { mode: 0o600 });
 
   // Routes the phone can call on the main listener, after the server checked its login.
   const phoneRoute = router({
