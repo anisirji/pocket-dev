@@ -62,4 +62,4 @@ More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/d
 - [Full guide](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md): commands, configuration, rooms, internet access, security, limitations.
 - [Guided setup](https://github.com/anisirji/pocket-dev/blob/main/docs/SETUP.md) and [reference](https://github.com/anisirji/pocket-dev/blob/main/docs/REFERENCE.md).
 
-Licence: ISC.
+

@@ -3,6 +3,14 @@
   "version": "1.1.1",
   "description": "Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
   "author": "anisirji",
+  "homepage": "https://github.com/anisirji/pocket-dev#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anisirji/pocket-dev.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anisirji/pocket-dev/issues"
+  },
   "license": "ISC",
   "keywords": [
     "remote-control",
