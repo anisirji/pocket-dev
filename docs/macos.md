@@ -57,6 +57,8 @@ Chats need at least one of Claude Code or Codex. `pocket-dev setup --check` list
 | GitHub CLI (`gh`) | `brew install gh` | `gh auth login` |
 | cloudflared (internet access only) | `brew install cloudflared` | none for a Quick link |
 
+> **Upcoming:** Google Antigravity CLI (`agy`) support, in the terminal and in Chat. It is not available yet. See the [roadmap](ROADMAP.md).
+
 ## 6. Keep it running, start at login
 
 ```sh

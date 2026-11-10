@@ -69,6 +69,8 @@ Chats need at least one of Claude Code or Codex. Everything else works without t
 
 If you do have winget, `winget install --id Git.Git -e`, `winget install --id GitHub.cli -e` and `winget install Cloudflare.cloudflared` also work. After installing a tool, open a new terminal and restart Pocket Dev so its terminals see the new PATH.
 
+> **Upcoming:** Google Antigravity CLI (`agy`) support, in the terminal and in Chat. It is not available yet. See the [roadmap](ROADMAP.md).
+
 ## 6. Keep it running, start at login
 
 - Without a window, for this session: `Start-Process pocket-dev.cmd -ArgumentList 'start','--no-open' -WindowStyle Hidden`

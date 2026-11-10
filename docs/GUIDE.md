@@ -338,8 +338,8 @@ The Admin page has a **Permissions** panel that shows each of these. Details: [d
 - Pocket Dev cannot wake or power on any device, and the remote Sleep button can leave a device unreachable until someone presses its power button.
 - Rooms work over the Wi-Fi or each device's own address. Failover across devices and a room over the internet are not built, and a device that is asleep or off leaves the room until it wakes.
 - Files over the internet connector are limited to 100 MB in Messages (a Cloudflare free-plan limit).
-- Windows: main features tested on a real PC; temperature, lid control and window names are unavailable. Linux: written and partly tested, not run on a real machine. `pocket-dev service` is macOS only.
-- Roadmap: passkeys and fingerprint login, an Android share target.
+- Windows: main features tested on a real PC; temperature, lid control and window names are unavailable. Linux: written and partly tested, not run on a real machine. `pocket-dev service` uses launchd on macOS and the Task Scheduler on Windows (tested on a real PC), and systemd on Linux (not run on a real machine).
+- Upcoming, not built: Google Antigravity CLI in the terminal and in Chat, passkeys and fingerprint login, an Android share target. See [the roadmap](ROADMAP.md).
 
 ## Develop and test
 

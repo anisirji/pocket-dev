@@ -67,6 +67,8 @@ Chats need at least one of Claude Code or Codex. `pocket-dev setup --check` list
 | GitHub CLI (`gh`) | `sudo apt install gh`, `sudo dnf install gh`, `sudo pacman -S github-cli`; or [install instructions](https://github.com/cli/cli/blob/trunk/docs/install_linux.md) | `gh auth login` |
 | cloudflared (internet access only) | [download page](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/); `sudo pacman -S cloudflared` on Arch | none for a Quick link |
 
+> **Upcoming:** Google Antigravity CLI (`agy`) support, in the terminal and in Chat. It is not available yet. See the [roadmap](ROADMAP.md).
+
 ## 6. Keep it running, start at login
 
 - Quick way: `nohup pocket-dev start --no-open > ~/pocket-dev.log 2>&1 &`
