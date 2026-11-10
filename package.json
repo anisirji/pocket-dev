@@ -60,6 +60,9 @@
     "docs/diagrams",
     "docs/SETUP.md",
     "docs/INSTALL_BEGINNERS.md",
+    "docs/windows.md",
+    "docs/macos.md",
+    "docs/linux.md",
     "docs/install-guide",
     "LICENSE"
   ],

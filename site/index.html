@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pocket Dev: control your computer from your phone</title>
+<meta name="description" content="Terminals, Claude Code and Codex chats, Git, files and open apps on your own computer, from your phone's browser. Self-hosted, nothing to install on the phone.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234c8dff'/%3E%3Cpath d='M8 11l6 5-6 5M17 21h7' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="wrap bar">
+    <a class="brand" href="#top" aria-label="Pocket Dev home">Pocket Dev</a>
+    <nav aria-label="Main">
+      <a href="#install">Install</a>
+      <a href="#features">Features</a>
+      <a href="#security">Security</a>
+      <a href="https://github.com/anisirji/pocket-dev">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero wrap" id="top">
+    <div>
+      <p class="eyebrow">Self-hosted. No cloud account.</p>
+      <h1>Your computer, from your pocket.</h1>
+      <p class="lead">Open terminals, Claude Code and Codex chats, Git, files and apps on your own machine from your phone's browser. Nothing to install on the phone.</p>
+      <p class="cta">
+        <a class="btn primary" href="#install">Install in 3 steps</a>
+        <a class="btn" href="https://www.npmjs.com/package/@anisirji/pocket-dev">npm package</a>
+      </p>
+    </div>
+    <figure class="term" aria-label="Example terminal output">
+      <pre><code><span class="dim">$</span> npm install -g @anisirji/pocket-dev
+<span class="dim">$</span> pocket-dev start
+
+Pocket Dev running at <span class="hl">http://192.168.1.20:7777</span>
+Password: <span class="hl">Xk3p9QwR2tLm</span>
+<span class="dim">(QR code here: scan it with your phone)</span></code></pre>
+    </figure>
+  </section>
+
+  <section class="wrap" id="install" aria-labelledby="install-h">
+    <h2 id="install-h">Install in 3 steps</h2>
+    <p class="note"><strong>Before you start:</strong> Node.js 22 or newer, and a phone on the same Wi-Fi as the computer. Type the package name exactly, with the <code>@</code> and <code>-g</code>.</p>
+
+    <div class="tabs" id="tabs">
+      <div role="tablist" aria-label="Operating system">
+        <button role="tab" id="tab-win" aria-controls="p-win" aria-selected="true">Windows</button>
+        <button role="tab" id="tab-mac" aria-controls="p-mac" aria-selected="false" tabindex="-1">macOS</button>
+        <button role="tab" id="tab-lin" aria-controls="p-lin" aria-selected="false" tabindex="-1">Linux</button>
+      </div>
+
+      <div role="tabpanel" id="p-win" aria-labelledby="tab-win">
+        <ol class="steps">
+          <li><h3>Get Node.js</h3><p>Install the LTS version from <a href="https://nodejs.org/en/download">nodejs.org</a>, then open a new PowerShell window and check:</p><pre><code>node -v</code></pre></li>
+          <li><h3>Install and check</h3><pre><code>npm install -g @anisirji/pocket-dev
+pocket-dev doctor</code></pre></li>
+          <li><h3>Start and scan</h3><pre><code>pocket-dev start</code></pre><p>Scan the QR code with your phone. Windows asks about the firewall: choose <strong>Private networks</strong>.</p></li>
+        </ol>
+        <p><a href="https://github.com/anisirji/pocket-dev/blob/main/docs/windows.md">Full Windows guide and error fixes</a></p>
+      </div>
+
+      <div role="tabpanel" id="p-mac" aria-labelledby="tab-mac">
+        <ol class="steps">
+          <li><h3>Get Node.js</h3><pre><code>brew install node
+node -v</code></pre><p>Or use the installer from <a href="https://nodejs.org/en/download">nodejs.org</a>.</p></li>
+          <li><h3>Install and check</h3><pre><code>npm install -g @anisirji/pocket-dev
+pocket-dev doctor</code></pre></li>
+          <li><h3>Start and scan</h3><pre><code>pocket-dev start</code></pre><p>Scan the QR code with your phone. If macOS asks, allow <code>node</code> incoming connections.</p></li>
+        </ol>
+        <p><a href="https://github.com/anisirji/pocket-dev/blob/main/docs/macos.md">Full macOS guide and error fixes</a></p>
+      </div>
+
+      <div role="tabpanel" id="p-lin" aria-labelledby="tab-lin">
+        <ol class="steps">
+          <li><h3>Get Node.js</h3><pre><code>nvm install 22
+node -v</code></pre><p>Or use your package manager or <a href="https://nodejs.org/en/download">nodejs.org</a>.</p></li>
+          <li><h3>Install and check</h3><pre><code>npm install -g @anisirji/pocket-dev
+pocket-dev doctor</code></pre></li>
+          <li><h3>Start and scan</h3><pre><code>pocket-dev start</code></pre><p>Scan the QR code with your phone. If a firewall is on, allow TCP port 7777 from your local network.</p></li>
+        </ol>
+        <p><a href="https://github.com/anisirji/pocket-dev/blob/main/docs/linux.md">Full Linux guide and error fixes</a> (written from the code, not yet run on a real machine)</p>
+      </div>
+    </div>
+
+    <p class="note warn"><strong>If you see <code>unknown command 'start'</code> or <code>EEXIST</code>:</strong> a different npm package called <code>pocket-dev</code> owns the command. Run <code>npm uninstall -g pocket-dev</code>, then install again.</p>
+  </section>
+
+  <section class="wrap" id="features" aria-labelledby="features-h">
+    <h2 id="features-h">What you get</h2>
+    <ul class="grid">
+      <li><h3>Terminals</h3><p>Real shells that keep running when you close the page.</p></li>
+      <li><h3>Chat</h3><p>Claude Code and Codex conversations, using your own logins.</p></li>
+      <li><h3>Git and Files</h3><p>Browse, edit and commit on the computer where your work is.</p></li>
+      <li><h3>Apps, health, power</h3><p>See open apps, battery and temperature, keep the machine awake.</p></li>
+      <li><h3>Several computers</h3><p>One phone switches between your machines, with per-device permissions.</p></li>
+      <li><h3>Internet access</h3><p>Optional, off by default, through a Cloudflare tunnel.</p></li>
+    </ul>
+  </section>
+
+  <section class="wrap" id="security" aria-labelledby="security-h">
+    <h2 id="security-h">Security notes</h2>
+    <ul class="plain">
+      <li>It runs on your computer, as your user. There is no Pocket Dev cloud and no account.</li>
+      <li>A logged-in phone has the rights of your user: a shell, your files, and your Claude, Codex and GitHub logins. Treat the phone like the keys to the computer.</li>
+      <li>Port 7777 listens on your local network. Wrong passwords are throttled. Only allow the firewall on Private networks.</li>
+      <li>Internet access is optional and off by default.</li>
+    </ul>
+    <p><a href="https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md">Read the full security section</a></p>
+  </section>
+
+  <section class="wrap links" aria-labelledby="links-h">
+    <h2 id="links-h">Docs and source</h2>
+    <ul class="plain">
+      <li><a href="https://github.com/anisirji/pocket-dev/blob/main/docs/windows.md">Windows</a>, <a href="https://github.com/anisirji/pocket-dev/blob/main/docs/macos.md">macOS</a>, <a href="https://github.com/anisirji/pocket-dev/blob/main/docs/linux.md">Linux</a> install guides</li>
+      <li><a href="https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md">Full guide</a> and <a href="https://github.com/anisirji/pocket-dev/blob/main/docs/REFERENCE.md">reference</a></li>
+      <li><a href="https://github.com/anisirji/pocket-dev">GitHub</a> and <a href="https://www.npmjs.com/package/@anisirji/pocket-dev">npm</a></li>
+    </ul>
+  </section>
+</main>
+
+<footer class="wrap foot"><p>Pocket Dev, ISC licence.</p></footer>
+
+<script>
+(function () {
+  var root = document.getElementById('tabs');
+  var tabs = Array.prototype.slice.call(root.querySelectorAll('[role=tab]'));
+  var panels = Array.prototype.slice.call(root.querySelectorAll('[role=tabpanel]'));
+  root.classList.add('js');
+  function show(i, focus) {
+    tabs.forEach(function (t, j) {
+      var on = i === j;
+      t.setAttribute('aria-selected', on);
+      t.tabIndex = on ? 0 : -1;
+      panels[j].hidden = !on;
+    });
+    if (focus) tabs[i].focus();
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () { show(i); });
+    t.addEventListener('keydown', function (e) {
+      var n = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (n === undefined) return;
+      e.preventDefault();
+      show((n + tabs.length) % tabs.length, true);
+    });
+  });
+  var ua = navigator.userAgent;
+  show(/Mac/.test(ua) && !/iPhone|iPad/.test(ua) ? 1 : /Linux|X11/.test(ua) && !/Android/.test(ua) ? 2 : 0);
+})();
+</script>
+</body>
+</html>
