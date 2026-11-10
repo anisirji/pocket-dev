@@ -36,7 +36,7 @@
   }
 
   // view is 'closed' | 'list' | 'detail'; every other field describes the open view.
-  const state = { view: 'closed', apps: [], listError: null, notice: null, app: null, windows: null, busy: null, timer: 0 };
+  const state = { view: 'closed', tab: 'running', installed: null, query: '', launching: null, apps: [], listError: null, notice: null, app: null, windows: null, busy: null, timer: 0 };
   let ui = null;
 
   function buildSheet() {
@@ -52,11 +52,29 @@
     refresh.onclick = () => (state.view === 'detail' ? loadWindows() : loadList());
     close.onclick = () => overlays.close('apps');
     bar.append(back, title, refresh, close);
+    const tabs = el('div', 'apps-tabs');
+    const tabButtons = { running: el('button', null, 'Running'), all: el('button', null, 'All apps') };
+    for (const [name, button] of Object.entries(tabButtons)) {
+      button.onclick = () => {
+        state.tab = name;
+        state.notice = null;
+        if (name === 'all' && !state.installed) loadInstalled();
+        render();
+      };
+      tabs.append(button);
+    }
+    const search = el('input', 'apps-search');
+    search.type = 'search';
+    search.placeholder = 'Search apps';
+    search.oninput = () => {
+      state.query = search.value;
+      renderList();
+    };
     const scroll = el('div', 'apps-scroll');
     const actions = el('div', 'apps-actions');
-    root.append(bar, scroll, actions);
+    root.append(bar, tabs, search, scroll, actions);
     document.body.appendChild(root);
-    return { root, back, title, scroll, actions };
+    return { root, back, title, scroll, actions, tabs, tabButtons, search };
   }
 
   function render() {
@@ -67,7 +85,10 @@
     }
     ui ??= buildSheet();
     ui.back.hidden = state.view !== 'detail';
-    ui.title.textContent = state.view === 'detail' ? state.app.name : 'Open apps';
+    ui.title.textContent = state.view === 'detail' ? state.app.name : 'Apps';
+    ui.tabs.hidden = state.view === 'detail';
+    ui.search.hidden = state.view === 'detail' || state.tab !== 'all';
+    for (const [name, button] of Object.entries(ui.tabButtons)) button.classList.toggle('on', state.tab === name);
     if (state.view === 'list') renderList();
     else renderDetail();
   }
@@ -76,7 +97,67 @@
     return el('div', `apps-banner ${notice.kind}`, notice.text);
   }
 
+  const normal = (name) => name.toLowerCase().replace(/\.exe$/, '').replace(/[^a-z0-9]/g, '');
+  const runningMatch = (installed) => {
+    const n = normal(installed.name);
+    return state.apps.find((a) => {
+      const r = normal(a.name);
+      return r.length >= 3 && n.length >= 3 && (n === r || n.includes(r) || r.includes(n));
+    });
+  };
+
+  function renderInstalled() {
+    const items = [];
+    if (state.notice) items.push(banner(state.notice));
+    if (state.installedError) items.push(banner({ kind: 'error', text: state.installedError }));
+    else if (!state.installed) items.push(el('p', 'apps-note', 'Loading…'));
+    const q = state.query.trim().toLowerCase();
+    const shown = (state.installed ?? []).filter((a) => !q || a.name.toLowerCase().includes(q));
+    if (state.installed && !shown.length && !state.installedError) items.push(el('p', 'apps-note', q ? 'No app matches.' : 'No apps found.'));
+    for (const app of shown) {
+      const running = runningMatch(app);
+      const card = el('button', 'apps-card');
+      const text = el('span', 'apps-text');
+      text.append(el('div', 'apps-name', app.name), el('div', 'apps-meta', running ? `Running · ${usageLine(running)}` : 'Tap to open'));
+      card.append(icon(app), text);
+      if (state.launching === app.id) card.append(el('span', 'apps-badge muted', 'opening…'));
+      else if (running) card.append(el('span', 'apps-badge', 'running'));
+      card.onclick = () => (running ? openDetail(running) : launch(app));
+      items.push(card);
+    }
+    ui.scroll.replaceChildren(...items);
+    ui.actions.hidden = true;
+  }
+
+  async function launch(app) {
+    if (state.launching) return;
+    state.launching = app.id;
+    state.notice = null;
+    render();
+    try {
+      await api('POST', '/api/apps/launch', { id: app.id });
+      state.notice = { kind: 'ok', text: `Opening ${app.name}…` };
+      setTimeout(loadList, 2500);
+    } catch (err) {
+      state.notice = { kind: 'error', text: err.message };
+    }
+    state.launching = null;
+    if (state.view !== 'closed') render();
+  }
+
+  async function loadInstalled() {
+    try {
+      const { installed, unsupported } = await api('GET', '/api/apps/installed');
+      state.installed = installed;
+      state.installedError = unsupported ? `Not available on this system: ${unsupported}` : null;
+    } catch (err) {
+      state.installedError = `Could not list installed apps: ${err.message}`;
+    }
+    if (state.view !== 'closed') render();
+  }
+
   function renderList() {
+    if (state.tab === 'all') return renderInstalled();
     const items = [];
     if (state.notice) items.push(banner(state.notice));
     if (state.listError) items.push(banner({ kind: 'error', text: state.listError }));
@@ -214,7 +295,7 @@
 
   function closeSheet() {
     clearInterval(state.timer);
-    Object.assign(state, { view: 'closed', apps: [], listError: null, notice: null, app: null, windows: null, busy: null });
+    Object.assign(state, { view: 'closed', tab: 'running', installed: null, installedError: null, query: '', launching: null, apps: [], listError: null, notice: null, app: null, windows: null, busy: null });
     render();
   }
 

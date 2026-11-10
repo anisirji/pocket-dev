@@ -152,6 +152,9 @@ function renderInternet() {
   for (const b of document.querySelectorAll('.net-kinds button')) b.setAttribute('aria-pressed', String(b.dataset.kind === shown));
   for (const kind of Object.keys(KIND_LABEL)) $(`net${kind[0].toUpperCase()}${kind.slice(1)}`).hidden = kind !== shown;
   $('netCloudflared').hidden = shown === 'off' || Boolean(cloudflared);
+  const onWindows = /win/i.test(navigator.platform);
+  $('netCloudflaredWhere').textContent = onWindows ? 'PowerShell' : 'Terminal';
+  $('netCloudflaredCmd').textContent = onWindows ? 'winget install Cloudflare.cloudflared' : 'brew install cloudflared';
   $('netCount').textContent = internet.kind === 'off' ? 'Off' : tunnel.status === 'connected' ? `On · ${tunnel.url}` : `${KIND_LABEL[internet.kind]} · ${tunnel.status === 'error' ? 'failed' : tunnel.status === 'starting' ? 'connecting' : 'not connected'}`;
   $('domainPort').textContent = `localhost:${access.port}`;
 

@@ -469,6 +469,16 @@ export function createFilesApi({ sendJson, readJson, config }) {
     return { path: base, q: needle, results, partial };
   }
 
+  async function vscode({ body }) {
+    const dir = await resolveDir(body.path);
+    try {
+      await platform.openInVSCode(dir);
+    } catch (err) {
+      fail(err.unsupported ? 501 : 500, err.message);
+    }
+    return { opened: dir };
+  }
+
   async function pin({ body }) {
     if (typeof body.pinned !== 'boolean') fail(400, 'Expected { path, pinned }.');
     const dir = await resolveDir(body.path);
@@ -490,6 +500,7 @@ export function createFilesApi({ sendJson, readJson, config }) {
     'GET zip': { run: zip },
     'GET search': { run: search },
     'PUT pin': { run: pin, body: 'json' },
+    'POST vscode': { run: vscode, body: 'json' },
     'POST mkdir': { run: mkdir, body: 'json' },
     'POST rename': { run: rename, body: 'json' },
     'POST trash': { run: trash, body: 'json' },

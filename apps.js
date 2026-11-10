@@ -14,10 +14,15 @@ export function permissionHelp(access, host) {
 }
 
 // Chrome, VS Code and friends spread across helper processes, so an app's usage is its whole process tree.
+// The visited set guards against cycles in the Windows process tree (e.g. reparented VS Code processes
+// whose recorded ppid points back to an ancestor, causing an infinite stack-growing loop).
 function treeUsage(table, children, root) {
   const usage = { cpu: 0, rssKB: 0 };
+  const visited = new Set();
   for (const stack = [root]; stack.length;) {
     const pid = stack.pop();
+    if (visited.has(pid)) continue;
+    visited.add(pid);
     const row = table.get(pid);
     if (!row) continue;
     usage.cpu += row.cpu;
@@ -120,7 +125,7 @@ function windowView({ title, document }) {
 
 const ACTIONS = { quit, 'force-quit': forceQuit };
 
-export function createAppsApi({ sendJson }) {
+export function createAppsApi({ sendJson, readJson }) {
   async function findApp(res, key) {
     if (!/^\d+$/.test(key)) {
       sendJson(res, 400, { error: 'pid must be a whole number' });
@@ -135,6 +140,28 @@ export function createAppsApi({ sendJson }) {
   return async function handleApps(req, res, url) {
     const [, , , key, action, extra] = url.pathname.split('/');
     if (extra !== undefined) return sendJson(res, 404, { error: 'Not found' });
+
+    if (req.method === 'GET' && key === 'installed' && action === undefined) {
+      const noApps = platform.capabilities().apps;
+      if (!noApps.available) return sendJson(res, 200, { installed: [], unsupported: noApps.reason });
+      const installed = await platform.installedApps();
+      installed.sort((a, b) => a.name.localeCompare(b.name));
+      return sendJson(res, 200, { installed });
+    }
+
+    if (req.method === 'POST' && key === 'launch' && action === undefined) {
+      const noApps = platform.capabilities().apps;
+      if (!noApps.available) return sendJson(res, 501, { error: `Not available on this system: ${noApps.reason}`, unsupported: true });
+      const { id } = (await readJson(req).catch(() => null)) ?? {};
+      const app = typeof id === 'string' ? (await platform.installedApps()).find((a) => a.id === id) : null;
+      if (!app) return sendJson(res, 404, { error: 'That app is not installed here.' });
+      try {
+        await platform.launchApp(app.id);
+      } catch (err) {
+        return sendJson(res, err.unsupported ? 501 : 500, { error: err.message });
+      }
+      return sendJson(res, 200, { result: 'launched', name: app.name });
+    }
 
     if (req.method === 'GET' && key === undefined) {
       const [{ apps, unsupported }, access] = await Promise.all([snapshot(), windowAccess()]);

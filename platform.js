@@ -553,6 +553,45 @@ function run([pid]) {
     return [...pids].filter((pid) => names.has(pid)).map((pid) => ({ name: names.get(pid), bundleId: null, pid, frontmost: false, hidden: false }));
   }
 
+  // [{ name, id }] for the apps installed here: Start menu entries on Windows (id is the AppUserModelID), .app bundles on
+  // a Mac (id is the path). Linux has no single list, so it reports none.
+  async function installedApps() {
+    need('apps');
+    if (win) {
+      const out = await powershell('ConvertTo-Json -Compress -InputObject @(Get-StartApps | ForEach-Object { @{ name = $_.Name; id = $_.AppID } })', { timeout: 30_000 });
+      return (parseJson(out, []) ?? []).filter((a) => a.name && a.id);
+    }
+    if (mac) {
+      const found = [];
+      for (const dir of ['/Applications', '/System/Applications', '/Applications/Utilities', path.join(os.homedir(), 'Applications')]) {
+        for (const entry of listDir(dir)) if (entry.endsWith('.app')) found.push({ name: entry.slice(0, -4), id: path.join(dir, entry) });
+      }
+      return found;
+    }
+    return [];
+  }
+
+  // Starts an app taken from installedApps(); the caller has already checked the id against that list.
+  async function launchApp(id) {
+    need('apps');
+    if (win) return void await powershell(`Start-Process explorer.exe -ArgumentList '${('shell:AppsFolder\\' + id).replace(/'/g, "''")}'`, { timeout: 15_000 });
+    if (mac) return void await sh('/usr/bin/open', [id], { timeout: 15_000 });
+    throw Object.assign(new Error('Launching apps is not set up for this system.'), { unsupported: true });
+  }
+
+  // Opens a folder in VS Code without a shell, so a folder name can never be read as a command.
+  async function openInVSCode(dir) {
+    const local = env.LOCALAPPDATA ?? '';
+    const candidates = mac ? [] : win
+      ? [path.join(local, 'Programs', 'Microsoft VS Code', 'Code.exe'), path.join(env.ProgramFiles ?? '', 'Microsoft VS Code', 'Code.exe')]
+      : ['/usr/bin/code', '/usr/local/bin/code', '/snap/bin/code'];
+    const exe = candidates.find((c) => c && exists(c));
+    const [cmd, args] = mac ? ['/usr/bin/open', ['-a', 'Visual Studio Code', dir]] : exe ? [exe, [dir]] : [null];
+    if (!cmd) throw Object.assign(new Error('VS Code was not found on this computer.'), { unsupported: true });
+    if (mac) return void await sh(cmd, args, { timeout: 15_000 });
+    spawn(cmd, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+  }
+
   // Asks the app to quit the way a person would, so it can still ask to save.
   async function quitApp(pid) {
     need('apps');
@@ -842,7 +881,7 @@ $src.Dispose()`;
     platform, osName, host, trash, openUrl, defaultShell, zipCommand, capabilities, unsupported,
     battery, temperatures, batteryCondition, lid, sleepHolds, updateInProgress, keepAwakeCommand, sleepNow, shutDown, openAppNames,
     cpuMemory, memoryFreePercent,
-    listApps, quitApp, appWindows, processTable, systemApps, macScript, windowPermission, probeWindowAccess,
+    listApps, installedApps, launchApp, openInVSCode, quitApp, appWindows, processTable, systemApps, macScript, windowPermission, probeWindowAccess,
     screenshot, resizeImage,
     installService, serviceStatus, setAutostart, stopService, uninstallService, servicePlan: servicePlanFor,
     lanIps, localName, hostname, shellArgs, portOwner,

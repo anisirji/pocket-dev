@@ -24,6 +24,7 @@
     select: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12 3 3 5-6"/>',
     eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
     pin: '<path d="M9 4h6l-1 6 3.5 3.5h-11L10 10zM12 13.5V20"/>',
+    code: '<path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/>',
     terminal: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 9.5 3 2.5-3 2.5M12.5 15h4.5"/>',
     chev: '<path d="m9.5 6 6 6-6 6"/>',
     link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
@@ -295,6 +296,7 @@
       { label: 'Show hidden files', icon: 'eye', checked: state.showHidden, run: () => { state.showHidden = !state.showHidden; store.set('hidden', state.showHidden ? '1' : '0'); refresh(); } },
       ...(!state.places?.scoped ? [{ label: pinned ? 'Unpin folder' : 'Pin folder', icon: 'pin', run: () => setPinned(dir, !pinned) }] : []),
     ];
+    items.push({ label: 'Open in VS Code', icon: 'code', run: () => openInVSCode(dir) });
     const openTerminal = window.pocketDev?.openTerminalAt;
     if (typeof openTerminal === 'function') {
       items.push({ label: 'Open terminal here', icon: 'terminal', run: () => { closeFiles(); openTerminal(dir); } });
@@ -685,6 +687,15 @@
     a.remove();
     toast('Zip download started');
     closeTransient();
+  }
+
+  async function openInVSCode(dir) {
+    try {
+      await api('POST', '/api/files/vscode', { path: dir });
+      toast('Opening in VS Code on your computer');
+    } catch (err) {
+      toast(err.message, true);
+    }
   }
 
   async function setPinned(path, pinned) {

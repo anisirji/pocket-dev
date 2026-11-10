@@ -53,7 +53,17 @@ export function writeToken(token) {
   fs.renameSync(tmp, TOKEN_PATH);
 }
 
-export const findCloudflared = () => [process.env.POCKET_DEV_CLOUDFLARED, ...CLOUDFLARED_PATHS].find((p) => p && fs.existsSync(p)) ?? null;
+// winget puts cloudflared in Program Files and links it in WinGet\Links; a bare PATH lookup covers anything else.
+function cloudflaredPaths() {
+  if (process.platform !== 'win32') return CLOUDFLARED_PATHS;
+  const dirs = [process.env.ProgramFiles && path.join(process.env.ProgramFiles, 'cloudflared'),
+    process.env['ProgramFiles(x86)'] && path.join(process.env['ProgramFiles(x86)'], 'cloudflared'),
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Links'),
+    ...(process.env.PATH ?? '').split(path.delimiter)];
+  return dirs.filter(Boolean).map((d) => path.join(d, 'cloudflared.exe'));
+}
+
+export const findCloudflared = () => [process.env.POCKET_DEV_CLOUDFLARED, ...cloudflaredPaths()].find((p) => p && fs.existsSync(p)) ?? null;
 
 // The first 64 bits of an IPv6 address as four groups, or null for anything else (IPv4-mapped addresses included).
 export function ipv6Prefix(ip) {

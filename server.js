@@ -776,7 +776,7 @@ const handleHistory = createHistoryApi({
     releaseChat: (id, note) => chatApi.release(id, note),
   },
 });
-const handleApps = createAppsApi({ sendJson });
+const handleApps = createAppsApi({ sendJson, readJson });
 const handleFiles = createFilesApi({ sendJson, readJson, config });
 
 const PAGES = {

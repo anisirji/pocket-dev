@@ -5,16 +5,24 @@ import path from 'node:path';
 // launchd gives the service a short PATH, so also look where the installers put these CLIs.
 const EXTRA_BIN_DIRS = ['/usr/local/bin', '/opt/homebrew/bin', path.join(os.homedir(), '.local/bin'), path.join(os.homedir(), '.claude/local')];
 
+// Windows has no executable bit and npm leaves .cmd shims, so look for the real .exe, including the one an npm
+// install of Claude Code keeps beside its shim.
+function binCandidates(dir, name) {
+  if (process.platform !== 'win32') return [path.join(dir, name)];
+  return [path.join(dir, `${name}.exe`), path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', `${name}.exe`)];
+}
+
 export function findBin(name) {
   // The standalone Codex installer uses ~/.local/bin. launchd puts /usr/local/bin first,
   // where an older npm installation may start the terminal UI instead of app-server.
   const preferred = name === 'codex' ? [path.join(os.homedir(), '.local/bin')] : [];
-  for (const dir of [...preferred, ...(process.env.PATH ?? '').split(':'), ...EXTRA_BIN_DIRS]) {
-    const file = path.join(dir, name);
-    try {
-      fs.accessSync(file, fs.constants.X_OK);
-      return file;
-    } catch {}
+  for (const dir of [...preferred, ...(process.env.PATH ?? '').split(path.delimiter), ...EXTRA_BIN_DIRS]) {
+    for (const file of binCandidates(dir, name)) {
+      try {
+        fs.accessSync(file, fs.constants.X_OK);
+        return file;
+      } catch {}
+    }
   }
   return null;
 }
@@ -25,7 +33,7 @@ const INHERITED = /^(CLAUDECODE|CLAUDE_CODE_.*|CLAUDE_PID|CLAUDE_EFFORT|CLAUDE_A
 
 export function engineEnv() {
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !INHERITED.test(k)));
-  env.PATH = [...new Set([...(env.PATH ?? '').split(':').filter(Boolean), ...EXTRA_BIN_DIRS])].join(':');
+  env.PATH = [...new Set([...(env.PATH ?? '').split(path.delimiter).filter(Boolean), ...EXTRA_BIN_DIRS])].join(path.delimiter);
   env.LANG ??= 'en_US.UTF-8';
   return env;
 }
