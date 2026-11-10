@@ -58,11 +58,14 @@ export function assertNoSecret(argv) {
   for (const arg of argv.slice(1)) if (SECRET_ARG.test(String(arg))) throw new Error('Refusing to run a command line that carries a secret.');
 }
 
+// On Windows only a real .exe can be started directly. A bare name such as `npm` is npm.cmd, and a .cmd or .bat needs cmd.exe.
+export const needsShell = (cmd, platform = process.platform) => platform === 'win32' && !/\.(exe|com)$/i.test(String(cmd));
+
 // Resolves { code, stdout, stderr, timedOut, error } and never rejects. `inherit` hands the terminal to the program.
 export function realRun(cmd, args, { timeout = 0, inherit = false, env, cwd } = {}) {
   assertNoSecret([cmd, ...args]);
   return new Promise((resolve) => {
-    const win = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
+    const win = needsShell(cmd);
     let child;
     try {
       // A .cmd/.bat needs cmd.exe. One command string (not an args array with shell:true, which Node 24+ deprecates as DEP0190) keeps the quoting ours.

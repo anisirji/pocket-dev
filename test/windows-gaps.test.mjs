@@ -331,3 +331,13 @@ test('a real host that starts late is found: the socket appears after the first 
   server.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('setup starts a bare npm through cmd.exe on Windows, and real programs directly', async () => {
+  const { needsShell } = await import('../setup.js');
+  assert.equal(needsShell('npm', 'win32'), true, 'a bare npm is npm.cmd, which spawn cannot start without a shell');
+  assert.equal(needsShell('C:\\Program Files\\nodejs\\npm.cmd', 'win32'), true);
+  assert.equal(needsShell('claude.CMD', 'win32'), true);
+  assert.equal(needsShell('C:\\Program Files\\Git\\cmd\\git.exe', 'win32'), false);
+  assert.equal(needsShell('npm', 'darwin'), false);
+  assert.equal(needsShell('npm', 'linux'), false);
+});
