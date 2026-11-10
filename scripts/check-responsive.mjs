@@ -357,6 +357,15 @@ try {
   await page.waitForFunction(() => /Codex queued messages/.test(document.querySelector('.chat-queue')?.getAttribute('aria-label') ?? ''));
   assert.match(await page.locator('.chat-queue').getAttribute('aria-label'), /Codex queued messages/);
   assert.equal(messagePosts, 0, 'reconnect and reload must never submit drafts or replay queued messages');
+  // Enter sends; Shift+Enter adds a new line and sends nothing.
+  await page.locator('.chat-input').fill('first line');
+  await page.locator('.chat-input').press('Shift+Enter');
+  await page.locator('.chat-input').pressSequentially('second line');
+  assert.equal(await page.locator('.chat-input').inputValue(), 'first line\nsecond line');
+  assert.equal(messagePosts, 0, 'Shift+Enter must only add a line');
+  await page.locator('.chat-input').press('Enter');
+  for (let i = 0; i < 50 && messagePosts === 0; i++) await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(messagePosts, 1, 'Enter must send the message');
   await page.evaluate(() => window.pocketDev.overlays.closeAll());
   await page.waitForSelector('.chat[hidden]', { state: 'attached' });
   await page.locator('#cmd').fill('keep this terminal draft');

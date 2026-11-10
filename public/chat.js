@@ -1834,6 +1834,12 @@
     growInput();
     renderComposer();
   });
+  // Enter sends and Shift+Enter adds a new line. A key press that confirms an IME choice (Japanese, Chinese, Korean) is left alone.
+  ui.input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    ui.composer.requestSubmit();
+  });
   keepFocus(ui.send);
   q('.chat-queue-cancel').onclick = () => {
     const edit = queueEdits.get(convo.id);
