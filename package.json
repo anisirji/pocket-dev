@@ -43,7 +43,8 @@
     "node-pty": "^1.1.0"
   },
   "bin": {
-    "pocket-dev": "bin/pocket-dev.js"
+    "pocket-dev": "bin/pocket-dev.js",
+    "pocketdev-app": "bin/pocket-dev.js"
   },
   "files": [
     "bin",

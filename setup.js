@@ -65,8 +65,12 @@ export function realRun(cmd, args, { timeout = 0, inherit = false, env, cwd } = 
     const win = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
     let child;
     try {
-      // A shell joins the command and arguments into one line, so a path with a space (C:\Program Files\nodejs\npm.cmd) needs quotes.
-      child = spawn(win && /\s/.test(cmd) ? `"${cmd}"` : cmd, args, { stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'], env, cwd, shell: win, windowsHide: !inherit });
+      // A .cmd/.bat needs cmd.exe. One command string (not an args array with shell:true, which Node 24+ deprecates as DEP0190) keeps the quoting ours.
+      const quote = (a) => (a === '' || /[\s&|<>()^"%]/.test(a)) ? `"${String(a).replace(/"/g, '""')}"` : a;
+      const stdio = inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'];
+      child = win
+        ? spawn([cmd, ...args].map(quote).join(' '), { stdio, env, cwd, shell: true, windowsHide: !inherit })
+        : spawn(cmd, args, { stdio, env, cwd, windowsHide: !inherit });
     } catch (error) { return resolve({ code: null, stdout: '', stderr: '', timedOut: false, error }); }
     let stdout = '', stderr = '', timedOut = false, settled = false;
     const done = (r) => { if (!settled) { settled = true; clearTimeout(timer); resolve({ stdout, stderr, timedOut, error: null, ...r }); } };

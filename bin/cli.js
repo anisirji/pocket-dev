@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { PACKAGE_ROOT, STATE_DIR, resolveConfigPath } from '../paths.js';
@@ -160,17 +159,67 @@ async function internet([action = 'status', ...rest]) {
   console.log('Applies when Pocket Dev starts.');
 }
 
-function service([action = 'status', ...rest]) {
-  if (action === 'install' || action === 'restart') return runScript('install-service.sh', rest);
-  if (action === 'uninstall') return runScript('uninstall-service.sh');
-  if (action === 'status') return runScript('status.sh');
-  if (action === 'autostart') return runScript('autostart.sh', rest);
-  if (action === 'logs') {
-    const log = process.env.LOG || path.join(os.homedir(), 'Library', 'Logs', 'pocket-dev.log');
-    const result = spawnSync('tail', ['-n', '50', '-f', log], { stdio: 'inherit' });
-    process.exit(result.status ?? 1);
+const SERVICE_USAGE = 'usage: pocket-dev service install|restart|uninstall|status|logs|autostart on|off|status';
+
+// Prints the last lines of the log, then follows it until Ctrl+C. Plain Node, so it works the same on every system.
+async function followLog(file, lines = 50) {
+  if (!fs.existsSync(file)) fail(`There is no log yet at ${file}. Pocket Dev has not run as a service here: pocket-dev service install`);
+  const tail = fs.readFileSync(file, 'utf8').split('\n');
+  process.stdout.write(tail.slice(-lines - 1).join('\n'));
+  let offset = fs.statSync(file).size;
+  await new Promise(() => {
+    fs.watchFile(file, { interval: 500 }, (stat) => {
+      if (stat.size < offset) offset = 0;
+      if (stat.size === offset) return;
+      const fd = fs.openSync(file, 'r');
+      try {
+        const buf = Buffer.alloc(stat.size - offset);
+        fs.readSync(fd, buf, 0, buf.length, offset);
+        process.stdout.write(buf);
+        offset = stat.size;
+      } finally { fs.closeSync(fd); }
+    });
+  });
+}
+
+// A Mac runs the launchd scripts. Linux (systemd) and Windows (Task Scheduler) use the same service plan the setup
+// step and the admin page use. Every failure prints why and exits non-zero.
+async function service([action = 'status', ...rest]) {
+  if (!['install', 'restart', 'uninstall', 'status', 'logs', 'autostart'].includes(action)) fail(SERVICE_USAGE, 2);
+  if (process.platform === 'darwin' && action !== 'logs') {
+    const script = { install: 'install-service.sh', restart: 'install-service.sh', uninstall: 'uninstall-service.sh', status: 'status.sh', autostart: 'autostart.sh' }[action];
+    return runScript(script, action === 'install' || action === 'restart' || action === 'autostart' ? rest : []);
   }
-  fail('usage: pocket-dev service install|restart|uninstall|status|logs|autostart', 2);
+  const { platform } = await import('../platform.js');
+  const plan = platform.servicePlan();
+  const log = process.env.LOG || plan.log;
+  if (action === 'logs') return followLog(log);
+  const svc = platform.capabilities().service;
+  if (!svc.available) fail(`Background service is not available here: ${svc.reason}\nRun Pocket Dev in this terminal with: pocket-dev start`);
+  try {
+    if (action === 'install' || action === 'restart') {
+      if (action === 'restart') for (const [cmd, args] of plan.commands.stop) spawnSync(cmd, args, { stdio: 'ignore' });
+      const port = openConfig(resolveConfigPath()).read().port || process.env.PORT || 7777;
+      console.log(await platform.installService({ port, force: action === 'restart' }));
+    } else if (action === 'uninstall') {
+      await platform.uninstallService();
+      console.log('Removed. Pocket Dev no longer starts at login.');
+    } else if (action === 'status') {
+      const s = await platform.serviceStatus();
+      console.log(`Installed: ${s.installed ? 'yes' : 'no'}\nStarts at login: ${s.autostart ? 'yes' : 'no'}\nRunning: ${s.running ? 'yes' : 'no'}${s.pid ? ` (pid ${s.pid})` : ''}\nLog: ${log}`);
+    } else {
+      const mode = rest[0];
+      if (mode === 'status') {
+        const s = await platform.serviceStatus();
+        console.log(s.autostart ? 'Start at login: on' : 'Start at login: off');
+      } else if (mode === 'on' || mode === 'off') {
+        await platform.setAutostart(mode === 'on');
+        console.log(`Start at login: ${mode}`);
+      } else fail('usage: pocket-dev service autostart on|off|status', 2);
+    }
+  } catch (err) {
+    fail(`service ${action} failed: ${String(err.message || err).trim()}`);
+  }
 }
 
 // Ctrl+C stops between steps. Every change setup makes is a finished write, so nothing is left half done.
@@ -194,7 +243,7 @@ const [command, ...args] = process.argv.slice(2);
 switch (command) {
   case 'start': await start(args); break;
   case 'config': config(args); break;
-  case 'service': service(args); break;
+  case 'service': await service(args); break;
   case 'setup': process.exit(await setup(args)); break;
   case 'doctor': process.exit(await doctor(args)); break;
   case 'qr': runScript('qr.js'); break;
@@ -206,5 +255,5 @@ switch (command) {
   case 'message': runScript('message.js', args); break;
   case 'version': case '--version': case '-v': console.log(VERSION); break;
   case undefined: case 'help': case '--help': case '-h': console.log(HELP); break;
-  default: fail(`Unknown command "${command}".\n\n${HELP}`, 2);
+  default: fail(`Unknown command "${command}". See '${path.basename(process.argv[1] ?? '', '.js') === 'pocketdev-app' ? 'pocketdev-app' : 'pocket-dev'} --help'.\n\n${HELP}`, 2);
 }

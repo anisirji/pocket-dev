@@ -117,3 +117,24 @@ test('unknown commands fail with usage; help lists every settable key', (t) => {
   assert.equal(help.status, 0);
   for (const key of ['port', 'adminPort', 'awake', 'requireApproval', 'maxDevices', 'approveFromDevices', 'chatIdleMinutes', 'allowedHosts', 'internet']) assert.match(help.stdout, new RegExp(`\\b${key}\\b`));
 });
+
+test('service logs with no log says so and exits non-zero; an unknown action prints usage', (t) => {
+  const { cli, env, root } = fixture(t);
+  env.LOG = path.join(root, 'missing.log');
+  const logs = cli('service', 'logs');
+  assert.equal(logs.status, 1);
+  assert.match(logs.stderr, /There is no log yet at .*missing\.log/);
+  const bad = cli('service', 'bogus');
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /usage: pocket-dev service/);
+});
+
+test('an unknown command points at --help', (t) => {
+  const { cli } = fixture(t);
+  assert.match(cli('nope').stderr, /See 'pocket-dev --help'/);
+});
+
+test('package.json has a unique second command name for the same program', () => {
+  const { bin } = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8'));
+  assert.equal(bin['pocketdev-app'], bin['pocket-dev']);
+});
