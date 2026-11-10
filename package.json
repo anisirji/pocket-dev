@@ -2,7 +2,10 @@
   "name": "@anisirji/pocket-dev",
   "version": "1.1.1",
   "description": "Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
-  "author": "anisirji",
+  "author": {
+    "name": "anisirji",
+    "url": "https://theani.me"
+  },
   "homepage": "https://github.com/anisirji/pocket-dev#readme",
   "repository": {
     "type": "git",

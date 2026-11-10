@@ -69,4 +69,4 @@ More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/d
 - **Report a bug:** [open an issue](https://github.com/anisirji/pocket-dev/issues/new/choose) and paste the output of `pocket-dev doctor`
 - **Source code:** [github.com/anisirji/pocket-dev](https://github.com/anisirji/pocket-dev)
 
-Licence: ISC.
+Made by [anisirji](https://theani.me). Licence: ISC. If you use or build on this code, keep the copyright notice in `LICENSE` and please credit and link [theani.me](https://theani.me).
