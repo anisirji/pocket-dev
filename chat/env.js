@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -5,7 +6,43 @@ import path from 'node:path';
 // launchd gives the service a short PATH, so also look where the installers put these CLIs.
 const EXTRA_BIN_DIRS = ['/usr/local/bin', '/opt/homebrew/bin', path.join(os.homedir(), '.local/bin'), path.join(os.homedir(), '.claude/local')];
 
-export function findBin(name) {
+// Windows: PATH is split on ";", a program is name.exe, .cmd or .bat (PATHEXT), and a window or server that was already open when
+// something was installed still has the old PATH. So the machine and user PATH are read from the registry too, and the usual
+// install folders are tried. A Windows app alias such as winget.exe cannot be stat'ed (EACCES) but can be lstat'ed.
+const REG_KEYS = ['HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment', 'HKCU\\Environment'];
+
+export function registryPathDirs(env = process.env, run = execFileSync) {
+  const dirs = [];
+  for (const key of REG_KEYS) {
+    try {
+      const out = run('reg', ['query', key, '/v', 'Path'], { encoding: 'utf8', windowsHide: true, timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] });
+      const value = /^\s*Path\s+REG_(?:EXPAND_)?SZ\s+(.*)$/im.exec(out)?.[1]?.trim();
+      if (value) dirs.push(...value.replace(/%([^%]+)%/g, (m, v) => env[v] ?? env[v.toUpperCase()] ?? m).split(';').filter(Boolean));
+    } catch {}
+  }
+  return dirs;
+}
+
+export function windowsBinCandidates(name, { env = process.env, registryDirs = registryPathDirs(env) } = {}) {
+  const exts = (env.PATHEXT || '.EXE;.CMD;.BAT').split(';').filter(Boolean).map((e) => e.toLowerCase());
+  const known = [
+    env.ProgramFiles && path.win32.join(env.ProgramFiles, name),
+    env['ProgramFiles(x86)'] && path.win32.join(env['ProgramFiles(x86)'], name),
+    env.APPDATA && path.win32.join(env.APPDATA, 'npm'),
+    env.LOCALAPPDATA && path.win32.join(env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Links'),
+    env.LOCALAPPDATA && path.win32.join(env.LOCALAPPDATA, 'Microsoft', 'WindowsApps'),
+  ].filter(Boolean);
+  const dirs = [...(env.PATH ?? env.Path ?? '').split(';'), ...registryDirs, ...known].filter(Boolean);
+  const seen = new Set();
+  return dirs.flatMap((dir) => exts.map((ext) => path.win32.join(dir, name + ext))).filter((f) => !seen.has(f.toLowerCase()) && seen.add(f.toLowerCase()));
+}
+
+export const lstatExists = (f) => { try { return !!fs.lstatSync(f); } catch { return false; } };
+
+export function findBin(name, { platform = process.platform, candidates, isFile } = {}) {
+  if (platform === 'win32') {
+    return (candidates ?? windowsBinCandidates(name)).find(isFile ?? lstatExists) ?? null;
+  }
   // The standalone Codex installer uses ~/.local/bin. launchd puts /usr/local/bin first,
   // where an older npm installation may start the terminal UI instead of app-server.
   const preferred = name === 'codex' ? [path.join(os.homedir(), '.local/bin')] : [];

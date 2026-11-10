@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { STATE_DIR } from './paths.js';
-import { findBin, engineEnv } from './chat/env.js';
+import { findBin, engineEnv, lstatExists, windowsBinCandidates } from './chat/env.js';
 import { findCloudflared, readNetwork, networkError } from './network.js';
 
 // `pocket-dev setup`: one guided pass that takes a computer from nothing to a working, logged-in Pocket Dev.
@@ -38,18 +38,13 @@ const NAMES = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' };
 
 // The same lookup the app uses: POCKET_DEV_CLAUDE / POCKET_DEV_CODEX when set, findCloudflared (which honours
 // POCKET_DEV_CLOUDFLARED), and findBin's PATH plus the folders installers use. Windows looks along PATH with PATHEXT.
-export function defaultFind(tool, { platform = process.platform, env = process.env, exists = fs.existsSync } = {}) {
+export function defaultFind(tool, { platform = process.platform, env = process.env, exists = lstatExists } = {}) {
   const override = tool.env && env[tool.env];
   if (override) return exists(override) ? override : null;
   if (tool.id === 'cloudflared') return findCloudflared();
   if (platform !== 'win32') return findBin(tool.bin);
-  const exts = (env.PATHEXT || '.EXE;.CMD;.BAT').split(';').filter(Boolean);
-  const dirs = [...(env.PATH ?? env.Path ?? '').split(';').filter(Boolean), ...(env.APPDATA ? [path.win32.join(env.APPDATA, 'npm')] : [])];
-  for (const dir of dirs) for (const ext of exts) {
-    const file = path.win32.join(dir, tool.bin + ext.toLowerCase());
-    if (exists(file)) return file;
-  }
-  return null;
+  // Tests pass their own env, and then the registry is not read.
+  return findBin(tool.bin, { platform, isFile: exists, candidates: windowsBinCandidates(tool.bin, { env, ...(env === process.env ? {} : { registryDirs: [] }) }) });
 }
 
 // Refuses a command line that carries a secret, so no future edit can put one in ps or the shell history.
