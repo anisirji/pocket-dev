@@ -1,6 +1,6 @@
 # Pocket Dev reference
 
-The long reference material behind the [README](../README.md): every feature in detail, the full command list, internet access, permissions and the login and security table. The README has the setup steps and a short tour.
+The long reference material behind the [README](GUIDE.md): every feature in detail, the full command list, internet access, permissions and the login and security table. The README has the setup steps and a short tour.
 
 Pocket Dev works on macOS, Windows 11 and Linux. Some details below name macOS tools (`launchd`, `pmset`, `caffeinate`, the Trash); on Windows and Linux the equivalent system tool is used, or the feature says "not available on this system".
 
@@ -203,7 +203,7 @@ Limits of this version: the room is a star, so devices reach each other through 
 
 **Collaborators:** **Browse folders** selects the repository and each related folder on the Mac, in both Admin and phone Settings. Paths remain editable as an optional shortcut. Admin and phone Settings include a Collaborators section for one-repository access, optional related folders, 1-hour/1-day/7-day expiry, QR invitations, native sharing, WhatsApp sharing, editing access and revocation. First enable sharing from Mac Admin, explicitly selecting your own trusted devices as Admin. Other devices need review, subsequent password logins require Mac approval, and Admin pairing stays on the Mac. Invitations work once within 10 minutes; opening a link preview never accepts one, and admission never evicts an Admin.
 
-Viewer can preview and download scoped files. Developer can change a separate project copy and explicitly writable copies of related folders; the owner's live checkout stays unchanged. Common credentials, Git metadata, dependencies and symlinks are excluded from copies. Review shared contents for project-specific secrets. Guest sessions cannot access owner chats, terminals, settings, apps, screen, power or other repositories. **Collaborator AI is currently unavailable** until an isolated execution runner and authentication are implemented and validated. The current file-sharing foundation does not complete the scoped-AI feature. See [implementation status and remaining plan](docs/ROLE_ACCESS_PLAN.md).
+Viewer can preview and download scoped files. Developer can change a separate project copy and explicitly writable copies of related folders; the owner's live checkout stays unchanged. Common credentials, Git metadata, dependencies and symlinks are excluded from copies. Review shared contents for project-specific secrets. Guest sessions cannot access owner chats, terminals, settings, apps, screen, power or other repositories. **Collaborator AI is currently unavailable** until an isolated execution runner and authentication are implemented and validated. The current file-sharing foundation does not complete the scoped-AI feature. See [implementation status and remaining plan](ROLE_ACCESS_PLAN.md).
 
 | Feature | What it does |
 | --- | --- |
@@ -233,7 +233,7 @@ Viewer can preview and download scoped files. Developer can change a separate pr
 | `pocket-dev service autostart on\|off\|status` | Start at login or not. |
 | `pocket-dev takeover <id>\|--last` | Close Pocket Dev's copy of a conversation, then continue it in this terminal with `claude --resume` or `codex resume`. `--last` picks the conversation most recently active in Pocket Dev. |
 | `pocket-dev internet status\|off\|quick` | Show internet access and the link's status, turn it off, or allow a Quick link. |
-| `pocket-dev internet domain --hostname <host> --token-stdin` | Use your own domain through a Cloudflare tunnel. The token comes from stdin, or from a file with `--token-file <path>`, never as an argument. See [Connect over the internet](#connect-over-the-internet-optional). |
+| `pocket-dev internet domain --hostname <host> --token-stdin` | Use your own domain through a Cloudflare tunnel. The token comes from stdin, or from a file with `--token-file <path>`, never as an argument. See [Connect over the internet](#internet-access-in-detail). |
 | `pocket-dev qr`, `admin`, `connect`, `disconnect`, `awake` | The same as the `npm run` commands below. |
 | `pocket-dev message [text] [--to NAME] [--file PATH]` | Send to Messages as the Mac. Text comes from the argument or piped stdin. |
 

@@ -25,7 +25,7 @@ You need a computer (Mac, Windows 11 or Linux) and a phone on the same Wi-Fi. Yo
 
 Want to try it first without installing? `npx -y @anisirji/pocket-dev start` runs it once and leaves nothing behind (it is slower to start).
 
-> **Guided setup of the extras.** After it is installed, run **`pocket-dev setup`**. It checks Node, Git, Claude Code, Codex, the GitHub CLI and Cloudflare's `cloudflared`, shows the exact command before it installs anything, hands over to each tool's own login (`claude auth login`, `codex login`, `gh auth login`), then sets your password, the phone access and start-at-login. `pocket-dev setup --check` only shows the status; `--dry-run` shows the plan. Details: [docs/SETUP.md](docs/SETUP.md). The same checklist is in Settings, under **Tools on this computer**.
+> **Guided setup of the extras.** After it is installed, run **`pocket-dev setup`**. It checks Node, Git, Claude Code, Codex, the GitHub CLI and Cloudflare's `cloudflared`, shows the exact command before it installs anything, hands over to each tool's own login (`claude auth login`, `codex login`, `gh auth login`), then sets your password, the phone access and start-at-login. `pocket-dev setup --check` only shows the status; `--dry-run` shows the plan. Details: [docs/SETUP.md](SETUP.md). The same checklist is in Settings, under **Tools on this computer**.
 
 ### Beginner guide
 
@@ -110,7 +110,7 @@ Written for Linux and not yet tested on a real machine. Tell us what breaks.
 
 ## Tour
 
-Details for every feature are in [docs/REFERENCE.md](docs/REFERENCE.md). A one-page summary of what Pocket Dev can reach on the computer is in [ACCESS.md](ACCESS.md).
+Details for every feature are in [docs/REFERENCE.md](REFERENCE.md). A one-page summary of what Pocket Dev can reach on the computer is in [ACCESS.md](../ACCESS.md).
 
 ### Terminals
 
@@ -192,7 +192,7 @@ Install Pocket Dev on each computer. A **room** joins them so the phone can swit
 
 **8. Leave.** A member can leave at any time. Being removed or leaving ends access at once and removes the room's data from that device.
 
-What the room does not do yet: it is a star, so devices reach each other through the host, and when the host is off the members cannot reach each other. There is no automatic failover and no room over the internet. Messages are not direct between members. Modes are pattern based. Copies of chats follow the owner's admin setting, not per-chat rules. See [the details](docs/REFERENCE.md#rooms-in-detail).
+What the room does not do yet: it is a star, so devices reach each other through the host, and when the host is off the members cannot reach each other. There is no automatic failover and no room over the internet. Messages are not direct between members. Modes are pattern based. Copies of chats follow the owner's admin setting, not per-chat rules. See [the details](REFERENCE.md#rooms-in-detail).
 
 ## Use it away from home
 
@@ -211,7 +211,7 @@ pbpaste | pocket-dev internet domain --hostname pocket.example.com --token-stdin
 pocket-dev internet off
 ```
 
-Link the phone while it is at home (the phone offers **Link this phone**), because each address has its own login cookie. Afterwards **Settings, Connection** shows both addresses with **Switch to local** and **Switch to remote**. Nothing switches by itself. The full steps (tunnel token, HTTPS, linking, Wi-Fi access off) are in [docs/REFERENCE.md](docs/REFERENCE.md#internet-access-in-detail).
+Link the phone while it is at home (the phone offers **Link this phone**), because each address has its own login cookie. Afterwards **Settings, Connection** shows both addresses with **Switch to local** and **Switch to remote**. Nothing switches by itself. The full steps (tunnel token, HTTPS, linking, Wi-Fi access off) are in [docs/REFERENCE.md](REFERENCE.md#internet-access-in-detail).
 
 ## Security model
 
@@ -223,7 +223,7 @@ Link the phone while it is at home (the phone offers **Link this phone**), becau
 - **Rooms:** a device joins only with a one-time short code (10 minutes, limited guesses). The host's control of a member is limited by the member's own mode, and a member never controls the host. Every room request carries a secret per device, failed secrets are rate limited, and kicking or leaving closes open connections. The host is a single point of failure for member-to-member work.
 - **Not protected:** traffic sniffing on the LAN, forwarded ports, an unlocked logged-in phone, local processes on the computer, or a malicious program on it. The login throttles wrong passwords (10 per IP in 15 minutes, then a 15-minute lock).
 
-Full table (cookies, CSRF, approval, block, lockdown, security log): [docs/REFERENCE.md](docs/REFERENCE.md#collaborators-login-and-security).
+Full table (cookies, CSRF, approval, block, lockdown, security log): [docs/REFERENCE.md](REFERENCE.md#collaborators-login-and-security).
 
 ## Commands
 
@@ -275,7 +275,7 @@ Full table (cookies, CSRF, approval, block, lockdown, security log): [docs/REFER
 | `access` | `{"connected": true, "keepOpen": true}` | Phone access and Keep connection open. |
 | `network` | `{"wifi": true, "internet": {"kind": "off"}}` | Wi-Fi access and the kind of [internet access](#use-it-away-from-home): `off`, `quick`, or `domain` with a `hostname`. `wifi: false` applies after a restart and is refused while internet is off. |
 
-Environment variables: `PORT`, `POCKET_DEV_CONFIG`, `POCKET_DEV_PASSWORD` (overrides the stored password and is printed at start), `POCKET_DEV_REPO_ROOTS`, `POCKET_DEV_STATE_DIR`, `POCKET_DEV_CHAT_DIR`, `POCKET_DEV_ADMIN_PORT`, `POCKET_DEV_NO_OPEN`, `POCKET_DEV_CLOUDFLARED`, and for Codex `POCKET_DEV_CODEX_SOCKET` and `POCKET_DEV_CODEX`. See [docs/REFERENCE.md](docs/REFERENCE.md#environment-variables).
+Environment variables: `PORT`, `POCKET_DEV_CONFIG`, `POCKET_DEV_PASSWORD` (overrides the stored password and is printed at start), `POCKET_DEV_REPO_ROOTS`, `POCKET_DEV_STATE_DIR`, `POCKET_DEV_CHAT_DIR`, `POCKET_DEV_ADMIN_PORT`, `POCKET_DEV_NO_OPEN`, `POCKET_DEV_CLOUDFLARED`, and for Codex `POCKET_DEV_CODEX_SOCKET` and `POCKET_DEV_CODEX`. See [docs/REFERENCE.md](REFERENCE.md#environment-variables).
 
 ### Permissions it needs
 
@@ -291,7 +291,7 @@ Pocket Dev runs as your user, never as root, and never runs `sudo` itself.
 | Your `claude`, `codex`, and `gh` logins | Chat, terminals, Git. |
 | Your computer password, typed by you in a terminal | Lid closed, sleep with Lid closed on, force shutdown (macOS). |
 
-The Admin page has a **Permissions** panel that shows each of these. Details: [docs/REFERENCE.md](docs/REFERENCE.md#permissions-it-needs).
+The Admin page has a **Permissions** panel that shows each of these. Details: [docs/REFERENCE.md](REFERENCE.md#permissions-it-needs).
 
 ## Troubleshooting
 
@@ -351,7 +351,7 @@ npm start          # run in the foreground
 npm test           # node --test test/*.test.mjs
 ```
 
-Pocket Dev has no npm install scripts, so an install cannot fail on one; node-pty 1.1.0 ships its `spawn-helper` without the execute bit and `pty-loader.js` fixes that when it loads node-pty. The first start writes `~/.pocket-dev/config.json` (mode 0600) and prints the password once, a login QR and the URL. Other `npm run` scripts (`qr`, `admin`, `connect`, `disconnect`, `awake`, `lid`, `sleep`, `shutdown`, `service:*`, `autostart`) are listed in [docs/REFERENCE.md](docs/REFERENCE.md#commands). To try a build as a package: `npm pack`, then `npm install -g ./anisirji-pocket-dev-*.tgz`; or `npm link` to use your working copy as `pocket-dev`.
+Pocket Dev has no npm install scripts, so an install cannot fail on one; node-pty 1.1.0 ships its `spawn-helper` without the execute bit and `pty-loader.js` fixes that when it loads node-pty. The first start writes `~/.pocket-dev/config.json` (mode 0600) and prints the password once, a login QR and the URL. Other `npm run` scripts (`qr`, `admin`, `connect`, `disconnect`, `awake`, `lid`, `sleep`, `shutdown`, `service:*`, `autostart`) are listed in [docs/REFERENCE.md](REFERENCE.md#commands). To try a build as a package: `npm pack`, then `npm install -g ./anisirji-pocket-dev-*.tgz`; or `npm link` to use your working copy as `pocket-dev`.
 
 The suite starts disposable phone and Admin listeners, uses fixture folders, stubbed power commands and a stand-in for `cloudflared`, and exercises authentication, Host/Origin/CSRF checks, terminals, chat persistence, Files, devices, lockdown, the tunnel kinds, rooms and modes. It makes no model calls, opens no real tunnel, and does not install a service or quit user apps.
 
@@ -359,4 +359,4 @@ Before publishing, run `node tools/set-image-version.mjs` so the README's screen
 
 ## Licence
 
-ISC. See [LICENSE](LICENSE).
+ISC. See [LICENSE](../LICENSE).
