@@ -28,6 +28,7 @@ const messagesHello = {
 const historyItem = { tool: 'codex', id: '00000000-0000-4000-8000-000000000001', cwd: '/tmp', title: 'Resume fixture', project: 'Fixture', lastActive: new Date().toISOString(), messageCount: 1, live: false };
 let messagePosts = 0, terminalInputs = 0, terminalCreates = 0;
 const chatCreates = [];
+const uploads = [];
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const json = (data) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(data)); };
@@ -72,6 +73,12 @@ const server = http.createServer(async (req, res) => {
       let body = ''; for await (const chunk of req) body += chunk;
       chatCreates.push(JSON.parse(body));
       return json(chat);
+    }
+    if (req.method === 'POST' && url.pathname === '/api/upload') {
+      for await (const chunk of req);
+      const name = decodeURIComponent(req.headers['x-filename'] ?? '');
+      uploads.push(name);
+      return json({ path: `/tmp/uploads/${name}` });
     }
     if (req.method === 'POST' && url.pathname === '/api/sessions') terminalCreates++;
     if (req.method === 'POST' && url.pathname.endsWith('/message')) messagePosts++;
@@ -366,6 +373,29 @@ try {
   await page.locator('.chat-input').press('Enter');
   for (let i = 0; i < 50 && messagePosts === 0; i++) await new Promise((resolve) => setTimeout(resolve, 100));
   assert.equal(messagePosts, 1, 'Enter must send the message');
+  // A file attaches by the paperclip, by paste (a screenshot) and by drop.
+  const chipNames = () => page.evaluate(() => [...document.querySelectorAll('.chat-file-name')].map((n) => n.textContent));
+  const waitForChip = (name) => page.waitForFunction((n) => [...document.querySelectorAll('.chat-file-name')].some((c) => c.textContent === n), name);
+  await page.locator('.chat-file-input').setInputFiles({ name: 'picked.txt', mimeType: 'text/plain', buffer: Buffer.from('picked') });
+  await waitForChip('picked.txt');
+  await page.locator('.chat-input').evaluate((node) => {
+    const data = new DataTransfer();
+    data.items.add(new File(['pasted'], 'pasted.png', { type: 'image/png' }));
+    node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await waitForChip('pasted.png');
+  const dropped = await page.locator('.chat-convo-screen').evaluate((node) => {
+    const data = new DataTransfer();
+    data.items.add(new File(['dropped'], 'dropped.pdf', { type: 'application/pdf' }));
+    const events = ['dragenter', 'dragover', 'drop'].map((type) => node.dispatchEvent(new DragEvent(type, { dataTransfer: data, bubbles: true, cancelable: true })));
+    return events;
+  });
+  assert.deepEqual(dropped, [true, false, false], 'a dropped file must be handled here, not opened by the browser');
+  await waitForChip('dropped.pdf');
+  assert.deepEqual(uploads, ['picked.txt', 'pasted.png', 'dropped.pdf']);
+  assert.deepEqual(await chipNames(), ['picked.txt', 'pasted.png', 'dropped.pdf']);
+  for (const name of ['picked.txt', 'pasted.png', 'dropped.pdf']) await page.locator(`.chat-file-x[aria-label="Remove ${name}"]`).click();
+  assert.deepEqual(await chipNames(), []);
   await page.evaluate(() => window.pocketDev.overlays.closeAll());
   await page.waitForSelector('.chat[hidden]', { state: 'attached' });
   await page.locator('#cmd').fill('keep this terminal draft');
