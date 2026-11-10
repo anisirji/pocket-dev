@@ -104,9 +104,21 @@ export function onPath(ctx, name) {
   return null;
 }
 
+// A Windows shim (.cmd) names the package it runs inside its text; a Mac or Linux link points into its folder. The
+// other `pocket-dev` package (2020) lives in node_modules/pocket-dev, ours in node_modules/@anisirji/pocket-dev.
+export function foreignCommand(ctx, file) {
+  let text = '';
+  try { text = (ctx.readFile ?? ((f) => fs.readFileSync(f, 'utf8')))(file); } catch {}
+  const haystack = `${ctx.realpath ? ctx.realpath(file) : file}\n${text.length < 20_000 ? text : ''}`;
+  if (/@anisirji[\\/]pocket-dev/.test(haystack)) return false;
+  return /node_modules[\\/]pocket-dev[\\/]/.test(haystack);
+}
+
 function commandRow(ctx) {
   const row = { id: 'command', title: 'pocket-dev command', level: 'recommended' };
   const file = onPath(ctx, 'pocket-dev');
+  if (file && foreignCommand(ctx, file)) return { ...row, ok: false, detail: `${file} belongs to a different npm package also named pocket-dev, not this one`,
+    fix: { command: `npm uninstall -g pocket-dev && ${INSTALL_COMMAND}`, note: 'Then open a new terminal. Until then this tool also runs under its other name: pocketdev-app start' } };
   if (file) return { ...row, ok: true, detail: file };
   return { ...row, ok: false, detail: 'typing pocket-dev would say "not recognised"',
     fix: { command: INSTALL_COMMAND, note: 'If it is already installed this way, the npm global folder is not on PATH: see the row above, then open a new terminal.' } };
@@ -277,7 +289,8 @@ function portFree(port) {
   return new Promise((resolve) => {
     const probe = net.createServer();
     probe.once('error', () => resolve(false));
-    probe.listen(port, () => probe.close(() => resolve(true)));
+    // The server binds every interface when Wi-Fi access is on; on Windows a 127.0.0.1 bind succeeds beside it.
+    probe.listen(port, '0.0.0.0', () => probe.close(() => resolve(true)));
   });
 }
 

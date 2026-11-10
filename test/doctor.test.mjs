@@ -224,3 +224,29 @@ test('the real doctor command runs in a throwaway state folder and ends with a v
   assert.match(r.stdout, /Terminals \(node-pty\)/);
   assert.match(r.stdout, /Everything Pocket Dev requires is working\.|Something required is not working/);
 });
+
+test('a pocket-dev command that belongs to the other npm package is reported with the fix', async () => {
+  const prefix = 'C:\\Users\\ROHIT\\AppData\\Roaming\\npm';
+  const shim = '"%_prog%" "%dp0%\\node_modules\\pocket-dev\\bin\\main.js" %*';
+  const make = (text) => computer({
+    platform: 'win32', prefix, globalRoot: `${prefix}\\node_modules`, packageRoot: `${prefix}\\node_modules\\@anisirji\\pocket-dev`,
+    env: { Path: `${prefix};C:\\Windows`, PATHEXT: '.EXE;.CMD' }, programs: { npm: 'C:\\Program Files\\nodejs\\npm.cmd' },
+    state: { files: new Set([`${prefix}\\pocket-dev.cmd`]) }, readFile: () => text,
+  });
+  const foreign = row(await collectDoctor(make(shim).ctx), 'command');
+  assert.equal(foreign.ok, false);
+  assert.match(foreign.fix.command, /^npm uninstall -g pocket-dev && npm install -g @anisirji\/pocket-dev$/);
+  const ours = row(await collectDoctor(make('"%dp0%\\node_modules\\@anisirji\\pocket-dev\\bin\\pocket-dev.js" %*').ctx), 'command');
+  assert.equal(ours.ok, true);
+});
+
+test('doctor sees a port that a server holds on all interfaces', async () => {
+  const net = await import('node:net');
+  const holder = net.createServer();
+  await new Promise((r) => holder.listen(0, '0.0.0.0', r));
+  const { port } = holder.address();
+  try {
+    const { doctorDefaults } = await import('../doctor.js');
+    assert.equal(await (await doctorDefaults()).portFree(port), false);
+  } finally { holder.close(); }
+});
