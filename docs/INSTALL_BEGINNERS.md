@@ -50,7 +50,7 @@ Each part has the same 10 steps: 1 Open the command window, 2 Check Node.js, 3 I
 
 > Choose plain **Windows PowerShell**. Do **not** choose "Run as administrator". You do not need it.
 
-![Windows Start search with PowerShell typed and Windows PowerShell highlighted](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/open-powershell.png)
+![Windows Start search with PowerShell typed and Windows PowerShell highlighted](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/open-powershell.png)
 
 A blue or black window opens with a blinking cursor. This is PowerShell. **It is safe.** It only does what you type, and only when you press Enter. You can close it any time with the X.
 
@@ -62,7 +62,7 @@ Type this and press **Enter**:
 node -v
 ```
 
-![Terminal showing node -v and the answer v22.11.0](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/node-version-ok.png)
+![Terminal showing node -v and the answer v22.11.0](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/node-version-ok.png)
 
 - **A number like `v22.11.0` (v22 or higher, such as v23 or v24):** good. Skip to **Step 4**.
 - **A lower number (like `v18.20.0`):** too old. Do **Step 3** to install a newer one.
@@ -73,7 +73,7 @@ node -v
 1. Open **https://nodejs.org** in your browser.
 2. Click the big green **LTS** button. (LTS means the stable, recommended version.) A file downloads.
 
-![A simplified drawing of the Node.js download page with the green LTS button](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/nodejs-download.png)
+![A simplified drawing of the Node.js download page with the green LTS button](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/nodejs-download.png)
 
 3. Open the downloaded file. Click **Next**, **Next**, **Next**, then **Install**. **Tick nothing special.** If a box offers to install "tools for native modules", leave it unticked.
 4. When it says it is finished, click **Finish**.
@@ -94,11 +94,11 @@ node -v
 
 **How to paste in PowerShell:** copy the line above (select it and press Ctrl+C), click the PowerShell window, then **right-click once** inside the window. The text appears. (Ctrl+V also works in most windows.) Press **Enter**.
 
-![PowerShell with the command pasted and a right-click Paste menu](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/paste-in-powershell.png)
+![PowerShell with the command pasted and a right-click Paste menu](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/paste-in-powershell.png)
 
 It takes **1 to 3 minutes**. Lines scroll by. Wait until you get the `PS C:\Users\you>` prompt back.
 
-![Terminal after the install: "added 134 packages"](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/install-output.png)
+![Terminal after the install: "added 134 packages"](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/install-output.png)
 
 - **Good:** a line like **`added 134 packages in 41s`** (your number will differ).
 - **Harmless:** yellow or plain `npm WARN deprecated ...` (or lowercase `npm warn ...`) lines, and `N packages are looking for funding`. Ignore them.
@@ -112,7 +112,7 @@ Type this and press **Enter**:
 pocket-dev start
 ```
 
-![Terminal after pocket-dev start: QR code, address and one-time password](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/start-output.png)
+![Terminal after pocket-dev start: QR code, address and one-time password](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/start-output.png)
 
 What you see:
 
@@ -130,7 +130,7 @@ The first time, Windows shows a box ("Windows Security Alert") about **Node.js J
 1. Tick **Private networks** (home or work Wi-Fi). Leave Public networks unticked.
 2. Click **Allow access**.
 
-![Illustration of the Windows firewall box with Private networks ticked and Allow access highlighted](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/firewall-prompt.png)
+![Illustration of the Windows firewall box with Private networks ticked and Allow access highlighted](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/firewall-prompt.png)
 
 If you clicked Cancel or the box never appeared, see [The phone cannot open the address](#the-phone-cannot-open-the-address).
 
@@ -140,15 +140,15 @@ If you clicked Cancel or the box never appeared, see [The phone cannot open the 
 2. Open the phone's browser (Chrome, Safari, Samsung Internet).
 3. Type the address from Step 5 into the **address bar at the top**. **Not** into a Google search box. Start with `http://`.
 
-![A phone browser with the address typed in the address bar](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/phone-address-bar.png)
+![A phone browser with the address typed in the address bar](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/phone-address-bar.png)
 
 4. The login page opens. Type the **password** from Step 5, or scan the QR code on the computer with the phone camera (it logs you in once, and works for 10 minutes).
 
-![The Pocket Dev login page on a phone](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/phone-login.png)
+![The Pocket Dev login page on a phone](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/phone-login.png)
 
 5. You should now see the Pocket Dev app, with a terminal of your computer.
 
-![The terminal of your computer shown on the phone](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/success.png)
+![The terminal of your computer shown on the phone](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/success.png)
 
 **Put it on your home screen** so it opens like an app: **Android Chrome**: menu (three dots), then **Add to Home screen**. **iPhone Safari**: tap the **Share** button, then **Add to Home Screen**.
 
@@ -198,7 +198,7 @@ Install Pocket Dev on the other computer the same way, then join them in a **roo
 2. Type **Terminal**.
 3. Press **Enter** when **Terminal** is highlighted.
 
-![Mac Spotlight search with Terminal typed and Terminal highlighted](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/open-terminal-mac.png)
+![Mac Spotlight search with Terminal typed and Terminal highlighted](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/open-terminal-mac.png)
 
 A white or black window opens with a blinking cursor. This is Terminal. **It is safe.** It only does what you type, and only when you press Enter.
 
@@ -210,7 +210,7 @@ Type this and press **Enter**:
 node -v
 ```
 
-![Terminal showing node -v and the answer v22.11.0](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/node-version-ok.png)
+![Terminal showing node -v and the answer v22.11.0](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/node-version-ok.png)
 
 - **`v22.11.0` or higher (v23, v24...):** good. Skip to **Step 4**.
 - **A lower number, or `command not found: node`:** do **Step 3**.
@@ -221,7 +221,7 @@ node -v
 
 1. Open **https://nodejs.org** and click the big green **LTS** button.
 
-![A simplified drawing of the Node.js download page with the green LTS button](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/nodejs-download.png)
+![A simplified drawing of the Node.js download page with the green LTS button](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/nodejs-download.png)
 
 2. Open the downloaded `.pkg` file and click **Continue** and **Install** until it finishes. Your Mac may ask for your Mac password. That is normal.
 3. **Close Terminal and open a new one.**
@@ -241,7 +241,7 @@ node -v
 
 It takes **1 to 3 minutes**.
 
-![Terminal after the install: "added 134 packages"](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/install-output.png)
+![Terminal after the install: "added 134 packages"](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/install-output.png)
 
 - **Good:** a line like **`added 134 packages in 41s`** (your number will differ).
 - **Harmless:** `npm WARN deprecated ...` and `N packages are looking for funding`.
@@ -254,7 +254,7 @@ It takes **1 to 3 minutes**.
 pocket-dev start
 ```
 
-![Terminal after pocket-dev start: QR code, address and one-time password](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/start-output.png)
+![Terminal after pocket-dev start: QR code, address and one-time password](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/start-output.png)
 
 - **A square QR code.** Your phone camera can scan it to log in.
 - **`Pocket Dev running at http://192.168.1.20:7777`**: the **address** for your phone. Yours will differ.
@@ -275,15 +275,15 @@ If your Mac asks **"Do you want the application node to accept incoming network 
 2. Open the phone's browser.
 3. Type the address from Step 5 into the **address bar at the top**. **Not** into a Google search box. Start with `http://`.
 
-![A phone browser with the address typed in the address bar](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/phone-address-bar.png)
+![A phone browser with the address typed in the address bar](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/phone-address-bar.png)
 
 4. The login page opens. Type the **password** from Step 5, or scan the QR code on the Mac screen with the phone camera.
 
-![The Pocket Dev login page on a phone](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/phone-login.png)
+![The Pocket Dev login page on a phone](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/phone-login.png)
 
 5. You should see the Pocket Dev app with a terminal of your Mac.
 
-![The terminal of your computer shown on the phone](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/success.png)
+![The terminal of your computer shown on the phone](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/success.png)
 
 **Put it on your home screen:** **Android Chrome**: menu (three dots), **Add to Home screen**. **iPhone Safari**: **Share** button, **Add to Home Screen**.
 
@@ -329,7 +329,7 @@ Install Pocket Dev on the other computer, then join both in a **room**. See **"R
 
 Press **Ctrl + Alt + T** together. If nothing happens, open your apps menu and search for **Terminal**.
 
-![Linux desktop: press Ctrl+Alt+T and a terminal opens](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/open-terminal-linux.png)
+![Linux desktop: press Ctrl+Alt+T and a terminal opens](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/open-terminal-linux.png)
 
 A window opens with a blinking cursor. **It is safe.** It only does what you type, and only when you press Enter.
 
@@ -339,7 +339,7 @@ A window opens with a blinking cursor. **It is safe.** It only does what you typ
 node -v
 ```
 
-![Terminal showing node -v and the answer v22.11.0](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/node-version-ok.png)
+![Terminal showing node -v and the answer v22.11.0](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/node-version-ok.png)
 
 - **`v22.11.0` or higher:** good. Skip to **Step 4**.
 - **A lower number, or `command not found`:** do **Step 3**. (Many Linux systems ship an old Node.)
@@ -368,7 +368,7 @@ Then type `node -v` again. You should see **v22 or higher**.
 
 It takes **1 to 3 minutes**.
 
-![Terminal after the install: "added 134 packages"](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/install-output.png)
+![Terminal after the install: "added 134 packages"](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/install-output.png)
 
 - **Good:** `added 134 packages in 41s` (your number will differ).
 - **Harmless:** `npm WARN deprecated ...` and `packages are looking for funding`.
@@ -381,7 +381,7 @@ It takes **1 to 3 minutes**.
 pocket-dev start
 ```
 
-![Terminal after pocket-dev start: QR code, address and one-time password](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/start-output.png)
+![Terminal after pocket-dev start: QR code, address and one-time password](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/start-output.png)
 
 - **A square QR code** for your phone camera.
 - **`Pocket Dev running at http://192.168.1.20:7777`**: the **address** for your phone. Yours will differ.
@@ -401,15 +401,15 @@ Many Linux computers have no firewall on by default, so you may not need this. I
 2. Open the phone's browser.
 3. Type the address from Step 5 into the **address bar at the top**. **Not** into a Google search box. Start with `http://`.
 
-![A phone browser with the address typed in the address bar](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/phone-address-bar.png)
+![A phone browser with the address typed in the address bar](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/phone-address-bar.png)
 
 4. Log in with the **password** from Step 5, or scan the QR code on the computer screen.
 
-![The Pocket Dev login page on a phone](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/phone-login.png)
+![The Pocket Dev login page on a phone](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/phone-login.png)
 
 5. You should see the Pocket Dev app with a terminal of your computer.
 
-![The terminal of your computer shown on the phone](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/success.png)
+![The terminal of your computer shown on the phone](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/success.png)
 
 **Put it on your home screen:** **Android Chrome**: menu (three dots), **Add to Home screen**. **iPhone Safari**: **Share**, **Add to Home Screen**.
 
@@ -451,7 +451,7 @@ Install Pocket Dev on the other computer, then join both in a **room**. See **"R
 
 Find the red message you saw, then follow the fix. Red text is not a disaster: it says what went wrong. If you are stuck, jump to [How to ask for help](#how-to-ask-for-help).
 
-![What red error text looks like and which part to copy](https://unpkg.com/@anisirji/pocket-dev@1.1.3/docs/install-guide/error-red-text.png)
+![What red error text looks like and which part to copy](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/install-guide/error-red-text.png)
 
 ### `'npm' is not recognized` or `command not found: npm`
 
