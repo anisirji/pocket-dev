@@ -271,7 +271,7 @@ test('windows-install.ps1 exists, is ASCII, and does what the task asks (text ch
     assert.ok(text.includes(needle.replace('node --version', '& node --version')) || text.includes(needle), `mentions ${needle}`);
   }
   assert.doesNotMatch(text, /-ArgumentList[^\n]*"/, 'no double quotes passed through native arguments');
-  const pwsh = spawnSync('pwsh', ['-NoProfile', '-Command', `[void][System.Management.Automation.Language.Parser]::ParseFile('${path.join(REPO, 'scripts', 'windows-install.ps1')}', [ref]$null, [ref]$e); if ($e) { $e; exit 1 }`], { encoding: 'utf8' });
+  const pwsh = spawnSync('pwsh', ['-NoProfile', '-Command', `$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile('${path.join(REPO, 'scripts', 'windows-install.ps1')}', [ref]$null, [ref]$e); if ($e) { $e; exit 1 }`], { encoding: 'utf8' });
   if (pwsh.error?.code !== 'ENOENT') assert.equal(pwsh.status, 0, pwsh.stdout + pwsh.stderr);
 });
 
