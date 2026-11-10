@@ -63,3 +63,10 @@ More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/d
 - [Guided setup](https://github.com/anisirji/pocket-dev/blob/main/docs/SETUP.md) and [reference](https://github.com/anisirji/pocket-dev/blob/main/docs/REFERENCE.md).
 
 
+## Community and support
+
+- **Ask a question or share a tip:** [GitHub Discussions](https://github.com/anisirji/pocket-dev/discussions)
+- **Report a bug:** [open an issue](https://github.com/anisirji/pocket-dev/issues/new/choose) and paste the output of `pocket-dev doctor`
+- **Source code:** [github.com/anisirji/pocket-dev](https://github.com/anisirji/pocket-dev)
+
+Licence: ISC.
