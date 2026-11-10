@@ -301,6 +301,7 @@ try {
   await page.waitForFunction(() => document.querySelector('.chat-conn').hidden);
   assert.equal(await page.locator('.chat-card').isVisible(), false, 'completed question must not reappear after wake');
   assert.equal(await page.locator('.chat-input').inputValue(), 'Keep my Codex draft');
+  await page.waitForFunction(() => /Codex queued messages/.test(document.querySelector('.chat-queue')?.getAttribute('aria-label') ?? ''));
   assert.match(await page.locator('.chat-queue').getAttribute('aria-label'), /Codex queued messages/);
   assert.equal(await page.locator('.chat-log .chat-user-queued').count(), 0);
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 100 }));
@@ -353,6 +354,7 @@ try {
   assert.equal(await page.locator('.chat-input').inputValue(), 'Keep my Codex draft');
   await page.reload();
   await page.waitForFunction(() => document.querySelector('.chat-input')?.value === 'Keep my Codex draft' && document.querySelector('.chat-conn').hidden);
+  await page.waitForFunction(() => /Codex queued messages/.test(document.querySelector('.chat-queue')?.getAttribute('aria-label') ?? ''));
   assert.match(await page.locator('.chat-queue').getAttribute('aria-label'), /Codex queued messages/);
   assert.equal(messagePosts, 0, 'reconnect and reload must never submit drafts or replay queued messages');
   await page.evaluate(() => window.pocketDev.overlays.closeAll());
