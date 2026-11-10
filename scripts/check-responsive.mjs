@@ -43,7 +43,7 @@ const server = http.createServer(async (req, res) => {
     return res.end(req.method === 'HEAD' ? undefined : content);
   }
   const routes = {
-    '/api/sessions': [session], '/api/forwards': [], '/api/info': { forwards: [] },
+    '/api/terminals': { available: true }, '/api/sessions': [session], '/api/forwards': [], '/api/info': { forwards: [] },
     '/api/folders': { home: '/tmp', pinned: folders, recent: [], projects: [] },
     '/api/chat': [chat, claudeChat], '/api/history': [historyItem], '/api/apps': { apps: [] },
     [`/api/history/codex/${historyItem.id}`]: { ...historyItem, messages: [{ role: 'user', text: 'A previous message' }] },
@@ -132,11 +132,8 @@ try {
     await settle();
     await inViewport('#macStatus', { aboveStatus: true });
     for (const selector of ['#app', '#inputBar', '#keyNav', '#terms']) await inViewport(selector);
-    await page.locator('#keyMore').click();
-    await inViewport('#keyTools');
-    await page.locator('#keyTools .key').last().scrollIntoViewIfNeeded();
-    await inViewport('#keyTools .key:last-child');
-    await page.locator('#keyMore').click();
+    await page.locator('#keyNav .key').last().scrollIntoViewIfNeeded();
+    await inViewport('#keyNav .key:last-child');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}x${height}: horizontal overflow`);
   }
   await page.setViewportSize({ width: 393, height: 852 });
@@ -145,23 +142,20 @@ try {
     await page.evaluate((g) => setTestViewport(g), geometry);
     await settle();
     for (const selector of ['#app', '#terms', '#inputBar', '#keyNav']) await inViewport(selector);
-    await page.locator('#keyMore').click();
-    await inViewport('#keyTools');
-    await page.locator('#keyTools .key').last().scrollIntoViewIfNeeded();
-    await inViewport('#keyTools .key:last-child');
-    await page.locator('#keyMore').click();
+    await page.locator('#keyNav .key').last().scrollIntoViewIfNeeded();
+    await inViewport('#keyNav .key:last-child');
   }
   await page.evaluate(() => setTestViewport({}));
   await page.locator('#cmd').evaluate((node) => node.blur());
   await page.locator('#new').click();
   await page.locator('#sheetAction').getByRole('button', { name: 'Browse folders', exact: true }).click();
   await page.locator('#sheetBody').getByRole('button', { name: 'Open folder website-project', exact: true }).click();
-  assert.equal(await page.locator('#sheetBody .fp-selected').textContent(), '/tmp/website-project');
+  await page.waitForFunction(() => document.querySelector('#sheetBody .fp-selected')?.textContent === '/tmp/website-project');
   assert.equal(await page.locator('#sheetBody').getByRole('button', { name: 'Open terminal here', exact: true }).isEnabled(), true);
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
-    await page.locator('#sheetBody .fp-primary').scrollIntoViewIfNeeded();
-    await inViewport('#sheetBody .fp-primary');
+    await page.locator('#sheetBody').getByRole('button', { name: 'Open terminal here', exact: true }).scrollIntoViewIfNeeded();
+    await inViewport('#sheetBody .fp-footer .fp-primary');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   }
   await page.locator('#sheetBody').getByRole('button', { name: 'Cancel', exact: true }).click();
