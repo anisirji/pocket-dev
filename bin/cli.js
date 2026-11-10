@@ -64,11 +64,23 @@ function flagValue(args, name) {
 }
 
 async function start(args) {
+  const { resolvePorts, runningInstance, alreadyRunningMessage, firstRun } = await import('../startup.js');
+  const running = await runningInstance(STATE_DIR);
+  if (running) fail(alreadyRunningMessage(running));
   const port = flagValue(args, '--port');
   const adminPort = flagValue(args, '--admin-port');
   if (port) process.env.PORT = port;
   if (adminPort) process.env.POCKET_DEV_ADMIN_PORT = adminPort;
   if (args.includes('--no-open')) process.env.POCKET_DEV_NO_OPEN = '1';
+  const { createRealContext, detectAll, runSetup } = await import('../setup.js');
+  await firstRun({ stateDir: STATE_DIR, ctx: await createRealContext({ noTerminals: true }), detect: detectAll, runSetup });
+  const { platform } = await import('../platform.js');
+  try {
+    const chosen = await resolvePorts({ config: openConfig(resolveConfigPath()), ownerOf: (p) => platform.portOwner(p) });
+    for (const note of chosen.notes) console.log(note);
+    process.env.PORT = String(chosen.port);
+    process.env.POCKET_DEV_ADMIN_PORT = String(chosen.adminPort);
+  } catch (err) { fail(err.message); }
   await import('../server.js');
 }
 
