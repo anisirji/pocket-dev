@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { claudeLimitNotice } from './limits.js';
-import { findBin, engineEnv, ENGINE_SETTINGS, cap, lineDiff, INPUT_MAX } from './env.js';
+import { findBin, nativeBin, engineEnv, ENGINE_SETTINGS, cap, lineDiff, INPUT_MAX } from './env.js';
 import { saveToolImages, resultText } from './tool-images.js';
 
-const CLAUDE_BIN = process.env.POCKET_DEV_CLAUDE || findBin('claude') || '/usr/local/bin/claude';
+const CLAUDE_BIN = process.env.POCKET_DEV_CLAUDE || nativeBin(findBin('claude')) || '/usr/local/bin/claude';
 
 // The permission modes `claude --help` lists for --permission-mode in 2.1.139.
 const MODES = [

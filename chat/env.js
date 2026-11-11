@@ -39,6 +39,13 @@ export function windowsBinCandidates(name, { env = process.env, registryDirs = r
 
 export const lstatExists = (f) => { try { return !!fs.lstatSync(f); } catch { return false; } };
 
+// npm's claude.cmd is only a shim and the Agent SDK needs the real binary it launches, which sits beside it.
+export function nativeBin(file) {
+  if (!file || !/\.(cmd|bat)$/i.test(file)) return file;
+  const real = path.join(path.dirname(file), 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+  return fs.existsSync(real) ? real : file;
+}
+
 export function findBin(name, { platform = process.platform, candidates, isFile } = {}) {
   if (platform === 'win32') {
     return (candidates ?? windowsBinCandidates(name)).find(isFile ?? lstatExists) ?? null;
@@ -62,7 +69,7 @@ const INHERITED = /^(CLAUDECODE|CLAUDE_CODE_.*|CLAUDE_PID|CLAUDE_EFFORT|CLAUDE_A
 
 export function engineEnv() {
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !INHERITED.test(k)));
-  env.PATH = [...new Set([...(env.PATH ?? '').split(':').filter(Boolean), ...EXTRA_BIN_DIRS])].join(':');
+  env.PATH = [...new Set([...(env.PATH ?? env.Path ?? '').split(path.delimiter).filter(Boolean), ...EXTRA_BIN_DIRS])].join(path.delimiter);
   env.LANG ??= 'en_US.UTF-8';
   return env;
 }
