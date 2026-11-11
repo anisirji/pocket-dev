@@ -10,6 +10,7 @@ import { checkPermissions, openPane } from './permissions.js';
 import { captureScreen } from './screen.js';
 import { svgQr } from './qr.js';
 import { readNetwork, networkError, isToken, hasToken, writeToken, findCloudflared } from './network.js';
+import { createContext, cachedStatus } from './setup.js';
 import { createFolderBrowser } from './folder-browser.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -22,6 +23,7 @@ const FILES = {
   '/': ['admin.html', 'text/html; charset=utf-8'],
   '/admin.css': ['admin.css', 'text/css; charset=utf-8'],
   '/admin-client.js': ['admin-client.js', 'text/javascript; charset=utf-8'],
+  '/admin-nav.js': ['admin-nav.js', 'text/javascript; charset=utf-8'],
   '/admin-heartbeat.js': ['admin-heartbeat.js', 'text/javascript; charset=utf-8'],
   '/admin-permissions.js': ['admin-permissions.js', 'text/javascript; charset=utf-8'],
   '/collaborators.js': ['collaborators.js', 'text/javascript; charset=utf-8'],
@@ -118,6 +120,8 @@ async function quickLinkHost() {
   }
   return null;
 }
+
+const setupStatus = cachedStatus(createContext());
 
 export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections }) {
   const browseFolders = createFolderBrowser({ config });
@@ -407,11 +411,12 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   }
   // Browsers may resolve localhost to ::1 first. A Mac without IPv6 loopback still has 127.0.0.1.
   await listen('::1').catch(() => {});
-  fs.writeFileSync(ADMIN_URL_PATH, JSON.stringify({ url }) + '\n', { mode: 0o600 });
+  fs.writeFileSync(ADMIN_URL_PATH, JSON.stringify({ url, pid: process.pid }) + '\n', { mode: 0o600 });
 
   // Routes the phone can call on the main listener, after the server checked its login.
   const phoneRoute = router({
     'GET /api/service': async () => ok(await serviceStatus()),
+    'GET /api/setup/status': async () => ok(await setupStatus()),
     'PUT /api/service/autostart': ({ body }) => changeAutostart(body, 'phone'),
     'POST /api/service/restart': ({ req }) => restart('phone', req),
     'POST /api/access/disconnect': () => {

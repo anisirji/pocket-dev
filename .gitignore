@@ -11,3 +11,4 @@ ACCESS.private.md
 .env.*
 .pocket-dev/
 config.json.migrated
+.claude/

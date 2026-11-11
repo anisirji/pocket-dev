@@ -1,8 +1,19 @@
 {
   "name": "@anisirji/pocket-dev",
-  "version": "1.1.0",
+  "version": "1.1.5",
   "description": "Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
-  "author": "anisirji",
+  "author": {
+    "name": "anisirji",
+    "url": "https://theani.me"
+  },
+  "homepage": "https://github.com/anisirji/pocket-dev#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anisirji/pocket-dev.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anisirji/pocket-dev/issues"
+  },
   "license": "ISC",
   "keywords": [
     "remote-control",
@@ -18,7 +29,6 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "postinstall": "node scripts/postinstall.js",
     "start": "node server.js",
     "qr": "node scripts/qr.js",
     "admin": "node scripts/admin.js open",
@@ -37,12 +47,15 @@
   "type": "module",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.139",
-    "node-pty": "^1.1.0",
     "qrcode": "^1.5.4",
     "ws": "^8.22.1"
   },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0"
+  },
   "bin": {
-    "pocket-dev": "bin/pocket-dev.js"
+    "pocket-dev": "bin/pocket-dev.js",
+    "pocketdev-app": "bin/pocket-dev.js"
   },
   "files": [
     "bin",
@@ -53,6 +66,17 @@
     "README.md",
     "ACCESS.md",
     "docs/CHALLENGES.md",
+    "docs/GUIDE.md",
+    "docs/ROADMAP.md",
+    "docs/REFERENCE.md",
+    "docs/screenshots",
+    "docs/diagrams",
+    "docs/SETUP.md",
+    "docs/INSTALL_BEGINNERS.md",
+    "docs/windows.md",
+    "docs/macos.md",
+    "docs/linux.md",
+    "docs/install-guide",
     "LICENSE"
   ],
   "os": [

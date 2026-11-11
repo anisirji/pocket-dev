@@ -334,3 +334,5 @@
 /* Pictures the person attached, shown small in their own message. */
 .chat-user-img-link { display: block; }
 .chat-user-img { display: block; max-width: 100%; max-height: 200px; border-radius: 10px; border: 1px solid var(--chat-user-line); background: #000; object-fit: cover; }
+
+.chat-convo-screen.chat-dragover { outline: 2px dashed #4c8dff; outline-offset: -6px; }

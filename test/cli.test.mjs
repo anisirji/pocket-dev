@@ -15,7 +15,9 @@ function fixture(t) {
   const pkg = path.join(root, 'pkg');
   fs.mkdirSync(path.join(pkg, 'bin'), { recursive: true });
   for (const file of ['paths.js', 'config.js', 'config-keys.js', 'network.js', 'platform.js', 'platform-service.js', 'package.json']) fs.copyFileSync(path.join(REPO, file), path.join(pkg, file));
-  fs.copyFileSync(path.join(REPO, 'bin', 'pocket-dev.js'), path.join(pkg, 'bin', 'pocket-dev.js'));
+  fs.mkdirSync(path.join(pkg, 'chat'));
+  fs.copyFileSync(path.join(REPO, 'chat', 'env.js'), path.join(pkg, 'chat', 'env.js'));
+  for (const file of ['pocket-dev.js', 'cli.js']) fs.copyFileSync(path.join(REPO, 'bin', file), path.join(pkg, 'bin', file));
   const state = path.join(root, 'state');
   const env = { ...process.env, POCKET_DEV_STATE_DIR: state };
   delete env.POCKET_DEV_CONFIG;
@@ -114,4 +116,25 @@ test('unknown commands fail with usage; help lists every settable key', (t) => {
   const help = cli('help');
   assert.equal(help.status, 0);
   for (const key of ['port', 'adminPort', 'awake', 'requireApproval', 'maxDevices', 'approveFromDevices', 'chatIdleMinutes', 'allowedHosts', 'internet']) assert.match(help.stdout, new RegExp(`\\b${key}\\b`));
+});
+
+test('service logs with no log says so and exits non-zero; an unknown action prints usage', (t) => {
+  const { cli, env, root } = fixture(t);
+  env.LOG = path.join(root, 'missing.log');
+  const logs = cli('service', 'logs');
+  assert.equal(logs.status, 1);
+  assert.match(logs.stderr, /There is no log yet at .*missing\.log/);
+  const bad = cli('service', 'bogus');
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /usage: pocket-dev service/);
+});
+
+test('an unknown command points at --help', (t) => {
+  const { cli } = fixture(t);
+  assert.match(cli('nope').stderr, /See 'pocket-dev --help'/);
+});
+
+test('package.json has a unique second command name for the same program', () => {
+  const { bin } = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8'));
+  assert.equal(bin['pocketdev-app'], bin['pocket-dev']);
 });

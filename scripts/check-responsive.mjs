@@ -28,6 +28,7 @@ const messagesHello = {
 const historyItem = { tool: 'codex', id: '00000000-0000-4000-8000-000000000001', cwd: '/tmp', title: 'Resume fixture', project: 'Fixture', lastActive: new Date().toISOString(), messageCount: 1, live: false };
 let messagePosts = 0, terminalInputs = 0, terminalCreates = 0;
 const chatCreates = [];
+const uploads = [];
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const json = (data) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(data)); };
@@ -43,7 +44,7 @@ const server = http.createServer(async (req, res) => {
     return res.end(req.method === 'HEAD' ? undefined : content);
   }
   const routes = {
-    '/api/sessions': [session], '/api/forwards': [], '/api/info': { forwards: [] },
+    '/api/terminals': { available: true }, '/api/sessions': [session], '/api/forwards': [], '/api/info': { forwards: [] },
     '/api/folders': { home: '/tmp', pinned: folders, recent: [], projects: [] },
     '/api/chat': [chat, claudeChat], '/api/history': [historyItem], '/api/apps': { apps: [] },
     [`/api/history/codex/${historyItem.id}`]: { ...historyItem, messages: [{ role: 'user', text: 'A previous message' }] },
@@ -72,6 +73,12 @@ const server = http.createServer(async (req, res) => {
       let body = ''; for await (const chunk of req) body += chunk;
       chatCreates.push(JSON.parse(body));
       return json(chat);
+    }
+    if (req.method === 'POST' && url.pathname === '/api/upload') {
+      for await (const chunk of req);
+      const name = decodeURIComponent(req.headers['x-filename'] ?? '');
+      uploads.push(name);
+      return json({ path: `/tmp/uploads/${name}` });
     }
     if (req.method === 'POST' && url.pathname === '/api/sessions') terminalCreates++;
     if (req.method === 'POST' && url.pathname.endsWith('/message')) messagePosts++;
@@ -132,11 +139,8 @@ try {
     await settle();
     await inViewport('#macStatus', { aboveStatus: true });
     for (const selector of ['#app', '#inputBar', '#keyNav', '#terms']) await inViewport(selector);
-    await page.locator('#keyMore').click();
-    await inViewport('#keyTools');
-    await page.locator('#keyTools .key').last().scrollIntoViewIfNeeded();
-    await inViewport('#keyTools .key:last-child');
-    await page.locator('#keyMore').click();
+    await page.locator('#keyNav .key').last().scrollIntoViewIfNeeded();
+    await inViewport('#keyNav .key:last-child');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}x${height}: horizontal overflow`);
   }
   await page.setViewportSize({ width: 393, height: 852 });
@@ -145,23 +149,20 @@ try {
     await page.evaluate((g) => setTestViewport(g), geometry);
     await settle();
     for (const selector of ['#app', '#terms', '#inputBar', '#keyNav']) await inViewport(selector);
-    await page.locator('#keyMore').click();
-    await inViewport('#keyTools');
-    await page.locator('#keyTools .key').last().scrollIntoViewIfNeeded();
-    await inViewport('#keyTools .key:last-child');
-    await page.locator('#keyMore').click();
+    await page.locator('#keyNav .key').last().scrollIntoViewIfNeeded();
+    await inViewport('#keyNav .key:last-child');
   }
   await page.evaluate(() => setTestViewport({}));
   await page.locator('#cmd').evaluate((node) => node.blur());
   await page.locator('#new').click();
   await page.locator('#sheetAction').getByRole('button', { name: 'Browse folders', exact: true }).click();
   await page.locator('#sheetBody').getByRole('button', { name: 'Open folder website-project', exact: true }).click();
-  assert.equal(await page.locator('#sheetBody .fp-selected').textContent(), '/tmp/website-project');
+  await page.waitForFunction(() => document.querySelector('#sheetBody .fp-selected')?.textContent === '/tmp/website-project');
   assert.equal(await page.locator('#sheetBody').getByRole('button', { name: 'Open terminal here', exact: true }).isEnabled(), true);
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
-    await page.locator('#sheetBody .fp-primary').scrollIntoViewIfNeeded();
-    await inViewport('#sheetBody .fp-primary');
+    await page.locator('#sheetBody').getByRole('button', { name: 'Open terminal here', exact: true }).scrollIntoViewIfNeeded();
+    await inViewport('#sheetBody .fp-footer .fp-primary');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   }
   await page.locator('#sheetBody').getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -307,6 +308,7 @@ try {
   await page.waitForFunction(() => document.querySelector('.chat-conn').hidden);
   assert.equal(await page.locator('.chat-card').isVisible(), false, 'completed question must not reappear after wake');
   assert.equal(await page.locator('.chat-input').inputValue(), 'Keep my Codex draft');
+  await page.waitForFunction(() => /Codex queued messages/.test(document.querySelector('.chat-queue')?.getAttribute('aria-label') ?? ''));
   assert.match(await page.locator('.chat-queue').getAttribute('aria-label'), /Codex queued messages/);
   assert.equal(await page.locator('.chat-log .chat-user-queued').count(), 0);
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 100 }));
@@ -359,8 +361,41 @@ try {
   assert.equal(await page.locator('.chat-input').inputValue(), 'Keep my Codex draft');
   await page.reload();
   await page.waitForFunction(() => document.querySelector('.chat-input')?.value === 'Keep my Codex draft' && document.querySelector('.chat-conn').hidden);
+  await page.waitForFunction(() => /Codex queued messages/.test(document.querySelector('.chat-queue')?.getAttribute('aria-label') ?? ''));
   assert.match(await page.locator('.chat-queue').getAttribute('aria-label'), /Codex queued messages/);
   assert.equal(messagePosts, 0, 'reconnect and reload must never submit drafts or replay queued messages');
+  // Enter sends; Shift+Enter adds a new line and sends nothing.
+  await page.locator('.chat-input').fill('first line');
+  await page.locator('.chat-input').press('Shift+Enter');
+  await page.locator('.chat-input').pressSequentially('second line');
+  assert.equal(await page.locator('.chat-input').inputValue(), 'first line\nsecond line');
+  assert.equal(messagePosts, 0, 'Shift+Enter must only add a line');
+  await page.locator('.chat-input').press('Enter');
+  for (let i = 0; i < 50 && messagePosts === 0; i++) await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(messagePosts, 1, 'Enter must send the message');
+  // A file attaches by the paperclip, by paste (a screenshot) and by drop.
+  const chipNames = () => page.evaluate(() => [...document.querySelectorAll('.chat-file-name')].map((n) => n.textContent));
+  const waitForChip = (name) => page.waitForFunction((n) => [...document.querySelectorAll('.chat-file-name')].some((c) => c.textContent === n), name);
+  await page.locator('.chat-file-input').setInputFiles({ name: 'picked.txt', mimeType: 'text/plain', buffer: Buffer.from('picked') });
+  await waitForChip('picked.txt');
+  await page.locator('.chat-input').evaluate((node) => {
+    const data = new DataTransfer();
+    data.items.add(new File(['pasted'], 'pasted.png', { type: 'image/png' }));
+    node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await waitForChip('pasted.png');
+  const dropped = await page.locator('.chat-convo-screen').evaluate((node) => {
+    const data = new DataTransfer();
+    data.items.add(new File(['dropped'], 'dropped.pdf', { type: 'application/pdf' }));
+    const events = ['dragenter', 'dragover', 'drop'].map((type) => node.dispatchEvent(new DragEvent(type, { dataTransfer: data, bubbles: true, cancelable: true })));
+    return events;
+  });
+  assert.deepEqual(dropped, [true, false, false], 'a dropped file must be handled here, not opened by the browser');
+  await waitForChip('dropped.pdf');
+  assert.deepEqual(uploads, ['picked.txt', 'pasted.png', 'dropped.pdf']);
+  assert.deepEqual(await chipNames(), ['picked.txt', 'pasted.png', 'dropped.pdf']);
+  for (const name of ['picked.txt', 'pasted.png', 'dropped.pdf']) await page.locator(`.chat-file-x[aria-label="Remove ${name}"]`).click();
+  assert.deepEqual(await chipNames(), []);
   await page.evaluate(() => window.pocketDev.overlays.closeAll());
   await page.waitForSelector('.chat[hidden]', { state: 'attached' });
   await page.locator('#cmd').fill('keep this terminal draft');

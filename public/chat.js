@@ -1834,6 +1834,12 @@
     growInput();
     renderComposer();
   });
+  // Enter sends and Shift+Enter adds a new line. A key press that confirms an IME choice (Japanese, Chinese, Korean) is left alone.
+  ui.input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    ui.composer.requestSubmit();
+  });
   keepFocus(ui.send);
   q('.chat-queue-cancel').onclick = () => {
     const edit = queueEdits.get(convo.id);
@@ -1876,12 +1882,11 @@
   });
 
   ui.attach.onclick = () => ui.fileInput.click();
-  ui.fileInput.onchange = async () => {
-    if (queueEdits.has(convo.id)) { ui.fileInput.value = ''; return; }
-    const picked = [...ui.fileInput.files];
+  async function attachFiles(picked) {
+    if (!picked.length || queueEdits.has(convo.id)) return;
+    if (ui.attach.disabled) return notice(convo.uploadsOff ? 'This server cannot receive attachments yet.' : 'Attachments are not available right now.');
     const id = convo.id;
     const files = convo.files;
-    ui.fileInput.value = '';
     for (const file of picked) {
       const f = { name: file.name, path: null };
       files.push(f);
@@ -1908,7 +1913,31 @@
         if (draft?.files === files) saveDraft(id, draft.text, files);
       }
     }
+  }
+  ui.fileInput.onchange = () => {
+    const picked = [...ui.fileInput.files];
+    ui.fileInput.value = '';
+    return attachFiles(picked);
   };
+  // A file can also be pasted (a screenshot) or dropped on the conversation. Without a drop handler the browser would open the file and leave Pocket Dev.
+  const hasFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes('Files');
+  ui.input.addEventListener('paste', (e) => {
+    const picked = [...(e.clipboardData?.files ?? [])];
+    if (!picked.length) return;
+    e.preventDefault();
+    attachFiles(picked);
+  });
+  let dragDepth = 0;
+  ui.convoScreen.addEventListener('dragenter', (e) => { if (hasFiles(e)) { dragDepth++; ui.convoScreen.classList.add('chat-dragover'); } });
+  ui.convoScreen.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+  ui.convoScreen.addEventListener('dragleave', (e) => { if (hasFiles(e) && --dragDepth <= 0) { dragDepth = 0; ui.convoScreen.classList.remove('chat-dragover'); } });
+  ui.convoScreen.addEventListener('drop', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    ui.convoScreen.classList.remove('chat-dragover');
+    attachFiles([...e.dataTransfer.files]);
+  });
 
   window.pocketDevChat = {
     open(chatId) {

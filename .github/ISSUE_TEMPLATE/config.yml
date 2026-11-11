@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question or share a tip
+    url: https://github.com/anisirji/pocket-dev/discussions
+    about: For how-to questions and ideas, use Discussions.

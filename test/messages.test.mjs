@@ -223,13 +223,15 @@ test('Messages between the Mac, owner devices and guests', { timeout: 120000 }, 
   });
 
   await t.test('over the connector a file may be 100 MB; the page is told before it uploads', async () => {
-    const limits = (await request('GET', '/api/messages', { cookie: A.cookie, headers: CONNECTOR })).data.limits;
+    // A cookie works only on the address it was issued for, so the internet side needs a login made through the connector.
+    const { cookie: internet } = await request('POST', '/api/login', { body: { password: 'test-password' }, headers: CONNECTOR });
+    const limits = (await request('GET', '/api/messages', { cookie: internet, headers: CONNECTOR })).data.limits;
     assert.equal(limits.fileMax, 100 * MB);
     assert.equal((await request('GET', '/api/messages', { cookie: A.cookie })).data.limits.fileMax, null);
-    const declared = await streamUpload(A.cookie, 100 * MB + 1, { headers: CONNECTOR });
+    const declared = await streamUpload(internet, 100 * MB + 1, { headers: CONNECTOR });
     assert.equal(declared.status, 413);
     assert.equal(declared.data.error, 'Over the internet you can send files up to 100 MB. This file is 100.0 MB. Connect on the same Wi-Fi as the Mac to send it.');
-    const counted = await streamUpload(A.cookie, 101 * MB, { declare: false, headers: CONNECTOR });
+    const counted = await streamUpload(internet, 101 * MB, { declare: false, headers: CONNECTOR });
     assert.equal(counted.status, 413);
     assert.match(counted.data.error, /^Over the internet you can send files up to 100 MB/);
   });

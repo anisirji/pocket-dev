@@ -271,7 +271,7 @@ test('windows-install.ps1 exists, is ASCII, and does what the task asks (text ch
     assert.ok(text.includes(needle.replace('node --version', '& node --version')) || text.includes(needle), `mentions ${needle}`);
   }
   assert.doesNotMatch(text, /-ArgumentList[^\n]*"/, 'no double quotes passed through native arguments');
-  const pwsh = spawnSync('pwsh', ['-NoProfile', '-Command', `[void][System.Management.Automation.Language.Parser]::ParseFile('${path.join(REPO, 'scripts', 'windows-install.ps1')}', [ref]$null, [ref]$e); if ($e) { $e; exit 1 }`], { encoding: 'utf8' });
+  const pwsh = spawnSync('pwsh', ['-NoProfile', '-Command', `$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile('${path.join(REPO, 'scripts', 'windows-install.ps1')}', [ref]$null, [ref]$e); if ($e) { $e; exit 1 }`], { encoding: 'utf8' });
   if (pwsh.error?.code !== 'ENOENT') assert.equal(pwsh.status, 0, pwsh.stdout + pwsh.stderr);
 });
 
@@ -330,4 +330,14 @@ test('a real host that starts late is found: the socket appears after the first 
   assert.ok(tries >= 3);
   server.close();
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('setup starts a bare npm through cmd.exe on Windows, and real programs directly', async () => {
+  const { needsShell } = await import('../setup.js');
+  assert.equal(needsShell('npm', 'win32'), true, 'a bare npm is npm.cmd, which spawn cannot start without a shell');
+  assert.equal(needsShell('C:\\Program Files\\nodejs\\npm.cmd', 'win32'), true);
+  assert.equal(needsShell('claude.CMD', 'win32'), true);
+  assert.equal(needsShell('C:\\Program Files\\Git\\cmd\\git.exe', 'win32'), false);
+  assert.equal(needsShell('npm', 'darwin'), false);
+  assert.equal(needsShell('npm', 'linux'), false);
 });

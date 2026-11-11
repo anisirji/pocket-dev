@@ -14,7 +14,7 @@ function parse(file) {
 // in memory; a fallback is never written, so a malformed hand edit stays on disk for the user to fix.
 export function openConfig(file) {
   if (!fs.existsSync(file)) {
-    fs.writeFileSync(file, JSON.stringify({ port: 7777 }, null, 2) + '\n', { mode: 0o600 });
+    fs.writeFileSync(file, JSON.stringify({}, null, 2) + '\n', { mode: 0o600 });
     console.log(`Created ${file}`);
   }
   let last = parse(file);
