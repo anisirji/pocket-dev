@@ -804,6 +804,7 @@ const PAGES = {
   '/room-pages.js': 'room-pages.js', '/room-pages.css': 'room-pages.css', '/room-screen.js': 'room-screen.js', '/room-invite.js': 'room-invite.js', '/room.css': 'room.css',
   '/modes-core.js': 'modes-core.js', '/room-modes.js': 'room-modes.js', '/room-modes.css': 'room-modes.css', '/room-approvals.js': 'room-approvals.js', '/room-approvals.css': 'room-approvals.css', '/room-banner.js': 'room-banner.js', '/room-banner.css': 'room-banner.css', '/vendor/qrcode/qrcode.js': 'vendor/qrcode/qrcode.js', '/vendor/jsqr/jsQR.js': 'vendor/jsqr/jsQR.js', '/room-scan.js': 'room-scan.js', '/terminals-off.js': 'terminals-off.js',
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
+  '/welcome.js': 'welcome.js', '/greeting-copy.js': 'greeting-copy.js',
 };
 const PUBLIC_PAGES = new Set(['login.html', 'invite.html', 'invite.js', 'guest.css']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };

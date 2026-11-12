@@ -1,9 +1,12 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { STATE_DIR } from './paths.js';
 import { findBin, engineEnv, lstatExists, windowsBinCandidates } from './chat/env.js';
 import { findCloudflared, readNetwork, networkError } from './network.js';
+import { greetingText, box, firstName } from './greeting.js';
+import { COPY } from './public/greeting-copy.js';
 
 // `pocket-dev setup`: one guided pass that takes a computer from nothing to a working, logged-in Pocket Dev.
 // Detection and the plan for each tool are pure functions of a context (platform, a command runner, a lookup), so
@@ -251,6 +254,9 @@ export function createContext(overrides = {}) {
     run: realRun,
     out: (line = '') => console.log(line),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    now: () => new Date(),
+    username: (() => { try { return os.userInfo().username; } catch { return null; } })(),
+    columns: process.stdout.columns,
     isTTY: !!process.stdin.isTTY && !!process.stdout.isTTY,
     color: !env.NO_COLOR && !!process.stdout.isTTY,
   };
@@ -546,21 +552,43 @@ async function finishStep(ctx, opts, started) {
   if (await printPhoneLogin(ctx, { tries: started === false ? 1 : READY_TRIES })) ctx.out('  Pocket Dev runs in the background now. You do not need to run pocket-dev start.');
 }
 
+// Plan C12: never without a person at a terminal, never in CI, hidden by --quiet. Every fact is read here, on this
+// computer, and only reaches the screen.
+export async function showGreeting(ctx, { quiet = false } = {}) {
+  if (quiet || !ctx.isTTY || ctx.env.CI) return;
+  const config = KNOWN_CONFIG(ctx);
+  const plain = config.greeting === 'plain';
+  const facts = plain ? {} : {
+    name: firstName(ctx.username), hour: ctx.now().getHours(), platform: ctx.platform, laptop: await ctx.hasBattery().catch(() => true),
+    awake: config.awake, claude: !!ctx.find(toolById('claude')), codex: !!ctx.find(toolById('codex')),
+  };
+  const { greeting, creator } = greetingText(facts, { plain });
+  const width = Math.max(30, Math.min(64, (ctx.columns || 80) - 4));
+  ctx.out('');
+  ctx.out(box(greeting, { color: ctx.color, width }));
+  ctx.out('');
+  ctx.out(box(creator, { color: ctx.color, width }));
+  ctx.out(COPY.madeHere);
+  if (!plain) ctx.out(COPY.plainHint);
+  ctx.out('');
+}
+
 // ---- The flow -----------------------------------------------------------------------------------------------------
 
 export function parseArgs(args) {
-  const opts = { check: false, yes: false, dry: false, only: null, error: null };
+  const opts = { check: false, yes: false, dry: false, quiet: false, only: null, error: null };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--check') opts.check = true;
     else if (a === '--yes' || a === '-y') opts.yes = true;
     else if (a === '--dry-run') opts.dry = true;
+    else if (a === '--quiet') opts.quiet = true;
     else if (a === '--only') {
       // autostart is the step's old name.
       const v = args[++i] === 'autostart' ? 'always-on' : args[i];
       if (!STEP_IDS.includes(v)) opts.error = `--only needs one of: ${STEP_IDS.join(', ')}.`;
       else opts.only = v;
-    } else opts.error = `Unknown option "${a}". Options: --check, --yes, --dry-run, --only <${STEP_IDS.join('|')}>.`;
+    } else opts.error = `Unknown option "${a}". Options: --check, --yes, --dry-run, --quiet, --only <${STEP_IDS.join('|')}>.`;
   }
   return opts;
 }
@@ -600,6 +628,7 @@ export async function runSetup(args, ctx, { fromStart = false } = {}) {
 
   ctx.out(`Pocket Dev setup (${NAMES[ctx.platform] ?? ctx.platform})${check ? ': status only' : opts.dry ? ': dry run, nothing will be installed, changed or logged in' : ''}`);
   if (!ctx.isTTY && !opts.check && !opts.dry) ctx.out('This is not an interactive terminal, so setup only checks and prints what to run. Run pocket-dev setup in a terminal to do the steps.');
+  if (!check && !opts.only) for (const line of COPY.intro) ctx.out(line);
   ctx.out('');
 
   if (check) {
@@ -640,6 +669,7 @@ export async function runSetup(args, ctx, { fromStart = false } = {}) {
   if (!opts.only && !opts.dry) ctx.setupDone.mark();
   if (installedSome) ctx.out(`If Pocket Dev was already running: ${RESTART_NOTE}`);
   ctx.out(opts.dry ? 'Dry run finished. Nothing was changed.' : nodeOk ? 'Setup finished. Run pocket-dev setup --check any time to see the status.' : 'Setup stopped short: Node.js is not ready. Fix it and run pocket-dev setup again.');
+  if (!opts.only && !opts.dry && !fromStart) await showGreeting(ctx, opts);
   return nodeOk ? 0 : 1;
 }
 

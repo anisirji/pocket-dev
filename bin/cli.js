@@ -12,7 +12,7 @@ const HELP = `pocket-dev ${VERSION}: control this computer from your phone's bro
 
 Usage: pocket-dev <command>
 
-  start [--port N] [--admin-port N] [--no-open] [--no-setup]
+  start [--port N] [--admin-port N] [--no-open] [--no-setup] [--quiet]
                                                    Run the server in this terminal. The first start on a computer
                                                    runs the guided setup; --no-setup (or POCKET_DEV_NO_SETUP=1) skips it
   config list                                      Show the settings and where they are saved
@@ -23,9 +23,10 @@ Usage: pocket-dev <command>
   service install|restart                          Run in the background and start at login
   service uninstall|status|logs                    Remove it, check it, or follow its log
   service autostart on|off|status                  Start at login (or not)
-  setup [--check] [--yes] [--dry-run] [--only <step>]
+  setup [--check] [--yes] [--dry-run] [--quiet] [--only <step>]
                                                    Guided setup: install and log in Git, Claude Code, Codex, GitHub CLI,
-                                                   cloudflared, then password, phone access and start at login
+                                                   cloudflared, then password, phone access and Always on.
+                                                   --quiet hides the greeting at the end
   doctor [--fix] [--yes]                           Check this installation (Node, PATH, terminals, tools, port); --fix repairs terminals
   qr [--link <address>]                            Print a one-time login QR code (for an internet address with --link)
   admin                                            Open the admin page (this computer only)
@@ -66,7 +67,7 @@ function flagValue(args, name) {
 
 async function start(args) {
   const { resolvePorts, runningInstance, firstRun } = await import('../startup.js');
-  const { createRealContext, runSetup, printAlreadyRunning, printPhoneLogin } = await import('../setup.js');
+  const { createRealContext, runSetup, printAlreadyRunning, printPhoneLogin, showGreeting } = await import('../setup.js');
   const ctx = await createRealContext();
   if (await runningInstance(STATE_DIR)) return printAlreadyRunning(ctx);
   const port = flagValue(args, '--port');
@@ -79,7 +80,7 @@ async function start(args) {
   if (guided && (await ctx.service.status().catch(() => ({}))).running) {
     ctx.out('Pocket Dev now runs in the background.');
     await printPhoneLogin(ctx, { tries: 10 });
-    return;
+    return showGreeting(ctx, { quiet: args.includes('--quiet') });
   }
   const { platform } = await import('../platform.js');
   try {
@@ -88,7 +89,9 @@ async function start(args) {
     process.env.PORT = String(chosen.port);
     process.env.POCKET_DEV_ADMIN_PORT = String(chosen.adminPort);
   } catch (err) { fail(err.message); }
+  // server.js prints its address and QR code before this import resolves, so the greeting comes after them.
   await import('../server.js');
+  if (guided) await showGreeting(ctx, { quiet: args.includes('--quiet') });
 }
 
 function config([action, key, ...rest]) {

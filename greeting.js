@@ -1,0 +1,59 @@
+import { COPY } from './public/greeting-copy.js';
+
+// The greeting at the end of the guided setup (plan C12). Pure functions of facts read on this computer; nothing here
+// reads files, runs programs or touches the network. The words live in public/greeting-copy.js.
+
+// Account and machine names that are not a person's first name. An uncertain name means the plain greeting.
+const NOT_NAMES = new Set(['user', 'users', 'admin', 'administrator', 'root', 'pc', 'desktop', 'laptop', 'owner', 'guest', 'default', 'test',
+  'dev', 'developer', 'home', 'me', 'ubuntu', 'pi', 'runner', 'vagrant', 'docker', 'build', 'ci', 'mac', 'windows', 'linux', 'student', 'office', 'work', 'local', 'server']);
+
+export function firstName(username) {
+  const first = String(username ?? '').split(/[._\-\s]+|(?<=[a-z])(?=[A-Z])/)[0];
+  if (!/^[A-Za-z]{2,12}$/.test(first) || !/[aeiouy]/i.test(first) || NOT_NAMES.has(first.toLowerCase())) return null;
+  return first[0].toUpperCase() + first.slice(1).toLowerCase();
+}
+
+export function partOfDay(hour) {
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 22) return 'evening';
+  return 'night';
+}
+
+// facts: { name, hour, platform, laptop, awake, claude, codex }. `plain` leaves out the name, the system, the time and
+// what setup changed. Returns two lists of paragraphs, one per box.
+export function greetingText(facts, { plain = false } = {}) {
+  const computer = plain ? COPY.computer.other : COPY.computer[facts.platform] ?? COPY.computer.other;
+  const fill = (text) => text.replace('{name}', facts.name).replace('{computer}', computer);
+  const hello = plain || !facts.name ? COPY.hello.plain : facts.name === 'Ani' ? COPY.hello.sameName : COPY.hello.named;
+  const chat = facts.claude && facts.codex ? COPY.facts.both : facts.claude ? COPY.facts.claude : facts.codex ? COPY.facts.codex : null;
+  const said = plain ? [] : [facts.awake === 'always' && COPY.facts.alwaysOn, facts.awake === 'always' && !facts.laptop && COPY.facts.desktop, chat];
+  return {
+    greeting: [
+      [fill(hello), plain ? null : COPY.partOfDay[partOfDay(facts.hour)]].filter(Boolean).join(' '),
+      [fill(COPY.allSet), ...said.filter(Boolean)].join(' '),
+      ...COPY.body.slice(0, -1),
+      `${COPY.body.at(-1)}\n${COPY.signature}`,
+    ],
+    creator: [...COPY.creator, COPY.links.map((l) => `${l.label}: ${l.url}`).join('\n')],
+  };
+}
+
+function wrap(line, width) {
+  const out = [];
+  let current = '';
+  for (const word of line.split(' ')) {
+    if (current && current.length + 1 + word.length > width) { out.push(current); current = word; } else current = current ? `${current} ${word}` : word;
+  }
+  return [...out, current];
+}
+
+// A bordered box, paragraphs apart. With colour: rounded corners in the warm accent. Without: plain ASCII, for
+// terminals that show neither colour nor box characters.
+export function box(paragraphs, { color = false, width = 64 } = {}) {
+  const lines = paragraphs.flatMap((p, i) => [...(i ? [''] : []), ...p.split('\n').flatMap((l) => wrap(l, width))]);
+  const w = Math.max(...lines.map((l) => l.length));
+  const [tl, tr, bl, br, h, v] = color ? ['╭', '╮', '╰', '╯', '─', '│'] : ['+', '+', '+', '+', '-', '|'];
+  const edge = (t) => (color ? `\x1b[38;5;208m${t}\x1b[0m` : t);
+  return [edge(tl + h.repeat(w + 2) + tr), ...lines.map((l) => `${edge(v)} ${l.padEnd(w)} ${edge(v)}`), edge(bl + h.repeat(w + 2) + br)].join('\n');
+}

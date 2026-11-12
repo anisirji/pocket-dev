@@ -46,6 +46,7 @@ function fakeCtx({ platform = 'darwin', installed = {}, pms = [], tty = true, an
     saveNetwork: async (n) => writes.push(['network', n]),
     saveAwake: async (m) => { writes.push(['awake', m]); config.awake = m; },
     hasBattery: async () => battery,
+    username: 'ani', now: () => new Date(2026, 10, 12, 20, 0), columns: 100,
     setupDone: { read: () => false, mark: () => writes.push(['setup-done']) },
     keepAwake: { available: true },
     localApi: async () => null,
@@ -331,6 +332,35 @@ test('setup run by the first start leaves the address and QR to start itself', a
   assert.doesNotMatch(text(f), /Open it on your phone/);
 });
 
+test('a full interactive setup opens with why it is safe and ends with the greeting after the QR', async () => {
+  const f = fakeCtx({ installed: { claude: { version: '2.1.319', login: true } }, answers: [] });
+  f.ctx.localApi = async () => ({ ok: true, status: 200, data: { url: 'http://192.168.1.5:7777/?k=abc', expiresInMin: 10 } });
+  await runSetup([], f.ctx);
+  const out = text(f);
+  assert.match(out, /Two minutes now saves you the usual problems later/);
+  const qr = out.indexOf('[qr]'), hello = out.indexOf("Hi Ani, it's Ani too. Good evening.");
+  assert.ok(qr > 0 && hello > qr, 'the greeting comes after the QR code');
+  const flat = out.split('\n').map((l) => l.replace(/^\| | +\|$/g, '').trim()).join(' ');
+  assert.match(flat, /Claude Code is ready to chat from your phone/);
+  assert.match(out, /https:\/\/theani\.me/);
+  assert.match(out, /This message was made on your computer\. Nothing was sent\./);
+  assert.ok(!out.includes('\x1b'), 'no colour when the terminal has none');
+});
+
+test('--quiet hides the greeting, greeting plain drops the name, and a run without a terminal never shows it', async () => {
+  const quiet = fakeCtx({ answers: [] });
+  await runSetup(['--quiet'], quiet.ctx);
+  assert.doesNotMatch(text(quiet), /it's Ani|Nothing was sent/);
+  const plain = fakeCtx({ answers: [], config: { greeting: 'plain' } });
+  await runSetup([], plain.ctx);
+  assert.match(text(plain), /^\| Hi, it's Ani\. +\|$/m);
+  const boxed = text(plain).split('\n').filter((l) => l.startsWith('|')).join('\n');
+  assert.doesNotMatch(boxed, /Good evening|Mac/);
+  const ci = fakeCtx({ tty: false });
+  await runSetup([], ci.ctx);
+  assert.doesNotMatch(text(ci), /it's Ani|Two minutes/);
+});
+
 test('--yes applies the recommended set and never an explicit opt-in', async () => {
   const f = fakeCtx({ pms: ['brew'], installed: { git: { version: '2.52.0' } } });
   await runSetup(['--yes'], f.ctx);
@@ -412,7 +442,9 @@ test('the log file keeps command lines only, private to the owner', () => {
 });
 
 test('option parsing', () => {
-  assert.deepEqual(parseArgs(['--check']), { check: true, yes: false, dry: false, only: null, error: null });
+  assert.deepEqual(parseArgs(['--check']), { check: true, yes: false, dry: false, quiet: false, only: null, error: null });
+  assert.equal(parseArgs(['--quiet']).quiet, true);
+  assert.equal(parseArgs(['--only', 'autostart']).only, 'always-on', 'the old step name still works');
   assert.equal(parseArgs(['--only', 'codex']).only, 'codex');
   assert.match(parseArgs(['--only', 'nope']).error, /--only needs one of/);
   assert.match(parseArgs(['--bogus']).error, /Unknown option/);
