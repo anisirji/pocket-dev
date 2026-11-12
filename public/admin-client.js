@@ -422,7 +422,7 @@ function renderPending() {
   $('pending').hidden = list.length === 0 && !state.requireApproval;
   $('pendingTtl').textContent = state.pendingTtlMin;
   $('pendingRows').replaceChildren(...(list.length ? list.map((d) => h('div', { class: 'row' },
-    h('div', { class: 'cell' }, h('span', { class: 'dev-name' }, d.name), h('span', { class: 'tag tag-code' }, d.code), h('small', {}, 'code shown on the phone')),
+    h('div', { class: 'cell' }, h('span', { class: 'dev-name' }, d.name), h('span', { class: 'tag tag-code' }, d.code), h('small', {}, d.kind && d.kind !== d.name ? `${d.kind} · code shown on the phone` : 'code shown on the phone')),
     h('div', { class: 'cell' }, d.ip, h('small', {}, 'IP address')),
     h('div', { class: 'cell' }, `Asked ${ago(d.createdAt)}`, h('small', {}, `expires in ${Math.max(1, Math.ceil((d.expiresAt - Date.now()) / 60000))} min`)),
     h('div', { class: 'actions' },

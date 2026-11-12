@@ -108,3 +108,21 @@ test('approving a waiting login from a logged-in phone: off by default, Mac-only
   const turnedOff = (await s.local('GET', '/api/log')).data.find((e) => e.type === 'device-approval-changed' && e.on === false);
   assert.equal(turnedOff.by, 'phone');
 });
+
+test('a login may send a device name, which the approval lists show beside the browser kind', { timeout: 60000 }, async (t) => {
+  const s = await startServer(t);
+  const A = await s.login();
+  assert.equal((await s.local('PUT', '/api/settings', { requireApproval: true, approveFromDevices: true })).status, 200);
+  const ua = { 'user-agent': 'node' };
+  const bad = await s.login({ body: { password: 'test-password', name: 'two\nlines' }, headers: ua });
+  assert.equal(bad.status, 400);
+  assert.match(bad.data.error, /1 to 40 characters/);
+  const named = await s.login({ body: { password: 'test-password', name: '  build-bot on studio  ' }, headers: ua });
+  assert.equal(named.data.pending, true);
+  const unnamed = await s.login({ headers: ua });
+  assert.equal(unnamed.data.pending, true, 'a login without a name still works as before');
+  const waiting = (await s.status()).devices.filter((d) => d.status === 'pending');
+  assert.deepEqual(waiting.map((d) => [d.name, d.kind]).sort(), [['Unknown device', 'Unknown device'], ['build-bot on studio', 'Unknown device']]);
+  const onPhone = (await s.request('GET', '/api/settings', { cookie: A.cookie })).data.waiting;
+  assert.deepEqual(onPhone.map((d) => d.name).sort(), ['Unknown device', 'build-bot on studio']);
+});
