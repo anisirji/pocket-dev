@@ -178,6 +178,7 @@
   </header>
   <nav id="tabbar" aria-label="Terminals">
     <div id="tabs"></div>
+    <button id="tabGit" class="icon-btn glyph" aria-label="Git graph of this terminal's folder" title="Git graph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7"/><path d="M18 10.5c0 4-6 3.5-11 6"/></svg></button>
     <button id="tabsList" class="icon-btn glyph" aria-label="All terminals" title="All terminals">☰</button>
     <button id="new" class="icon-btn glyph" aria-label="New terminal">+</button>
   </nav>
@@ -465,6 +466,7 @@ function renderTabsSheet() {
   setSheet({ title: `Terminals · ${running} running`, rows, note: list.length ? '' : 'No terminals open.' });
 }
 $('tabsList').addEventListener('click', openTabsSheet);
+$('tabGit').addEventListener('click', () => active() && window.pocketDev.openGit(active().cwd));
 
 function renderBadge() {
   const view = active();
@@ -1178,6 +1180,12 @@ window.pocketDev = {
   powerOptions,
   showClientError,
   clientUpdateMessage: CLIENT_UPDATE_MESSAGE,
+  // openFolder runs first so the view switch does not start a second, competing load of the Git view.
+  openGit(folder) {
+    overlays.closeAll();
+    window.pocketDevGit.openFolder(folder);
+    setView('git');
+  },
   // Resume continues a conversation from either view; the new terminal has to be on screen.
   openSession(s) {
     setView('terminal');
