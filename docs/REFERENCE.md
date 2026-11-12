@@ -104,7 +104,7 @@ Trash uses macOS’s native Trash operation. Restore items in Finder on the Mac.
 
 Messages is a chat between this Mac, your own devices, and the people you invite. Use it to move text, screenshots, videos, and files between them.
 
-- **Who takes part.** The Mac (the Messages panel on the Admin page), every logged-in owner device, and every collaborator and guest session, in all roles. A Viewer can read and send in Messages even though its Files access is read-only.
+- **Who takes part.** The Mac (the Messages panel on the Admin page and `pocket-dev message`, shown under the computer's name), every logged-in owner device, and every collaborator and guest session, in all roles. A Viewer can read and send in Messages even though its Files access is read-only.
 - **Chats.** **Everyone** is the group chat. Each person also has a direct chat that only the two of you can see. Collaborators and guests see group messages from the moment their grant was created, never other people's direct chats, and only display names (no device codes or addresses).
 - **Messages.** Bubbles show the sender's name in the group, with a tag for collaborators and guests, and the time. Images show as thumbnails (a 480 px JPEG made with `sips`) and open full size when tapped. Videos and audio play in the page. Other files show as a card with a download button.
 - **Actions.** Long-press a message, right-click it, or use its **⋯** button for **Copy**, **Download**, **Delete for everyone**, or **Hide for me**. The sender and owner devices or the Mac can delete a message for everyone, which also deletes its files. Anyone else can hide it for themselves.
