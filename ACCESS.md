@@ -12,7 +12,7 @@ Pocket Dev runs on your Mac as the user who starts it. An owner/Admin phone can 
 - Mac status reads CPU activity, memory availability, free storage and Pocket Dev response delay for owner devices. Monitoring does not close apps or restart the Mac.
 - Open apps lists applications and can quit unprotected apps. Force quit can lose unsaved work.
 - Power can keep the Mac awake, request sleep, or ask System Events to shut down.
-- Port forwarding exposes a selected localhost service to the LAN. Forwarded services have no Pocket Dev login.
+- Port forwarding exposes a selected localhost service to the LAN. On the LAN, forwarded services have no Pocket Dev login. Opened from the internet address, a forwarded port gets its own Quick link behind a gate that needs a one-time key from a logged-in device (see docs/REFERENCE.md, Ports from outside the home network).
 
 ## Mac permissions and elevated commands
 

@@ -64,7 +64,20 @@ ws.on('message', (raw) => { const m = JSON.parse(raw); if (m.t === 'out') proces
 
 Forward `localhost:<port>` on the Mac to `<mac-lan-ip>:<port>`, so the phone can open a dev server. It is a raw TCP pipe (127.0.0.1 first, then ::1), so HMR WebSockets work. When the Mac's LAN IP changes, every forward moves to the new IP within about 10 s.
 
-It does not protect forwarded ports with a password, persist forwards across restarts, forward ports below 1024, or forward Pocket Dev's own ports (the phone port and the Admin port, which only this Mac may open).
+It does not protect forwarded ports with a password on Wi-Fi, persist forwards across restarts, forward ports below 1024, or forward Pocket Dev's own ports (the phone port and the Admin port, which only this Mac may open).
+
+### Ports from outside the home network
+
+A phone on the internet address cannot reach the Wi-Fi link. There, tapping a port opens it through its own Quick link (`https://….trycloudflare.com`), behind the Pocket Dev login:
+
+1. The phone asks `POST /api/forwards/<port>/remote`. Only a logged-in owner device can ask, only for a port that is forwarded, and only while internet access is on. Collaborators and room members cannot.
+2. The first time, Pocket Dev starts a small gate on `127.0.0.1` and one `cloudflared` Quick link that points at the gate, never at the dev server. Each port gets its own address, so a dev server's root paths (`/assets/…`, `/@vite/client`) work.
+3. The reply is a link with a one-time key that lasts 60 seconds. Opening it gives that browser a `pd_port` cookie (HttpOnly, Secure, SameSite=Strict) for that address only, and removes the key from the address bar.
+4. The gate passes a request on to `localhost:<port>` only with that cookie, while the device that asked is still logged in and internet access is still on. Anyone else gets a 401 page and nothing reaches the dev server. WebSockets (hot reload) pass through the same check.
+5. The dev server sees `Host: localhost:<port>`, so host checks such as Vite's pass. The tunnel's own headers and the gate cookie are removed; the app's own cookies pass.
+6. Closing the forward, Lockdown, or stopping Pocket Dev ends the Quick link. A WebSocket already open stays open until then, even if its device is logged out.
+
+Each opening is in the security log as `port-remote-opened`. It needs `cloudflared`, like a Quick link. A new Quick link can take a few seconds before its address answers.
 
 ## Git
 

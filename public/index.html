@@ -1034,12 +1034,44 @@ $('cmd').addEventListener('paste', (e) => {
 });
 
 let forwards = [];
+let viaInternet = false;
+
+// The Wi-Fi link cannot work from outside the home network, so there the port opens through its own internet link.
+// The tab opens at the tap, before the wait, so a phone browser does not block it as a pop-up.
+async function openOverInternet(port) {
+  const tab = window.open('', '_blank');
+  $('portErr').textContent = `Opening port ${port} over the internet. The first time takes a few seconds.`;
+  try {
+    const { url } = await api('POST', `/api/forwards/${port}/remote`, {});
+    if (tab) {
+      tab.opener = null;
+      tab.location.href = url;
+      $('portErr').textContent = `Port ${port} opened in a new tab, through its own internet link and behind your Pocket Dev login.`;
+    } else {
+      const open = h('a', null, `Open port ${port}`);
+      Object.assign(open, { href: url, target: '_blank', rel: 'noopener' });
+      $('portErr').replaceChildren(open);
+    }
+  } catch (err) {
+    tab?.close();
+    $('portErr').textContent = err.message;
+  }
+}
+
 function renderForwards() {
   $('portsCount').textContent = forwards.length || '';
   $('chips').replaceChildren(...forwards.map(({ port, url, state, error }) => {
     const chip = h('span', 'chip');
     let link;
-    if (state === 'open') {
+    if (viaInternet) {
+      link = h('a', null, `:${port}`);
+      link.href = '#';
+      link.title = 'Opens through the internet link';
+      link.onclick = (e) => {
+        e.preventDefault();
+        openOverInternet(port);
+      };
+    } else if (state === 'open') {
       link = h('a', null, `:${port}`);
       link.href = url;
       link.target = '_blank';
@@ -1061,7 +1093,7 @@ function renderForwards() {
 }
 
 async function refreshForwards() {
-  forwards = (await api('GET', '/api/info')).forwards;
+  ({ forwards, remote: viaInternet } = await api('GET', '/api/info'));
   renderForwards();
 }
 

@@ -446,6 +446,7 @@ const EVENT_TEXT = {
   'remote-started': (e) => `Internet link on at ${e.url}`,
   'remote-stopped': () => 'Internet link off',
   'remote-error': (e) => `Internet link failed: ${e.error}`,
+  'port-remote-opened': (e) => `Device ${e.deviceId?.slice(-4)} opened port ${e.port} over the internet at ${e.url}`,
   'network-changed': (e) => `Internet access set to ${KIND_LABEL[e.kind] ?? e.kind}${e.hostname ? ` (${e.hostname})` : ''}${e.wifi === false ? ', Wi-Fi access off' : ''}${byText(e)}`,
   'handoff-created': (e) => (e.direction === 'to-remote' ? `${e.name} asked to link to ${e.host}` : `${e.name} asked to switch from the internet link to Wi-Fi`),
   'handoff-redeemed': (e) => (e.direction === 'to-remote' ? `${e.name} linked to ${e.host}` : `${e.name} switched to the Wi-Fi address`),

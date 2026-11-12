@@ -763,6 +763,6 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     },
   };
 
-  return { passwordLine, noteRestart, lookup, deviceFor, trackSocket, mintQrUrl, redeemQrKey, mintHandoff, redeemHandoff, hasCookieFor, isLocalRequest, handleApi, admin, activeCount,
+  return { passwordLine, noteRestart, lookup, deviceFor, isActiveDevice: (id) => Boolean(findActive(id)), trackSocket, mintQrUrl, redeemQrKey, mintHandoff, redeemHandoff, hasCookieFor, isLocalRequest, handleApi, admin, activeCount,
     isTrustedAdmin: (req) => deviceFor(req)?.role === 'admin' };
 }
