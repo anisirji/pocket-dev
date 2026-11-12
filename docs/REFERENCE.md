@@ -20,6 +20,45 @@ Pocket Dev works on macOS, Windows 11 and Linux. Some details below name macOS t
 | Upload | **📎** or paste an image. Saves to `~/.pocket-dev/uploads` (25 MB per file) and inserts the quoted path into the input. | Press Enter. Delete old uploads. |
 | Shortcuts | **⚡** runs saved commands. Up to 30, each 1 to 200 characters, stored in `config.json`. | |
 
+### Terminal API for scripts
+
+A script or agent can drive a terminal with the same HTTP calls and WebSocket the phone uses. Every call goes to the phone address (`http://<Wi-Fi address>:7777`, or the internet link) and carries the login cookie.
+
+1. Log in with `POST /api/login` and the JSON body `{ "password": "…", "name": "build-bot" }`. The `name` is optional, 1 to 40 characters on one line, and is what the approval list shows. The reply sets the `pd_token` cookie. A reply of `{ "ok": true, "pending": true }` means the login waits for approval; poll `GET /api/status` until `status` is `active`. The cookie works only on the address that issued it.
+2. Create a terminal with `POST /api/sessions` and the body `{ "cwd": "/path/to/folder", "command": "npm test" }`. Both fields are optional. `cwd` defaults to the home folder and must be a folder. `command` is one line of 1 to 200 characters; the shell types it and presses Enter once its prompt is quiet. The reply is `201` with `{ id, title, cwd, exitCode, startedAt, activeAt, persistent }`.
+3. Open the WebSocket `ws://<address>/ws/<id>` (`wss://` on the internet link) with the cookie. An `Origin` header, if sent, must match the address. A refused upgrade answers `401` (no login), `403` (wrong origin or a collaborator), `404` (no such terminal), or `503` (terminals are unavailable on this computer).
+4. `GET /api/sessions` lists every terminal. `DELETE /api/sessions/<id>` closes one and answers `204`.
+
+Every `POST`, `PUT`, `PATCH` and `DELETE` needs the header `x-pocket-dev: 1` and `content-type: application/json`.
+
+Each WebSocket message is one JSON text frame.
+
+| Direction | Frame | Meaning |
+| --- | --- | --- |
+| Server to client | `{ "t": "out", "d": "…" }` | Terminal output, with escape sequences as the shell printed them. The first frame after connecting replays up to about 500 KB of earlier output. |
+| Server to client | `{ "t": "exit", "code": 0 }` | The shell ended. The socket stays open, and input is ignored. |
+| Server to client | `{ "t": "pong" }` | The answer to a `ping` frame. |
+| Server to client | `{ "t": "waiting", "kind": "…", "code": "1a2b" }` | A login is waiting for approval. Only owner devices hear this, and only with **Approve from a logged-in phone** on. Ignore it in a script. |
+| Client to server | `{ "t": "in", "d": "ls\r" }` | Keystrokes. Send `\r` for Enter and `\u0003` for Ctrl-C. |
+| Client to server | `{ "t": "resize", "cols": 120, "rows": 40 }` | The terminal size, each 10 to 500. The client that types last sets the size. |
+| Client to server | `{ "t": "ping" }` | Asks for a `pong` frame. |
+
+The server also sends a WebSocket ping every 30 seconds and closes a socket that does not answer. Most WebSocket libraries answer it on their own.
+
+A minimal Node.js script with the `ws` package:
+
+```js
+import WebSocket from 'ws';
+const base = 'http://192.168.1.20:7777';
+const headers = { 'content-type': 'application/json', 'x-pocket-dev': '1' };
+const login = await fetch(`${base}/api/login`, { method: 'POST', headers, body: JSON.stringify({ password: process.env.PD_PASSWORD, name: 'build-bot' }) });
+const cookie = login.headers.get('set-cookie').split(';')[0];
+const session = await (await fetch(`${base}/api/sessions`, { method: 'POST', headers: { ...headers, cookie }, body: JSON.stringify({ cwd: '/Users/me/app' }) })).json();
+const ws = new WebSocket(`${base.replace('http', 'ws')}/ws/${session.id}`, { headers: { cookie } });
+ws.on('open', () => ws.send(JSON.stringify({ t: 'in', d: 'npm test\r' })));
+ws.on('message', (raw) => { const m = JSON.parse(raw); if (m.t === 'out') process.stdout.write(m.d); });
+```
+
 
 ## Ports
 
@@ -214,7 +253,7 @@ Viewer can preview and download scoped files. Developer can change a separate pr
 | Rate limit | 10 wrong passwords per IP in 15 minutes locks that IP for 15 minutes. The Admin page warns at 5 failures in an hour. |
 | Cookie | `pd_token`, HttpOnly, SameSite=Strict, 1 year. `Secure` on the internet link; not on Wi-Fi, where the transport is http. Each cookie works only on the address it was issued for: a Wi-Fi cookie is no login on the internet address, and the other way round. |
 | CSRF | Every POST, PUT, PATCH, and DELETE needs `x-pocket-dev: 1`. JSON bodies need `content-type: application/json`. WebSocket upgrades check `Origin`. |
-| Approve, block, lockdown, security log | `requireApproval` makes password logins wait up to 10 minutes for approval on the Mac, with a 4-character code to compare. `approveFromDevices` (default off; only the Mac turns it on, a phone can turn it off) also lets a logged-in owner phone see who is waiting under Settings → Devices and approve or deny with the same code check, and pushes "Someone is waiting to log in" to the owner's open pages. A logged-in owner phone already has full shell access, so letting it approve logins adds no power it did not have; if that phone is lost, log it out from the Mac or run lockdown. With role-based sharing on, only Admin devices approve, and collaborator invitations can already be sent from a logged-in owner phone. Blocked devices are refused on every route, across restarts. Lockdown logs out every non-blocked device, stops forwards, voids QR keys, disconnects phone access, and optionally closes terminals or sets a new password. Only the Mac can reconnect phone access. Events go to `~/.pocket-dev/security.log` (JSONL, mode 0600, rotated at 1 MB to `security.log.1`). |
+| Approve, block, lockdown, security log | `requireApproval` makes password logins wait up to 10 minutes for approval on the Mac, with a 4-character code to compare. A login can send a device name (see [Terminal API for scripts](#terminal-api-for-scripts)); the approval list shows it beside the browser kind. `approveFromDevices` (default off; only the Mac turns it on, a phone can turn it off) also lets a logged-in owner phone see who is waiting under Settings → Devices and approve or deny with the same code check, and pushes "Someone is waiting to log in" to the owner's open pages. A logged-in owner phone already has full shell access, so letting it approve logins adds no power it did not have; if that phone is lost, log it out from the Mac or run lockdown. With role-based sharing on, only Admin devices approve, and collaborator invitations can already be sent from a logged-in owner phone. Blocked devices are refused on every route, across restarts. Lockdown logs out every non-blocked device, stops forwards, voids QR keys, disconnects phone access, and optionally closes terminals or sets a new password. Only the Mac can reconnect phone access. Events go to `~/.pocket-dev/security.log` (JSONL, mode 0600, rotated at 1 MB to `security.log.1`). |
 | Admin page | `http://localhost:7778` (`adminPort`, default phone port + 1), bound to 127.0.0.1 and ::1, with a Host allowlist, Origin and proxy-header refusal, and an `x-pocket-admin: 1` header on writes. It has no password, because only a process on the Mac can reach it. Sections: Connection, Internet access (Off, Quick link, My own domain, Wi-Fi access), Share & login (share QR, one-time login QR, copy links), Waiting, Devices (rename, log out, block, unblock), Security log (latest 200, filters), Password (no old password needed), Settings (device limit, approval, approve from a logged-in phone, addresses), Live (close terminals, stop forwards and active chats, read-only Power and Open apps status), Service (install, Start automatically, stop), Lockdown. |
 | Connect and Disconnect | Disconnect closes port 7777 and all forwards. Terminals keep running and devices stay logged in. A phone can disconnect, only the Mac can connect. With **Keep connection open** off, access closes about 30 s after the last Admin page closes (10 s heartbeat) and a restart starts disconnected. Saved as `access` in `config.json`. |
 | Start automatically | `launchctl enable` or `disable` for `dev.pocket.server`, from the Admin page, the phone, or `npm run autostart`. Does not stop the running server. |
