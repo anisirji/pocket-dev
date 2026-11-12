@@ -14,6 +14,8 @@ export const MIN_NODE = 22;
 // A running server keeps the PATH it started with, so a tool installed since then is invisible to its terminals and chats.
 export const RESTART_NOTE = 'Restart Pocket Dev so it sees tools installed after it started: pocket-dev service restart (or stop it and run pocket-dev start).';
 export const SETUP_LOG = path.join(STATE_DIR, 'setup.log');
+// Written when a full guided setup ends, so the first start does not guide this computer again.
+export const SETUP_DONE = path.join(STATE_DIR, 'setup-done');
 const STATUS_TIMEOUT_MS = 8000;
 
 const NODE_LINK = 'https://nodejs.org/en/download';
@@ -586,12 +588,12 @@ function checkTable(ctx, states, facts) {
   if (!chat.length) ctx.out('\nNote: neither Claude Code nor Codex is ready. Chats need at least one of them.');
 }
 
-// Returns the process exit code.
-export async function runSetup(args, ctx) {
+// Returns the process exit code. `fromStart`: the first `pocket-dev start` runs it, and prints the address and QR itself.
+export async function runSetup(args, ctx, { fromStart = false } = {}) {
   const opts = parseArgs(args);
   if (opts.error) { ctx.out(opts.error); return 2; }
   ctx.log ??= () => {};
-  const ids = opts.only ? [opts.only] : STEP_IDS;
+  const ids = opts.only ? [opts.only] : STEP_IDS.filter((id) => !(fromStart && id === 'finish'));
   const toolIds = ids.filter((id) => toolById(id));
   const facts = await gatherFacts(ctx);
   const check = opts.check || (!ctx.isTTY && !opts.dry);
@@ -635,6 +637,7 @@ export async function runSetup(args, ctx) {
     else if (id === 'finish') await finishStep(ctx, opts, started);
   }
   ctx.out('');
+  if (!opts.only && !opts.dry) ctx.setupDone.mark();
   if (installedSome) ctx.out(`If Pocket Dev was already running: ${RESTART_NOTE}`);
   ctx.out(opts.dry ? 'Dry run finished. Nothing was changed.' : nodeOk ? 'Setup finished. Run pocket-dev setup --check any time to see the status.' : 'Setup stopped short: Node.js is not ready. Fix it and run pocket-dev setup again.');
   return nodeOk ? 0 : 1;
@@ -686,6 +689,13 @@ export async function createRealContext(extra = {}) {
   ctx.ask = askPrompt;
   ctx.secret = secretPrompt;
   ctx.readConfig = readConfigFile;
+  ctx.setupDone = {
+    read: () => fs.existsSync(SETUP_DONE),
+    mark: () => {
+      fs.mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 });
+      fs.writeFileSync(SETUP_DONE, new Date().toISOString() + '\n');
+    },
+  };
   const store = async () => {
     const { openConfig } = await import('./config.js');
     const { resolveConfigPath } = await import('./paths.js');

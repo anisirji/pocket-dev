@@ -12,7 +12,9 @@ const HELP = `pocket-dev ${VERSION}: control this computer from your phone's bro
 
 Usage: pocket-dev <command>
 
-  start [--port N] [--admin-port N] [--no-open]   Run the server in this terminal
+  start [--port N] [--admin-port N] [--no-open] [--no-setup]
+                                                   Run the server in this terminal. The first start on a computer
+                                                   runs the guided setup; --no-setup (or POCKET_DEV_NO_SETUP=1) skips it
   config list                                      Show the settings and where they are saved
   config get <key>                                 Show one setting
   config set <key> <value>                         Change a setting
@@ -64,14 +66,21 @@ function flagValue(args, name) {
 
 async function start(args) {
   const { resolvePorts, runningInstance, firstRun } = await import('../startup.js');
-  const { createRealContext, detectAll, runSetup, printAlreadyRunning } = await import('../setup.js');
-  if (await runningInstance(STATE_DIR)) return printAlreadyRunning(await createRealContext({ noTerminals: true }));
+  const { createRealContext, runSetup, printAlreadyRunning, printPhoneLogin } = await import('../setup.js');
+  const ctx = await createRealContext();
+  if (await runningInstance(STATE_DIR)) return printAlreadyRunning(ctx);
   const port = flagValue(args, '--port');
   const adminPort = flagValue(args, '--admin-port');
   if (port) process.env.PORT = port;
   if (adminPort) process.env.POCKET_DEV_ADMIN_PORT = adminPort;
   if (args.includes('--no-open')) process.env.POCKET_DEV_NO_OPEN = '1';
-  await firstRun({ stateDir: STATE_DIR, ctx: await createRealContext({ noTerminals: true }), detect: detectAll, runSetup });
+  const guided = await firstRun({ ctx, runSetup, noSetup: args.includes('--no-setup') }) === 'ran';
+  // The guide may have started the background service. A second copy here would take other ports and split the devices.
+  if (guided && (await ctx.service.status().catch(() => ({}))).running) {
+    ctx.out('Pocket Dev now runs in the background.');
+    await printPhoneLogin(ctx, { tries: 10 });
+    return;
+  }
   const { platform } = await import('../platform.js');
   try {
     const chosen = await resolvePorts({ config: openConfig(resolveConfigPath()), ownerOf: (p) => platform.portOwner(p) });

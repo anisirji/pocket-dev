@@ -84,38 +84,34 @@ test('runningInstance answers only when the admin page is alive', async (t) => {
   await new Promise((r) => server.close(r));
 });
 
-function firstRunFixture(t, { isTTY = true, installed = false, answer = true } = {}) {
-  const stateDir = tmp(t);
-  const out = [];
-  let asked = 0, setups = 0;
-  const ctx = { isTTY, env: {}, out: (l = '') => out.push(l), ask: async () => { asked++; return answer; } };
-  const detect = async (_, ids) => ids.map((id) => ({ id, installed }));
-  const runSetup = async () => { setups++; };
-  const run = () => firstRun({ stateDir, ctx, detect, runSetup });
-  return { run, out, stateDir, counts: () => ({ asked, setups }) };
+function firstRunFixture({ isTTY = true, done = false, env = {} } = {}) {
+  const out = [], setups = [];
+  const ctx = { isTTY, env, out: (l = '') => out.push(l), setupDone: { read: () => done, mark: () => { done = true; } } };
+  const runSetup = async (args, c, opts) => { setups.push([args, opts]); if (!args.length) c.setupDone.mark(); return 0; };
+  return { run: (noSetup = false) => firstRun({ ctx, runSetup, noSetup }), out, setups };
 }
 
-test('first run: Y runs setup, and it asks only once', async (t) => {
-  const f = firstRunFixture(t);
+test('first interactive start runs the whole guide, once per computer', async () => {
+  const f = firstRunFixture();
   assert.equal(await f.run(), 'ran');
-  assert.deepEqual(f.counts(), { asked: 1, setups: 1 });
+  assert.deepEqual(f.setups, [[[], { fromStart: true }]]);
   assert.equal(await f.run(), 'skipped');
-  assert.equal(f.counts().asked, 1);
+  assert.equal(f.setups.length, 1);
 });
 
-test('first run: n starts anyway and points at pocket-dev setup', async (t) => {
-  const f = firstRunFixture(t, { answer: false });
-  assert.equal(await f.run(), 'declined');
-  assert.equal(f.counts().setups, 0);
+test('first start without a terminal prints the status table and the command, and goes on', async () => {
+  const f = firstRunFixture({ isTTY: false });
+  assert.equal(await f.run(), 'status');
+  assert.deepEqual(f.setups.map(([args]) => args), [['--check']]);
   assert.match(f.out.join('\n'), /pocket-dev setup/);
+  const ci = firstRunFixture({ env: { CI: 'true' } });
+  assert.equal(await ci.run(), 'status', 'CI is never asked anything');
 });
 
-test('first run never prompts without a terminal or when nothing is missing', async (t) => {
-  const quiet = firstRunFixture(t, { isTTY: false });
-  assert.equal(await quiet.run(), 'skipped');
-  assert.equal(quiet.counts().asked, 0);
-  assert.equal(fs.existsSync(path.join(quiet.stateDir, 'first-run-done')), false);
-  const full = firstRunFixture(t, { installed: true });
-  assert.equal(await full.run(), 'skipped');
-  assert.equal(full.counts().asked, 0);
+test('--no-setup or POCKET_DEV_NO_SETUP skips the guide for automation', async () => {
+  const flag = firstRunFixture();
+  assert.equal(await flag.run(true), 'skipped');
+  const env = firstRunFixture({ env: { POCKET_DEV_NO_SETUP: '1' } });
+  assert.equal(await env.run(), 'skipped');
+  assert.equal(flag.setups.length + env.setups.length, 0);
 });

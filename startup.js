@@ -4,7 +4,6 @@ import path from 'node:path';
 
 export const DEFAULT_PORT = 7777;
 const SCAN = 30;
-export const FIRST_RUN_MARKER = 'first-run-done';
 
 const canBind = (port, host) => new Promise((resolve) => {
   const probe = net.createServer();
@@ -79,19 +78,16 @@ export async function runningInstance(stateDir, fetchFn = fetch) {
   } catch { return null; }
 }
 
-// Asks once, on the first interactive start, when a chat tool or cloudflared is missing. `ctx` is a setup context.
-export async function firstRun({ stateDir, ctx, detect, runSetup, interactive = ctx.isTTY && !ctx.env.CI }) {
-  const marker = path.join(stateDir, FIRST_RUN_MARKER);
-  if (!interactive || fs.existsSync(marker)) return 'skipped';
-  const missing = (await detect(ctx, ['claude', 'codex', 'cloudflared'])).filter((d) => !d.installed);
-  if (!missing.length) return 'skipped';
-  fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(marker, new Date().toISOString() + '\n');
-  if (!(await ctx.ask('First time here. Set up now? (installs Claude Code, Codex, cloudflared; shows each command first) [Y/n] ', true))) {
-    ctx.out('Starting without setup. You can run it later with: pocket-dev setup');
-    return 'declined';
+// Plan C11: the first start on a computer that was never set up runs the guided setup when a person is at a terminal.
+// Without one (a script, CI, npx in a pipe) it prints the status table and the command, and the start goes on.
+export async function firstRun({ ctx, runSetup, noSetup = false }) {
+  if (noSetup || ctx.env.POCKET_DEV_NO_SETUP || ctx.setupDone.read()) return 'skipped';
+  if (!ctx.isTTY || ctx.env.CI) {
+    await runSetup(['--check'], ctx);
+    ctx.out('This computer has not been set up yet. In a terminal, run: pocket-dev setup');
+    ctx.out('');
+    return 'status';
   }
-  await runSetup([], ctx);
-  ctx.out('Logging in to Claude Code and Codex happens in your browser. Setup shows the command; finish the login there.');
+  await runSetup([], ctx, { fromStart: true });
   return 'ran';
 }

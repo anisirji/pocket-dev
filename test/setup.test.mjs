@@ -46,6 +46,7 @@ function fakeCtx({ platform = 'darwin', installed = {}, pms = [], tty = true, an
     saveNetwork: async (n) => writes.push(['network', n]),
     saveAwake: async (m) => { writes.push(['awake', m]); config.awake = m; },
     hasBattery: async () => battery,
+    setupDone: { read: () => false, mark: () => writes.push(['setup-done']) },
     keepAwake: { available: true },
     localApi: async () => null,
     sleep: async () => {},
@@ -304,6 +305,30 @@ test('always on: a laptop defaults to plugged, and n lets you pick items one by 
   assert.match(f.asked[2], /1\. Keep this computer awake: plugged.*\[y\/N\]/);
   assert.deepEqual(f.writes.filter((w) => w[0] !== 'log'), [['service']]);
   assert.doesNotMatch(text(f), /Restore on AC power loss/, 'power-cut advice is for a computer meant to stay on');
+});
+
+test('a full interactive run marks the computer as set up; a check, a dry run or one step does not', async () => {
+  const marked = (f) => f.writes.some((w) => w[0] === 'setup-done');
+  const full = fakeCtx({ answers: [] });
+  await runSetup([], full.ctx);
+  assert.equal(marked(full), true);
+  for (const args of [['--check'], ['--dry-run'], ['--only', 'git']]) {
+    const f = fakeCtx();
+    await runSetup(args, f.ctx);
+    assert.equal(marked(f), false, args.join(' '));
+  }
+  const quiet = fakeCtx({ tty: false });
+  await runSetup([], quiet.ctx);
+  assert.equal(marked(quiet), false, 'no terminal means only a check');
+});
+
+test('setup run by the first start leaves the address and QR to start itself', async () => {
+  const f = fakeCtx({ answers: [] });
+  let asked = 0;
+  f.ctx.localApi = async () => { asked++; return null; };
+  await runSetup([], f.ctx, { fromStart: true });
+  assert.equal(asked, 0);
+  assert.doesNotMatch(text(f), /Open it on your phone/);
 });
 
 test('--yes applies the recommended set and never an explicit opt-in', async () => {
