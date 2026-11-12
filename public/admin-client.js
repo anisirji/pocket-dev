@@ -310,12 +310,12 @@ $('wifi').addEventListener('change', (e) => saveNetwork({ wifi: e.target.checked
 // ---- Overview
 
 function renderOverview() {
-  const { overview, maxDevices, requireApproval } = state;
+  const { overview, maxDevices } = state;
   $('cLogged').textContent = overview.loggedIn;
   $('cLoggedSub').textContent = `of ${maxDevices} allowed`;
   $('cOnline').textContent = overview.online;
   $('cPending').textContent = overview.pending;
-  $('cPendingSub').textContent = requireApproval ? 'approval is on' : 'approval is off';
+  $('cPendingSub').textContent = approvalNeeded() ? 'approval is on' : 'approval is off';
   $('cPendingCard').classList.toggle('warn', overview.pending > 0);
   const failed = overview.failedLogins;
   $('cFailed').textContent = failed.count;
@@ -327,7 +327,7 @@ function renderOverview() {
     const from = failed.ips.slice(0, 3).map((x) => `${x.ip} (${x.count})`).join(', ') + (failed.ips.length > 3 ? ', …' : '');
     banner.replaceChildren(...[
       h('p', {}, h('b', {}, 'Someone may be guessing your password: '), `${failed.count} failed attempts in the last hour from ${failed.ips.length === 1 ? 'IP' : 'IPs'} ${from}.`),
-      requireApproval ? null : h('button', { class: 'btn btn-sm', type: 'button', onclick: () => setApproval(true) }, 'Turn on approval'),
+      approvalNeeded() ? null : h('button', { class: 'btn btn-sm', type: 'button', onclick: () => setApproval(true) }, 'Turn on approval'),
       h('a', { class: 'btn btn-sm link-btn', href: '#password' }, 'Change password'),
     ].filter(Boolean));
   }
@@ -419,7 +419,7 @@ function renderDevices() {
 
 function renderPending() {
   const list = state.devices.filter((d) => d.status === 'pending');
-  $('pending').hidden = list.length === 0 && !state.requireApproval;
+  $('pending').hidden = list.length === 0 && !approvalNeeded();
   $('pendingTtl').textContent = state.pendingTtlMin;
   $('pendingRows').replaceChildren(...(list.length ? list.map((d) => h('div', { class: 'row' },
     h('div', { class: 'cell' }, h('span', { class: 'dev-name' }, d.name), h('span', { class: 'tag tag-code' }, d.code), h('small', {}, d.kind && d.kind !== d.name ? `${d.kind} · code shown on the phone` : 'code shown on the phone')),
@@ -576,8 +576,15 @@ function renderSettings() {
   $('limitNote').textContent = limit < overview.loggedIn
     ? `${plural(overview.loggedIn, 'device is', 'devices are')} logged in, so new password logins stay refused until you log some out. Lowering the limit logs nobody out.`
     : 'Password logins stop at this many devices. QR logins always work and replace the device used least recently.';
-  if (state.roleAccessEnabled) $('limitNote').textContent = `The device limit includes ${plural(overview.loggedIn, 'Admin device')} and ${plural(state.collaboratorSessions || 0, 'active collaborator session')}. Invitations never log out an Admin. New password logins always require Mac approval.`;
+  if (state.roleAccessEnabled) $('limitNote').textContent = `The device limit includes ${plural(overview.loggedIn, 'Admin device')} and ${plural(state.collaboratorSessions || 0, 'active collaborator session')}. Invitations never log out an Admin.`;
   $('approval').checked = requireApproval;
+  const where = state.approveFromDevices ? 'Approve it here or on a logged-in phone.' : 'Approve it here, on this computer.';
+  $('approvalNote').textContent = [
+    state.roleAccessEnabled ? `Collaborator sharing is on, so every password login from a new browser waits, even with this switch off. ${where}`
+      : requireApproval ? `A password login from a new browser waits for your approval. ${where}`
+        : 'While this is off, the password alone lets a new browser in.',
+    'QR logins never wait, because scanning a code from this computer proves you are here. A recovery code also skips approval.',
+  ].join(' ');
   $('approveFrom').checked = state.approveFromDevices === true;
   const copy = (text) => h('button', { class: 'btn btn-sm', type: 'button', onclick: () => copyLink(text) }, 'Copy');
   $('urls').replaceChildren(
@@ -598,6 +605,9 @@ $('limitSave').addEventListener('click', () => act(async () => {
   await api('PUT', '/api/settings', { maxDevices: limitDraft });
   limitDraft = null;
 }, 'Device limit saved'));
+
+// Collaborator sharing makes every new password login wait, whatever the switch says (auth.js addDevice status).
+const approvalNeeded = () => state.requireApproval || state.roleAccessEnabled;
 
 async function setApproval(on) {
   await act(() => api('PUT', '/api/settings', { requireApproval: on }), on ? 'New password logins now wait for approval' : 'Approval turned off');

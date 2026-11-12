@@ -51,7 +51,7 @@ Then: **4** `npm install -g @anisirji/pocket-dev`, **5** `pocket-dev start` (cop
    The Admin page also opens in your Mac's browser (add `--no-open` to stop that).
 4. **Find the address** if you missed it: **`ipconfig getifaddr en0`** prints the Wi-Fi address (use `en1` if `en0` prints nothing). The URL is `http://<that address>:7777`. If macOS asks whether `node` may accept incoming connections, choose **Allow**.
 5. **Open the URL on the phone** (same Wi-Fi) and log in with the password, or scan the QR code with the phone camera (it logs you in once, for 10 minutes). Forgot the password? Run **`pocket-dev admin`**, open **Password**, and set a new one. No old password is needed.
-6. **Approve the device if asked.** If **Approve new devices** is on, the phone waits and the Mac Admin page (**Waiting**) shows a 4-character code to compare. It is off by default.
+6. **Approve the device if asked.** If **Approve new devices** is on, the phone waits and the Mac Admin page (**Waiting**) shows a 4-character code to compare. It is off by default. While collaborator sharing is on, every new password login waits, even with the switch off. A QR login never waits.
 7. **Keep it running** in the background and at login: **`pocket-dev service install`**. Check with **`pocket-dev service status`**.
 8. **Optional:** add a second computer, see [Rooms](#rooms-several-computers-one-phone).
 9. **Update:** `npm install -g @anisirji/pocket-dev@latest` then `pocket-dev service restart`. **Uninstall:** `pocket-dev service uninstall` then `npm uninstall -g @anisirji/pocket-dev`. Settings stay in `~/.pocket-dev` until you delete that folder.
@@ -63,7 +63,7 @@ Then: **4** `npm install -g @anisirji/pocket-dev`, **5** `pocket-dev start` (cop
 3. **Start it:** **`pocket-dev start`**. You should see `Pocket Dev running at http://192.168.…:7777` and a `Password:` line (shown once, copy it).
 4. **Firewall:** Windows asks whether Node may accept connections. Choose **Private networks** and Allow. Find the PC's address with **`ipconfig`** (the IPv4 address of your Wi-Fi). On the PC itself you can use `http://localhost:7777`.
 5. **Open the URL on the phone** (same Wi-Fi) and log in with the password, or scan the QR code the start printed. Forgot the password? Run **`pocket-dev admin`** and set a new one under **Password**.
-6. **Approve the device if asked** (only when **Approve new devices** is on): approve it on the PC's Admin page, **Waiting**.
+6. **Approve the device if asked** (when **Approve new devices** is on, or collaborator sharing is on): approve it on the PC's Admin page, **Waiting**.
 7. **Keep it running without a window:** **`Start-Process pocket-dev.cmd -ArgumentList 'start','--no-open' -WindowStyle Hidden`**. The Admin page (`pocket-dev admin`, **Service**) can also install a start-at-login Task Scheduler task; that part is written but not tested on a real PC. `pocket-dev service` is macOS only. After installing a tool such as Git, restart Pocket Dev so its terminals see the new PATH.
 8. **Optional:** join it to a room, see [Rooms](#rooms-several-computers-one-phone).
 9. **Update:** `npm install -g @anisirji/pocket-dev@latest`, then stop and start it again. **Uninstall:** `npm uninstall -g @anisirji/pocket-dev`. Settings and data live in `%USERPROFILE%\.pocket-dev` until you delete that folder.
