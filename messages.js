@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -227,7 +228,10 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
 
   const canSee = (v) => (m) => m.at >= v.since && !m.hiddenFor?.includes(v.key)
     && (m.to === null || m.to.key === v.key || m.from.key === v.key);
-  const personView = (v) => (p) => ({ id: pub(p.key), name: p.name, kind: p.kind, ...(isOwner(v) && p.code && { code: p.code }) });
+  // The Mac's participant is stored as "Mac" and shown as this computer's name; a copy from a room device names that device.
+  const thisComputer = () => (room?.peers?.()?.members.find((m) => m.deviceId === room.deviceId())?.name) || os.hostname().replace(/\.local$/i, '');
+  const nameOf = (p, origin) => (p.kind === 'mac' ? origin?.deviceName ?? thisComputer() : origin ? `${p.name} (${origin.deviceName})` : p.name);
+  const personView = (v) => (p) => ({ id: pub(p.key), name: nameOf(p), kind: p.kind, ...(isOwner(v) && p.code && { code: p.code }) });
   function messageView(m, v) {
     const mine = m.from.key === v.key;
     const origin = m.origin && { deviceId: m.origin.device, deviceName: deviceName(m.origin.device) };
@@ -235,8 +239,8 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
       seq: m.seq, at: m.at, text: m.text, mine, canDelete: !m.origin && (mine || isOwner(v)),
       ...(room && { gid: gidOf(m) }), ...(origin && { origin }),
       chat: m.to === null ? 'everyone' : pub(mine ? m.to.key : m.from.key),
-      from: { id: pub(m.from.key), name: origin ? `${m.from.name} (${origin.deviceName})` : m.from.name, kind: m.from.kind },
-      to: m.to && { id: pub(m.to.key), name: m.to.name, kind: m.to.kind },
+      from: { id: pub(m.from.key), name: nameOf(m.from, origin), kind: m.from.kind },
+      to: m.to && { id: pub(m.to.key), name: nameOf(m.to), kind: m.to.kind },
       files: m.files.map(({ id, name, size, kind }) => ({ id, name, size, kind })),
     };
   }
@@ -354,7 +358,7 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
     const others = (await people()).filter((p) => p.key !== v.key);
     const exact = others.find((p) => pub(p.key) === query) ?? (loose && others.find((p) => p.code === query));
     if (exact) return exact;
-    const named = loose ? others.filter((p) => p.name.toLowerCase() === String(query).toLowerCase()) : [];
+    const named = loose ? others.filter((p) => nameOf(p).toLowerCase() === String(query).toLowerCase()) : [];
     if (named.length === 1) return named[0];
     if (named.length > 1) throw httpError(409, `${named.length} people are named "${query}". Use a device code: ${named.map((p) => p.code ?? '(none)').join(', ')}.`);
     throw httpError(404, `Nobody in Messages matches "${query}".`);
@@ -530,7 +534,7 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
     const chats = new Map();
     for (const m of store.list()) {
       const id = chatOf(m);
-      const c = chats.get(id) ?? { id, title: m.to === null ? 'Everyone' : `${m.from.name} and ${m.to.name}`, count: 0, bytes: 0 };
+      const c = chats.get(id) ?? { id, title: m.to === null ? 'Everyone' : `${nameOf(m.from)} and ${nameOf(m.to)}`, count: 0, bytes: 0 };
       c.count++;
       c.bytes += m.files.reduce((n, f) => n + f.size, 0);
       chats.set(id, c);

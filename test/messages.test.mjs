@@ -262,7 +262,8 @@ test('Messages between the Mac, owner devices and guests', { timeout: 120000 }, 
     assert.equal(byName.stdout.trim(), 'Sent to Pixel.');
     await until(() => texts(sA).includes('hello Pixel'));
     const got = sA.inbox.findLast((m) => m.t === 'message').message;
-    assert.deepEqual([got.from.kind, got.chat], ['mac', await idOf(A.cookie, 'Mac')]);
+    const computer = os.hostname().replace(/\.local$/i, '');
+    assert.deepEqual([got.from.kind, got.from.name, got.chat], ['mac', computer, await idOf(A.cookie, computer)], 'the CLI sender shows as this computer, not "Admin page" or "Mac"');
     assert.equal(cli(['to the laptop', '--to', C.id.slice(-4)]).stdout.trim(), 'Sent to Laptop.');
     assert.equal(cli([], 'piped text\n').status, 0);
     await until(() => texts(sA).includes('piped text'));
