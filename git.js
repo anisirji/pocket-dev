@@ -76,11 +76,43 @@ function scanRepos(roots, { fresh = false } = {}) {
   return repos;
 }
 
-function resolveRepo(roots, value) {
+const OPENED_MAX = 20;
+
+// Repositories opened by hand: a folder picked in the Git tab, or the folder of a chat or terminal. Stored as the real
+// top level, so a later request through a symlink, a subfolder or ".." does not match.
+function openedRepos(config) {
+  const list = config.read().gitRepos;
+  return Array.isArray(list) ? list.filter((p) => typeof p === 'string') : [];
+}
+
+async function repoTopLevel(folder) {
+  if (typeof folder !== 'string' || !path.isAbsolute(folder) || folder.includes('\0')) throw new HttpError(400, 'path must be an absolute folder path');
+  let real;
+  try { real = fs.realpathSync(folder); } catch { throw new HttpError(404, `No such folder: ${folder}`); }
+  if (!fs.statSync(real).isDirectory()) throw new HttpError(400, `Not a folder: ${folder}`);
+  const top = await git(real, ['rev-parse', '--show-toplevel']).catch(() => { throw new HttpError(400, `Not in a git repository: ${folder}`); });
+  return fs.realpathSync(top.trim());
+}
+
+function listRepos(roots, config) {
+  const scanned = scanRepos(roots, { fresh: true });
+  const opened = openedRepos(config).filter((p) => !scanned.some((r) => r.path === p) && fs.existsSync(path.join(p, '.git')));
+  return [...scanned, ...opened.map((p) => ({ name: path.basename(p), path: p }))]
+    .sort((a, b) => a.name.localeCompare(b.name) || a.path.localeCompare(b.path));
+}
+
+function resolveRepo(roots, config, value) {
   if (typeof value !== 'string' || !value) throw new HttpError(400, 'repo is required');
+  if (openedRepos(config).includes(value)) return value;
   const repo = scanRepos(roots).find((r) => r.path === value) ?? scanRepos(roots, { fresh: true }).find((r) => r.path === value);
   if (!repo) throw new HttpError(403, `Not a known repository: ${value}`);
   return repo.path;
+}
+
+async function openRepo(config, folder) {
+  const top = await repoTopLevel(folder);
+  config.update({ gitRepos: [top, ...openedRepos(config).filter((p) => p !== top)].slice(0, OPENED_MAX) });
+  return { name: path.basename(top), path: top };
 }
 
 const HASH = /^[0-9a-f]{4,40}$/i;
@@ -539,10 +571,11 @@ export function createGitApi({ config }) {
     const key = `${method} ${url.pathname.replace(/^\/api\/git\//, '')}`;
     const roots = configuredRoots(config.read().repoRoots);
     try {
-      if (key === 'GET repos') return { status: 200, body: scanRepos(roots, { fresh: true }) };
+      if (key === 'GET repos') return { status: 200, body: listRepos(roots, config) };
+      if (key === 'POST open') return { status: 200, body: await openRepo(config, (await readBody())?.path) };
       const route = ROUTES[key];
       if (!route) return { status: 404, body: { error: 'Not found' } };
-      const repo = resolveRepo(roots, url.searchParams.get('repo'));
+      const repo = resolveRepo(roots, config, url.searchParams.get('repo'));
       const body = method === 'POST' ? await readBody() : {};
       return { status: 200, body: await route({ repo, q: url.searchParams, body }) };
     } catch (err) {
