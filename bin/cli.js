@@ -43,6 +43,7 @@ Settings you can change with config set:
 ${Object.entries(KEYS).map(([key, { help }]) => `  ${key.padEnd(16)} ${help}`).join('\n')}
 
 The password is changed on the admin page (pocket-dev admin).`;
+const STOPPED = 'Stopped. Nothing is half done; run pocket-dev setup again to continue.';
 const INTERNET_USAGE = 'usage: pocket-dev internet status|off|quick | domain --hostname <host> (--token-stdin | --token-file <path>)';
 
 function fail(message, code = 1) {
@@ -75,7 +76,11 @@ async function start(args) {
   if (port) process.env.PORT = port;
   if (adminPort) process.env.POCKET_DEV_ADMIN_PORT = adminPort;
   if (args.includes('--no-open')) process.env.POCKET_DEV_NO_OPEN = '1';
-  const guided = await firstRun({ ctx, runSetup, noSetup: args.includes('--no-setup') }) === 'ran';
+  let guided;
+  try { guided = await firstRun({ ctx, runSetup, noSetup: args.includes('--no-setup') }) === 'ran'; } catch (err) {
+    if (err.code === 'SIGINT') fail(STOPPED, 130);
+    throw err;
+  }
   // The guide may have started the background service. A second copy here would take other ports and split the devices.
   if (guided && (await ctx.service.status().catch(() => ({}))).running) {
     ctx.out('Pocket Dev now runs in the background.');
@@ -248,9 +253,9 @@ async function service([action = 'status', ...rest]) {
 // Ctrl+C stops between steps. Every change setup makes is a finished write, so nothing is left half done.
 async function setup(args) {
   const { createRealContext, runSetup } = await import('../setup.js');
-  process.once('SIGINT', () => { console.log('\nStopped. Nothing is half done; run pocket-dev setup again to continue.'); process.exit(130); });
+  process.once('SIGINT', () => { console.log(`\n${STOPPED}`); process.exit(130); });
   try { return await runSetup(args, await createRealContext()); } catch (err) {
-    if (err.code === 'SIGINT') { console.log('Stopped. Nothing is half done; run pocket-dev setup again to continue.'); return 130; }
+    if (err.code === 'SIGINT') { console.log(STOPPED); return 130; }
     throw err;
   }
 }

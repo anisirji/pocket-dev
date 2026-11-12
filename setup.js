@@ -514,7 +514,7 @@ async function alwaysOnStep(ctx, opts) {
 // A server that setup or the service just started needs a few seconds before it listens, so the key is asked for again.
 const READY_TRIES = 10;
 
-// Prints the addresses and a one-time QR code from the running server. Resolves false when no server answered.
+// Resolves false when no server answered.
 export async function printPhoneLogin(ctx, { tries = 1 } = {}) {
   let res = null;
   for (let i = 0; i < tries && !res; i++) {
@@ -538,7 +538,6 @@ export async function printPhoneLogin(ctx, { tries = 1 } = {}) {
   return true;
 }
 
-// `pocket-dev start` when a copy already runs (often the background service setup installed).
 export async function printAlreadyRunning(ctx) {
   ctx.out('Pocket Dev is already running in the background, so this did not start a second copy.');
   await printPhoneLogin(ctx, { tries: 3 });
