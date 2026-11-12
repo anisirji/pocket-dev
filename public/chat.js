@@ -321,6 +321,7 @@
             <div class="chat-title"></div>
             <div class="chat-sub"></div>
           </div>
+          <button type="button" class="chat-icon chat-git" aria-label="Git graph of this chat's folder" title="Git graph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7"/><path d="M18 10.5c0 4-6 3.5-11 6"/></svg></button>
           <button type="button" class="chat-icon chat-menu" aria-label="Chat settings">⋯</button>
         </div>
         <div class="chat-chips" role="toolbar" aria-label="Engine settings"></div>
@@ -551,6 +552,8 @@
   }, POLL_MS);
 
   ui.close.onclick = closeAll;
+  q('.chat-git').hidden = !window.pocketDev?.openGit;
+  q('.chat-git').onclick = () => convo.chat && window.pocketDev.openGit(convo.chat.cwd);
   ui.newBtn.onclick = () => push({ layer: 'new' });
   for (const wrap of [ui.newWrap, ui.settingsWrap, ui.pickWrap]) wrap.querySelector('.chat-backdrop').onclick = back;
   ui.permsBack.onclick = back;
