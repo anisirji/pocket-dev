@@ -734,7 +734,6 @@ async function handleApi(req, res, url) {
         return sendJson(res, 409, { error: err.message });
       }
     }
-    // From outside the home network the Wi-Fi link cannot work, so the phone asks for a login link to the port's own Quick link.
     case 'POST forwards/:key': {
       if (url.pathname !== `/api/forwards/${key}/remote`) return sendJson(res, 404, { error: 'Not found' });
       if (req.roomPeer) return sendJson(res, 403, { error: 'Open the port on that device itself.' });

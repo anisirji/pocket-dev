@@ -607,7 +607,7 @@ $('limitSave').addEventListener('click', () => act(async () => {
   limitDraft = null;
 }, 'Device limit saved'));
 
-// Collaborator sharing makes every new password login wait, whatever the switch says (auth.js addDevice status).
+// Collaborator sharing makes every new password login wait, whatever the switch says (POST /api/login in auth.js).
 const approvalNeeded = () => state.requireApproval || state.roleAccessEnabled;
 
 async function setApproval(on) {

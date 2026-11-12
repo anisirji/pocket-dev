@@ -9,7 +9,7 @@ const COOKIE = 'pd_port';
 const KEY_PARAM = 'pd-port-key';
 const hash = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-// What the tunnel adds and the login cookie for this gate never reach the dev server.
+// The tunnel's own headers never reach the dev server.
 const DROPPED = /^(x-forwarded-.*|cf-.*|forwarded|x-real-ip|cdn-loop)$/;
 
 const quickTunnel = (port) => createTunnel({ port, isConnected: () => true, network: () => ({ internet: { kind: 'quick' } }), token: () => null });
