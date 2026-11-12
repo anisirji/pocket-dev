@@ -31,7 +31,7 @@ function render(ev) {
   const ctx = {
     el, KINDS: { command: 'Run a command' }, FALLBACK_OPTIONS: [],
     button: (cls, text, onclick) => Object.assign(el('button', cls, text), { onclick }),
-    md: (text) => el('div', 'md', text), diffBlock: () => el('div', 'chat-diff'), keepFocus: () => {}, answer: () => {}, closeKeyboard: () => {},
+    md: (text) => el('div', 'md', text), diffBlock: () => el('div', 'chat-diff'), keepFocus: (b) => { b.tabIndex = -1; }, answer: () => {}, closeKeyboard: () => {},
   };
   vm.createContext(ctx);
   vm.runInContext(`${longCheck}\n${cardView}\nthis.permissionCard = permissionCard;`, ctx);
@@ -56,8 +56,9 @@ test('a long command collapses behind an expand control and keeps the whole comm
   assert.equal(more.textContent, 'Show less');
   more.onclick();
   assert.equal(scroll.classList.contains('chat-card-open'), false);
-  const decisions = actions.all((n) => n.dataset.decision).map((b) => b.dataset.decision).sort();
-  assert.deepEqual(decisions, ['allow', 'allow-chat', 'deny']);
+  const decisions = actions.all((n) => n.dataset.decision);
+  assert.deepEqual(decisions.map((b) => b.dataset.decision).sort(), ['allow', 'allow-chat', 'deny']);
+  assert.equal(decisions.some((b) => b.tabIndex === -1), false, 'every answer is reachable with the keyboard');
 });
 
 test('a short command has no expand control', () => {

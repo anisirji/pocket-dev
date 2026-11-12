@@ -1684,7 +1684,11 @@
     const opt = (o, cls) => {
       const b = button(cls, o.label, decide(o));
       b.dataset.decision = o.id;
-      if (o.id === 'deny') keepFocus(b);
+      if (o.id === 'deny') {
+        keepFocus(b);
+        // A tap still leaves the phone keyboard open; Tab must still reach Deny.
+        b.tabIndex = 0;
+      }
       return b;
     };
     // Remembering options sit together under the rule they save; the one-shot answers share the bottom row.
