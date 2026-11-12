@@ -639,7 +639,11 @@ function run([pid]) {
   const linuxCapture = () => LINUX_CAPTURE.find(([name]) => onPath(name));
   const linuxResizer = () => ['magick', 'convert'].find(onPath);
 
-  const WIN_CAPTURE = `Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+  // Without SetProcessDPIAware, PowerShell sees a scaled display (125%, 150%) at its smaller logical size, and the
+  // picture is only the top-left part of the screen.
+  const WIN_CAPTURE = `Add-Type -Namespace PD -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'
+[void][PD.Dpi]::SetProcessDPIAware()
+Add-Type -AssemblyName System.Windows.Forms,System.Drawing
 $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
 [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)

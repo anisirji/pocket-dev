@@ -205,7 +205,7 @@ An amber or red banner appears under the strip, and the phone vibrates once, whe
 
 ## Screen view
 
-Settings → **Mac screen** shows a picture of the Mac's main display: **Refresh** takes a new one, **Auto** refreshes every 3 s, **Zoom** enlarges it to scroll around. It is read-only (no clicks or typing reach the Mac) and needs a logged-in phone. Each picture is a JPEG at most 1,600 px on its longest side, taken with `screencapture`, shrunk with `sips`, sent, and deleted; nothing is kept on disk. Turn it off with `pocket-dev config set screenView false`.
+Settings → **Mac screen** shows a picture of the Mac's main display: **Refresh** takes a new one, **Auto** refreshes every 3 s, **Zoom** enlarges it to scroll around. It is read-only (no clicks or typing reach the Mac) and needs a logged-in phone. Each picture is a JPEG at most 1,600 px on its longest side, sent and then deleted; nothing is kept on disk. On a Mac it is taken with `screencapture` and shrunk with `sips`. On Windows, PowerShell takes it with .NET (System.Drawing, at the display's real resolution) and shrinks it the same way; Windows allows this only from the signed-in, unlocked desktop. On Linux it uses grim, scrot, maim, gnome-screenshot or ImageMagick, and ImageMagick to shrink. Turn it off with `pocket-dev config set screenView false`.
 
 It needs **Screen Recording** for the program that runs Pocket Dev. Without it the picture shows only the wallpaper. The Admin page's Permissions panel shows whether it is allowed and opens the right System Settings page. The check looks for titled windows from other apps, because macOS hides those titles until Screen Recording is allowed; with no other window open it reports Unknown.
 

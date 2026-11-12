@@ -101,6 +101,7 @@ Settings stay in `%USERPROFILE%\.pocket-dev` until you delete that folder.
 | The phone cannot open the address | Same Wi-Fi (not mobile data or a guest network)? Firewall rule in step 4? Wi-Fi marked Private? Use the numeric address, not `localhost`. Run `pocket-dev doctor`. |
 | Port 7777 is in use | An older copy or another program has it. `pocket-dev start --port 7780`, or `pocket-dev config set port 7780`. |
 | Forgot the password | `pocket-dev admin`, then **Password**. No old password needed. |
+| Device screen says "Could not capture the screen" | Unlock the PC and sign in. Pocket Dev must run as you, from `pocket-dev start` or Start at login, not as a system service. |
 | Install fails with `EACCES` | Do not use an administrator window for npm. Reinstall Node for the current user, or fix npm's prefix. |
 
 ## Not on Windows
