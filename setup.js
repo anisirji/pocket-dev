@@ -245,6 +245,7 @@ export function createContext(overrides = {}) {
     childEnv: platformName === 'win32' ? env : engineEnv(),
     run: realRun,
     out: (line = '') => console.log(line),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     isTTY: !!process.stdin.isTTY && !!process.stdout.isTTY,
     color: !env.NO_COLOR && !!process.stdout.isTTY,
   };
@@ -431,24 +432,45 @@ async function autostartStep(ctx, opts) {
   }
 }
 
-async function finishStep(ctx, opts) {
-  ctx.out('Open it on your phone');
-  if (opts.dry) { ctx.out('  Would print the addresses and a one-time QR code, valid for a few minutes.'); return; }
-  const res = await ctx.localApi('POST', '/api/qr-key');
+// A server that setup or the service just started needs a few seconds before it listens, so the key is asked for again.
+const READY_TRIES = 10;
+
+// Prints the addresses and a one-time QR code from the running server. Resolves false when no server answered.
+export async function printPhoneLogin(ctx, { tries = 1 } = {}) {
+  let res = null;
+  for (let i = 0; i < tries && !res; i++) {
+    if (i) await ctx.sleep(1000);
+    res = await ctx.localApi('POST', '/api/qr-key');
+  }
   if (!res?.ok) {
-    ctx.out(res ? `  Pocket Dev refused the request (${res.status}).` : '  Pocket Dev is not running, so there is no address yet.');
-    ctx.out('  Start it with: pocket-dev start   (or run this setup again and set up start at login)');
-    ctx.out('  Then: pocket-dev qr   for the QR code.');
-    return;
+    ctx.out(res ? `  Pocket Dev refused the request (${res.status}).` : '  Pocket Dev is not running yet, so there is no address.');
+    ctx.out('  Start it with: pocket-dev start   It prints the address and a QR code.');
+    return false;
   }
   const url = new URL(res.data.url);
   ctx.out(`  On the same Wi-Fi: ${url.origin}`);
   const remote = await ctx.remoteUrl().catch(() => null);
-  if (remote) ctx.out(`  From anywhere: ${remote}`);
+  if (remote) ctx.out(`  From anywhere: ${remote}   (a QR code for this address: pocket-dev qr --link ${remote})`);
+  if (!ctx.isTTY) { ctx.out('  For a login QR code, run in a terminal: pocket-dev qr'); return true; }
   ctx.out('');
   ctx.out(await ctx.qr(res.data.url));
   ctx.out(`  Scan this with your phone's camera to log in without the password. It works once and expires in ${res.data.expiresInMin} minutes (new code: pocket-dev qr).`);
   ctx.out('  Or open the address in your phone\'s browser and type the password. In the browser menu choose Add to Home Screen to keep it like an app.');
+  return true;
+}
+
+// `pocket-dev start` when a copy already runs (often the background service setup installed).
+export async function printAlreadyRunning(ctx) {
+  ctx.out('Pocket Dev is already running in the background, so this did not start a second copy.');
+  await printPhoneLogin(ctx, { tries: 3 });
+  ctx.out('  To restart it: pocket-dev service restart');
+}
+
+// `started` is false when nothing was started in this run, so there is no server to wait for.
+async function finishStep(ctx, opts, started) {
+  ctx.out('Open it on your phone');
+  if (opts.dry) { ctx.out('  Would print the addresses and a one-time QR code, valid for a few minutes.'); return; }
+  if (await printPhoneLogin(ctx, { tries: started === false ? 1 : READY_TRIES })) ctx.out('  Pocket Dev runs in the background now. You do not need to run pocket-dev start.');
 }
 
 // ---- The flow -----------------------------------------------------------------------------------------------------
@@ -523,6 +545,7 @@ export async function runSetup(args, ctx) {
 
   let cloudflaredReady = null;
   let nodeOk = true;
+  let started;
   for (const [index, id] of ids.entries()) {
     if (index > 0) ctx.out('');
     const tool = toolById(id);
@@ -535,8 +558,8 @@ export async function runSetup(args, ctx) {
     else if (id === 'network') {
       cloudflaredReady ??= !!ctx.find(toolById('cloudflared'));
       await networkStep(ctx, opts, cloudflaredReady);
-    } else if (id === 'autostart') await autostartStep(ctx, opts);
-    else if (id === 'finish') await finishStep(ctx, opts);
+    } else if (id === 'autostart') started = await autostartStep(ctx, opts);
+    else if (id === 'finish') await finishStep(ctx, opts, started);
   }
   ctx.out('');
   ctx.out(opts.dry ? 'Dry run finished. Nothing was changed.' : nodeOk ? 'Setup finished. Run pocket-dev setup --check any time to see the status.' : 'Setup stopped short: Node.js is not ready. Fix it and run pocket-dev setup again.');

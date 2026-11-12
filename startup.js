@@ -79,9 +79,6 @@ export async function runningInstance(stateDir, fetchFn = fetch) {
   } catch { return null; }
 }
 
-export const alreadyRunningMessage = (url) =>
-  `Pocket Dev already runs at ${url}. This second copy did not start, because it must not take over the other copy's terminals. Stop the other one first, or use the one that runs.`;
-
 // Asks once, on the first interactive start, when a chat tool or cloudflared is missing. `ctx` is a setup context.
 export async function firstRun({ stateDir, ctx, detect, runSetup, interactive = ctx.isTTY && !ctx.env.CI }) {
   const marker = path.join(stateDir, FIRST_RUN_MARKER);

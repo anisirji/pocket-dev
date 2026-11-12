@@ -25,7 +25,7 @@ Usage: pocket-dev <command>
                                                    Guided setup: install and log in Git, Claude Code, Codex, GitHub CLI,
                                                    cloudflared, then password, phone access and start at login
   doctor [--fix] [--yes]                           Check this installation (Node, PATH, terminals, tools, port); --fix repairs terminals
-  qr                                               Print a one-time login QR code
+  qr [--link <address>]                            Print a one-time login QR code (for an internet address with --link)
   admin                                            Open the admin page (this computer only)
   connect | disconnect                             Open or close phone access
   message [text] [--to NAME] [--file PATH]         Send to Messages as this computer (text or piped stdin)
@@ -63,15 +63,14 @@ function flagValue(args, name) {
 }
 
 async function start(args) {
-  const { resolvePorts, runningInstance, alreadyRunningMessage, firstRun } = await import('../startup.js');
-  const running = await runningInstance(STATE_DIR);
-  if (running) fail(alreadyRunningMessage(running));
+  const { resolvePorts, runningInstance, firstRun } = await import('../startup.js');
+  const { createRealContext, detectAll, runSetup, printAlreadyRunning } = await import('../setup.js');
+  if (await runningInstance(STATE_DIR)) return printAlreadyRunning(await createRealContext({ noTerminals: true }));
   const port = flagValue(args, '--port');
   const adminPort = flagValue(args, '--admin-port');
   if (port) process.env.PORT = port;
   if (adminPort) process.env.POCKET_DEV_ADMIN_PORT = adminPort;
   if (args.includes('--no-open')) process.env.POCKET_DEV_NO_OPEN = '1';
-  const { createRealContext, detectAll, runSetup } = await import('../setup.js');
   await firstRun({ stateDir: STATE_DIR, ctx: await createRealContext({ noTerminals: true }), detect: detectAll, runSetup });
   const { platform } = await import('../platform.js');
   try {
@@ -258,7 +257,7 @@ switch (command) {
   case 'service': await service(args); break;
   case 'setup': process.exit(await setup(args)); break;
   case 'doctor': process.exit(await doctor(args)); break;
-  case 'qr': runScript('qr.js'); break;
+  case 'qr': runScript('qr.js', args); break;
   case 'admin': runScript('admin.js', ['open']); break;
   case 'connect': case 'disconnect': runScript('admin.js', [command]); break;
   case 'internet': await internet(args); break;

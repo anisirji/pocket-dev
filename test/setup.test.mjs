@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  TOOLS, parseLogin, parseVersion, detectTool, installPlan, runSetup, createContext, assertNoSecret, makeLogger, collectStatus, cachedStatus, parseArgs, defaultFind,
+  TOOLS, parseLogin, parseVersion, detectTool, installPlan, runSetup, createContext, assertNoSecret, makeLogger, collectStatus, cachedStatus, parseArgs, defaultFind, printPhoneLogin, printAlreadyRunning,
 } from '../setup.js';
 import { findCloudflared } from '../network.js';
 
@@ -45,6 +45,7 @@ function fakeCtx({ platform = 'darwin', installed = {}, pms = [], tty = true, an
     writePassword: async (p) => writes.push(['password', p]),
     saveNetwork: async (n) => writes.push(['network', n]),
     localApi: async () => null,
+    sleep: async () => {},
     remoteUrl: async () => null,
     qr: async () => '[qr]',
     service: { available: true, kind: 'launchd', status: async () => ({}), describe: () => ['Will run: pocket-dev service install'], install: async () => { writes.push(['service']); return 'ok'; } },
@@ -279,6 +280,39 @@ test('finish prints the address and QR when running, and how to start when not',
   const down = fakeCtx();
   await runSetup(['--only', 'finish'], down.ctx);
   assert.match(text(down), /not running/);
+});
+
+test('finish waits for a server that is still starting, then always prints the address and the QR', async () => {
+  const f = fakeCtx();
+  let tries = 0;
+  f.ctx.localApi = async () => (++tries < 3 ? null : { ok: true, status: 200, data: { url: 'http://192.168.1.5:7777/?k=abc', expiresInMin: 10 } });
+  f.ctx.remoteUrl = async () => 'https://calm-river.trycloudflare.com';
+  await runSetup(['--only', 'finish'], f.ctx);
+  assert.equal(tries, 3);
+  assert.match(text(f), /On the same Wi-Fi: http:\/\/192\.168\.1\.5:7777$/m);
+  assert.match(text(f), /From anywhere: https:\/\/calm-river\.trycloudflare\.com/);
+  assert.match(text(f), /pocket-dev qr --link https:\/\/calm-river\.trycloudflare\.com/);
+  assert.match(text(f), /\[qr\]/);
+  assert.match(text(f), /You do not need to run pocket-dev start/);
+});
+
+test('without a terminal the finish prints the address and the command, no QR art', async () => {
+  const f = fakeCtx();
+  f.ctx.isTTY = false;
+  f.ctx.localApi = async () => ({ ok: true, status: 200, data: { url: 'http://192.168.1.5:7777/?k=abc', expiresInMin: 10 } });
+  await printPhoneLogin(f.ctx);
+  assert.match(text(f), /On the same Wi-Fi: http:\/\/192\.168\.1\.5:7777$/m);
+  assert.match(text(f), /pocket-dev qr/);
+  assert.doesNotMatch(text(f), /\[qr\]|k=abc/);
+});
+
+test('start with a copy already running says so and prints the address and a fresh QR', async () => {
+  const f = fakeCtx();
+  f.ctx.localApi = async (method, endpoint) => (method === 'POST' && endpoint === '/api/qr-key' ? { ok: true, status: 200, data: { url: 'http://192.168.1.5:7777/?k=new', expiresInMin: 5 } } : null);
+  await printAlreadyRunning(f.ctx);
+  assert.match(text(f), /^Pocket Dev is already running in the background/m);
+  assert.match(text(f), /On the same Wi-Fi: http:\/\/192\.168\.1\.5:7777$/m);
+  assert.match(text(f), /\[qr\]/);
 });
 
 test('no command line, log line or output carries a secret', async () => {
