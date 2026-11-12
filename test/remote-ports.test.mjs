@@ -12,6 +12,7 @@ async function devServer(t, host = '127.0.0.1') {
   const server = http.createServer((req, res) => {
     seen.push({ url: req.url, headers: req.headers });
     if (req.url === '/go') { res.writeHead(302, { location: `http://localhost:${server.address().port}/landed` }); return res.end(); }
+    if (req.url === '/go4') { res.writeHead(302, { location: `http://127.0.0.1:${server.address().port}/` }); return res.end(); }
     res.end(`dev page ${req.url}`);
   });
   const wss = new WebSocketServer({ server });
@@ -25,7 +26,8 @@ async function devServer(t, host = '127.0.0.1') {
 function fakeTunnel() {
   const made = [];
   const tunnelFor = (gatePort) => {
-    const tunnel = { gatePort, killed: false, start: async () => {}, view: () => ({ status: 'connected', url: `https://port-${made.length}.trycloudflare.com` }), dispose() { this.killed = true; } };
+    const url = `https://port-${made.length + 1}.trycloudflare.com`;
+    const tunnel = { gatePort, killed: false, status: 'connected', start: async () => {}, view: () => ({ status: tunnel.status, url }), dispose() { this.killed = true; } };
     made.push(tunnel);
     return tunnel;
   };
@@ -64,7 +66,7 @@ test('a port opened over the internet answers only a device that redeemed its on
   const landing = await get(gate, `/app?x=1&pd-port-key=${keyOf(link)}`);
   assert.equal(landing.status, 200);
   const setCookie = landing.headers['set-cookie'][0];
-  assert.match(setCookie, /^pd_port=[\w-]{43}; HttpOnly; Secure; SameSite=Strict; Path=\/$/);
+  assert.match(setCookie, /^pd_port=[\w-]{43}; HttpOnly; Secure; SameSite=Lax; Path=\/; Max-Age=43200$/);
   assert.match(landing.body, /location\.replace\("\/app\?x=1"\)/, 'the key leaves the address bar');
   assert.equal((await get(gate, `/?pd-port-key=${keyOf(link)}`)).status, 403, 'a key works once');
 
@@ -78,6 +80,7 @@ test('a port opened over the internet answers only a device that redeemed its on
   assert.equal(reached.cookie, 'app_session=abc', 'the gate cookie stays at the gate; the app keeps its own');
   assert.equal(Object.keys(reached).some((k) => /^(cf-|x-forwarded-)/.test(k)), false);
   assert.equal((await get(gate, '/go', { cookie })).headers.location, '/landed', 'a redirect to the dev server stays on the link');
+  assert.equal((await get(gate, '/go4', { cookie })).headers.location, '/');
 
   const ws = new WebSocket(`ws://127.0.0.1:${gate}/hmr`, { headers: { cookie, host: 'port-1.trycloudflare.com' } });
   await once(ws, 'open');
@@ -142,4 +145,41 @@ test('the server hands a login link for a forwarded port only to a logged-in dev
   assert.ok(log.some((e) => e.type === 'port-remote-opened' && e.port === dev.port));
   assert.equal((await s.request('DELETE', `/api/forwards/${dev.port}`, { cookie })).status, 204);
   await until(async () => (await get(gate, '/x', { cookie: portCookie }).catch(() => null)) === null);
+});
+
+test('open sockets end when their device logs out, and internet access off ends the Quick link', async (t) => {
+  const dev = await devServer(t);
+  const active = new Set(['dev1']);
+  let internet = true;
+  const { made, tunnelFor } = fakeTunnel();
+  const remote = createRemotePorts({ isActive: (id) => active.has(id), allowed: () => internet, tunnelFor, sweepMs: 30 });
+  t.after(() => remote.closeAll());
+  const gate = async () => {
+    const link = await remote.open(dev.port, 'dev1');
+    const port = made.at(-1).gatePort;
+    const cookie = (await get(port, `/?pd-port-key=${keyOf(link)}`)).headers['set-cookie'][0].split(';')[0];
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/hmr`, { headers: { cookie } });
+    await once(ws, 'open');
+    return ws;
+  };
+  const ws = await gate();
+  active.delete('dev1');
+  await once(ws, 'close');
+  active.add('dev1');
+  const second = await gate();
+  internet = false;
+  await once(second, 'close');
+  assert.equal(made.at(-1).killed, true, 'turning internet access off stops the port\'s cloudflared');
+  assert.equal(remote.isOpen(dev.port), false);
+});
+
+test('a port whose cloudflared exited after connecting gets a new Quick link', async (t) => {
+  const dev = await devServer(t);
+  const { made, tunnelFor } = fakeTunnel();
+  const remote = createRemotePorts({ isActive: () => true, allowed: () => true, tunnelFor });
+  t.after(() => remote.closeAll());
+  assert.match(await remote.open(dev.port, 'dev1'), /port-1\./);
+  made[0].status = 'error';
+  assert.match(await remote.open(dev.port, 'dev1'), /port-2\./);
+  assert.equal(made[0].killed, true);
 });

@@ -72,10 +72,10 @@ A phone on the internet address cannot reach the Wi-Fi link. There, tapping a po
 
 1. The phone asks `POST /api/forwards/<port>/remote`. Only a logged-in owner device can ask, only for a port that is forwarded, and only while internet access is on. Collaborators and room members cannot.
 2. The first time, Pocket Dev starts a small gate on `127.0.0.1` and one `cloudflared` Quick link that points at the gate, never at the dev server. Each port gets its own address, so a dev server's root paths (`/assets/…`, `/@vite/client`) work.
-3. The reply is a link with a one-time key that lasts 60 seconds. Opening it gives that browser a `pd_port` cookie (HttpOnly, Secure, SameSite=Strict) for that address only, and removes the key from the address bar.
+3. The reply is a link with a one-time key that lasts 60 seconds. Opening it gives that browser a `pd_port` cookie (HttpOnly, Secure, SameSite=Lax, 12 hours) for that address only, and removes the key from the address bar. Lax lets an app's sign-in callback from another site still reach it.
 4. The gate passes a request on to `localhost:<port>` only with that cookie, while the device that asked is still logged in and internet access is still on. Anyone else gets a 401 page and nothing reaches the dev server. WebSockets (hot reload) pass through the same check.
 5. The dev server sees `Host: localhost:<port>`, so host checks such as Vite's pass. The tunnel's own headers and the gate cookie are removed; the app's own cookies pass.
-6. Closing the forward, Lockdown, or stopping Pocket Dev ends the Quick link. A WebSocket already open stays open until then, even if its device is logged out.
+6. Closing the forward, Lockdown, stopping Pocket Dev, or turning internet access off ends the Quick link. An open WebSocket is checked again every 5 seconds and closes once its device is logged out or blocked. If `cloudflared` for a port stops, the next tap starts a new Quick link.
 
 Each opening is in the security log as `port-remote-opened`. It needs `cloudflared`, like a Quick link. A new Quick link can take a few seconds before its address answers.
 
