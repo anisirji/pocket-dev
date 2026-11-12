@@ -12,7 +12,7 @@ const tool = (id) => TOOLS.find((t) => t.id === id);
 const res = (o = {}) => ({ code: 0, stdout: '', stderr: '', timedOut: false, error: null, ...o });
 
 // A fake computer: `installed` maps a tool name to { version, login }, `pms` lists package managers present.
-function fakeCtx({ platform = 'darwin', installed = {}, pms = [], tty = true, answers = [], secrets = [], npmWritable = true, node = '22.17.1', config = {} } = {}) {
+function fakeCtx({ platform = 'darwin', installed = {}, pms = [], tty = true, answers = [], secrets = [], npmWritable = true, node = '22.17.1', config = {}, battery = false } = {}) {
   const calls = [], out = [], asked = [], writes = [];
   const binPath = (name) => `/fake/bin/${name}`;
   const known = { npm: { version: '10.9.2' }, ...installed };
@@ -44,6 +44,9 @@ function fakeCtx({ platform = 'darwin', installed = {}, pms = [], tty = true, an
     readConfig: () => config,
     writePassword: async (p) => writes.push(['password', p]),
     saveNetwork: async (n) => writes.push(['network', n]),
+    saveAwake: async (m) => { writes.push(['awake', m]); config.awake = m; },
+    hasBattery: async () => battery,
+    keepAwake: { available: true },
     localApi: async () => null,
     sleep: async () => {},
     remoteUrl: async () => null,
@@ -171,7 +174,7 @@ test('setup installs after yes, streams the command, logs in, and re-checks', as
   assert.deepEqual(inherited.map((c) => [c.cmd, ...c.args].join(' ')), ['npm install -g @anthropic-ai/claude-code', '/fake/bin/claude auth login']);
   assert.match(text(f), /Will run: npm install -g @anthropic-ai\/claude-code/);
   assert.match(text(f), /Source: npm package @anthropic-ai\/claude-code/);
-  assert.match(f.asked[0], /Install now\? \[Y\/n\]/);
+  assert.match(f.asked[0], /Install now\? \[y\/N\]/, 'an account tool is an explicit opt-in, never pre-selected');
   assert.match(text(f), /✓ Claude Code: installed 9\.9\.9, logged in/);
   assert.match(text(f), /Restart Pocket Dev so it sees tools installed after it started: pocket-dev service restart/);
   const none = fakeCtx({ installed: { gh: { version: '2.83.0', login: true } } });
@@ -260,18 +263,57 @@ test('network: the internet link needs cloudflared', async () => {
 });
 
 test('start at login: skipped when already set up, installed on yes, manual when unsupported', async () => {
-  const done = fakeCtx();
+  const services = (f) => f.writes.filter((w) => w[0] === 'service');
+  const done = fakeCtx({ config: { awake: 'always' } });
   done.ctx.service.status = async () => ({ installed: true, autostart: true, running: true });
   await runSetup(['--only', 'autostart'], done.ctx);
-  assert.match(text(done), /Already set up/);
+  assert.match(text(done), /already in place/);
   assert.deepEqual(done.writes, []);
-  const fresh = fakeCtx({ answers: [true] });
+  const fresh = fakeCtx({ answers: [true, true] });
   await runSetup(['--only', 'autostart'], fresh.ctx);
-  assert.deepEqual(fresh.writes, [['service'], ['log', 'service installed (launchd)']]);
+  assert.deepEqual(services(fresh), [['service']]);
   const none = fakeCtx({ platform: 'linux' });
   none.ctx.service = { available: false, reason: 'systemctl was not found.' };
-  await runSetup(['--only', 'autostart'], none.ctx);
+  await runSetup(['--only', 'always-on'], none.ctx);
   assert.match(text(none), /pocket-dev start/);
+  assert.deepEqual(services(none), []);
+});
+
+test('always on: one question, one list of changes, one confirm, then a checked table', async () => {
+  const f = fakeCtx({ answers: [true, true] });
+  let installed = false;
+  f.ctx.service.install = async () => { installed = true; f.writes.push(['service']); return 'ok'; };
+  f.ctx.service.status = async () => (installed ? { installed: true, autostart: true, running: true } : {});
+  const started = await runSetup(['--only', 'always-on'], f.ctx);
+  assert.equal(started, 0);
+  assert.equal(f.asked.length, 2);
+  assert.match(f.asked[0], /always be reachable from your phone\? \[Y\/n\]/);
+  assert.match(f.asked[1], /Apply the recommended settings\? \[Y\/n\]/);
+  assert.match(text(f), /I will:\n {4}1\. Keep this computer awake: always[^\n]*\n {7}Will run: pocket-dev config set awake always\n {4}2\. Run Pocket Dev in the background/);
+  assert.deepEqual(f.writes.filter((w) => w[0] !== 'log'), [['awake', 'always'], ['service']], 'awake is saved first, so the service starts with it');
+  assert.match(text(f), /✓ Starts at login: yes\n {2}✓ Running in the background: yes\n {2}✓ Keep awake: always/);
+  assert.match(text(f), /Restore on AC power loss/);
+  assert.match(text(f), /Automatic login \(your choice; setup never turns it on\)/);
+});
+
+test('always on: a laptop defaults to plugged, and n lets you pick items one by one', async () => {
+  const f = fakeCtx({ battery: true, config: { awake: 'off' }, answers: [undefined, false, false, true] });
+  f.ctx.ask = async (q, def) => { f.asked.push(q); const a = [def, false, false, true][f.asked.length - 1]; return a; };
+  await runSetup(['--only', 'always-on'], f.ctx);
+  assert.match(f.asked[0], /\[y\/N\]/, 'a computer with a battery is not assumed to stay reachable');
+  assert.match(f.asked[2], /1\. Keep this computer awake: plugged.*\[y\/N\]/);
+  assert.deepEqual(f.writes.filter((w) => w[0] !== 'log'), [['service']]);
+  assert.doesNotMatch(text(f), /Restore on AC power loss/, 'power-cut advice is for a computer meant to stay on');
+});
+
+test('--yes applies the recommended set and never an explicit opt-in', async () => {
+  const f = fakeCtx({ pms: ['brew'], installed: { git: { version: '2.52.0' } } });
+  await runSetup(['--yes'], f.ctx);
+  assert.equal(f.asked.length, 0);
+  const handedOver = f.calls.filter((c) => c.inherit).map((c) => [c.cmd, ...c.args].join(' '));
+  assert.deepEqual(handedOver, ['brew install cloudflared'], 'Claude Code, Codex and GitHub CLI are not installed or logged in by --yes');
+  assert.match(text(f), /Install now\? \[y\/N\] no \(--yes leaves this to you\)/);
+  assert.deepEqual(f.writes.filter((w) => w[0] === 'awake' || w[0] === 'service' || w[0] === 'network'), [['awake', 'always'], ['service']], 'internet access stays off');
 });
 
 test('finish prints the address and QR when running, and how to start when not', async () => {

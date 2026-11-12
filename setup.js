@@ -21,17 +21,18 @@ const CLOUDFLARED_LINK = 'https://developers.cloudflare.com/cloudflare-one/conne
 
 // level: required (setup fails without it), recommended, optional. `npm` is the official package; `login` and
 // `status` are the tool's own commands. Claude Code and Codex are each optional, but one of them is what the chat uses.
+// `optIn` tools are accounts the person signs up for, so installing or logging in is never pre-selected, not even by --yes.
 export const TOOLS = [
   { id: 'node', title: 'Node.js and npm', level: 'required', why: 'Runs Pocket Dev.' },
   { id: 'git', title: 'Git', level: 'recommended', bin: 'git', why: 'The Git screen and project history.' },
-  { id: 'claude', title: 'Claude Code', level: 'optional', bin: 'claude', env: 'POCKET_DEV_CLAUDE', npm: '@anthropic-ai/claude-code',
+  { id: 'claude', title: 'Claude Code', level: 'optional', bin: 'claude', env: 'POCKET_DEV_CLAUDE', npm: '@anthropic-ai/claude-code', optIn: true,
     status: ['auth', 'status'], login: ['auth', 'login'], why: 'Chats with Claude.' },
-  { id: 'codex', title: 'Codex', level: 'optional', bin: 'codex', env: 'POCKET_DEV_CODEX', npm: '@openai/codex',
+  { id: 'codex', title: 'Codex', level: 'optional', bin: 'codex', env: 'POCKET_DEV_CODEX', npm: '@openai/codex', optIn: true,
     status: ['login', 'status'], login: ['login'], why: 'Chats with Codex.' },
-  { id: 'gh', title: 'GitHub CLI', level: 'optional', bin: 'gh', status: ['auth', 'status'], login: ['auth', 'login'], why: 'Pull requests in Git.' },
+  { id: 'gh', title: 'GitHub CLI', level: 'optional', bin: 'gh', optIn: true, status: ['auth', 'status'], login: ['auth', 'login'], why: 'Pull requests in Git.' },
   { id: 'cloudflared', title: 'cloudflared', level: 'optional', bin: 'cloudflared', env: 'POCKET_DEV_CLOUDFLARED', why: 'The internet link (Cloudflare tunnel).' },
 ];
-export const STEP_IDS = [...TOOLS.map((t) => t.id), 'terminals', 'password', 'network', 'autostart', 'finish'];
+export const STEP_IDS = [...TOOLS.map((t) => t.id), 'terminals', 'password', 'network', 'always-on', 'finish'];
 const toolById = (id) => TOOLS.find((t) => t.id === id);
 
 const NAMES = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' };
@@ -292,9 +293,10 @@ export function makeLogger(file = SETUP_LOG, now = () => new Date().toISOString(
 
 // ---- Steps --------------------------------------------------------------------------------------------------------
 
-async function yes(ctx, opts, question, def = true) {
+async function yes(ctx, opts, question, def = true, optIn = false) {
+  if (optIn) def = false;
   const hint = def ? '[Y/n]' : '[y/N]';
-  if (opts.yes) { ctx.out(`${question} ${hint} yes (--yes)`); return true; }
+  if (opts.yes) { ctx.out(`${question} ${hint} ${optIn ? 'no (--yes leaves this to you)' : `${def ? 'yes' : 'no'} (--yes)`}`); return def; }
   return ctx.ask(`${question} ${hint} `, def);
 }
 
@@ -323,7 +325,7 @@ async function toolStep(ctx, opts, tool, facts) {
     ctx.out(`  Will run: ${plan.display}`);
     ctx.out(`  Source: ${plan.source}.${plan.note ? ` ${plan.note}` : ''}`);
     if (opts.dry) { ctx.out('  (dry run: not asked, not run)'); return d; }
-    if (!(await yes(ctx, opts, '  Install now?'))) { ctx.out('  Skipped. You can run setup again any time.'); return d; }
+    if (!(await yes(ctx, opts, '  Install now?', true, tool.optIn))) { ctx.out('  Skipped. You can run setup again any time.'); return d; }
     const r = await runShown(ctx, plan.argv, `install ${tool.id}`);
     if (r.code !== 0) { ctx.out(`  The install did not finish (${r.error ? `could not start ${plan.argv[0]}` : `exit ${r.code}`}). Read the messages above, fix that, and run pocket-dev setup again.`); return d; }
     d = { ...await detectTool(tool, ctx), justInstalled: true };
@@ -335,7 +337,7 @@ async function toolStep(ctx, opts, tool, facts) {
     if (d.status === 'unknown') { ctx.out(`  Could not check the login in ${STATUS_TIMEOUT_MS / 1000} seconds. Check it yourself: ${tool.bin} ${tool.status.join(' ')}`); return d; }
     ctx.out(`  Will run: ${shortLogin(tool)}   (your browser opens; Pocket Dev never sees what you type there)`);
     if (opts.dry) { ctx.out('  (dry run: not asked, not run)'); return d; }
-    if (!(await yes(ctx, opts, '  Log in now?'))) { ctx.out(`  Skipped. Later: ${shortLogin(tool)}`); return d; }
+    if (!(await yes(ctx, opts, '  Log in now?', true, tool.optIn))) { ctx.out(`  Skipped. Later: ${shortLogin(tool)}`); return d; }
     await runShown(ctx, [d.path ?? tool.bin, ...tool.login], `login ${tool.id}`);
     d = { ...await detectTool(tool, ctx), justInstalled: d.justInstalled };
     ctx.out(statusLine(ctx, d));
@@ -408,30 +410,97 @@ async function terminalsStep(ctx, opts) {
   return ctx.terminals.repair({ yes: opts.yes });
 }
 
-async function autostartStep(ctx, opts) {
-  ctx.out('Start at login');
+// What the Always on step explains. It changes none of these: each is a system setting, an administrator command or a
+// security trade-off that stays the person's own choice.
+const SLEEP_NOTE = {
+  darwin: 'Keep awake stops idle sleep only while Pocket Dev runs. Check System Settings > Energy (or Battery > Options) so the Mac does not sleep or log out on its own.',
+  win32: 'Keep awake stops idle sleep only while Pocket Dev runs. Windows can still hibernate: check Settings > System > Power, and Control Panel > Power Options > Change plan settings.',
+  linux: 'Keep awake holds sleep only while Pocket Dev runs (systemd-inhibit). Check your desktop power settings for suspend when idle and the lid action.',
+};
+const AUTO_LOGIN_NOTE = {
+  darwin: 'Automatic login (your choice; setup never turns it on): after a restart the Mac waits at the login screen, so Pocket Dev does not start. System Settings > Users & Groups > Automatically log in as. Anyone who can switch on this Mac then gets your account.',
+  win32: 'Automatic login (your choice; setup never turns it on): after a restart Windows waits at the login screen, so Pocket Dev does not start. Anyone who can switch on this PC then gets your account. If you want it: press Win+R, run netplwiz, and untick "Users must enter a user name and password". Pocket Dev never stores your Windows password.',
+  linux: 'Automatic login (your choice; setup never turns it on): your display manager (GDM, SDDM, LightDM) has the setting. Or run once yourself: loginctl enable-linger $USER, so the service starts before anyone logs in.',
+};
+const FIREWALL_NOTE = {
+  darwin: 'Firewall: macOS may ask "Accept incoming network connections?" for node. Choose Allow, or the phone cannot connect.',
+  win32: `Firewall: Windows asks once to let Node.js through. Choose Private networks and Allow. If the phone still cannot connect, run this yourself in PowerShell as administrator: New-NetFirewallRule -DisplayName "Pocket Dev" -Direction Inbound -Program "${process.execPath}" -Action Allow -Profile Private`,
+  linux: 'Firewall: if one is on (ufw, firewalld), allow the Pocket Dev port yourself, for example: sudo ufw allow 7777/tcp',
+};
+const POWER_NOTE = 'Power back on after a power cut: software cannot do this. In the BIOS or firmware, set "Restore on AC power loss" (or "AC recovery") to "Power on".';
+const HEADLESS_NOTE = 'Without a screen: Screen view is Mac-only today, and programs that need a desktop window do not work without a display.';
+const ADDRESS_NOTE = {
+  off: 'Address: Wi-Fi only. Internet access stays off unless you turn it on: pocket-dev internet quick, or your own domain with pocket-dev internet domain.',
+  quick: 'Address: a Quick link gets a new address after every restart. For a fixed one, use your own domain (a free Cloudflare account and a domain): pocket-dev internet domain',
+  domain: 'Address: your own domain stays the same after a restart.',
+};
+const AWAKE_WHY = { always: 'stays awake on battery too', plugged: 'stays awake on the charger' };
+
+// Plan C10 and C13: one question, one list of changes, one confirm. Returns true when a server runs or is starting.
+async function alwaysOnStep(ctx, opts) {
+  ctx.out('Always on');
   const svc = ctx.service;
-  if (!svc.available) {
-    ctx.out(`  Not available here: ${svc.reason}`);
-    ctx.out('  Run Pocket Dev yourself with: pocket-dev start');
-    return false;
+  const laptop = await ctx.hasBattery().catch(() => false);
+  const before = svc.available ? await svc.status().catch(() => ({})) : {};
+  const question = '  Should this computer always be reachable from your phone?';
+  if (opts.dry) ctx.out(`${question} (would ask; the default is ${laptop ? 'no, it has a battery' : 'yes'})`);
+  const reachable = opts.dry ? !laptop : await yes(ctx, opts, question, !laptop);
+  const awake = reachable ? 'always' : 'plugged';
+
+  const plan = [];
+  if (ctx.keepAwake.available && (KNOWN_CONFIG(ctx).awake ?? 'plugged') !== awake) {
+    plan.push({ label: `Keep this computer awake: ${awake} (${AWAKE_WHY[awake]}).`, lines: [`Will run: pocket-dev config set awake ${awake}`],
+      apply: async () => { await ctx.saveAwake(awake); ctx.log(`awake set to ${awake}`); } });
   }
-  const state = await svc.status().catch(() => ({}));
-  if (state.installed && state.autostart && state.running) { ctx.out('  Already set up: Pocket Dev starts at login and is running.'); return true; }
-  for (const line of svc.describe()) ctx.out(`  ${line}`);
-  if (ctx.platform === 'linux') ctx.out('  To also start it before you log in, run once: loginctl enable-linger $USER');
-  if (opts.dry) { ctx.out('  (dry run: not asked, not run)'); return false; }
-  if (!(await yes(ctx, opts, '  Set it up now? This also starts Pocket Dev.'))) { ctx.out('  Skipped. Start it yourself with: pocket-dev start'); return false; }
-  try {
-    const message = await svc.install();
-    ctx.log(`service installed (${svc.kind})`);
-    for (const line of String(message).split('\n').filter(Boolean).slice(-3)) ctx.out(`  ${line}`);
-    return true;
-  } catch (err) {
-    ctx.log(`service install failed (${svc.kind})`);
-    ctx.out(`  Could not set it up: ${String(err.message).split('\n').slice(-3).join(' ')}`);
-    return false;
+  if (svc.available && !(before.installed && before.autostart && before.running)) {
+    plan.push({ label: 'Run Pocket Dev in the background and start it at login. This also starts it now.', lines: svc.describe(), apply: async () => {
+      try {
+        const message = await svc.install();
+        ctx.log(`service installed (${svc.kind})`);
+        for (const line of String(message).split('\n').filter(Boolean).slice(-3)) ctx.out(`  ${line}`);
+      } catch (err) {
+        ctx.log(`service install failed (${svc.kind})`);
+        ctx.out(`  Could not set it up: ${String(err.message).split('\n').slice(-3).join(' ')}`);
+      }
+    } });
   }
+  if (!svc.available) ctx.out(`  Start at login is not available here: ${svc.reason} Run Pocket Dev yourself with: pocket-dev start`);
+  if (!ctx.keepAwake.available) ctx.out(`  Keep awake is not available here: ${ctx.keepAwake.reason}`);
+
+  if (!plan.length) ctx.out('  The recommended settings are already in place.');
+  else {
+    ctx.out('  I will:');
+    plan.forEach((item, i) => { ctx.out(`    ${i + 1}. ${item.label}`); for (const line of item.lines) ctx.out(`       ${line}`); });
+    ctx.out('  Then I show the address and a QR code to log in. Nothing outside this list changes.');
+    if (opts.dry) ctx.out('  (dry run: not asked, not run)');
+    else {
+      let chosen = plan;
+      if (!(await yes(ctx, opts, '  Apply the recommended settings?'))) {
+        chosen = [];
+        for (const [i, item] of plan.entries()) if (await ctx.ask(`  ${i + 1}. ${item.label} [y/N] `, false)) chosen.push(item);
+      }
+      for (const item of chosen) await item.apply();
+    }
+  }
+
+  ctx.out('');
+  ctx.out('  Good to know (setup changes none of these):');
+  const notes = [FIREWALL_NOTE[ctx.platform]];
+  if (reachable) notes.push(SLEEP_NOTE[ctx.platform], AUTO_LOGIN_NOTE[ctx.platform], ...(laptop ? [] : [POWER_NOTE]), HEADLESS_NOTE);
+  notes.push(ADDRESS_NOTE[readNetwork({ read: () => KNOWN_CONFIG(ctx) }).internet.kind]);
+  for (const note of notes.filter(Boolean)) ctx.out(`  - ${note}`);
+
+  const after = svc.available && !opts.dry ? await svc.status().catch(() => ({})) : before;
+  const nowAwake = KNOWN_CONFIG(ctx).awake ?? 'plugged';
+  const mark = (ok) => (ok ? good(ctx, '✓') : paint(ctx, 33, '✗'));
+  ctx.out('');
+  ctx.out(opts.dry ? '  Always on, as it is now:' : '  Always on, checked:');
+  if (svc.available) {
+    ctx.out(`  ${mark(after.installed && after.autostart)} Starts at login: ${after.installed && after.autostart ? 'yes' : 'no'}`);
+    ctx.out(`  ${mark(after.running)} Running in the background: ${after.running ? 'yes' : 'no'}`);
+  }
+  if (ctx.keepAwake.available) ctx.out(`  ${mark(nowAwake === awake)} Keep awake: ${nowAwake}`);
+  return !!(after.running || after.installed);
 }
 
 // A server that setup or the service just started needs a few seconds before it listens, so the key is asked for again.
@@ -485,7 +554,8 @@ export function parseArgs(args) {
     else if (a === '--yes' || a === '-y') opts.yes = true;
     else if (a === '--dry-run') opts.dry = true;
     else if (a === '--only') {
-      const v = args[++i];
+      // autostart is the step's old name.
+      const v = args[++i] === 'autostart' ? 'always-on' : args[i];
       if (!STEP_IDS.includes(v)) opts.error = `--only needs one of: ${STEP_IDS.join(', ')}.`;
       else opts.only = v;
     } else opts.error = `Unknown option "${a}". Options: --check, --yes, --dry-run, --only <${STEP_IDS.join('|')}>.`;
@@ -561,7 +631,7 @@ export async function runSetup(args, ctx) {
     else if (id === 'network') {
       cloudflaredReady ??= !!ctx.find(toolById('cloudflared'));
       await networkStep(ctx, opts, cloudflaredReady);
-    } else if (id === 'autostart') started = await autostartStep(ctx, opts);
+    } else if (id === 'always-on') started = await alwaysOnStep(ctx, opts);
     else if (id === 'finish') await finishStep(ctx, opts, started);
   }
   ctx.out('');
@@ -626,6 +696,13 @@ export async function createRealContext(extra = {}) {
     (await store()).update({ passwordHash: hashPassword(password), password: undefined });
   };
   ctx.saveNetwork = async (network) => (await store()).update({ network });
+  // A running server applies the mode at once and saves it; otherwise the next start reads it from config.json.
+  ctx.saveAwake = async (awake) => {
+    const live = await ctx.localApi('PUT', '/api/local/power', { awake });
+    if (!live?.ok) (await store()).update({ awake });
+  };
+  ctx.hasBattery = async () => (await host.battery()).battery !== null;
+  ctx.keepAwake = host.capabilities().keepAwake;
   ctx.qr = terminalQr;
   if (!extra.noTerminals) {
     const doctor = await import('./doctor.js');
