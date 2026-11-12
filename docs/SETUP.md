@@ -1,10 +1,10 @@
 # Guided setup: `pocket-dev setup`
 
-One command takes a computer from nothing to a working, logged-in Pocket Dev on macOS, Windows or Linux.
+One guided pass takes a computer from nothing to a working, logged-in Pocket Dev on macOS, Windows or Linux. It opens by itself on the first start, and `pocket-dev setup` runs it again any time.
 
 ```
 npm install -g @anisirji/pocket-dev
-pocket-dev setup
+pocket-dev start
 ```
 
 ## Decisions
@@ -18,7 +18,13 @@ These were made without asking, so they are written down here.
 - **Node is never updated by setup.** Setup is running on that Node. If it is too old, setup prints the command and stops short.
 - **Logins belong to the tool.** Setup runs `claude auth login`, `codex login` or `gh auth login` with your terminal attached, so the browser flow works. Setup never reads, prints, stores or sends a token, and a built-in guard refuses any command line carrying a password, token or API key flag. Status checks are reduced to yes, no or "could not check" and their output is thrown away.
 - **No terminal means no changes.** If stdin or stdout is not a terminal (a pipe, CI, a script), setup behaves like `--check`: it prints the status and what to run, and changes nothing, even with `--yes`.
-- **`--yes` accepts defaults, not secrets.** It answers every "Install now?" and "Log in now?" with yes and keeps the existing network setting and password. If no password exists it does not invent one: Pocket Dev makes one on its first start and prints it there.
+- **The guide opens on the first start, not on install.** npm hides `postinstall` output and many installs use `--ignore-scripts`, so the first `pocket-dev start` with a terminal attached runs the full guide before the server starts. When it finishes, `~/.pocket-dev/setup-done` is written and later starts skip it. A finished `pocket-dev setup` writes the same file. Only `pocket-dev start` opens the guide; other commands never do, so scripts that call them keep working.
+- **No terminal, no questions.** A start without a terminal (a script, CI, `npx` in a pipe) or with `CI` set prints the status table and the command `pocket-dev setup`, then starts as usual. `pocket-dev start --no-setup` or `POCKET_DEV_NO_SETUP=1` skips even that.
+- **Accounts are explicit opt-ins.** Installing or logging in to Claude Code, Codex and GitHub CLI asks `[y/N]`, and `--yes` never does it. Turning on internet access and Windows automatic login are never pre-selected either, and anything that needs administrator rights is printed for you to run.
+- **`--yes` applies the recommended set, not secrets.** It installs Git and cloudflared when missing, applies the Always on list (start at login, Keep awake), and keeps the existing network setting and password. If no password exists it does not invent one: Pocket Dev makes one on its first start and prints it there.
+- **Always on asks one question, then once more.** "Should this computer always be reachable from your phone?" defaults to yes on a computer without a battery and to no on a laptop. Then one numbered list ("I will: 1 ... 2 ...") and one "Apply the recommended settings? [Y/n]". Answer n to choose item by item. Nothing outside the list changes.
+- **The end always shows how to log in.** A server that setup just started can take a few seconds to listen, so setup asks it for a login code for up to 10 seconds. Then it prints the address, the internet address when a link runs, and the QR code. Without a terminal it prints the address and the command `pocket-dev qr`, no QR art and no login key.
+- **The greeting is made on your computer.** After the QR code, two boxes with a note from Ani and links to https://theani.me and https://github.com/anisirji/pocket-dev. Personal touches come only from this computer: the first name when the user name looks like one, the time of day, the system, whether a Claude Code or Codex command was found, and the Keep awake setting setup just made. No network call, no analytics. It never shows without a terminal or in CI. `--quiet` hides it and `pocket-dev config set greeting plain` turns the personal touches off. The words are in `public/greeting-copy.js`. The phone shows the plain wording once, as "Welcome to Pocket Dev", after its first login.
 - **`--dry-run` runs only read-only checks** (`--version`, login status, `npm prefix -g`, and a look at the start-at-login state). It asks nothing, installs nothing, logs in to nothing and writes nothing, including the log.
 - **Linux start at login uses the existing systemd user unit** (the same code as the admin page). Without systemd, setup says so and prints `pocket-dev start`.
 - **cloudflared needs no login.** A Quick link needs none. A link on your own domain uses a tunnel token you paste in Admin or give to `pocket-dev internet domain`; setup does not handle that token.
@@ -30,9 +36,11 @@ These were made without asking, so they are written down here.
 | --- | --- |
 | `pocket-dev setup` | The guided flow below. Asks before every change. |
 | `pocket-dev setup --check` | Read-only status table and the command to fix each gap. Exit code 0 when everything required is OK, 1 otherwise. |
-| `pocket-dev setup --yes` | Accepts the defaults (see Decisions). Needs a terminal. |
+| `pocket-dev setup --yes` | Applies the recommended set (see Decisions). Needs a terminal. |
 | `pocket-dev setup --dry-run` | Prints the plan: what it would run and ask. Changes nothing. |
-| `pocket-dev setup --only <step>` | One step: `node`, `git`, `claude`, `codex`, `gh`, `cloudflared`, `password`, `network`, `autostart` or `finish`. |
+| `pocket-dev setup --quiet` | The same guide without the greeting at the end. |
+| `pocket-dev setup --only <step>` | One step: `node`, `git`, `claude`, `codex`, `gh`, `cloudflared`, `terminals`, `password`, `network`, `always-on` (also `autostart`) or `finish`. |
+| `pocket-dev start --no-setup` | Starts without the first-start guide. `POCKET_DEV_NO_SETUP=1` does the same. |
 
 Setup is safe to run again. A step that is already done says so and does nothing. Ctrl+C stops between steps; every change setup makes is a finished write, so nothing is left half done.
 
@@ -50,13 +58,15 @@ Each tool step prints a status line first.
   Install now? [Y/n]
 ```
 
-On yes, the command runs with its output streaming, then the tool is checked again. If it is installed but logged out:
+The guide opens with why it is worth two minutes and what it will never do. On yes, the command runs with its output streaming, then the tool is checked again. If it is installed but logged out:
 
 ```
 ✗ Claude Code: installed 2.1.319, not logged in
   Will run: claude auth login   (your browser opens; Pocket Dev never sees what you type there)
-  Log in now? [Y/n]
+  Log in now? [y/N]
 ```
+
+Git and cloudflared ask `[Y/n]`. Claude Code, Codex and GitHub CLI ask `[y/N]`: they are your accounts.
 
 If a step cannot be done by setup, it says why, prints the exact manual steps and a link, and moves on.
 
@@ -68,8 +78,23 @@ If a step cannot be done by setup, it says why, prints the exact manual steps an
 6. **cloudflared.** Optional, for the internet link.
 7. **Password.** Choose or change the password (6 to 200 characters, typing hidden, asked twice). Only a scrypt hash is saved in `config.json`, the same way the admin page does it. Skipped if the password comes from `POCKET_DEV_PASSWORD`.
 8. **Phone access.** Wi-Fi only (the default), or Wi-Fi plus a Quick internet link. The link option needs cloudflared. Your own domain is set with `pocket-dev internet domain` or on the admin page, and setup leaves it alone.
-9. **Start at login.** macOS: `pocket-dev service install` (launchd). Windows: the Task Scheduler task, the same one `scripts\windows-install.ps1` creates. Linux: a systemd user unit. This also starts Pocket Dev.
-10. **Open it on your phone.** Prints the Wi-Fi address (and the internet address when a link is running), a one-time QR code valid for a few minutes, and how to use it: scan it with the phone camera, or open the address and type the password, then use the browser menu's Add to Home Screen. A new code any time: `pocket-dev qr`.
+9. **Always on.** One question, "Should this computer always be reachable from your phone?", then one list and one confirm:
+
+   ```
+   I will:
+     1. Keep this computer awake: always (stays awake on battery too).
+        Will run: pocket-dev config set awake always
+     2. Run Pocket Dev in the background and start it at login. This also starts it now.
+        Will run: pocket-dev service install   (writes ~/Library/LaunchAgents/dev.pocket.server.plist and loads it)
+   Then I show the address and a QR code to log in. Nothing outside this list changes.
+   Apply the recommended settings? [Y/n]
+   ```
+
+   Keep awake is `always` for a computer meant to stay reachable and `plugged` otherwise. Start at login is launchd on macOS, the Task Scheduler task on Windows (the same one `scripts\windows-install.ps1` creates), and a systemd user unit on Linux. Then a "Good to know" list that setup changes nothing about: the firewall prompt (on Windows the Private-network rule to run yourself as administrator), the system's own sleep and hibernate settings, automatic login and its trade-off (anyone who can switch the computer on gets your account; setup never turns it on and never stores the password), "Restore on AC power loss" in the BIOS for a desktop, what a Quick link does to the address after a restart and `pocket-dev internet domain` for a fixed one, and the headless limits. It ends with a checked table: starts at login, running, Keep awake.
+10. **Open it on your phone.** Waits up to 10 seconds for a server that is still starting, then prints the Wi-Fi address (and the internet address when a link is running, with `pocket-dev qr --link <address>` for its QR code), a one-time QR code valid for a few minutes, and how to use it: scan it with the phone camera, or open the address and type the password, then use the browser menu's Add to Home Screen. When it runs in the background, setup says so: do not run `pocket-dev start` again. A new code any time: `pocket-dev qr`.
+11. **The greeting.** Two boxes: a short note from Ani, then who made Pocket Dev, with the links. See Decisions.
+
+If setup installed a tool while Pocket Dev was already running, it ends with: restart Pocket Dev so it sees the new tool (`pocket-dev service restart`). A running copy keeps the PATH it started with.
 
 ## Commands per tool per OS
 
@@ -129,6 +154,9 @@ Settings has a **Tools on this computer** section: a tick or cross for Node, Git
 - **A tool shows "not installed" but you installed it.** Check `which claude` (macOS, Linux) or `where claude` (Windows) from the same terminal. If it lives somewhere unusual, set `POCKET_DEV_CLAUDE`, `POCKET_DEV_CODEX` or `POCKET_DEV_CLOUDFLARED` to its full path. Setup and the app both honour them.
 - **Start at login failed on macOS because port 7777 is in use.** Another Pocket Dev is running. Stop it, or see `pocket-dev service status`.
 - **Start at login is not available on Linux.** There is no `systemctl`. Run `pocket-dev start` in a terminal or write your own service.
-- **"Pocket Dev is not running, so there is no address yet."** Run `pocket-dev start`, then `pocket-dev qr`.
+- **"Pocket Dev is not running yet, so there is no address."** Run `pocket-dev start`. It prints the address and a QR code.
+- **`pocket-dev start` says "Pocket Dev is already running in the background".** That is the copy setup started. Nothing is wrong: it prints the address and a fresh QR code. Restart it with `pocket-dev service restart`.
+- **`pocket-dev doctor` and the port.** A tick with "Pocket Dev is running on it" is the healthy state. A cross means another program holds the port, and the doctor suggests a free one, never 7778 (the Admin page port).
+- **A tool you just installed is missing in Pocket Dev's terminals or chats.** Restart Pocket Dev: `pocket-dev service restart`, or stop it and run `pocket-dev start`.
 - **Forgot the password.** `pocket-dev setup --only password` sets a new one.
 - **What did setup do?** Read `~/.pocket-dev/setup.log`.

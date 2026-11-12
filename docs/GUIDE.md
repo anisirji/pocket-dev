@@ -25,7 +25,7 @@ You need a computer (Mac, Windows 11 or Linux) and a phone on the same Wi-Fi. Yo
 
 Want to try it first without installing? `npx -y @anisirji/pocket-dev start` runs it once and leaves nothing behind (it is slower to start).
 
-> **Guided setup of the extras.** After it is installed, run **`pocket-dev setup`**. It checks Node, Git, Claude Code, Codex, the GitHub CLI and Cloudflare's `cloudflared`, shows the exact command before it installs anything, hands over to each tool's own login (`claude auth login`, `codex login`, `gh auth login`), then sets your password, the phone access and start-at-login. `pocket-dev setup --check` only shows the status; `--dry-run` shows the plan. Details: [docs/SETUP.md](SETUP.md). The same checklist is in Settings, under **Tools on this computer**.
+> **Guided setup on the first start.** The first `pocket-dev start` on a computer opens the guided setup before the server starts (`pocket-dev setup` runs it again any time). It checks Node, Git, Claude Code, Codex, the GitHub CLI and Cloudflare's `cloudflared`, shows the exact command before it installs anything, and offers each tool's own login (`claude auth login`, `codex login`, `gh auth login`). Claude Code, Codex and the GitHub CLI are accounts, so their install and login default to no. Then it sets your password and the phone access, and the **Always on** step shows one list of recommended changes (start at login, Keep awake) and asks once. It ends with the address, a one-time QR code and a short note from the author, Ani (`--quiet` hides it). Without a terminal (a script, CI) the start prints the status table and the command, and goes on; `pocket-dev start --no-setup` or `POCKET_DEV_NO_SETUP=1` skips the guide. `pocket-dev setup --check` only shows the status; `--dry-run` shows the plan. Details: [docs/SETUP.md](SETUP.md). The same checklist is in Settings, under **Tools on this computer**.
 
 ### Beginner guide
 
@@ -37,7 +37,7 @@ The full guide (Windows, Mac and Linux, with pictures, a glossary and a fix for 
 2. **Check Node.js.** Type **`node -v`** and press Enter. `v22` or higher is good. "Not recognized" or "command not found" means it is not installed.
 3. **Install Node.js** (skip if step 2 was good). Open [nodejs.org](https://nodejs.org), click the big green **LTS** button, run the installer (Next, Next, Next; tick nothing special), then **close the window and open a new one** and check `node -v` again. Windows can also use `winget install OpenJS.NodeJS.LTS`; Mac can use `brew install node`; Linux can use [nvm](https://github.com/nvm-sh/nvm) and `nvm install 22`.
 
-Then: **4** `npm install -g @anisirji/pocket-dev`, **5** `pocket-dev start` (copy the one-time password), **6** allow it through the firewall, **7** open the address on your phone, **8** start by itself (optional), **9** `pocket-dev setup` (optional), **10** add a second computer (optional). Then, if stuck: **If something goes wrong** and **How to ask for help**, both in the guide.
+Then: **4** `npm install -g @anisirji/pocket-dev`, **5** `pocket-dev start` (the first time, the guided setup opens; copy the one-time password), **6** allow it through the firewall, **7** open the address on your phone, **8** start by itself (the Always on step of the setup), **9** `pocket-dev setup` again any time, **10** add a second computer (optional). Then, if stuck: **If something goes wrong** and **How to ask for help**, both in the guide.
 
 ### macOS
 
@@ -240,13 +240,13 @@ Full table (cookies, CSRF, approval, block, lockdown, security log): [docs/REFER
 | `pocket-dev takeover <id>\|--last` | Close Pocket Dev's copy of a conversation, then continue it in this terminal with `claude --resume` or `codex resume`. |
 | `pocket-dev internet status\|off\|quick` | Show internet access and the link's status, turn it off, or allow a Quick link. |
 | `pocket-dev internet domain --hostname <host> --token-stdin` | Use your own domain through a Cloudflare tunnel. The token comes from stdin, or from a file with `--token-file <path>`, never as an argument. |
-| `pocket-dev qr`, `admin`, `connect`, `disconnect`, `awake` | Print a one-time login QR, open the Admin page, turn phone access on or off, set Keep awake (`on\|plugged\|off\|status`). |
+| `pocket-dev qr [--link <address>]`, `admin`, `connect`, `disconnect`, `awake` | Print a one-time login QR (for an internet address with `--link`), open the Admin page, turn phone access on or off, set Keep awake (`on\|plugged\|off\|status`). |
 | `pocket-dev message [text] [--to NAME] [--file PATH]` | Send to Messages as this computer. Text comes from the argument or piped stdin. |
 | `pocket-dev version`, `pocket-dev help` | Show the version, or the command list. |
 
 ## Configuration
 
-`config.json` lives in `~/.pocket-dev/` (or `POCKET_DEV_STATE_DIR`, or exactly at `POCKET_DEV_CONFIG`; on Windows `%USERPROFILE%\.pocket-dev`). Edit it by hand or with `pocket-dev config`. `config set` accepts `port`, `adminPort`, `awake`, `requireApproval`, `approveFromDevices`, `maxDevices`, `chatIdleMinutes`, `batteryAlertPercent`, `temperatureAlertC`, `screenView`, `allowedHosts` (comma separated) and `messagesReserveGB`. `port` and `adminPort` apply after a restart; the rest apply right away. Change the password on the Admin page (`pocket-dev admin`). Pocket Dev rereads the file at use, so you can edit it while the server runs.
+`config.json` lives in `~/.pocket-dev/` (or `POCKET_DEV_STATE_DIR`, or exactly at `POCKET_DEV_CONFIG`; on Windows `%USERPROFILE%\.pocket-dev`). Edit it by hand or with `pocket-dev config`. `config set` accepts `port`, `adminPort`, `awake`, `requireApproval`, `approveFromDevices`, `maxDevices`, `chatIdleMinutes`, `batteryAlertPercent`, `temperatureAlertC`, `screenView`, `allowedHosts` (comma separated), `messagesReserveGB` and `greeting`. `port` and `adminPort` apply after a restart; the rest apply right away. Change the password on the Admin page (`pocket-dev admin`). Pocket Dev rereads the file at use, so you can edit it while the server runs.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -260,6 +260,7 @@ Full table (cookies, CSRF, approval, block, lockdown, security log): [docs/REFER
 | `repoRoots` | `~/Desktop`, `~/Desktop/Projects`, `~` | Git scan roots. `POCKET_DEV_REPO_ROOTS` (colon-separated) overrides it. |
 | `awake` | `plugged` | Keep awake mode: `off`, `plugged`, or `always`. |
 | `allowedHosts` | `[]` | Additional hostnames accepted by the phone listener. |
+| `greeting` | `personal` | The note at the end of setup. `plain` leaves out your first name, the system and the time of day. It is made on the computer and never sent. |
 | `chatDefaults` | saved by Chat | Last safe tool, folder, model, mode, and effort choices. Bypass and Full access are never silently remembered. |
 | `chatIdleMinutes` | `10` | Idle minutes before a chat engine stops. |
 | `batteryAlertPercent` | `20` | Alert when the battery is at or below this percent and not charging, 5 to 90. |
@@ -299,7 +300,7 @@ The Admin page has a **Permissions** panel that shows each of these. Details: [d
 
 **Firewall.** Windows: when the prompt appeared you must choose **Private networks**. If you dismissed it, open Windows Defender Firewall, Allow an app, and allow Node.js on Private. macOS: allow incoming connections for `node`. Linux: allow TCP 7777 from your network.
 
-**`pocket-dev doctor`.** Run it on the computer where Pocket Dev is installed. It prints a table of ticks and crosses (Node version, how Pocket Dev was installed, npm's global folder on PATH, the `pocket-dev` command, terminals, Git/Claude Code/Codex/GitHub CLI/cloudflared, the settings folder, port 7777) with the exact next command for each cross. It exits 0 when everything required works and 1 otherwise. `pocket-dev doctor --fix` repairs terminals after showing the command and asking `[Y/n]` (`--yes` skips the question); it never uses `sudo`.
+**`pocket-dev doctor`.** Run it on the computer where Pocket Dev is installed. It prints a table of ticks and crosses (Node version, how Pocket Dev was installed, npm's global folder on PATH, the `pocket-dev` command, terminals, Git/Claude Code/Codex/GitHub CLI/cloudflared, the settings folder, port 7777, with a tick when this Pocket Dev holds it) with the exact next command for each cross. When Pocket Dev is running it also reminds you to restart it after installing a tool, because a running copy keeps the PATH it started with. It exits 0 when everything required works and 1 otherwise. `pocket-dev doctor --fix` repairs terminals after showing the command and asking `[Y/n]` (`--yes` skips the question); it never uses `sudo`.
 
 **`pocket-dev` is not recognized / command not found.** You skipped `-g`, or the terminal was opened before the install. Open a new terminal and run `npm config get prefix` to see where npm puts global commands; that folder (or its `bin`) must be on your PATH. `pocket-dev doctor` shows that folder and the command that adds it; if the command itself is missing, run `npx -y @anisirji/pocket-dev doctor` instead.
 
@@ -317,7 +318,7 @@ The Admin page has a **Permissions** panel that shows each of these. Details: [d
 
 **`node-pty` fails to build.** macOS: `xcode-select --install`. Windows: Visual Studio Build Tools with the C++ workload and Python 3. Linux: `build-essential` and Python 3. A prebuilt binary is used first when one exists.
 
-**Port 7777 is in use.** Another program (or an older Pocket Dev) has it. Use `pocket-dev start --port 7780`, or `pocket-dev config set port 7780` and restart. On macOS `pocket-dev service install --force` takes over the port from a stray copy.
+**Port 7777 is in use.** `pocket-dev doctor` shows a tick when the program on it is this Pocket Dev, and then nothing is wrong: `pocket-dev start` says it already runs and prints the address and a QR code. Otherwise another program (or an older Pocket Dev) has it, and the doctor suggests a free port that is never 7778 (the Admin page). Use `pocket-dev start --port 7780`, or `pocket-dev config set port 7780` and restart. On macOS `pocket-dev service install --force` takes over the port from a stray copy.
 
 **I forgot the password.** Run `pocket-dev admin` on the computer and set a new one under **Password** (no old password needed). Or start once with `POCKET_DEV_PASSWORD=<new>` (PowerShell: `$env:POCKET_DEV_PASSWORD='<new>'`), which overrides the stored one.
 

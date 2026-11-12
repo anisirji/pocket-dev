@@ -14,7 +14,7 @@
 > - Type the package name exactly: **`@anisirji/pocket-dev`**, with the `@` and with `-g`.
 > - Your computer may ask about the **firewall**. Allow it on **Private networks**.
 > - A different npm package called `pocket-dev` can take over the command. If you see `unknown command 'start'` or `EEXIST`, run `npm uninstall -g pocket-dev`, then install again.
-> - `pocket-dev setup` is optional. It adds Claude Code, Codex, Git and the rest.
+> - The first `pocket-dev start` opens a short guided setup. It asks before every change. Run it again any time with `pocket-dev setup`.
 >
 > Step by step for your system: [Windows](https://github.com/anisirji/pocket-dev/blob/main/docs/windows.md), [macOS](https://github.com/anisirji/pocket-dev/blob/main/docs/macos.md), [Linux](https://github.com/anisirji/pocket-dev/blob/main/docs/linux.md).
 
@@ -27,13 +27,14 @@ npm install -g @anisirji/pocket-dev
 pocket-dev start
 ```
 
-1. `pocket-dev start` prints an address like `http://192.168.1.25:7777`, a one-time password and a QR code.
-2. On your phone, scan the QR code (or open the address and type the password).
-3. If your computer asks, allow Pocket Dev through the firewall.
+1. The first time, `pocket-dev start` opens the guided setup. It shows each command before it runs it and asks first. Claude Code, Codex and the GitHub CLI are installed or logged in only if you say yes. The **Always on** step shows one list of recommended changes (start at login, Keep awake) and asks once.
+2. At the end it prints an address like `http://192.168.1.25:7777` and a one-time QR code. If Pocket Dev now runs in the background, do not run `pocket-dev start` again. If you do, it says it is already running and prints a fresh QR code.
+3. On your phone, scan the QR code (or open the address and type the password).
+4. If your computer asks, allow Pocket Dev through the firewall.
+
+A new login code any time: `pocket-dev qr`. The guide again: `pocket-dev setup`. Scripts and CI never get a question: without a terminal, `pocket-dev start` prints the status and the command, then starts. `--no-setup` (or `POCKET_DEV_NO_SETUP=1`) skips the guide.
 
 Just trying it? `npx -y @anisirji/pocket-dev start` runs it once and installs nothing.
-
-**Optional:** `pocket-dev setup` installs and checks Claude Code, Codex, Git and `cloudflared` (it shows each command first), then helps you set a password and start at login.
 
 ## If something goes wrong
 
