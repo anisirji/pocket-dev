@@ -130,6 +130,8 @@ Browse the folders you allow (your home folder by default), upload several files
 
 A commit graph of all branches, per-file diffs, and a Changes tab that commits everything with your message and pushes (never forcing). Switch and create branches, stash and apply stashes, and work with GitHub pull requests: review, merge, close, reopen and create (through `gh`).
 
+The repository list holds the repositories found under `repoRoots`. To open another one, choose **Open folder…** at the end of the list and pick any folder inside it. Every Chat and Terminal page also has a Git graph button that opens the Graph for that chat's or terminal's folder. Opened repositories stay in the list.
+
 ### Chat with Claude Code and Codex
 
 <table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/07-chat.png" width="240" alt="Chat with an approval card"><br><sub>Chat with approval cards</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/08-chat-agents.png" width="240" alt="The agents panel in a chat"><br><sub>Agents panel</sub></td></tr></table>
@@ -258,6 +260,7 @@ Full table (cookies, CSRF, approval, block, lockdown, security log): [docs/REFER
 | `recentFolders` | `[]` | Last 5 terminal folders. |
 | `shortcuts` | `claude`, `codex`, `npm run dev`, `git status`, `git pull` | Shortcut commands. |
 | `repoRoots` | `~/Desktop`, `~/Desktop/Projects`, `~` | Git scan roots. `POCKET_DEV_REPO_ROOTS` (colon-separated) overrides it. |
+| `gitRepos` | saved by Git | Repositories opened by hand (**Open folder…**, or the Git graph button on a chat or terminal), newest first, at most 20. |
 | `awake` | `plugged` | Keep awake mode: `off`, `plugged`, or `always`. |
 | `allowedHosts` | `[]` | Additional hostnames accepted by the phone listener. |
 | `chatDefaults` | saved by Chat | Last safe tool, folder, model, mode, and effort choices. Bypass and Full access are never silently remembered. |

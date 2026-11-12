@@ -31,7 +31,8 @@ It does not protect forwarded ports with a password, persist forwards across res
 
 | Feature | What it does | Does not |
 | --- | --- | --- |
-| Repo picker | Finds repositories up to two levels below `~/Desktop`, `~/Desktop/Projects`, and `~`, or below `repoRoots`. Only scanned repositories are accepted. | Open a repository outside the roots. |
+| Repo picker | Finds repositories up to two levels below `~/Desktop`, `~/Desktop/Projects`, and `~`, or below `repoRoots`. **Open folder…** opens any folder inside a repository with the folder picker. The server resolves symlinks, asks git for the top level, and saves that path in `gitRepos`. Git runs only in a scanned or saved top level, matched exactly. | Accept a subfolder, a `..` path or a symlink path in place of the saved top level. |
+| Git graph button | On every Chat page (conversation header) and Terminal page (terminal tab bar). Opens the Graph for the chat's or terminal's starting folder, the same way as **Open folder…**. | Follow a later `cd` in the terminal. |
 | Graph | Last 300 commits on all branches with lanes, **Load more**, branch and tag chips. | |
 | Commit detail | Message, author, files with line counts, per-file diffs. Merge commits diff against the first parent. Diffs are cut at 3,000 lines. | |
 | Changes | Branch, ahead and behind, staged, unstaged, and untracked files with diffs. **Commit** stages every change (`git add -A`), commits with your message, and can push (`git push`, or `git push -u origin <branch>` for a new branch). Pushing never forces. | Pull, or commit only some files. |
