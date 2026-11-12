@@ -17,8 +17,8 @@ async function disconnected() {
 const res = await localRequest('POST', '/api/qr-key');
 if (!res) {
   console.error(await disconnected()
-    ? 'Pocket Dev is running but phone access is disconnected, so no phone can reach it. Press Connect on the admin page (npm run admin) or run npm run connect, then run npm run qr again.'
-    : 'Pocket Dev is not running. Start it with npm start (or npm run service:install to keep it running), then run npm run qr again.');
+    ? 'Pocket Dev is running but phone access is disconnected, so no phone can reach it. Press Connect on the admin page (pocket-dev admin) or run pocket-dev connect, then run pocket-dev qr again.'
+    : 'Pocket Dev is not running. Start it with pocket-dev start (or pocket-dev service install to keep it running), then run pocket-dev qr again.');
   process.exit(1);
 }
 if (!res.ok) {
