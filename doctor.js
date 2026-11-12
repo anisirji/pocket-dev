@@ -17,6 +17,7 @@ const TIMEOUT = 8000;
 const PROBE_MS = 1000;
 const NODE_PTY_RANGE = PACKAGE.optionalDependencies?.['node-pty'] ?? 'latest';
 export const INSTALL_COMMAND = 'npm install -g @anisirji/pocket-dev';
+export const RESTART_NOTE = 'Restart Pocket Dev so it sees tools installed after it started: pocket-dev service restart (or stop it and run pocket-dev start).';
 
 const pathsFor = (platform) => (platform === 'win32' ? path.win32 : path.posix);
 const same = (platform, a, b) => (platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
@@ -180,10 +181,19 @@ function stateRow(ctx) {
   return { ...row, ok: false, detail: `${ctx.stateDir}: ${problem}`, fix: { command: null, note: 'Pocket Dev saves its passwords and devices here. Fix the folder\'s permissions, or point it elsewhere with the POCKET_DEV_STATE_DIR environment variable.' } };
 }
 
+// The admin page takes the next port, so a suggestion needs two free ports in a row, and 7778 is the default admin port.
+async function freePortPair(ctx, from = 7780) {
+  for (let p = from; p < from + 100; p++) if (p !== 7778 && p + 1 !== 7778 && await ctx.portFree(p) && await ctx.portFree(p + 1)) return p;
+  return null;
+}
+
 async function portRow(ctx) {
-  const row = { id: 'port', title: `Port ${ctx.port} free`, level: 'recommended' };
+  const row = { id: 'port', title: `Port ${ctx.port}`, level: 'recommended' };
   if (await ctx.portFree(ctx.port)) return { ...row, ok: true, detail: 'free' };
-  return { ...row, ok: false, detail: 'something is already using it (Pocket Dev itself, if it is running)', fix: { command: 'pocket-dev config set port 7778', note: 'Only needed when Pocket Dev is not already running. Restart it afterwards.' } };
+  if (await ctx.pocketDevOn(ctx.port)) return { ...row, ok: true, running: true, detail: 'Pocket Dev is running on it' };
+  const port = await freePortPair(ctx);
+  return { ...row, ok: false, detail: 'another program is using it, not Pocket Dev',
+    fix: { command: port ? `pocket-dev config set port ${port}` : 'pocket-dev config set port <number>', note: 'Then start Pocket Dev again. Or quit the other program.' } };
 }
 
 function firewallRow(ctx) {
@@ -201,12 +211,13 @@ export async function collectDoctor(ctx) {
   const tools = await toolRows(ctx, facts);
   const [node, ...rest] = tools;
   const rows = [node, installRow(ctx, npm.globalRoot), prefixRow(ctx, npm), commandRow(ctx), await terminalsRow(ctx), ...rest, stateRow(ctx), await portRow(ctx), firewallRow(ctx)].filter(Boolean);
-  return { rows, install: rows.find((r) => r.id === 'install').found, ok: rows.filter((r) => r.level === 'required').every((r) => r.ok) };
+  return { rows, install: rows.find((r) => r.id === 'install').found, running: !!rows.find((r) => r.id === 'port').running,
+    ok: rows.filter((r) => r.level === 'required').every((r) => r.ok) };
 }
 
 const paint = (ctx, code, text) => (ctx.color ? `\x1b[${code}m${text}\x1b[0m` : text);
 
-export function printDoctor(ctx, { rows, ok }) {
+export function printDoctor(ctx, { rows, ok, running }) {
   const w = (f) => Math.max(...rows.map((r) => f(r).length));
   const wt = w((r) => r.title), wl = w((r) => r.level);
   ctx.out(`Pocket Dev ${PACKAGE.version} doctor (${{ darwin: 'macOS', win32: 'Windows', linux: 'Linux' }[ctx.platform] ?? ctx.platform}, Node ${ctx.nodeVersion})`);
@@ -225,6 +236,8 @@ export function printDoctor(ctx, { rows, ok }) {
       if (r.fix.link) ctx.out(`    ${r.fix.link}`);
     }
   }
+  // A running server keeps the PATH it started with, so a tool installed since then is invisible to its terminals and chats.
+  if (running) { ctx.out(''); ctx.out(RESTART_NOTE); }
   ctx.out('');
   const broken = rows.filter((r) => !r.ok && r.level === 'required');
   ctx.out(ok ? 'Everything Pocket Dev requires is working.' : `Something required is not working: ${broken.map((r) => r.title).join(', ')}.`);
@@ -307,6 +320,12 @@ export async function doctorDefaults() {
     packageRoot: PACKAGE_ROOT, stateDir: STATE_DIR, port: configuredPort(),
     realpath: (p) => { try { return fs.realpathSync(p); } catch { return p; } },
     checkWritable, portFree,
+    // Asks the server this settings folder belongs to. A program that holds the port but never answers must not stall the doctor.
+    pocketDevOn: async (port) => {
+      const { localRequest } = await import('./scripts/local-api.js');
+      const res = await Promise.race([localRequest('GET', '/api/status'), new Promise((r) => setTimeout(r, 3000, null).unref())]);
+      return !!res?.ok && res.port === port;
+    },
     probeTerminals: () => probeTerminals({ shell, shellArgs: host.shellArgs(shell) }),
   };
 }

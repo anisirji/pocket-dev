@@ -35,7 +35,8 @@ function computer(over = {}) {
   Object.assign(ctx, {
     packageRoot: over.packageRoot ?? LINUX_ROOT, stateDir: '/home/u/.pocket-dev', port: 7777,
     realpath: (p) => p, readFile: over.readFile ?? (() => { throw new Error('ENOENT'); }),
-    checkWritable: over.checkWritable ?? (() => null), portFree: async () => over.portFree ?? true,
+    checkWritable: over.checkWritable ?? (() => null), portFree: async (p) => (typeof over.portFree === 'function' ? over.portFree(p) : over.portFree ?? true),
+    pocketDevOn: async () => over.pocketDevOn ?? false,
     probeTerminals: async () => state.terminals, ask: over.ask ?? (async () => true), log: () => {},
   });
   return { ctx, lines, ran, state };
@@ -142,6 +143,25 @@ test('unwritable settings folder and a busy port are reported', async () => {
   assert.equal(report.ok, false);
   assert.equal(row(report, 'port').ok, false);
   assert.equal(row(report, 'port').level, 'recommended');
+});
+
+test('the port held by this Pocket Dev is a tick, with a note to restart it for newly installed tools', async () => {
+  const { ctx, lines } = computer({ portFree: false, pocketDevOn: true });
+  const report = await collectDoctor(ctx);
+  assert.equal(row(report, 'port').ok, true);
+  printDoctor(ctx, report);
+  const out = lines.join('\n');
+  assert.match(out, /✓ Port 7777 +recommended +Pocket Dev is running on it/);
+  assert.match(out, /Restart Pocket Dev so it sees tools installed after it started: pocket-dev service restart/);
+});
+
+test('another program on the port: the suggested port is free and is never the admin port 7778', async () => {
+  const busy = [7777, 7780, 7781];
+  const { ctx } = computer({ portFree: (p) => !busy.includes(p) });
+  const port = row(await collectDoctor(ctx), 'port');
+  assert.equal(port.ok, false);
+  assert.match(port.detail, /another program/);
+  assert.equal(port.fix.command, 'pocket-dev config set port 7782');
 });
 
 test('--fix with node-pty folder present rebuilds it, then re-checks; never sudo', async () => {
