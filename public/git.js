@@ -668,6 +668,39 @@ function selectRepo(repo) {
   selectTab(state.tab);
 }
 
+const OPEN_FOLDER = '\0open';
+const noteEl = el('div');
+const pickWrap = el('div', { class: 'g-pick', hidden: true });
+const picker = window.PocketDevFolderPicker.create({
+  api,
+  title: 'Open a git repository',
+  selectLabel: 'Open this folder',
+  onSelect: (folder) => openFolder(folder),
+  onClose: () => {
+    pickWrap.hidden = true;
+    screensEl.hidden = false;
+    window.pocketDev?.overlays.close('git-folder');
+  },
+});
+pickWrap.append(picker.element);
+
+function showPicker() {
+  pickWrap.hidden = false;
+  screensEl.hidden = true;
+  window.pocketDev?.overlays.open('git-folder', () => { if (!pickWrap.hidden) picker.close(); });
+  picker.open('');
+}
+
+// The server turns any folder inside a repository into its top level and remembers it for the dropdown.
+async function openFolder(folder) {
+  state.started = true;
+  const repo = await api('POST', '/api/git/open', { path: folder });
+  noteEl.replaceChildren();
+  remember.set('pd.gitRepo', repo.path);
+  remember.set('pd.gitTab', 'graph');
+  await start();
+}
+
 async function start() {
   state.started = true;
   screensEl.replaceChildren(el('p', { class: 'g-empty' }, 'Finding repositories…'));
@@ -679,22 +712,42 @@ async function start() {
     return;
   }
   screensEl.replaceChildren();
-  if (!state.repos.length) {
-    screensEl.append(empty('No git repositories found under the configured repoRoots.'));
-    return;
-  }
   const counts = new Map();
   for (const r of state.repos) counts.set(r.name, (counts.get(r.name) ?? 0) + 1);
-  repoSelect.replaceChildren(...state.repos.map((r) => el('option', { value: r.path, title: r.path },
-    counts.get(r.name) > 1 ? `${r.name} (${r.path.split('/').slice(-2, -1)[0]})` : r.name)));
+  repoSelect.replaceChildren(
+    ...(state.repos.length ? [] : [el('option', { value: '', hidden: true }, 'No repository')]),
+    ...state.repos.map((r) => el('option', { value: r.path, title: r.path },
+      counts.get(r.name) > 1 ? `${r.name} (${r.path.split('/').slice(-2, -1)[0]})` : r.name)),
+    el('option', { value: OPEN_FOLDER }, 'Open folder…'));
+  if (!state.repos.length) {
+    repoSelect.value = '';
+    screensEl.append(empty('No git repositories found under the configured repoRoots.'),
+      el('p', { class: 'g-empty' }, el('button', { class: 'g-btn', onclick: showPicker }, 'Open folder…')));
+    return;
+  }
   const stored = remember.get('pd.gitRepo');
   repoSelect.value = state.repos.some((r) => r.path === stored) ? stored : state.repos[0].path;
   state.tab = Object.hasOwn(TABS, remember.get('pd.gitTab')) ? remember.get('pd.gitTab') : 'graph';
   selectRepo(repoSelect.value);
 }
 
-repoSelect.onchange = () => selectRepo(repoSelect.value);
-root.append(el('div', { class: 'g-bar' }, tabBar, refreshBtn), screensEl);
+repoSelect.onchange = () => {
+  if (repoSelect.value !== OPEN_FOLDER) {
+    noteEl.replaceChildren();
+    return selectRepo(repoSelect.value);
+  }
+  repoSelect.value = state.repo ?? '';
+  showPicker();
+};
+
+window.pocketDevGit = {
+  openFolder: (folder) => openFolder(folder).catch(async (err) => {
+    await start();
+    noteEl.replaceChildren(notice('error', err.message));
+  }),
+};
+
+root.append(el('div', { class: 'g-bar' }, tabBar, refreshBtn), noteEl, pickWrap, screensEl);
 document.getElementById('app').append(root);
 // The repo picker fills the header's free space in the Git view; the terminal tab bar is hidden there.
 document.getElementById('viewSwitch').after(repoSelect);

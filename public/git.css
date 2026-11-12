@@ -18,6 +18,7 @@
 .g-icon:active { background: var(--line); }
 
 .g-screens { position: relative; flex: 1; min-height: 0; }
+.g-pick { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
 .g-screen { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; }
 .g-screen-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 8px 0 4px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .g-back { flex: none; height: 36px; padding: 0 10px; border-radius: 8px; color: var(--accent); }
