@@ -20,12 +20,64 @@ Pocket Dev works on macOS, Windows 11 and Linux. Some details below name macOS t
 | Upload | **📎** or paste an image. Saves to `~/.pocket-dev/uploads` (25 MB per file) and inserts the quoted path into the input. | Press Enter. Delete old uploads. |
 | Shortcuts | **⚡** runs saved commands. Up to 30, each 1 to 200 characters, stored in `config.json`. | |
 
+### Terminal API for scripts
+
+A script or agent can drive a terminal with the same HTTP calls and WebSocket the phone uses. Every call goes to the phone address (`http://<Wi-Fi address>:7777`, or the internet link) and carries the login cookie.
+
+1. Log in with `POST /api/login` and the JSON body `{ "password": "…", "name": "build-bot" }`. The `name` is optional, 1 to 40 characters on one line, and is what the approval list shows. The reply sets the `pd_token` cookie. A reply of `{ "ok": true, "pending": true }` means the login waits for approval; poll `GET /api/status` until `status` is `active`. The cookie works only on the address that issued it.
+2. Create a terminal with `POST /api/sessions` and the body `{ "cwd": "/path/to/folder", "command": "npm test" }`. Both fields are optional. `cwd` defaults to the home folder and must be a folder. `command` is one line of 1 to 200 characters; the shell types it and presses Enter once its prompt is quiet. The reply is `201` with `{ id, title, cwd, exitCode, startedAt, activeAt, persistent }`.
+3. Open the WebSocket `ws://<address>/ws/<id>` (`wss://` on the internet link) with the cookie. An `Origin` header, if sent, must match the address. A refused upgrade answers `401` (no login), `403` (wrong origin or a collaborator), `404` (no such terminal), or `503` (terminals are unavailable on this computer).
+4. `GET /api/sessions` lists every terminal. `DELETE /api/sessions/<id>` closes one and answers `204`.
+
+Every `POST`, `PUT`, `PATCH` and `DELETE` needs the header `x-pocket-dev: 1` and `content-type: application/json`.
+
+Each WebSocket message is one JSON text frame.
+
+| Direction | Frame | Meaning |
+| --- | --- | --- |
+| Server to client | `{ "t": "out", "d": "…" }` | Terminal output, with escape sequences as the shell printed them. The first frame after connecting replays up to about 500 KB of earlier output. |
+| Server to client | `{ "t": "exit", "code": 0 }` | The shell ended. The socket stays open, and input is ignored. |
+| Server to client | `{ "t": "pong" }` | The answer to a `ping` frame. |
+| Server to client | `{ "t": "waiting", "kind": "…", "code": "1a2b" }` | A login is waiting for approval. Only owner devices hear this, and only with **Approve from a logged-in phone** on. Ignore it in a script. |
+| Client to server | `{ "t": "in", "d": "ls\r" }` | Keystrokes. Send `\r` for Enter and `\u0003` for Ctrl-C. |
+| Client to server | `{ "t": "resize", "cols": 120, "rows": 40 }` | The terminal size, each 10 to 500. The client that types last sets the size. |
+| Client to server | `{ "t": "ping" }` | Asks for a `pong` frame. |
+
+The server also sends a WebSocket ping every 30 seconds and closes a socket that does not answer. Most WebSocket libraries answer it on their own.
+
+A minimal Node.js script with the `ws` package:
+
+```js
+import WebSocket from 'ws';
+const base = 'http://192.168.1.20:7777';
+const headers = { 'content-type': 'application/json', 'x-pocket-dev': '1' };
+const login = await fetch(`${base}/api/login`, { method: 'POST', headers, body: JSON.stringify({ password: process.env.PD_PASSWORD, name: 'build-bot' }) });
+const cookie = login.headers.get('set-cookie').split(';')[0];
+const session = await (await fetch(`${base}/api/sessions`, { method: 'POST', headers: { ...headers, cookie }, body: JSON.stringify({ cwd: '/Users/me/app' }) })).json();
+const ws = new WebSocket(`${base.replace('http', 'ws')}/ws/${session.id}`, { headers: { cookie } });
+ws.on('open', () => ws.send(JSON.stringify({ t: 'in', d: 'npm test\r' })));
+ws.on('message', (raw) => { const m = JSON.parse(raw); if (m.t === 'out') process.stdout.write(m.d); });
+```
+
 
 ## Ports
 
 Forward `localhost:<port>` on the Mac to `<mac-lan-ip>:<port>`, so the phone can open a dev server. It is a raw TCP pipe (127.0.0.1 first, then ::1), so HMR WebSockets work. When the Mac's LAN IP changes, every forward moves to the new IP within about 10 s.
 
-It does not protect forwarded ports with a password, persist forwards across restarts, forward ports below 1024, or forward Pocket Dev's own ports (the phone port and the Admin port, which only this Mac may open).
+It does not protect forwarded ports with a password on Wi-Fi, persist forwards across restarts, forward ports below 1024, or forward Pocket Dev's own ports (the phone port and the Admin port, which only this Mac may open).
+
+### Ports from outside the home network
+
+A phone on the internet address cannot reach the Wi-Fi link. There, tapping a port opens it through its own Quick link (`https://….trycloudflare.com`), behind the Pocket Dev login:
+
+1. The phone asks `POST /api/forwards/<port>/remote`. Only a logged-in owner device can ask, only for a port that is forwarded, and only while internet access is on. Collaborators and room members cannot.
+2. The first time, Pocket Dev starts a small gate on `127.0.0.1` and one `cloudflared` Quick link that points at the gate, never at the dev server. Each port gets its own address, so a dev server's root paths (`/assets/…`, `/@vite/client`) work.
+3. The reply is a link with a one-time key that lasts 60 seconds. Opening it gives that browser a `pd_port` cookie (HttpOnly, Secure, SameSite=Lax, 12 hours) for that address only, and removes the key from the address bar. Lax lets an app's sign-in callback from another site still reach it.
+4. The gate passes a request on to `localhost:<port>` only with that cookie, while the device that asked is still logged in and internet access is still on. Anyone else gets a 401 page and nothing reaches the dev server. WebSockets (hot reload) pass through the same check.
+5. The dev server sees `Host: localhost:<port>`, so host checks such as Vite's pass. The tunnel's own headers and the gate cookie are removed; the app's own cookies pass.
+6. Closing the forward, Lockdown, stopping Pocket Dev, or turning internet access off ends the Quick link. An open WebSocket is checked again every 5 seconds and closes once its device is logged out or blocked. If `cloudflared` for a port stops, the next tap starts a new Quick link.
+
+Each opening is in the security log as `port-remote-opened`. It needs `cloudflared`, like a Quick link. A new Quick link can take a few seconds before its address answers.
 
 ## Git
 
@@ -82,7 +134,7 @@ Run `pocket-dev takeover <id>` in a Mac terminal, or `pocket-dev takeover --last
 | Queue | Type while the agent is working and the button says **Queue**. Waiting messages stay in a compact tray above the composer, with a shortened one-line preview, **Edit**, and **Remove**. Edit loads the full text into the bottom message box; **Save** keeps its place and attachments, and **Cancel** restores your separate draft. If the agent already picked it up, **Keep draft** preserves the edit without sending another message. The tray stays at the bottom while replies stream; a large queue scrolls inside the tray. When the agent takes a message, it leaves the tray and appears in full in the conversation. Messages go out one per turn, in order. There is one **Stop** in the status line. Up to 20 messages can wait. After a failed turn the rest appear as **Not sent** instead of running. Waiting messages are held in memory, so a server restart marks them **Not sent**. | Survive a restart. |
 | Attached images | A picture you attach with 📎 shows as a small preview in your own message, not just a file name. Tap it for the original. Other files stay as `📎 name`. The preview is a 480 px JPEG made once with `sips` and kept in the chat's `.images` folder. The route serves only a file listed on that message and only if it is an image, never an arbitrary path. | Preview files that are gone (they fall back to the name). |
 | Tool images | A picture a tool returns (for example `Read` on a PNG) shows in the tool's fold instead of `[image]`. Tap it for the full size. Files up to 8 MB are saved in `~/.pocket-dev/chats/<id>.images/` (mode 0600), only their names go in the chat, and deleting the chat deletes them. | Show images over 8 MB or in other formats (those stay `[image]`). |
-| Allow and Deny | Cards for commands, file edits, tools, and plans: **Allow once**, **Always allow in this chat**, **Always allow in this project** when Claude offers it, and **Deny** with an optional reason. The Permissions screen lists and removes remembered rules. | Time out a waiting card. |
+| Allow and Deny | Cards for commands, file edits, tools, and plans. A Claude card has up to four buttons: **Allow once**, **Always allow in this chat** (**Allow all edits in this chat** for a file edit), **Always allow in this project** when Claude offers a rule it can save, and **Deny** with an optional reason. A Codex card has three: **Approve**, **Approve for this chat**, and **Deny**. A plan card has **Start working** and **Keep planning**. The Permissions screen lists and removes remembered rules. | Time out a waiting card. |
 | Questions | Answers `AskUserQuestion` (Claude) and `requestUserInput` (Codex), with **Other…**. | Multi-select on Codex. |
 | Stop | Interrupts the turn. The server ends it after 5 s if the engine does not stop. | |
 | Models and modes | Model lists come from each engine, with custom model names supported. Claude has Ask every time, Accept edits, Plan, Auto, Don’t ask, and Bypass. Codex has independent Approval (Ask first, On request, Never ask), Sandbox (Read only, Workspace, Full access), and Effort controls. Bypass and Full access need confirmation. Chips report whether a change applies now or next turn; replies show their model. | |
@@ -105,7 +157,7 @@ Trash uses macOS’s native Trash operation. Restore items in Finder on the Mac.
 
 Messages is a chat between this Mac, your own devices, and the people you invite. Use it to move text, screenshots, videos, and files between them.
 
-- **Who takes part.** The Mac (the Messages panel on the Admin page), every logged-in owner device, and every collaborator and guest session, in all roles. A Viewer can read and send in Messages even though its Files access is read-only.
+- **Who takes part.** The Mac (the Messages panel on the Admin page and `pocket-dev message`, shown under the computer's name), every logged-in owner device, and every collaborator and guest session, in all roles. A Viewer can read and send in Messages even though its Files access is read-only.
 - **Chats.** **Everyone** is the group chat. Each person also has a direct chat that only the two of you can see. Collaborators and guests see group messages from the moment their grant was created, never other people's direct chats, and only display names (no device codes or addresses).
 - **Messages.** Bubbles show the sender's name in the group, with a tag for collaborators and guests, and the time. Images show as thumbnails (a 480 px JPEG made with `sips`) and open full size when tapped. Videos and audio play in the page. Other files show as a card with a download button.
 - **Actions.** Long-press a message, right-click it, or use its **⋯** button for **Copy**, **Download**, **Delete for everyone**, or **Hide for me**. The sender and owner devices or the Mac can delete a message for everyone, which also deletes its files. Anyone else can hide it for themselves.
@@ -167,7 +219,7 @@ An amber or red banner appears under the strip, and the phone vibrates once, whe
 
 ## Screen view
 
-Settings → **Mac screen** shows a picture of the Mac's main display: **Refresh** takes a new one, **Auto** refreshes every 3 s, **Zoom** enlarges it to scroll around. It is read-only (no clicks or typing reach the Mac) and needs a logged-in phone. Each picture is a JPEG at most 1,600 px on its longest side, taken with `screencapture`, shrunk with `sips`, sent, and deleted; nothing is kept on disk. Turn it off with `pocket-dev config set screenView false`.
+Settings → **Mac screen** shows a picture of the Mac's main display: **Refresh** takes a new one, **Auto** refreshes every 3 s, **Zoom** enlarges it to scroll around. It is read-only (no clicks or typing reach the Mac) and needs a logged-in phone. Each picture is a JPEG at most 1,600 px on its longest side, sent and then deleted; nothing is kept on disk. On a Mac it is taken with `screencapture` and shrunk with `sips`. On Windows, PowerShell takes it with .NET (System.Drawing, at the display's real resolution) and shrinks it the same way; Windows allows this only from the signed-in, unlocked desktop. On Linux it uses grim, scrot, maim, gnome-screenshot or ImageMagick, and ImageMagick to shrink. Turn it off with `pocket-dev config set screenView false`.
 
 It needs **Screen Recording** for the program that runs Pocket Dev. Without it the picture shows only the wallpaper. The Admin page's Permissions panel shows whether it is allowed and opens the right System Settings page. The check looks for titled windows from other apps, because macOS hides those titles until Screen Recording is allowed; with no other window open it reports Unknown.
 
@@ -215,7 +267,7 @@ Viewer can preview and download scoped files. Developer can change a separate pr
 | Rate limit | 10 wrong passwords per IP in 15 minutes locks that IP for 15 minutes. The Admin page warns at 5 failures in an hour. |
 | Cookie | `pd_token`, HttpOnly, SameSite=Strict, 1 year. `Secure` on the internet link; not on Wi-Fi, where the transport is http. Each cookie works only on the address it was issued for: a Wi-Fi cookie is no login on the internet address, and the other way round. |
 | CSRF | Every POST, PUT, PATCH, and DELETE needs `x-pocket-dev: 1`. JSON bodies need `content-type: application/json`. WebSocket upgrades check `Origin`. |
-| Approve, block, lockdown, security log | `requireApproval` makes password logins wait up to 10 minutes for approval on the Mac, with a 4-character code to compare. `approveFromDevices` (default off; only the Mac turns it on, a phone can turn it off) also lets a logged-in owner phone see who is waiting under Settings → Devices and approve or deny with the same code check, and pushes "Someone is waiting to log in" to the owner's open pages. A logged-in owner phone already has full shell access, so letting it approve logins adds no power it did not have; if that phone is lost, log it out from the Mac or run lockdown. With role-based sharing on, only Admin devices approve, and collaborator invitations can already be sent from a logged-in owner phone. Blocked devices are refused on every route, across restarts. Lockdown logs out every non-blocked device, stops forwards, voids QR keys, disconnects phone access, and optionally closes terminals or sets a new password. Only the Mac can reconnect phone access. Events go to `~/.pocket-dev/security.log` (JSONL, mode 0600, rotated at 1 MB to `security.log.1`). |
+| Approve, block, lockdown, security log | `requireApproval` makes password logins wait up to 10 minutes for approval on the Mac, with a 4-character code to compare. With collaborator sharing on, every new password login waits, whatever `requireApproval` says; the Admin page says so under **Approve new devices**. QR logins and recovery-code logins never wait. A login can send a device name (see [Terminal API for scripts](#terminal-api-for-scripts)); the approval list shows it beside the browser kind. `approveFromDevices` (default off; only the Mac turns it on, a phone can turn it off) also lets a logged-in owner phone see who is waiting under Settings → Devices and approve or deny with the same code check, and pushes "Someone is waiting to log in" to the owner's open pages. A logged-in owner phone already has full shell access, so letting it approve logins adds no power it did not have; if that phone is lost, log it out from the Mac or run lockdown. With role-based sharing on, only Admin devices approve, and collaborator invitations can already be sent from a logged-in owner phone. Blocked devices are refused on every route, across restarts. Lockdown logs out every non-blocked device, stops forwards, voids QR keys, disconnects phone access, and optionally closes terminals or sets a new password. Only the Mac can reconnect phone access. Events go to `~/.pocket-dev/security.log` (JSONL, mode 0600, rotated at 1 MB to `security.log.1`). |
 | Admin page | `http://localhost:7778` (`adminPort`, default phone port + 1), bound to 127.0.0.1 and ::1, with a Host allowlist, Origin and proxy-header refusal, and an `x-pocket-admin: 1` header on writes. It has no password, because only a process on the Mac can reach it. Sections: Connection, Internet access (Off, Quick link, My own domain, Wi-Fi access), Share & login (share QR, one-time login QR, copy links), Waiting, Devices (rename, log out, block, unblock), Security log (latest 200, filters), Password (no old password needed), Settings (device limit, approval, approve from a logged-in phone, addresses), Live (close terminals, stop forwards and active chats, read-only Power and Open apps status), Service (install, Start automatically, stop), Lockdown. |
 | Connect and Disconnect | Disconnect closes port 7777 and all forwards. Terminals keep running and devices stay logged in. A phone can disconnect, only the Mac can connect. With **Keep connection open** off, access closes about 30 s after the last Admin page closes (10 s heartbeat) and a restart starts disconnected. Saved as `access` in `config.json`. |
 | Start automatically | `launchctl enable` or `disable` for `dev.pocket.server`, from the Admin page, the phone, or `npm run autostart`. Does not stop the running server. |
@@ -281,7 +333,7 @@ Setting up your own domain:
 4. Turn on **Always Use HTTPS** for the domain (SSL/TLS → Edge Certificates), so a phone that types the address without `https://` is sent there by Cloudflare before anything reaches the Mac.
 5. On the Admin page choose **My own domain**, paste the hostname and the token, and press **Save and connect**. The page shows connecting, connected with an **Open** link, or `cloudflared`'s error. From the terminal: `pbpaste | pocket-dev internet domain --hostname pocket.example.com --token-stdin`.
 
-Each address has its own login cookie, so a phone that first opens the internet address meets the password page, and with **Approve new devices** on it would wait for approval on the Mac, which is no use when you are away. Link the phone while it is at home instead: on Wi-Fi, the phone shows "Link this phone to pocket.example.com so you won't need to log in when you're away", and **Settings → Connection** has the same **Link this phone** button. Linking gives the same device a cookie for the internet address, then returns to Wi-Fi. A Quick link is a new address on every **Turn on**, so each phone links again each time; your own domain keeps one address, so the link is needed once per device. The other way round also works: scan the QR code on the internet address once (the codes point there when the link is up), then use **Switch to local** on Wi-Fi.
+Each address has its own login cookie, so a phone that first opens the internet address meets the password page, and with **Approve new devices** on it would wait for approval on the Mac, which is no use when you are away. Link the phone while it is at home instead: on Wi-Fi, the phone shows "Link this phone to pocket.example.com so you won't need to log in when you're away", and **Settings → Connection** has the same **Link this phone** button. Linking gives the same device a cookie for the internet address, then returns to Wi-Fi. A Quick link is a new address on every **Turn on**, so each phone links again each time; your own domain keeps one address, so the link is needed once per device. When the address changes, a phone on Wi-Fi says "The internet address is new" and offers **Link**. A phone still open on the old address says it cannot reach the device, that a restarted Quick link has a new address, and to scan a new QR code or open Pocket Dev on Wi-Fi. The other way round also works: scan the QR code on the internet address once (the codes point there when the link is up), then use **Switch to local** on Wi-Fi.
 
 Afterwards **Settings → Connection** shows both addresses with **Switch to local** and **Switch to remote**. When the phone is on the internet address but on the Mac's own network, a small prompt offers the local route; **Not now** is remembered for that network. When the Wi-Fi address stops answering for about five seconds, the phone offers the internet link. Nothing switches by itself. The open terminal or chat follows the switch. **Turn off internet access** in the same section works from either address; from the internet address the phone switches itself to Wi-Fi first, with its login, because its internet cookie opens nothing there.
 

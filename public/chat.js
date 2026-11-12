@@ -23,6 +23,8 @@
   const DECISIONS = { allow: 'Allowed', 'allow-chat': 'Allowed for this chat', 'allow-project': 'Allowed for this project', deny: 'Denied' };
   const FALLBACK_OPTIONS = [{ id: 'allow', label: 'Allow once' }, { id: 'allow-chat', label: 'Always allow in this chat' }, { id: 'deny', label: 'Deny' }];
   const KINDS = { command: 'Run a command', file: 'Edit a file', tool: 'Use a tool', plan: 'Approve the plan' };
+  // A request this long starts collapsed to a two-line title and a few lines of detail.
+  const isLongRequest = (ev) => (ev.title?.length ?? 0) > 120 || (ev.detail?.length ?? 0) > 400 || (ev.detail?.split('\n').length ?? 0) > 6;
   const POLL_MS = 3000;
   const MAX_INPUT_PX = 140;
   const TOAST_MS = 2600;
@@ -1659,6 +1661,16 @@
       }
     }
     if (ev.diff) scroll.append(diffBlock(ev.diff));
+    if (ev.kind !== 'plan' && isLongRequest(ev)) {
+      const label = ev.kind === 'command' ? 'Show full command' : 'Show everything';
+      const more = button('chat-card-more', label, () => {
+        const open = scroll.classList.toggle('chat-card-open');
+        more.textContent = open ? 'Show less' : label;
+        more.setAttribute('aria-expanded', String(open));
+      });
+      more.setAttribute('aria-expanded', 'false');
+      scroll.append(more);
+    }
     const reason = el('input', 'chat-text chat-reason');
     Object.assign(reason, { type: 'text', placeholder: 'Reason (optional), then tap Deny', hidden: true });
     reason.setAttribute('enterkeyhint', 'send');
@@ -1675,7 +1687,11 @@
     const opt = (o, cls) => {
       const b = button(cls, o.label, decide(o));
       b.dataset.decision = o.id;
-      if (o.id === 'deny') keepFocus(b);
+      if (o.id === 'deny') {
+        keepFocus(b);
+        // A tap still leaves the phone keyboard open; Tab must still reach Deny.
+        b.tabIndex = 0;
+      }
       return b;
     };
     // Remembering options sit together under the rule they save; the one-shot answers share the bottom row.
@@ -1685,7 +1701,9 @@
     if (remember.length) {
       if (ev.rule) {
         const rule = el('div', 'chat-card-rule');
-        rule.append(el('span', 'chat-card-rule-k', 'Remembers'), el('code', 'chat-card-rule-v', ev.rule));
+        const value = el('code', 'chat-card-rule-v', ev.rule);
+        value.title = ev.rule;
+        rule.append(el('span', 'chat-card-rule-k', 'Remembers'), value);
         actions.append(rule);
       }
       const row = el('div', `chat-card-row chat-card-remember${remember.length > 1 ? ' chat-card-two' : ''}`);

@@ -15,10 +15,20 @@ async function take() {
     await platform.resizeImage({ input: raw, output: small, side: MAX_WIDTH, quality: 60, onlyShrink: true });
     return fs.readFileSync(small);
   } catch (err) {
-    throw new Error(`Could not capture the screen. The display may be asleep or ${platform.host.the} locked. ${err.stderr?.trim() ?? ''}`.trim());
+    throw captureError(err);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+const WHY = {
+  win32: 'Windows allows a screen picture only from the signed-in desktop: the screen must be unlocked, and Pocket Dev must run as that user (pocket-dev start, or Start at login), not as a system service.',
+};
+
+export function captureError(err, os = platform.platform, host = platform.host) {
+  const why = WHY[os] ?? `The display may be asleep or ${host.the} locked.`;
+  const detail = String(err.stderr ?? '').trim().split(/\r?\n/)[0];
+  return new Error(`Could not capture the screen. ${why}${detail ? ` (${detail})` : ''}`);
 }
 
 let inFlight = null;

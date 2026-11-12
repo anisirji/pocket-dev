@@ -182,7 +182,13 @@ test('screenshot and resize: Mac keeps screencapture and sips; Linux and Windows
   await win.p.screenshot('C:\\t');
   await win.p.resizeImage({ input: 'in.jpg', output: 'out.jpg', side: 480, quality: 70 });
   assert.equal(win.calls[0].cmd, 'powershell.exe');
-  assert.match(win.calls[0].args.at(-1), /CopyFromScreen/);
+  const capture = win.calls[0].args.at(-1);
+  assert.match(capture, /CopyFromScreen/);
+  assert.ok(capture.indexOf('SetProcessDPIAware()') < capture.indexOf('PrimaryScreen.Bounds'), 'a scaled display is measured in real pixels');
+  assert.match(win.calls[0].o.env.POCKET_DEV_OUT, /raw\.jpg$/, 'the picture path travels in the environment');
+  assert.match(capture, /ImageFormat\]::Jpeg/);
+  await win.p.resizeImage({ input: 'raw.jpg', output: 'small.jpg', side: 1600, quality: 60, onlyShrink: true });
+  assert.deepEqual([win.calls[2].o.env.POCKET_DEV_SIDE, win.calls[2].o.env.POCKET_DEV_QUALITY, win.calls[2].o.env.POCKET_DEV_SHRINK_ONLY], ['1600', '60', '1'], 'the same 1,600 px JPEG as the Mac');
   assert.equal(win.calls[1].o.env.POCKET_DEV_SIDE, '480');
   assert.equal(win.calls[1].o.env.POCKET_DEV_SHRINK_ONLY, '0');
   assert.equal(win.calls[1].args.some((a) => a.includes('in.jpg')), false, 'paths travel in the environment');

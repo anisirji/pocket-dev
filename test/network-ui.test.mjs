@@ -201,3 +201,32 @@ test('landing on the internet address right after linking goes back to Wi-Fi wit
   await stranded.net.check();
   assert.equal(stranded.replaced.length, 0, 'the return happens at most once');
 });
+
+test('a new Quick link address is announced as new on Wi-Fi', async () => {
+  const storage = new Map([['pd.net.remoteUrl', 'https://old-words.trycloudflare.com']]);
+  const f = fixture({ storage, responses: { '/api/connection': connection({ route: 'local', sameNetwork: null, networkKey: null, linked: false, internet: 'quick', remoteUrl: 'https://new-words.trycloudflare.com' }) } });
+  await settle();
+  assert.equal(f.banner.hidden, false);
+  assert.equal(f.banner.children[0].textContent, 'The internet address is new: new-words.trycloudflare.com. The old one no longer works. Link this phone so you won’t need to log in when you’re away.');
+  assert.equal(f.storage.get('pd.net.remoteUrl'), 'https://new-words.trycloudflare.com');
+});
+
+test('on a Quick link that stops answering, the phone says the address may have changed', async () => {
+  const f = fixture({ protocol: 'https:', responses: { '/api/connection': connection({ sameNetwork: false, internet: 'quick', remoteUrl: 'https://words.trycloudflare.com' }), '/api/status': { status: 530, body: {} } } });
+  await settle();
+  f.net.socket(false);
+  for (let i = 0; i < 5; i++) await f.runTimers();
+  assert.equal(f.banner.dataset.kind, 'gone');
+  assert.match(f.banner.children[0].textContent, /Quick link has a new address/);
+  f.net.socket(true);
+  await settle();
+  assert.equal(f.banner.hidden, true, 'a socket that comes back withdraws it');
+});
+
+test('on an own domain that stops answering there is no address-changed claim', async () => {
+  const f = fixture({ protocol: 'https:', responses: { '/api/connection': connection({ sameNetwork: false }), '/api/status': { status: 530, body: {} } } });
+  await settle();
+  f.net.socket(false);
+  for (let i = 0; i < 5; i++) await f.runTimers();
+  assert.equal(f.banner.hidden, true);
+});

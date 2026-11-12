@@ -5,6 +5,7 @@ export const EVENT_KINDS = {
   'remote-started': 'change',
   'remote-stopped': 'change',
   'remote-error': 'failure',
+  'port-remote-opened': 'access',
   'network-changed': 'change',
   'handoff-created': 'access',
   'handoff-redeemed': 'access',

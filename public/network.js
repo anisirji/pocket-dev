@@ -41,6 +41,8 @@
   let section = null;
   let probe = 0;
   let failures = 0;
+  // The internet address this phone saw before the current one. A Quick link gets a new address on every start.
+  let replaced = null;
   const enabled = () => info !== null && info.wifi && info.internet !== 'off';
   const remoteUrl = () => info?.remoteUrl ?? store.get('pd.net.remoteUrl');
   const hostOf = (url) => new URL(url).hostname;
@@ -95,7 +97,8 @@
   const PROMPTS = {
     local: { text: () => 'You’re on the same Wi-Fi as the device. Switch to local?', action: 'Switch', go: () => switchToLocal(), later: () => info?.networkKey && store.set(`pd.net.notNow.${info.networkKey}`, '1') },
     remote: { text: () => 'Can’t reach the device on Wi-Fi. Switch to remote?', action: 'Switch to remote', go: () => switchToRemote() },
-    link: { text: () => `Link this phone to ${hostOf(info.remoteUrl)} so you won’t need to log in when you’re away.`, action: 'Link', go: () => linkToRemote(), later: () => store.set(`pd.net.linkNotNow.${hostOf(info.remoteUrl)}`, '1') },
+    gone: { text: () => 'Can’t reach the device over the internet. If Pocket Dev restarted, its Quick link has a new address and this one no longer works. Scan a new QR code on the device, or open Pocket Dev on its Wi-Fi.', action: 'Retry', go: () => location.reload() },
+    link: { text: () => (replaced ? `The internet address is new: ${hostOf(info.remoteUrl)}. The old one no longer works. Link this phone so you won’t need to log in when you’re away.` : `Link this phone to ${hostOf(info.remoteUrl)} so you won’t need to log in when you’re away.`), action: 'Link', go: () => linkToRemote(), later: () => store.set(`pd.net.linkNotNow.${hostOf(info.remoteUrl)}`, '1') },
     linked: { text: () => `Linked. This phone now opens ${hostOf(info.remoteUrl)} without logging in.`, action: 'OK', go: () => showPrompt(null) },
   };
 
@@ -118,7 +121,11 @@
   function render() {
     const ports = document.getElementById('portsBtn');
     if (ports) ports.hidden = info?.wifi === false;
-    if (enabled() && info.route === 'local' && info.remoteUrl) store.set('pd.net.remoteUrl', info.remoteUrl);
+    const previous = store.get('pd.net.remoteUrl');
+    if (enabled() && info.route === 'local' && info.remoteUrl) {
+      if (previous && previous !== info.remoteUrl) replaced = previous;
+      store.set('pd.net.remoteUrl', info.remoteUrl);
+    }
     if (!enabled()) store.remove('pd.net.remoteUrl');
     if (justLinked && enabled() && info.route === 'remote') {
       justLinked = false;
@@ -154,7 +161,7 @@
     if (online) {
       clearTimeout(probe);
       probe = 0;
-      if (banner.dataset.kind === 'remote') showPrompt(null);
+      if (banner.dataset.kind === 'remote' || banner.dataset.kind === 'gone') showPrompt(null);
       check();
       return;
     }
@@ -175,6 +182,7 @@
     }
     const local = info ? info.route === 'local' : location.protocol === 'http:';
     if (local && remoteUrl() && navigator.onLine !== false) showPrompt('remote');
+    else if (!local && info?.internet === 'quick' && navigator.onLine !== false) showPrompt('gone');
   }
 
   function row(label, detail, action, onclick, current) {

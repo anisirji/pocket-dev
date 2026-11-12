@@ -117,7 +117,9 @@
 .mx-chip-error { border-color: #6b2a27; }
 .mx-chip-error .mx-chip-state { color: var(--danger); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-chip-x { flex: none; width: 32px; height: 32px; color: var(--muted); }
-.mx-error { flex: none; margin: 6px 10px 0; color: var(--danger); font-size: 13px; overflow-wrap: anywhere; }
+.mx-error { flex: none; margin: 6px 10px 0; color: var(--danger); font-size: 13px; overflow-wrap: anywhere; white-space: pre-line; }
+.mx-limit { flex: none; margin: 6px 10px 0; color: var(--muted); font-size: 12px; }
+.mx-limit[hidden] { display: none; }
 .mx-error:empty { display: none; }
 .mx-gone { flex: none; margin: 0; padding: 14px; background: var(--mx-head); color: var(--mx-sub); text-align: center; }
 

@@ -130,7 +130,7 @@
     $('.st-waiting').replaceChildren(...(settings.waiting ?? []).map((d) => {
       const card = el('li', 'st-device st-pending');
       const top = el('div', 'st-dev-top');
-      top.append(el('span', 'st-name', d.kind ?? d.name), el('span', 'st-badge', 'Waiting'));
+      top.append(el('span', 'st-name', d.name), el('span', 'st-badge', 'Waiting'));
       const actions = el('div', 'st-actions');
       const approve = el('button', 'st-primary', 'Approve');
       approve.onclick = () => decide(d, 'approve');
@@ -138,7 +138,7 @@
       deny.onclick = () => decide(d, 'deny');
       actions.append(approve, deny);
       card.append(top, el('div', 'st-code', d.code), el('p', 'st-note', 'Approve only if this matches the code on the other device.'),
-        el('div', 'st-meta', `${d.ip} · asked ${ago(d.createdAt)}`), actions);
+        el('div', 'st-meta', [d.kind !== d.name && d.kind, d.ip, `asked ${ago(d.createdAt)}`].filter(Boolean).join(' · ')), actions);
       return card;
     }));
     const box = $('.st-approve');
@@ -157,7 +157,7 @@
   }
 
   async function decide(d, action) {
-    if (action === 'deny' && !confirm(`Deny ${d.kind ?? d.name} (code ${d.code})? It goes back to the login page.`)) return;
+    if (action === 'deny' && !confirm(`Deny ${d.name} (code ${d.code})? It goes back to the login page.`)) return;
     try {
       await api('POST', `/api/devices/${d.id}/${action}`);
       msg('err', 'devices', '');

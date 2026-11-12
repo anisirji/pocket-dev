@@ -290,10 +290,10 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     return device && isActive(device) ? device : undefined;
   }
 
-  function addDevice(req, via, status) {
+  function addDevice(req, via, status, name = null) {
     const now = Date.now();
     const { ip, ua } = requestInfo(req);
-    const device = { id: crypto.randomBytes(4).toString('hex'), name: deviceName(ua), ua, createdAt: now, lastSeen: now, ip, via, status, tokenHashes: [], ...(rolesEnabled() && status === 'active' && { role: 'admin' }) };
+    const device = { id: crypto.randomBytes(4).toString('hex'), name: name ?? deviceName(ua), ua, createdAt: now, lastSeen: now, ip, via, status, tokenHashes: [], ...(rolesEnabled() && status === 'active' && { role: 'admin' }) };
     devices.set(device.id, device);
     return { cookie: addCookie(req, device), device };
   }
@@ -521,7 +521,10 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       if (lockedMs) return reply(429, { error: lockedMessage(ip, lockedMs) });
       const existing = lookup(req);
       if (existing?.status === 'blocked') return reply(403, REFUSALS.blocked);
-      const { password, code } = await body();
+      const { password, code, name: givenName } = await body();
+      // A script or app may name itself for the approval list; the login page sends no name.
+      const name = givenName === undefined ? null : parseDeviceName(givenName);
+      if (givenName !== undefined && !name) return reply(400, { error: 'The device name must be 1 to 40 characters on one line.' });
       const refuse = async (error) => {
         log('login-failed', { ip, ua });
         const lockedNow = limiter.fail(ip);
@@ -551,10 +554,10 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
         evictLeastRecent();
       }
       const status = by || !(requireApproval() || rolesEnabled()) ? 'active' : 'pending';
-      const { cookie, device } = addDevice(req, 'password', status);
+      const { cookie, device } = addDevice(req, 'password', status, name);
       log(status === 'pending' ? 'login-pending' : 'login', { via: 'password', ...about(device), ua });
       if (by) log('device-approved', { ...about(device), by });
-      if (status === 'pending' && approveFromDevices()) notifyPending({ kind: deviceName(ua), code: device.id.slice(-4) });
+      if (status === 'pending' && approveFromDevices()) notifyPending({ kind: device.name, code: device.id.slice(-4) });
       return reply(200, { ok: true, ...(status === 'pending' && { pending: true }) }, { 'set-cookie': cookie });
     },
     'GET /api/status'({ req }) {
@@ -760,6 +763,6 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     },
   };
 
-  return { passwordLine, noteRestart, lookup, deviceFor, trackSocket, mintQrUrl, redeemQrKey, mintHandoff, redeemHandoff, hasCookieFor, isLocalRequest, handleApi, admin, activeCount,
+  return { passwordLine, noteRestart, lookup, deviceFor, isActiveDevice: (id) => Boolean(findActive(id)), trackSocket, mintQrUrl, redeemQrKey, mintHandoff, redeemHandoff, hasCookieFor, isLocalRequest, handleApi, admin, activeCount,
     isTrustedAdmin: (req) => deviceFor(req)?.role === 'admin' };
 }

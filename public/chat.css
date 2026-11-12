@@ -156,7 +156,7 @@
 .chat-dl-meta { color: var(--muted); }
 
 .chat-sys { align-self: center; max-width: 92%; color: var(--muted); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
-.chat-sys-wait { color: var(--chat-warn); }
+.chat-sys-wait { color: var(--chat-warn); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .chat-resolved { display: flex; align-items: baseline; gap: 6px; min-width: 0; padding: 0 4px; color: var(--muted); font-size: 12.5px; }
 .chat-resolved-mark { flex: none; color: var(--chat-add); font-weight: 700; }
 .chat-resolved-no .chat-resolved-mark { color: var(--danger); }
@@ -174,6 +174,10 @@
 .chat-card-kicker { color: var(--chat-warn); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
 .chat-card-title { font-size: 15px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
 .chat-card-detail { flex: none; margin: 0; max-height: 120px; padding: 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; overflow-y: auto; }
+/* A long request's title is a two-line summary; the detail under it holds the whole command. */
+.chat-card-scroll:has(.chat-card-more) .chat-card-title:has(+ .chat-card-detail) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.chat-card-open .chat-card-detail { max-height: none; overflow-y: visible; }
+.chat-card-more { align-self: flex-start; min-height: 36px; padding: 0 2px; color: var(--accent); font-size: 13.5px; font-weight: 600; }
 .chat-card-plan { max-height: 200px; overflow-y: auto; line-height: 1.45; }
 .chat-card-scroll .chat-diff { flex: none; max-height: 180px; }
 .chat-card-actions { flex: none; display: flex; flex-direction: column; gap: 8px; }
@@ -185,7 +189,8 @@
 .chat-remember { height: auto; min-height: 44px; padding: 6px 10px; line-height: 1.25; font-size: 13.5px; white-space: normal; }
 .chat-card-rule { display: flex; align-items: baseline; gap: 6px; min-width: 0; margin-bottom: -2px; color: var(--muted); font-size: 11.5px; }
 .chat-card-rule-k { flex: none; }
-.chat-card-rule-v { min-width: 0; color: var(--text); font: 12px var(--mono); overflow-wrap: anywhere; }
+/* The rule can be a whole command; the card's detail shows it in full, so the rule never grows the actions. */
+.chat-card-rule-v { min-width: 0; color: var(--text); font: 12px/1.4 var(--mono); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .chat-reason { flex: none; }
 .chat-q { display: flex; flex-direction: column; gap: 6px; }
 .chat-q + .chat-q { padding-top: 10px; border-top: 1px solid var(--line); }

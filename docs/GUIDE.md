@@ -51,7 +51,7 @@ Then: **4** `npm install -g @anisirji/pocket-dev`, **5** `pocket-dev start` (the
    The Admin page also opens in your Mac's browser (add `--no-open` to stop that).
 4. **Find the address** if you missed it: **`ipconfig getifaddr en0`** prints the Wi-Fi address (use `en1` if `en0` prints nothing). The URL is `http://<that address>:7777`. If macOS asks whether `node` may accept incoming connections, choose **Allow**.
 5. **Open the URL on the phone** (same Wi-Fi) and log in with the password, or scan the QR code with the phone camera (it logs you in once, for 10 minutes). Forgot the password? Run **`pocket-dev admin`**, open **Password**, and set a new one. No old password is needed.
-6. **Approve the device if asked.** If **Approve new devices** is on, the phone waits and the Mac Admin page (**Waiting**) shows a 4-character code to compare. It is off by default.
+6. **Approve the device if asked.** If **Approve new devices** is on, the phone waits and the Mac Admin page (**Waiting**) shows a 4-character code to compare. It is off by default. While collaborator sharing is on, every new password login waits, even with the switch off. A QR login never waits.
 7. **Keep it running** in the background and at login: **`pocket-dev service install`**. Check with **`pocket-dev service status`**.
 8. **Optional:** add a second computer, see [Rooms](#rooms-several-computers-one-phone).
 9. **Update:** `npm install -g @anisirji/pocket-dev@latest` then `pocket-dev service restart`. **Uninstall:** `pocket-dev service uninstall` then `npm uninstall -g @anisirji/pocket-dev`. Settings stay in `~/.pocket-dev` until you delete that folder.
@@ -63,7 +63,7 @@ Then: **4** `npm install -g @anisirji/pocket-dev`, **5** `pocket-dev start` (the
 3. **Start it:** **`pocket-dev start`**. You should see `Pocket Dev running at http://192.168.…:7777` and a `Password:` line (shown once, copy it).
 4. **Firewall:** Windows asks whether Node may accept connections. Choose **Private networks** and Allow. Find the PC's address with **`ipconfig`** (the IPv4 address of your Wi-Fi). On the PC itself you can use `http://localhost:7777`.
 5. **Open the URL on the phone** (same Wi-Fi) and log in with the password, or scan the QR code the start printed. Forgot the password? Run **`pocket-dev admin`** and set a new one under **Password**.
-6. **Approve the device if asked** (only when **Approve new devices** is on): approve it on the PC's Admin page, **Waiting**.
+6. **Approve the device if asked** (when **Approve new devices** is on, or collaborator sharing is on): approve it on the PC's Admin page, **Waiting**.
 7. **Keep it running without a window:** **`Start-Process pocket-dev.cmd -ArgumentList 'start','--no-open' -WindowStyle Hidden`**. The Admin page (`pocket-dev admin`, **Service**) can also install a start-at-login Task Scheduler task; that part is written but not tested on a real PC. `pocket-dev service` is macOS only. After installing a tool such as Git, restart Pocket Dev so its terminals see the new PATH.
 8. **Optional:** join it to a room, see [Rooms](#rooms-several-computers-one-phone).
 9. **Update:** `npm install -g @anisirji/pocket-dev@latest`, then stop and start it again. **Uninstall:** `npm uninstall -g @anisirji/pocket-dev`. Settings and data live in `%USERPROFILE%\.pocket-dev` until you delete that folder.
@@ -136,7 +136,7 @@ The repository list holds the repositories found under `repoRoots`. To open anot
 
 <table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/07-chat.png" width="240" alt="Chat with an approval card"><br><sub>Chat with approval cards</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/08-chat-agents.png" width="240" alt="The agents panel in a chat"><br><sub>Agents panel</sub></td></tr></table>
 
-Start or continue Claude Code and Codex conversations from the phone, with your existing logins. Approval cards (**Allow once**, **Always allow in this chat**, **Deny**), permission modes, a message queue, limits notices and a Copy button are built in. New in 1.1: an agents panel in the chat. You can also resume any conversation from the terminal and take it over from the Mac with `pocket-dev takeover`.
+Start or continue Claude Code and Codex conversations from the phone, with your existing logins. Approval cards (**Allow once**, **Always allow in this chat**, **Always allow in this project** when Claude offers it, and **Deny**; Codex shows **Approve**, **Approve for this chat** and **Deny**), permission modes, a message queue, limits notices and a Copy button are built in. New in 1.1: an agents panel in the chat. You can also resume any conversation from the terminal and take it over from the Mac with `pocket-dev takeover`.
 
 ### Messages
 
@@ -203,7 +203,7 @@ Pocket Dev works on your Wi-Fi with none of this. Internet access adds a second 
 | Choice | Needs | What you get |
 | --- | --- | --- |
 | **Off** (default) | nothing | Wi-Fi only. |
-| **Quick link** | `cloudflared` | A random `https://….trycloudflare.com` address that lasts until you turn it off or Pocket Dev restarts. No account. |
+| **Quick link** | `cloudflared` | A random `https://….trycloudflare.com` address that lasts until you turn it off or Pocket Dev restarts. No account. After a restart you turn it on again and get a new address; phones say so and offer to link again. Saved bookmarks to the old address stop working. |
 | **My own domain** | `cloudflared`, a free Cloudflare account, a domain on Cloudflare DNS | A fixed `https://pocket.example.com` that stays. |
 
 ```sh
@@ -219,7 +219,7 @@ Link the phone while it is at home (the phone offers **Link this phone**), becau
 
 - **Wi-Fi is plain http.** Anyone who can read the traffic on that network can see the cookie and terminal contents. Use a trusted network. Through the optional internet link the phone talks https to Cloudflare, which can read the traffic it relays.
 - **A logged-in device has the full rights of your user:** shell, files, and your Claude, Codex and GitHub logins (limited by the credentials and permissions you configured).
-- **Port 7777 listens on all interfaces** (`0.0.0.0`), or on the computer itself only with Wi-Fi access off. Forwarded ports listen on the LAN IP and have no password.
+- **Port 7777 listens on all interfaces** (`0.0.0.0`), or on the computer itself only with Wi-Fi access off. Forwarded ports listen on the LAN IP and have no password there. From the internet address, a port opens through its own Quick link behind the Pocket Dev login.
 - **Protections:** hashed password (scrypt) and cookies, one-time QR keys only from the computer, a device limit, a `SameSite=Strict` HttpOnly cookie, the `x-pocket-dev` header and JSON content-type for every change, a WebSocket `Origin` check, a Git repository allowlist, path checks after symlink resolution, sandboxed previews, and typed Messages attachments (only PNG, JPEG, GIF, WebP, MP4, WebM, MOV, MP3, M4A, Ogg and WAV display; everything else downloads, with `nosniff` and a sandbox policy).
 - **Admin page:** `127.0.0.1:7778`, with a Host allowlist that resists DNS rebinding. It has no password, so any local process can use it.
 - **Rooms:** a device joins only with a one-time short code (10 minutes, limited guesses). The host's control of a member is limited by the member's own mode, and a member never controls the host. Every room request carries a secret per device, failed secrets are rate limited, and kicking or leaving closes open connections. The host is a single point of failure for member-to-member work.
@@ -341,7 +341,7 @@ The Admin page has a **Permissions** panel that shows each of these. Details: [d
 - Agent services such as Claude and Codex still need internet access on the computer.
 - Pocket Dev cannot wake or power on any device, and the remote Sleep button can leave a device unreachable until someone presses its power button.
 - Rooms work over the Wi-Fi or each device's own address. Failover across devices and a room over the internet are not built, and a device that is asleep or off leaves the room until it wakes.
-- Files over the internet connector are limited to 100 MB in Messages (a Cloudflare free-plan limit).
+- Files over the internet connector are limited to 100 MB in Messages (a Cloudflare free-plan limit). On the internet address, Messages shows the limit under the message box and names any larger file before it uploads.
 - Windows: main features tested on a real PC; temperature, lid control and window names are unavailable. Linux: written and partly tested, not run on a real machine. `pocket-dev service` uses launchd on macOS and the Task Scheduler on Windows (tested on a real PC), and systemd on Linux (not run on a real machine).
 - Upcoming, not built: Google Antigravity CLI in the terminal and in Chat, passkeys and fingerprint login, an Android share target. See [the roadmap](ROADMAP.md).
 

@@ -30,6 +30,7 @@ import { createTunnel } from './tunnel.js';
 import { createMessages } from './messages.js';
 import { createRoom } from './room.js';
 import { createForward } from './forward.js';
+import { createRemotePorts } from './remote-ports.js';
 import { createModes } from './modes.js';
 import { createTasks } from './tasks.js';
 import { createRoomSync } from './room-sync.js';
@@ -439,6 +440,7 @@ function attachClient(session, ws) {
 }
 
 const forwards = new Map();
+const remotePorts = createRemotePorts({ isActive: (id) => auth.isActiveDevice(id), allowed: () => internetOn(), log: (type, e) => auth.admin.log(type, e) });
 
 // A forward listens on the Mac's LAN address, which changes with the network. Each one is open (listening on host),
 // waiting (no network), or error (the bind on host failed); watchLanIp moves every forward when the address changes.
@@ -515,6 +517,7 @@ function closeForward(port) {
   if (!fwd) return false;
   fwd.closed = true;
   stopListening(fwd);
+  remotePorts.close(port);
   forwards.delete(port);
   return true;
 }
@@ -731,10 +734,21 @@ async function handleApi(req, res, url) {
         return sendJson(res, 409, { error: err.message });
       }
     }
+    case 'POST forwards/:key': {
+      if (url.pathname !== `/api/forwards/${key}/remote`) return sendJson(res, 404, { error: 'Not found' });
+      if (req.roomPeer) return sendJson(res, 403, { error: 'Open the port on that device itself.' });
+      const port = Number(key);
+      if (!forwards.has(port)) return sendJson(res, 404, { error: 'Not forwarded' });
+      try {
+        return sendJson(res, 200, { url: await remotePorts.open(port, auth.deviceFor(req).id) });
+      } catch (err) {
+        return sendJson(res, 409, { error: err.message });
+      }
+    }
     case 'DELETE forwards/:key':
       return closeForward(Number(key)) ? sendJson(res, 204) : sendJson(res, 404, { error: 'Not forwarded' });
     case 'GET info':
-      return sendJson(res, 200, { lanIp: lanIp(), forwards: listForwards(), persistentTerminals: Boolean(terminalHost && !terminalHost.closed) });
+      return sendJson(res, 200, { lanIp: lanIp(), forwards: listForwards(), remote: fromConnector(req), persistentTerminals: Boolean(terminalHost && !terminalHost.closed) });
     // How this request reached the Mac, both addresses, whether this device already has a cookie for the current
     // internet hostname, and whether a phone on the internet link is on the Mac's own network. The page decides
     // nothing by itself from the hint; it only offers the switch.
@@ -1007,7 +1021,7 @@ const access = createPhoneAccess({
   forwards: { ports: () => [...forwards.keys()], open: openForward, close: closeForward },
 });
 tunnel = createTunnel({ port: PORT, isConnected: () => access.view().connected, network, token: readToken, log: auth.admin.log });
-process.once('exit', () => tunnel.dispose());
+process.once('exit', () => { tunnel.dispose(); remotePorts.closeAll(); });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { tunnel.dispose(); process.exit(0); });
 const admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, sections: adminSections }).catch((err) => {
   console.error(err.message);
