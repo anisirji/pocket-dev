@@ -11,6 +11,8 @@ import { findCloudflared, readNetwork, networkError } from './network.js';
 // are handed to the tool's own command with the terminal attached, and status commands are only checked for yes or no.
 
 export const MIN_NODE = 22;
+// A running server keeps the PATH it started with, so a tool installed since then is invisible to its terminals and chats.
+export const RESTART_NOTE = 'Restart Pocket Dev so it sees tools installed after it started: pocket-dev service restart (or stop it and run pocket-dev start).';
 export const SETUP_LOG = path.join(STATE_DIR, 'setup.log');
 const STATUS_TIMEOUT_MS = 8000;
 
@@ -324,7 +326,7 @@ async function toolStep(ctx, opts, tool, facts) {
     if (!(await yes(ctx, opts, '  Install now?'))) { ctx.out('  Skipped. You can run setup again any time.'); return d; }
     const r = await runShown(ctx, plan.argv, `install ${tool.id}`);
     if (r.code !== 0) { ctx.out(`  The install did not finish (${r.error ? `could not start ${plan.argv[0]}` : `exit ${r.code}`}). Read the messages above, fix that, and run pocket-dev setup again.`); return d; }
-    d = await detectTool(tool, ctx);
+    d = { ...await detectTool(tool, ctx), justInstalled: true };
     ctx.out(statusLine(ctx, d));
     if (!d.installed) { ctx.out('  Installed, but this window cannot see it yet. Open a new terminal and run pocket-dev setup again.'); return d; }
   }
@@ -335,7 +337,7 @@ async function toolStep(ctx, opts, tool, facts) {
     if (opts.dry) { ctx.out('  (dry run: not asked, not run)'); return d; }
     if (!(await yes(ctx, opts, '  Log in now?'))) { ctx.out(`  Skipped. Later: ${shortLogin(tool)}`); return d; }
     await runShown(ctx, [d.path ?? tool.bin, ...tool.login], `login ${tool.id}`);
-    d = await detectTool(tool, ctx);
+    d = { ...await detectTool(tool, ctx), justInstalled: d.justInstalled };
     ctx.out(statusLine(ctx, d));
   }
   return d;
@@ -545,13 +547,14 @@ export async function runSetup(args, ctx) {
 
   let cloudflaredReady = null;
   let nodeOk = true;
-  let started;
+  let started, installedSome = false;
   for (const [index, id] of ids.entries()) {
     if (index > 0) ctx.out('');
     const tool = toolById(id);
     if (tool) {
       const d = await toolStep(ctx, opts, tool, { ...facts, npmFound: facts.npm !== null });
       if (id === 'node') nodeOk = d.status === 'ok';
+      if (d.justInstalled) installedSome = true;
       if (id === 'cloudflared') cloudflaredReady = d.installed;
     } else if (id === 'terminals') await terminalsStep(ctx, opts);
     else if (id === 'password') await passwordStep(ctx, opts);
@@ -562,6 +565,7 @@ export async function runSetup(args, ctx) {
     else if (id === 'finish') await finishStep(ctx, opts, started);
   }
   ctx.out('');
+  if (installedSome) ctx.out(`If Pocket Dev was already running: ${RESTART_NOTE}`);
   ctx.out(opts.dry ? 'Dry run finished. Nothing was changed.' : nodeOk ? 'Setup finished. Run pocket-dev setup --check any time to see the status.' : 'Setup stopped short: Node.js is not ready. Fix it and run pocket-dev setup again.');
   return nodeOk ? 0 : 1;
 }

@@ -173,6 +173,10 @@ test('setup installs after yes, streams the command, logs in, and re-checks', as
   assert.match(text(f), /Source: npm package @anthropic-ai\/claude-code/);
   assert.match(f.asked[0], /Install now\? \[Y\/n\]/);
   assert.match(text(f), /✓ Claude Code: installed 9\.9\.9, logged in/);
+  assert.match(text(f), /Restart Pocket Dev so it sees tools installed after it started: pocket-dev service restart/);
+  const none = fakeCtx({ installed: { gh: { version: '2.83.0', login: true } } });
+  await runSetup(['--only', 'gh'], none.ctx);
+  assert.doesNotMatch(text(none), /Restart Pocket Dev/, 'nothing new was installed');
 });
 
 test('saying no installs nothing', async () => {

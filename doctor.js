@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { PACKAGE_ROOT, STATE_DIR } from './paths.js';
-import { TOOLS, MIN_NODE, createContext, detectTool, gatherFacts, fixFor, parseVersion } from './setup.js';
+import { TOOLS, MIN_NODE, RESTART_NOTE, createContext, detectTool, gatherFacts, fixFor, parseVersion } from './setup.js';
 import { loadPty, REPAIR_COMMAND } from './pty-loader.js';
 
 // `pocket-dev doctor`: one table of what is wrong with this installation and the exact command for each problem.
@@ -17,7 +17,6 @@ const TIMEOUT = 8000;
 const PROBE_MS = 1000;
 const NODE_PTY_RANGE = PACKAGE.optionalDependencies?.['node-pty'] ?? 'latest';
 export const INSTALL_COMMAND = 'npm install -g @anisirji/pocket-dev';
-export const RESTART_NOTE = 'Restart Pocket Dev so it sees tools installed after it started: pocket-dev service restart (or stop it and run pocket-dev start).';
 
 const pathsFor = (platform) => (platform === 'win32' ? path.win32 : path.posix);
 const same = (platform, a, b) => (platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
@@ -236,7 +235,6 @@ export function printDoctor(ctx, { rows, ok, running }) {
       if (r.fix.link) ctx.out(`    ${r.fix.link}`);
     }
   }
-  // A running server keeps the PATH it started with, so a tool installed since then is invisible to its terminals and chats.
   if (running) { ctx.out(''); ctx.out(RESTART_NOTE); }
   ctx.out('');
   const broken = rows.filter((r) => !r.ok && r.level === 'required');
