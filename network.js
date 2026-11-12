@@ -54,7 +54,12 @@ export function writeToken(token) {
   fs.renameSync(tmp, TOKEN_PATH);
 }
 
-export const findCloudflared = () => [process.env.POCKET_DEV_CLOUDFLARED, ...CLOUDFLARED_PATHS].find((p) => p && fs.existsSync(p)) ?? findBin('cloudflared');
+// Like POCKET_DEV_CLAUDE and POCKET_DEV_CODEX, a variable that names a missing file means not installed, not "look elsewhere".
+export function findCloudflared() {
+  const override = process.env.POCKET_DEV_CLOUDFLARED;
+  if (override) return fs.existsSync(override) ? override : null;
+  return CLOUDFLARED_PATHS.find((p) => fs.existsSync(p)) ?? findBin('cloudflared');
+}
 
 // The first 64 bits of an IPv6 address as four groups, or null for anything else (IPv4-mapped addresses included).
 export function ipv6Prefix(ip) {

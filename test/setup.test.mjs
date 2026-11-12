@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   TOOLS, parseLogin, parseVersion, detectTool, installPlan, runSetup, createContext, assertNoSecret, makeLogger, collectStatus, cachedStatus, parseArgs, defaultFind,
 } from '../setup.js';
+import { findCloudflared } from '../network.js';
 
 const tool = (id) => TOOLS.find((t) => t.id === id);
 const res = (o = {}) => ({ code: 0, stdout: '', stderr: '', timedOut: false, error: null, ...o });
@@ -107,6 +108,16 @@ test('lookup honours the same environment overrides as the app', () => {
   assert.equal(defaultFind(tool('claude'), { env: { POCKET_DEV_CLAUDE: '/missing/claude' }, exists }), null);
   const win = (p) => p === 'C:\\Users\\a\\AppData\\Roaming\\npm\\claude.cmd';
   assert.equal(defaultFind(tool('claude'), { platform: 'win32', env: { PATH: 'C:\\x', APPDATA: 'C:\\Users\\a\\AppData\\Roaming' }, exists: win }), 'C:\\Users\\a\\AppData\\Roaming\\npm\\claude.cmd');
+});
+
+test('POCKET_DEV_CLOUDFLARED is strict like the other two: a missing file means not installed', () => {
+  assert.equal(defaultFind(tool('cloudflared'), { env: { POCKET_DEV_CLOUDFLARED: '/missing/cloudflared' }, exists: () => false }), null);
+  assert.equal(defaultFind(tool('cloudflared'), { env: { POCKET_DEV_CLOUDFLARED: '/custom/cloudflared' }, exists: (p) => p === '/custom/cloudflared' }), '/custom/cloudflared');
+  const saved = process.env.POCKET_DEV_CLOUDFLARED;
+  process.env.POCKET_DEV_CLOUDFLARED = path.join(os.tmpdir(), 'no-such-cloudflared');
+  try { assert.equal(findCloudflared(), null, 'the app does not fall back to PATH either'); } finally {
+    if (saved === undefined) delete process.env.POCKET_DEV_CLOUDFLARED; else process.env.POCKET_DEV_CLOUDFLARED = saved;
+  }
 });
 
 test('install plans per system use only the official packages', () => {

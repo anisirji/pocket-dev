@@ -27,7 +27,7 @@ export const TOOLS = [
   { id: 'codex', title: 'Codex', level: 'optional', bin: 'codex', env: 'POCKET_DEV_CODEX', npm: '@openai/codex',
     status: ['login', 'status'], login: ['login'], why: 'Chats with Codex.' },
   { id: 'gh', title: 'GitHub CLI', level: 'optional', bin: 'gh', status: ['auth', 'status'], login: ['auth', 'login'], why: 'Pull requests in Git.' },
-  { id: 'cloudflared', title: 'cloudflared', level: 'optional', bin: 'cloudflared', why: 'The internet link (Cloudflare tunnel).' },
+  { id: 'cloudflared', title: 'cloudflared', level: 'optional', bin: 'cloudflared', env: 'POCKET_DEV_CLOUDFLARED', why: 'The internet link (Cloudflare tunnel).' },
 ];
 export const STEP_IDS = [...TOOLS.map((t) => t.id), 'terminals', 'password', 'network', 'autostart', 'finish'];
 const toolById = (id) => TOOLS.find((t) => t.id === id);
@@ -36,8 +36,8 @@ const NAMES = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' };
 
 // ---- Finding and running programs ---------------------------------------------------------------------------------
 
-// The same lookup the app uses: POCKET_DEV_CLAUDE / POCKET_DEV_CODEX when set, findCloudflared (which honours
-// POCKET_DEV_CLOUDFLARED), and findBin's PATH plus the folders installers use. Windows looks along PATH with PATHEXT.
+// The same lookup the app uses: POCKET_DEV_CLAUDE, POCKET_DEV_CODEX or POCKET_DEV_CLOUDFLARED when set, otherwise
+// findCloudflared or findBin's PATH plus the folders installers use. Windows looks along PATH with PATHEXT.
 export function defaultFind(tool, { platform = process.platform, env = process.env, exists = lstatExists } = {}) {
   const override = tool.env && env[tool.env];
   if (override) return exists(override) ? override : null;
