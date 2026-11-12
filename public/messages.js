@@ -104,6 +104,8 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   const tray = el('div', 'mx-tray');
   const error = el('p', 'mx-error');
   error.setAttribute('role', 'alert');
+  const limitNote = el('p', 'mx-limit');
+  limitNote.hidden = true;
   const form = el('form', 'mx-compose');
   const attach = el('button', 'mx-icon mx-attach');
   attach.innerHTML = ICON.attach;
@@ -122,7 +124,7 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   send.setAttribute('aria-label', 'Send');
   form.append(attach, picker, input, send);
   const gone = el('p', 'mx-gone', 'This person is no longer in Messages.');
-  convo.append(convoHead, log, pill, tray, error, gone, form);
+  convo.append(convoHead, log, pill, tray, error, limitNote, gone, form);
 
   const viewer = el('div', 'mx-viewer');
   viewer.hidden = true;
@@ -458,6 +460,8 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     state.you = you;
     state.people = new Map(people.map((p) => [p.id, p]));
     state.limits = limits ?? {};
+    limitNote.hidden = !state.limits.fileMax;
+    limitNote.textContent = state.limits.fileMax ? `Over the internet, files can be up to ${Math.round(state.limits.fileMax / MB)} MB each.` : '';
     const keepSet = new Set(keep);
     const stale = [...state.messages.keys()].filter((seq) => !keepSet.has(seq));
     if (stale.length) remove(stale);
@@ -491,7 +495,7 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
   // Refusals the server would give, shown before a byte is sent: Cloudflare answers an oversized body with its own page.
   function refusalFor(file) {
     const { fileMax, lowSpace, largeFile, freeBytes, reserveBytes } = state.limits;
-    if (fileMax && file.size > fileMax) return `Over the internet you can send files up to 100 MB. This file is ${sizeText(file.size)}. Connect on the same Wi-Fi as the device to send it.`;
+    if (fileMax && file.size > fileMax) return `${file.name} is ${sizeText(file.size)}, too large to send over the internet (the limit is ${Math.round(fileMax / MB)} MB). Connect to the same Wi-Fi as the computer to send it.`;
     if (lowSpace && file.size > largeFile) return `The device is low on space (${sizeText(freeBytes)} free). Files over 50 MB are paused until there's more than ${sizeText(reserveBytes)} free. Text and files up to 50 MB still work.`;
     return null;
   }
@@ -540,14 +544,15 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
 
   attach.onclick = () => picker.click();
   picker.onchange = () => {
-    error.textContent = '';
+    const refusals = [];
     for (const file of picker.files) {
       const refusal = refusalFor(file);
-      if (refusal) { showError(refusal); continue; }
+      if (refusal) { refusals.push(refusal); continue; }
       const u = { file, status: 'uploading', loaded: 0, id: null, error: null, xhr: null };
       state.uploads.push(u);
       upload(u);
     }
+    showError(refusals.join('\n'));
     picker.value = '';
     renderTray();
   };
