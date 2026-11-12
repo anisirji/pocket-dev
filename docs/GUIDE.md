@@ -201,7 +201,7 @@ Pocket Dev works on your Wi-Fi with none of this. Internet access adds a second 
 | Choice | Needs | What you get |
 | --- | --- | --- |
 | **Off** (default) | nothing | Wi-Fi only. |
-| **Quick link** | `cloudflared` | A random `https://….trycloudflare.com` address that lasts until you turn it off or Pocket Dev restarts. No account. |
+| **Quick link** | `cloudflared` | A random `https://….trycloudflare.com` address that lasts until you turn it off or Pocket Dev restarts. No account. After a restart you turn it on again and get a new address; phones say so and offer to link again. Saved bookmarks to the old address stop working. |
 | **My own domain** | `cloudflared`, a free Cloudflare account, a domain on Cloudflare DNS | A fixed `https://pocket.example.com` that stays. |
 
 ```sh
