@@ -347,6 +347,26 @@ test('a full interactive setup opens with why it is safe and ends with the greet
   assert.ok(!out.includes('\x1b'), 'no colour when the terminal has none');
 });
 
+test('the greeting appears a paragraph at a time with a pause between, and a pace of 0 prints it at once', async () => {
+  const paced = fakeCtx({ answers: [] });
+  paced.ctx.env.POCKET_DEV_GREETING_PACE_MS = '777';
+  const pauses = [];
+  paced.ctx.sleep = async (ms) => { if (ms === 777) pauses.push(text(paced)); };
+  await runSetup([], paced.ctx);
+  assert.ok(pauses.length >= 7, `a pause between paragraphs, saw ${pauses.length}`);
+  assert.match(pauses[0], /Hi Ani, it's Ani too/);
+  assert.doesNotMatch(pauses[0], /Thank you for trying Pocket Dev/, 'the next paragraph is not out yet during the first pause');
+  assert.match(text(paced), /Thank you for trying Pocket Dev/, 'and it does appear afterwards');
+
+  const instant = fakeCtx({ answers: [] });
+  instant.ctx.env.POCKET_DEV_GREETING_PACE_MS = '0';
+  let slept = 0;
+  instant.ctx.sleep = async (ms) => { if (ms === 0) slept++; };
+  await runSetup([], instant.ctx);
+  assert.equal(slept, 0, 'no pauses at all');
+  assert.match(text(instant), /Thank you for trying Pocket Dev/);
+});
+
 test('--quiet hides the greeting, greeting plain drops the name, and a run without a terminal never shows it', async () => {
   const quiet = fakeCtx({ answers: [] });
   await runSetup(['--quiet'], quiet.ctx);

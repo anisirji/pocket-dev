@@ -40,6 +40,31 @@ test('the phone shows Welcome to Pocket Dev once, with the greeting and the link
   delete globalThis.localStorage;
 });
 
+test('the phone greeting shows one paragraph first, then one more each second, and a tap on the text shows the rest', async () => {
+  const page = fakePage();
+  const timers = [];
+  const realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout;
+  globalThis.setTimeout = (fn, ms) => { timers.push({ fn, ms }); return timers.length; };
+  globalThis.clearTimeout = () => {};
+  try {
+    await loadWelcome();
+    const card = page.body.children[0].children[0];
+    const scroll = card.children[1];
+    const visible = () => scroll.children.filter((b) => b.style.display === 'block').length;
+    assert.equal(visible(), 1, 'only the first paragraph at the start');
+    assert.equal(timers.at(-1).ms, 1000, 'one second to the next');
+    timers.at(-1).fn();
+    assert.equal(visible(), 2);
+    scroll.onclick();
+    assert.equal(visible(), scroll.children.length, 'a tap shows everything');
+  } finally {
+    globalThis.setTimeout = realSet;
+    globalThis.clearTimeout = realClear;
+    delete globalThis.document;
+    delete globalThis.localStorage;
+  }
+});
+
 test('the logged-in page loads the welcome, and its files are served only after login', { timeout: 60000 }, async (t) => {
   const s = await startServer(t);
   assert.equal((await s.request('GET', '/welcome.js')).status, 401);

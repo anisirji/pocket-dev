@@ -48,12 +48,22 @@ function wrap(line, width) {
   return [...out, current];
 }
 
-// A bordered box, paragraphs apart. With colour: rounded corners in the warm accent. Without: plain ASCII, for
-// terminals that show neither colour nor box characters.
-export function box(paragraphs, { color = false, width = 64 } = {}) {
-  const lines = paragraphs.flatMap((p, i) => [...(i ? [''] : []), ...p.split('\n').flatMap((l) => wrap(l, width))]);
-  const w = Math.max(...lines.map((l) => l.length));
+// A bordered box in three parts so the terminal can print it a paragraph at a time: the top edge, one list of rows per
+// paragraph (a blank row apart from the one before), and the bottom edge. With colour: rounded corners in the warm
+// accent. Without: plain ASCII, for terminals that show neither colour nor box characters.
+export function boxParts(paragraphs, { color = false, width = 64 } = {}) {
+  const groups = paragraphs.map((p, i) => [...(i ? [''] : []), ...p.split('\n').flatMap((l) => wrap(l, width))]);
+  const w = Math.max(...groups.flat().map((l) => l.length));
   const [tl, tr, bl, br, h, v] = color ? ['╭', '╮', '╰', '╯', '─', '│'] : ['+', '+', '+', '+', '-', '|'];
   const edge = (t) => (color ? `\x1b[38;5;208m${t}\x1b[0m` : t);
-  return [edge(tl + h.repeat(w + 2) + tr), ...lines.map((l) => `${edge(v)} ${l.padEnd(w)} ${edge(v)}`), edge(bl + h.repeat(w + 2) + br)].join('\n');
+  return {
+    top: edge(tl + h.repeat(w + 2) + tr),
+    beats: groups.map((rows) => rows.map((l) => `${edge(v)} ${l.padEnd(w)} ${edge(v)}`)),
+    bottom: edge(bl + h.repeat(w + 2) + br),
+  };
+}
+
+export function box(paragraphs, opts) {
+  const { top, beats, bottom } = boxParts(paragraphs, opts);
+  return [top, ...beats.flat(), bottom].join('\n');
 }

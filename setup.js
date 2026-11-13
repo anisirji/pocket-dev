@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { STATE_DIR } from './paths.js';
 import { findBin, engineEnv, lstatExists, windowsBinCandidates } from './chat/env.js';
 import { findCloudflared, readNetwork, networkError } from './network.js';
-import { greetingText, box, firstName } from './greeting.js';
+import { greetingText, boxParts, firstName } from './greeting.js';
 import { COPY } from './public/greeting-copy.js';
 
 // `pocket-dev setup`: one guided pass that takes a computer from nothing to a working, logged-in Pocket Dev.
@@ -551,6 +551,18 @@ async function finishStep(ctx, opts, started) {
   if (await printPhoneLogin(ctx, { tries: started === false ? 1 : READY_TRIES })) ctx.out('  Pocket Dev runs in the background now. You do not need to run pocket-dev start.');
 }
 
+// The greeting appears a paragraph at a time, a second apart, so it reads like a person talking.
+const GREETING_PACE_MS = 1000;
+
+async function printPaced(ctx, { top, beats, bottom }, pace) {
+  ctx.out(top);
+  for (const [i, rows] of beats.entries()) {
+    if (i && pace > 0) await ctx.sleep(pace);
+    for (const row of rows) ctx.out(row);
+  }
+  ctx.out(bottom);
+}
+
 // Plan C12: never without a person at a terminal, never in CI, hidden by --quiet. Every fact is read here, on this
 // computer, and only reaches the screen.
 export async function showGreeting(ctx, { quiet = false } = {}) {
@@ -563,10 +575,12 @@ export async function showGreeting(ctx, { quiet = false } = {}) {
   };
   const { greeting, creator } = greetingText(facts, { plain });
   const width = Math.max(30, Math.min(64, (ctx.columns || 80) - 4));
+  const pace = Number(ctx.env.POCKET_DEV_GREETING_PACE_MS ?? GREETING_PACE_MS);
   ctx.out('');
-  ctx.out(box(greeting, { color: ctx.color, width }));
+  await printPaced(ctx, boxParts(greeting, { color: ctx.color, width }), pace);
+  if (pace > 0) await ctx.sleep(pace);
   ctx.out('');
-  ctx.out(box(creator, { color: ctx.color, width }));
+  await printPaced(ctx, boxParts(creator, { color: ctx.color, width }), pace);
   ctx.out(COPY.madeHere);
   if (!plain) ctx.out(COPY.plainHint);
   ctx.out('');
