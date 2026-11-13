@@ -1,6 +1,9 @@
-.mx {
+/* On :root, not .mx: the unread badge sits on a header button outside the .mx view. */
+:root {
   --mx-bg: #0b141a; --mx-head: #202c33; --mx-in: #202c33; --mx-out: #005c4b; --mx-text: #e9edef; --mx-sub: #8696a0;
   --mx-green: #00a884; --mx-field: #2a3942; --mx-line: #222d34; --mx-day: #182229;
+}
+.mx {
   display: flex; min-width: 0; overflow: hidden; background: var(--mx-bg); color: var(--mx-text);
   font: 14px/1.4 system-ui, -apple-system, Roboto, sans-serif;
   container: mx / inline-size;
