@@ -108,6 +108,7 @@ try {
   // Emulate the keyboard changing only the visual viewport, plus Safari panning
   // the page. A normal setViewportSize alone misses both of these failure modes.
   await context.addInitScript(() => {
+    localStorage.setItem('pd-welcome-shown', '1');
     const viewport = new EventTarget();
     let state = {};
     for (const [key, fallback] of Object.entries({ height: () => innerHeight, width: () => innerWidth, offsetTop: () => 0, offsetLeft: () => 0, scale: () => 1 })) {
