@@ -49,5 +49,20 @@ export const COPY = {
   madeHere: 'This message was made on your computer. Nothing was sent.',
   plainHint: 'For a greeting without your name or system: pocket-dev config set greeting plain',
 
-  phone: { title: 'Welcome to Pocket Dev', close: 'Start' },
+  // The phone shows these one slide at a time, each replacing the last. A short slide stays briefly and a long one longer,
+  // and Next always moves on at once. The last slide (the links) waits for Start. Emoji live here, not in the terminal copy.
+  phone: {
+    title: 'Welcome to Pocket Dev',
+    next: 'Next',
+    close: 'Start',
+    slides: [
+      "Hi, it's Ani 👋",
+      'Congratulations, you did it! 🎉 Your computer is now in your pocket.',
+      'Thank you for trying Pocket Dev 🙏 I built it because I was tired of my work tying me to my desk, and I wanted my own computer to be in my pocket.',
+      'This setup only did what you said yes to. Nothing leaves your computer. 🔒',
+      'Next time a build is running while you are out, or the coffee line is long, check it from your phone ☕ Go be where your life is. Your code will wait for you.',
+      'Happy coding, and have a good one! 🚀 — Ani',
+      'Pocket Dev is free and open source. I am anisirji (Ani), a developer who wanted to stay connected to his work without being tied to a desk. 💛',
+    ],
+  },
 };

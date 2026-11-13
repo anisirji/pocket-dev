@@ -8,7 +8,7 @@ import { REPO, startServer } from './helpers/server.mjs';
 // Just enough of a page for welcome.js: elements that keep their text and children, and a localStorage.
 function fakePage(stored = {}) {
   const make = (tag) => ({ tag, style: {}, attrs: {}, children: [], textContent: '', setAttribute(k, v) { this.attrs[k] = v; },
-    append(...nodes) { this.children.push(...nodes); }, addEventListener(type, fn) { this[`on${type}`] = fn; }, remove() { body.children = body.children.filter((n) => n !== this); } });
+    append(...nodes) { this.children.push(...nodes); }, replaceChildren(...nodes) { this.children = nodes; }, addEventListener(type, fn) { this[`on${type}`] = fn; }, remove() { body.children = body.children.filter((n) => n !== this); } });
   const body = make('body');
   globalThis.document = { createElement: make, body };
   globalThis.localStorage = { getItem: (k) => stored[k] ?? null, setItem: (k, v) => { stored[k] = v; } };
@@ -23,43 +23,85 @@ async function loadWelcome() {
   await import(`data:text/javascript,${encodeURIComponent(source)}#${Math.random()}`);
 }
 
-test('the phone shows Welcome to Pocket Dev once, with the greeting and the links', async () => {
-  const page = fakePage();
-  await loadWelcome();
-  assert.equal(page.body.children.length, 1);
-  const text = allText(page.body);
-  assert.match(text, /Welcome to Pocket Dev/);
-  assert.match(text, /Hi, it's Ani\./);
-  assert.match(text, /https:\/\/theani\.me/);
-  assert.match(text, /This message was made on your computer\. Nothing was sent\./);
-  page.body.children[0].children[0].children.at(-1).onclick();
-  assert.equal(page.body.children.length, 0, 'the button closes it');
-  await loadWelcome();
-  assert.equal(page.body.children.length, 0, 'never again on this phone');
-  delete globalThis.document;
-  delete globalThis.localStorage;
-});
+// The card: [title, stage, dots, button]. The stage holds the one slide on screen.
+const parts = (page) => { const card = page.body.children[0].children[0]; return { stage: card.children[1], button: card.children.at(-1) }; };
 
-test('the phone greeting shows one paragraph first, then one more each second, and a tap on the text shows the rest', async () => {
-  const page = fakePage();
+function fakeTimers() {
   const timers = [];
-  const realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout;
-  globalThis.setTimeout = (fn, ms) => { timers.push({ fn, ms }); return timers.length; };
-  globalThis.clearTimeout = () => {};
+  const real = { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
+  globalThis.setTimeout = (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length - 1; };
+  globalThis.clearTimeout = (id) => { if (timers[id]) timers[id].live = false; };
+  return { timers, live: () => timers.filter((x) => x.live), restore() { Object.assign(globalThis, real); } };
+}
+
+test('the phone plays Welcome to Pocket Dev as slides, once, ending on the links and a Start button', async () => {
+  const page = fakePage();
+  const clock = fakeTimers();
   try {
     await loadWelcome();
-    const card = page.body.children[0].children[0];
-    const scroll = card.children[1];
-    const visible = () => scroll.children.filter((b) => b.style.display === 'block').length;
-    assert.equal(visible(), 1, 'only the first paragraph at the start');
-    assert.equal(timers.at(-1).ms, 1000, 'one second to the next');
-    timers.at(-1).fn();
-    assert.equal(visible(), 2);
-    scroll.onclick();
-    assert.equal(visible(), scroll.children.length, 'a tap shows everything');
+    const { stage, button } = parts(page);
+    assert.match(allText(page.body), /Welcome to Pocket Dev/);
+    assert.match(allText(stage), /Hi, it's Ani 👋/, 'the first slide is the hello, with its emoji');
+    assert.doesNotMatch(allText(stage), /Congratulations/, 'only one slide at a time');
+    assert.equal(button.textContent, 'Next');
+    const seen = [allText(stage)];
+    while (button.textContent === 'Next') { button.onclick(); seen.push(allText(stage)); }
+    assert.equal(new Set(seen).size, seen.length, 'every Next shows a different slide');
+    assert.ok(seen.some((x) => /Congratulations, you did it! 🎉/.test(x)));
+    assert.ok(seen.every((x, i) => i === seen.length - 1 || !/theani\.me/.test(x)), 'the links come last');
+    assert.match(allText(stage), /https:\/\/theani\.me/);
+    assert.match(allText(stage), /This message was made on your computer\. Nothing was sent\./);
+    assert.equal(button.textContent, 'Start');
+    assert.equal(clock.live().length, 0, 'the last slide waits for Start, no timer');
+    button.onclick();
+    assert.equal(page.body.children.length, 0, 'Start closes it');
+    await loadWelcome();
+    assert.equal(page.body.children.length, 0, 'never again on this phone');
   } finally {
-    globalThis.setTimeout = realSet;
-    globalThis.clearTimeout = realClear;
+    clock.restore();
+    delete globalThis.document;
+    delete globalThis.localStorage;
+  }
+});
+
+test('a short slide stays briefly, a long one longer, and the slide changes on its own when the time is up', async () => {
+  const page = fakePage();
+  const clock = fakeTimers();
+  try {
+    await loadWelcome();
+    const { stage, button } = parts(page);
+    const waits = [];
+    for (let i = 0; i < 7; i++) {
+      const [timer] = clock.live();
+      waits.push(timer.ms);
+      const before = allText(stage);
+      timer.fn();
+      assert.notEqual(allText(stage), before, 'it moved on by itself');
+    }
+    assert.ok(waits[0] < waits[2], `the hello (${waits[0]} ms) stays less than the long paragraph (${waits[2]} ms)`);
+    assert.ok(waits.every((ms) => ms >= 2000 && ms <= 9000));
+    assert.equal(button.textContent, 'Start', 'it ends on the Start button instead of closing itself');
+    assert.equal(page.body.children.length, 1);
+  } finally {
+    clock.restore();
+    delete globalThis.document;
+    delete globalThis.localStorage;
+  }
+});
+
+test('Next moves on at once and restarts the wait, instead of leaving the old timer to skip a slide', async () => {
+  const page = fakePage();
+  const clock = fakeTimers();
+  try {
+    await loadWelcome();
+    const { stage, button } = parts(page);
+    const first = clock.live()[0];
+    button.onclick();
+    assert.match(allText(stage), /Congratulations/);
+    assert.equal(first.live, false, 'the first slide timer is cancelled');
+    assert.equal(clock.live().length, 1, 'one timer for the slide now showing');
+  } finally {
+    clock.restore();
     delete globalThis.document;
     delete globalThis.localStorage;
   }
