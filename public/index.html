@@ -74,7 +74,18 @@
   .tabs-open { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 10px 8px; text-align: left; }
   .tabs-open b { font-weight: 600; }
   .tabs-open small { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #portsBtn, #settingsBtn { position: relative; }
+  /* 44px tap targets in the 48px bar without taller buttons. Buttons outside the view switch sit 8px apart so their
+     targets do not overlap. */
+  header > button, #viewSwitch > button { position: relative; }
+  header > button::after { content: ""; position: absolute; inset: -5px; }
+  #viewSwitch > button::after { content: ""; position: absolute; inset: -7px 0; }
+  header > .icon-btn { margin-left: 4px; }
+  /* Apps, Resume and Room: used less often, so they wait behind More and leave the bar room for the repository name. */
+  #moreMenu { position: fixed; inset: auto; margin: 0; min-width: 220px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); box-shadow: 0 6px 24px #000a; }
+  #moreMenu button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 0 12px; border-radius: 8px; text-align: left; }
+  #moreMenu button:active { background: var(--panel-2); }
+  #moreMenu button > :first-child { flex: none; width: 20px; font-size: 18px; text-align: center; }
+  header:has(#moreMenu:popover-open) #moreBtn { border-color: var(--accent); }
   #portsBtn.open { border-color: var(--accent); }
   #portsCount { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--accent); color: #08101e; font-size: 11px; font-weight: 600; line-height: 17px; text-align: center; }
   #portsCount:empty { display: none; }
@@ -169,11 +180,15 @@
 <div id="app">
   <header>
     <div id="viewSwitch" role="group" aria-label="View">
-      <button data-view="terminal" title="Terminal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg><span class="sr-only">Terminal</span></button><button data-view="git" title="Git"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7"/><path d="M18 10.5c0 4-6 3.5-11 6"/></svg><span class="sr-only">Git</span></button><button data-view="chat" title="Chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></svg><span class="sr-only">Chat</span></button><button data-view="files" title="Files"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="sr-only">Files</span></button><button data-view="messages" title="Messages"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg><span class="sr-only">Messages</span></button><button data-view="apps" title="Apps"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg><span class="sr-only">Apps</span></button>
+      <button data-view="terminal" title="Terminal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg><span class="sr-only">Terminal</span></button><button data-view="git" title="Git"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7"/><path d="M18 10.5c0 4-6 3.5-11 6"/></svg><span class="sr-only">Git</span></button><button data-view="chat" title="Chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></svg><span class="sr-only">Chat</span></button><button data-view="files" title="Files"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="sr-only">Files</span></button><button data-view="messages" title="Messages"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg><span class="sr-only">Messages</span></button>
     </div>
     <div id="headGap"></div>
-    <button id="resumeBtn" class="icon-btn glyph" aria-label="Resume a laptop conversation"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
     <button id="portsBtn" class="icon-btn glyph" aria-label="Ports" title="Ports"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/></svg><span id="portsCount"></span></button>
+    <button id="moreBtn" class="icon-btn glyph" popovertarget="moreMenu" aria-label="More" title="More"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+    <div id="moreMenu" popover>
+      <button id="appsBtn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>Apps</button>
+      <button id="resumeBtn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>Resume a laptop conversation</button>
+    </div>
     <button id="settingsBtn" class="icon-btn glyph" aria-label="Settings">⚙︎<span id="gearBattery" hidden></span></button>
   </header>
   <nav id="tabbar" aria-label="Terminals">
@@ -1099,6 +1114,15 @@ async function refreshForwards() {
   renderForwards();
 }
 
+$('appsBtn').addEventListener('click', () => window.openAppsSheet());
+// The open menu is in the top layer, outside the header's layout, so it is placed under its button by hand.
+$('moreMenu').addEventListener('beforetoggle', (e) => {
+  if (e.newState !== 'open') return;
+  const r = $('moreBtn').getBoundingClientRect();
+  Object.assign($('moreMenu').style, { top: `${r.bottom + 6}px`, right: `${innerWidth - r.right}px` });
+});
+$('moreMenu').addEventListener('click', (e) => { if (e.target.closest('button')) $('moreMenu').hidePopover(); });
+
 $('portsBtn').addEventListener('click', () => {
   $('ports').hidden = !$('ports').hidden;
   if (!$('ports').hidden) refreshForwards().catch(() => {});
@@ -1140,7 +1164,7 @@ function setView(view) {
 }
 // Chat and Files are full-screen screens over the current view, with their own back and close; Terminal and Git
 // switch in place.
-const SCREENS = { chat: () => window.pocketDevChat.open(), files: () => window.openFiles(), messages: () => window.pocketDevMessages?.open(), apps: () => window.openAppsSheet() };
+const SCREENS = { chat: () => window.pocketDevChat.open(), files: () => window.openFiles(), messages: () => window.pocketDevMessages?.open() };
 for (const b of $('viewSwitch').children) {
   b.addEventListener('click', () => (SCREENS[b.dataset.view] ? SCREENS[b.dataset.view]() : setView(b.dataset.view)));
 }

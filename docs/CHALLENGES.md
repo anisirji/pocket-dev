@@ -170,4 +170,5 @@ The latest Messages fixes have passing model-free regressions. The combined bran
 | Tests passing for the wrong reason | An old test server kept holding a port, so later tests talked to it and failed.                 | Test servers are stopped by port, and every suite starts fresh. |
 | Not killing the live server        | A broad stop command would also have killed the Pocket Dev you were using.                      | Processes are only stopped by their exact ID or port.           |
 | Crowded top bar                    | The 360px phone bar had to fit tabs and buttons for Git, Resume, Ports, Settings and battery.   | Laid out again and checked with screenshots at phone width.     |
+| Crowded top bar, again             | An Apps tab and the Room button left the Git repository picker a bare arrow at 360px.           | Apps, Resume and Room moved behind one More menu.               |
 | Back gesture                       | Each screen handled the back gesture on its own, so one back press could close the wrong thing. | One shared stack, so back always closes only the top screen.    |

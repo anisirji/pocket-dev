@@ -338,13 +338,14 @@ if (typeof document !== 'undefined') {
   // ---------- header button, only in a room ----------
   const api = { open, close };
   window.PocketDevRoomPages = api;
-  const head = document.querySelector('header');
-  const gear = document.getElementById('settingsBtn');
-  if (head && gear) {
-    const b = el('button', 'icon-btn glyph', '⇄');
-    b.id = 'roomTasksBtn'; b.type = 'button'; b.hidden = true; b.title = 'Room'; b.setAttribute('aria-label', 'Room');
+  const menu = document.getElementById('moreMenu');
+  if (menu) {
+    const b = el('button');
+    b.append(el('span', null, '⇄'), 'Room');
+    b.firstChild.setAttribute('aria-hidden', 'true');
+    b.id = 'roomTasksBtn'; b.type = 'button'; b.hidden = true;
     b.onclick = () => import('/room-screen.js').then((m) => m.openRoom());
-    gear.before(b);
+    menu.append(b);
     const check = async () => { try { b.hidden = !(await roomInfo()).inRoom; } catch { /* keep the last state */ } };
     check(); setInterval(check, 30000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });

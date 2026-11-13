@@ -58,6 +58,7 @@ const server = http.createServer(async (req, res) => {
     '/api/files/places': { home: '/tmp', roots: ['/tmp'], pinned: [] },
     '/api/files/list': { path: '/tmp', parent: '/', breadcrumbs: [{ name: 'tmp', path: '/tmp' }], entries: [], total: 0 },
     '/api/messages/people': { you: messagesHello.you, people: messagesHello.people },
+    '/api/git/repos': [{ name: 'flutter_school_app', path: '/tmp/flutter_school_app' }],
   };
   if (url.pathname.startsWith('/api/')) {
     if (req.method === 'PATCH' && url.pathname === '/api/chat/fixture-chat/queue') {
@@ -97,7 +98,8 @@ wss.on('connection', (ws, req) => {
     if (msg.t === 'in') terminalInputs++;
   });
   const isClaude = req.url.endsWith('/claude-fixture');
-  if (req.url.startsWith('/ws/messages')) return ws.send(JSON.stringify(messagesHello));
+  ws.messages = req.url.startsWith('/ws/messages');
+  if (ws.messages) return ws.send(JSON.stringify(messagesHello));
   ws.send(JSON.stringify(req.url.startsWith('/ws/chat/') ? { t: 'hello', chat: isClaude ? claudeChat : chat, events: isClaude ? [] : chatEvents } : { t: 'out', d: '\x1b[2J\x1b[HQuestion\r\n\r\nChoose an option\r\n\r\n> 1. First option\r\n  2. Second option\r\n  3. Last option\r\n\r\nUp / Down to choose, Enter to confirm\r\n' }));
 });
 let browser;
@@ -108,6 +110,7 @@ try {
   // Emulate the keyboard changing only the visual viewport, plus Safari panning
   // the page. A normal setViewportSize alone misses both of these failure modes.
   await context.addInitScript(() => {
+    localStorage.setItem('pd-welcome-shown', '1');
     const viewport = new EventTarget();
     let state = {};
     for (const [key, fallback] of Object.entries({ height: () => innerHeight, width: () => innerWidth, offsetTop: () => 0, offsetLeft: () => 0, scale: () => 1 })) {
@@ -143,6 +146,39 @@ try {
     await inViewport('#keyNav .key:last-child');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}x${height}: horizontal overflow`);
   }
+  // The top bar with every optional button showing: the Room button (a room member) and an unread Messages count.
+  await page.evaluate(() => { document.getElementById('roomTasksBtn').hidden = false; });
+  for (const ws of wss.clients) if (ws.messages) ws.send(JSON.stringify({ t: 'message', message: { ...messagesHello.messages[0], seq: 3, text: 'New', files: [] } }));
+  await page.waitForFunction(() => document.querySelector('#viewSwitch .mx-badge:not([hidden])'));
+  assert.notEqual(await page.locator('#viewSwitch .mx-badge').evaluate((b) => getComputedStyle(b).backgroundColor), 'rgba(0, 0, 0, 0)', 'the unread count has its green background');
+  for (const view of ['terminal', 'git']) {
+    await page.locator(`#viewSwitch [data-view="${view}"]`).click();
+    for (const [width, height] of sizes.filter(([w]) => w <= 430)) {
+      await page.setViewportSize({ width, height });
+      await settle();
+      const bar = await page.evaluate(() => {
+        const shown = [...document.querySelectorAll('header button, header select')].filter((e) => e.getClientRects().length && !e.closest('[popover]'));
+        const box = (e) => { const r = e.getBoundingClientRect(); return { name: e.getAttribute('aria-label') || e.title || e.id, left: r.left, right: r.right, x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 }; };
+        // A tap 21px above or below the centre still lands on the control: a 44px tall target.
+        const lands = (e, x, y) => document.elementFromPoint(x, y)?.closest('button, select') === e;
+        return {
+          boxes: shown.map(box),
+          short: shown.filter((e) => { const b = box(e); return !lands(e, b.x, b.y - 21) || !lands(e, b.x, b.y + 21); }).map((e) => box(e).name),
+          repo: document.getElementById('gitRepo').getBoundingClientRect().width,
+          width: innerWidth,
+        };
+      });
+      const where = `${width}px ${view} top bar`;
+      for (const b of bar.boxes) assert.ok(b.left >= 0 && b.right <= bar.width + 0.5, `${where}: ${b.name} is off screen`);
+      const row = [...bar.boxes].sort((a, b) => a.left - b.left);
+      for (let i = 1; i < row.length; i++) assert.ok(row[i].left >= row[i - 1].right - 0.5, `${where}: ${row[i - 1].name} overlaps ${row[i].name}`);
+      assert.deepEqual(bar.short, [], `${where}: targets shorter than 44px`);
+      if (view === 'git' && width >= 360) assert.ok(bar.repo >= 80, `${where}: the repository picker is ${bar.repo}px, too narrow for its name`);
+    }
+  }
+  for (const ws of wss.clients) if (ws.messages) ws.send(JSON.stringify({ t: 'removed', seqs: [3] }));
+  await page.waitForFunction(() => document.querySelector('#viewSwitch .mx-badge[hidden]'));
+  await page.locator('#viewSwitch [data-view="terminal"]').click();
   await page.setViewportSize({ width: 393, height: 852 });
   await page.locator('#cmd').focus();
   for (const geometry of [{ height: 420, offsetTop: 0 }, { height: 300, offsetTop: 180 }, { height: 240, offsetTop: 220 }]) {
@@ -405,6 +441,7 @@ try {
   assert.equal(terminalInputs, 0, 'draft restoration must not execute a terminal command');
   // Cover the actual History -> Continue in chat path, not just opening a chat.
   async function resumeHistory() {
+    await page.locator('#moreBtn').click();
     await page.locator('#resumeBtn').click();
     await page.locator('.hist-card').click();
     await page.waitForSelector('.hist-detail-title');
