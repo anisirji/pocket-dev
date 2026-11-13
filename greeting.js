@@ -21,17 +21,21 @@ export function partOfDay(hour) {
 }
 
 // facts: { name, hour, platform, laptop, awake, claude, codex }. `plain` leaves out the name, the system, the time and
-// what setup changed. Returns two lists of paragraphs, one per box.
+// what setup changed. Returns two lists of paragraphs, one per box, in the order a person would say them: hello, what
+// they see on this computer, congratulations, what is ready, then the thanks.
 export function greetingText(facts, { plain = false } = {}) {
   const computer = plain ? COPY.computer.other : COPY.computer[facts.platform] ?? COPY.computer.other;
   const fill = (text) => text.replace('{name}', facts.name).replace('{computer}', computer);
   const hello = plain || !facts.name ? COPY.hello.plain : facts.name === 'Ani' ? COPY.hello.sameName : COPY.hello.named;
+  const pc = facts.laptop === true ? COPY.pc.laptop : facts.laptop === false ? COPY.pc.desktop : COPY.pc.other;
   const chat = facts.claude && facts.codex ? COPY.facts.both : facts.claude ? COPY.facts.claude : facts.codex ? COPY.facts.codex : null;
-  const said = plain ? [] : [facts.awake === 'always' && COPY.facts.alwaysOn, facts.awake === 'always' && !facts.laptop && COPY.facts.desktop, chat];
+  const ready = plain ? [] : [facts.awake === 'always' && COPY.facts.alwaysOn, facts.awake === 'always' && !facts.laptop && COPY.facts.desktop, chat];
   return {
     greeting: [
       [fill(hello), plain ? null : COPY.partOfDay[partOfDay(facts.hour)]].filter(Boolean).join(' '),
-      [fill(COPY.allSet), ...said.filter(Boolean)].join(' '),
+      ...(plain ? [] : [fill(pc)]),
+      fill(COPY.congrats),
+      ...ready.filter(Boolean),
       ...COPY.body.slice(0, -1),
       `${COPY.body.at(-1)}\n${COPY.signature}`,
     ],

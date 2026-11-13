@@ -16,7 +16,12 @@ export const COPY = {
     night: 'Still up? Fix it from bed.',
   },
   computer: { darwin: 'Mac', win32: 'Windows PC', linux: 'Linux box', other: 'computer' },
-  allSet: 'You are all set. Your {computer} is now in your pocket.',
+  pc: {
+    laptop: 'I can see you are on a {computer} laptop.',
+    desktop: 'I can see you are on a {computer} desktop.',
+    other: 'I can see you are on a {computer}.',
+  },
+  congrats: 'Congratulations, you did it. Your {computer} is now in your pocket.',
   facts: {
     alwaysOn: 'Keep awake is on, so it stays reachable.',
     desktop: 'You can leave it under the desk and reach it from anywhere.',

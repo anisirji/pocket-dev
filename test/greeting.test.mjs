@@ -20,14 +20,18 @@ test('the time of day picks the line', () => {
 test('personal greeting: name, system, time and only what setup just set', () => {
   const { greeting, creator } = greetingText({ name: 'Rohit', hour: 23, platform: 'win32', laptop: false, awake: 'always', claude: true, codex: false });
   assert.equal(greeting[0], "Hi Rohit, it's Ani. Still up? Fix it from bed.");
-  assert.match(greeting[1], /Your Windows PC is now in your pocket\. Keep awake is on, so it stays reachable\. You can leave it under the desk/);
-  assert.match(greeting[1], /Claude Code is ready to chat from your phone\.$/);
+  assert.equal(greeting[1], 'I can see you are on a Windows PC desktop.');
+  assert.equal(greeting[2], 'Congratulations, you did it. Your Windows PC is now in your pocket.');
+  assert.equal(greeting[3], 'Keep awake is on, so it stays reachable.');
+  assert.match(greeting[4], /under the desk/);
+  assert.equal(greeting[5], 'Claude Code is ready to chat from your phone.');
   assert.match(greeting.at(-1), /Happy coding, and have a good one\.\nAni$/);
   assert.match(creator.join('\n'), /https:\/\/theani\.me/);
   assert.match(creator.join('\n'), /https:\/\/github\.com\/anisirji\/pocket-dev/);
   assert.equal(greetingText({ name: 'Ani', hour: 9, platform: 'darwin' }).greeting[0], "Hi Ani, it's Ani too. Good morning.");
   const laptop = greetingText({ name: null, hour: 15, platform: 'darwin', laptop: true, awake: 'plugged' }).greeting;
   assert.equal(laptop[0], "Hi, it's Ani. Good afternoon.");
+  assert.equal(laptop[1], 'I can see you are on a Mac laptop.');
   assert.doesNotMatch(laptop.join(' '), /under the desk|Keep awake is on/);
 });
 
@@ -35,7 +39,8 @@ test('plain greeting leaves out the name, the system and the time', () => {
   const { greeting } = greetingText({ name: 'Rohit', hour: 23, platform: 'win32', laptop: false, awake: 'always', claude: true }, { plain: true });
   assert.equal(greeting[0], "Hi, it's Ani.");
   assert.doesNotMatch(greeting.join(' '), /Rohit|Windows|Still up|Keep awake|Claude/);
-  assert.match(greeting[1], /Your computer is now in your pocket\./);
+  assert.match(greeting[1], /Congratulations, you did it\. Your computer is now in your pocket\./);
+  assert.doesNotMatch(greeting.join(' '), /I can see you are on/);
 });
 
 test('box: colour and rounded corners, or plain ASCII with no colour codes', () => {

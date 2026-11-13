@@ -31,7 +31,7 @@ function show() {
     beats.push(wrap);
   };
   beat(el('p', 'margin:0 0 10px', COPY.hello.plain));
-  beat(el('p', 'margin:0 0 10px', COPY.allSet.replace('{computer}', COPY.computer.other)));
+  beat(el('p', 'margin:0 0 10px', COPY.congrats.replace('{computer}', COPY.computer.other)));
   for (const text of COPY.body.slice(0, -1)) beat(el('p', 'margin:0 0 10px', text));
   beat(el('p', 'margin:0 0 4px', COPY.body.at(-1)), el('p', 'margin:0 0 14px;font-weight:600', COPY.signature));
   for (const text of COPY.creator) beat(el('p', 'margin:0 0 10px', text));
