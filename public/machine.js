@@ -164,8 +164,8 @@
   const nowName = () => id ? nameOf() : (selfName() || 'This device');
   const nowOnline = () => me()?.online !== false;
 
-  // The header is full at 360 px (views, Resume, Room, Settings), so at home the status strip below it carries the device
-  // name. On another device Ports and Settings are hidden, which frees room for a chip that keeps a readable width.
+  // At home the status strip carries the device name. On another device Ports and Settings are hidden, which frees room
+  // in the header for a chip that keeps a readable width.
   function renderChip() {
     if (!chip) return;
     chip.hidden = !id;

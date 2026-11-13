@@ -56,4 +56,3 @@
 .rp-blob { margin: 6px 0; }
 .rp-blob img { display: block; max-width: 100%; border-radius: 8px; background: #fff2; }
 .rp .rp-show { width: 100%; min-height: 72px; border-style: dashed; color: var(--muted, #7d8799); }
-#roomTasksBtn { font-size: 18px; }

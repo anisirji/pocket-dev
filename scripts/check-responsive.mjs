@@ -148,7 +148,7 @@ try {
   }
   // The top bar with every optional button showing: the Room button (a room member) and an unread Messages count.
   await page.evaluate(() => { document.getElementById('roomTasksBtn').hidden = false; });
-  for (const ws of wss.clients) if (ws.messages) ws.send(JSON.stringify({ t: 'message', message: { ...messagesHello.messages[0], seq: 3, text: 'New' } }));
+  for (const ws of wss.clients) if (ws.messages) ws.send(JSON.stringify({ t: 'message', message: { ...messagesHello.messages[0], seq: 3, text: 'New', files: [] } }));
   await page.waitForFunction(() => document.querySelector('#viewSwitch .mx-badge:not([hidden])'));
   assert.notEqual(await page.locator('#viewSwitch .mx-badge').evaluate((b) => getComputedStyle(b).backgroundColor), 'rgba(0, 0, 0, 0)', 'the unread count has its green background');
   for (const view of ['terminal', 'git']) {
@@ -176,6 +176,8 @@ try {
       if (view === 'git' && width >= 360) assert.ok(bar.repo >= 80, `${where}: the repository picker is ${bar.repo}px, too narrow for its name`);
     }
   }
+  for (const ws of wss.clients) if (ws.messages) ws.send(JSON.stringify({ t: 'removed', seqs: [3] }));
+  await page.waitForFunction(() => document.querySelector('#viewSwitch .mx-badge[hidden]'));
   await page.locator('#viewSwitch [data-view="terminal"]').click();
   await page.setViewportSize({ width: 393, height: 852 });
   await page.locator('#cmd').focus();
@@ -439,6 +441,7 @@ try {
   assert.equal(terminalInputs, 0, 'draft restoration must not execute a terminal command');
   // Cover the actual History -> Continue in chat path, not just opening a chat.
   async function resumeHistory() {
+    await page.locator('#moreBtn').click();
     await page.locator('#resumeBtn').click();
     await page.locator('.hist-card').click();
     await page.waitForSelector('.hist-detail-title');
