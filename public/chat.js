@@ -1828,7 +1828,8 @@
     ui.send.classList.remove('chat-stop');
     ui.send.disabled = !convo.online || convo.sending || uploading || !hasInput || !!edit?.saving || !!updateRequired;
     ui.input.setAttribute('aria-label', edit ? 'Edit queued message' : 'Message');
-    ui.attach.disabled = !!edit || !convo.online || convo.uploadsOff;
+    // An upload is a plain HTTP request. Android drops the socket while its file picker is open, so the page is offline when the picked file arrives.
+    ui.attach.disabled = !!edit || convo.uploadsOff;
     ui.attach.title = convo.uploadsOff ? 'Attachments are not available on this server' : 'Attach a file';
   }
 
