@@ -109,6 +109,7 @@ async function toolStates() {
   return {
     claude: tool('Claude Code (claude)', findBin('claude')),
     codex: tool('Codex (codex)', findBin('codex')),
+    antigravity: tool('Antigravity (agy)', findBin('agy')),
     gh: gh && !ghLogin ? { state: 'missing', fix: 'Run: gh auth login' } : tool('the GitHub CLI (gh)', gh),
   };
 }
@@ -121,6 +122,7 @@ const ITEMS = [
   { id: 'firewall', group: 'mac', title: 'Incoming connections', why: 'Lets your phone reach this Mac while the firewall is on.' },
   { id: 'claude', group: 'tools', title: 'Claude Code', why: 'Chats with Claude.', optional: true },
   { id: 'codex', group: 'tools', title: 'Codex', why: 'Chats with Codex.', optional: true },
+  { id: 'antigravity', group: 'tools', title: 'Antigravity', why: 'Chats with Antigravity (experimental).', optional: true },
   { id: 'gh', group: 'tools', title: 'GitHub CLI', why: 'Pull requests in Git. Needs gh auth login.', optional: true },
 ];
 

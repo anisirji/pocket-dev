@@ -1002,7 +1002,7 @@ const adminSections = {
     list: () => chatApi.active().map((c) => ({
       id: c.id,
       label: c.title || 'New chat',
-      details: [c.tool === 'codex' ? 'Codex' : 'Claude', CHAT_STATUS[c.status], c.cwd],
+      details: [{ codex: 'Codex', antigravity: 'Antigravity' }[c.tool] ?? 'Claude', CHAT_STATUS[c.status], c.cwd],
       startedAt: c.runningSince ?? undefined,
     })),
     act: (id) => chatApi.stop(id),

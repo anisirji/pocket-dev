@@ -9,7 +9,7 @@
     };
     return;
   }
-  const TOOLS = { claude: 'Claude', codex: 'Codex' };
+  const TOOLS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity' };
   const WAITING = ['waiting for you', 'wait'];
   const STATUS = {
     running: ['running', 'run'],
@@ -769,7 +769,7 @@
   }
 
   function drawPerms(id, data) {
-    const codex = convo.chat?.tool === 'codex';
+    const noRules = convo.chat?.tool !== 'claude';
     const remove = async (b, body) => {
       for (const x of ui.permsBody.querySelectorAll('.chat-rule-x')) x.disabled = true;
       b.textContent = 'Removing…';
@@ -808,8 +808,8 @@
     });
     ui.permsBody.replaceChildren(
       section('This chat', 'Allowed for the rest of this chat. Remove one and it asks again.', chatRows, 'Nothing allowed for this chat yet.'),
-      section('This project', codex ? '' : 'Saved in the folder’s Claude settings, so every Claude session here skips the ask.', files,
-        codex ? 'Codex keeps no project rules.' : 'No project rules in this folder.'),
+      section('This project', noRules ? '' : 'Saved in the folder’s Claude settings, so every Claude session here skips the ask.', files,
+        noRules ? 'This tool keeps no project rules here.' : 'No project rules in this folder.'),
     );
   }
 

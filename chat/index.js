@@ -6,6 +6,7 @@ import { Chat, QUEUE_MAX } from './chat.js';
 import { IMAGE_FILE_RE, CONTENT_TYPE, ATTACHMENT_NAME_RE, ATTACHMENT_TYPES, thumbnailOf } from './tool-images.js';
 import * as claude from './claude.js';
 import * as codex from './codex.js';
+import * as antigravity from './antigravity.js';
 import { createChatReplica } from './replica.js';
 import { STATE_DIR } from '../paths.js';
 
@@ -17,6 +18,10 @@ const BUILT_IN_ENGINES = {
   codex: {
     label: 'Codex', create: codex.createCodexEngine, settingsSchema: codex.settingsSchema, grantLabel: codex.grantLabel,
     projectRules: () => [], removeProjectRule: () => { throw new BadRequest('Codex has no project rules here'); },
+  },
+  antigravity: {
+    label: 'Antigravity', create: antigravity.createAntigravityEngine, settingsSchema: antigravity.settingsSchema, grantLabel: antigravity.grantLabel,
+    projectRules: () => [], removeProjectRule: () => { throw new BadRequest('Antigravity has no project rules here'); },
   },
 };
 

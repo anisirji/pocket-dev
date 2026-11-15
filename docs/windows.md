@@ -69,7 +69,7 @@ Chats need at least one of Claude Code or Codex. Everything else works without t
 
 If you do have winget, `winget install --id Git.Git -e`, `winget install --id GitHub.cli -e` and `winget install Cloudflare.cloudflared` also work. After installing a tool, open a new terminal and restart Pocket Dev so its terminals see the new PATH.
 
-> **Upcoming:** Google Antigravity CLI (`agy`) support, in the terminal and in Chat. It is not available yet. See the [roadmap](ROADMAP.md).
+> **Experimental:** Google Antigravity CLI (`agy`) in Chat. Pocket Dev starts `agy acp` and talks to it over the Agent Client Protocol. It has been tested only against a stand-in, not yet against a real signed-in Antigravity, so it may not work. See the [roadmap](ROADMAP.md).
 
 ## 6. Keep it running, start at login
 

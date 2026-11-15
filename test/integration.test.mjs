@@ -224,7 +224,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     assert.equal((await request('POST', '/api/permissions/automation/request', { cookie: A.cookie, body: {} })).status, 404);
     const list = await local('GET', '/api/permissions');
     assert.equal(list.status, 200);
-    assert.deepEqual(list.data.items.map((i) => i.id), ['automation', 'accessibility', 'fullDisk', 'screenRecording', 'firewall', 'claude', 'codex', 'gh']);
+    assert.deepEqual(list.data.items.map((i) => i.id), ['automation', 'accessibility', 'fullDisk', 'screenRecording', 'firewall', 'claude', 'codex', 'antigravity', 'gh']);
     assert.ok(list.data.items.every((i) => ['granted', 'missing', 'waiting', 'not-needed', 'unknown'].includes(i.state)));
     assert.equal(list.data.setup, null);
     assert.equal((await local('POST', '/api/permissions/setup', { status: 'maybe' })).status, 400);
