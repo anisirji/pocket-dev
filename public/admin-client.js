@@ -932,33 +932,3 @@ function renderUpdated() {
 setInterval(refresh, REFRESH_MS);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 route();
-
-async function refreshQuickLink() {
-  if (activeGroup !== 'internet') return;
-  try {
-    const { hostname } = await api('GET', '/api/quick-link');
-    $('quickLinkStatus').textContent = hostname
-      ? `Running at https://${hostname}`
-      : 'No Quick link running. In a Mac terminal, run: cloudflared tunnel --no-autoupdate --url http://127.0.0.1:7777';
-    $('quickLinkBtn').disabled = !hostname;
-  } catch (err) {
-    $('quickLinkStatus').textContent = err.message;
-  }
-}
-
-$('quickLinkBtn').addEventListener('click', async () => {
-  $('quickLinkErr').textContent = '';
-  $('quickLinkBtn').disabled = true;
-  try {
-    const { svg, url, expiresAt } = await api('POST', '/api/quick-link/qr', {});
-    $('quickLinkCode').innerHTML = svg;
-    $('quickLinkUrl').textContent = url;
-    $('quickLinkExpiry').textContent = `Expires at ${new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Works once.`;
-    $('quickLinkQr').hidden = false;
-  } catch (err) {
-    $('quickLinkErr').textContent = err.message;
-  }
-  refreshQuickLink();
-});
-
-setInterval(() => { if (activeGroup === 'internet') refreshQuickLink(); }, REFRESH_MS);

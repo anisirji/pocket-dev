@@ -59,7 +59,7 @@ test('admin.html: every group holds its sections, every old id is kept, nav link
     assert.match(html, new RegExp(`id="${id}"`), id);
   }
   const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))], ['quickLink'], 'the only repeated id is the one that was already repeated');
+  assert.deepEqual([...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))], [], 'no id is repeated');
   const danger = html.indexOf('class="danger-zone"');
   assert.ok(danger > html.indexOf('id="group-security"') && danger < html.indexOf('id="group-computer"'), 'the danger zone is at the bottom of Security');
   assert.ok(html.indexOf('id="lockdown"') > danger);

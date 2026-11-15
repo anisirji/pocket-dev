@@ -108,19 +108,6 @@ function failedLogins(entries) {
 //     action?, warning?, act?(id) -> bool, lockdown?: 'always' | 'optional' }
 // A section without act() is read-only. Lockdown closes 'always' sections and the 'optional' ones it is asked to.
 // `urls()` returns the phone listener's current { lan, local, remote } base URLs.
-// A Quick Tunnel started by hand (`cloudflared tunnel --url ...`) reports its random name on cloudflared's metrics
-// port, 20241 unless another cloudflared already holds it.
-async function quickLinkHost() {
-  for (let port = 20241; port <= 20245; port++) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/quicktunnel`, { signal: AbortSignal.timeout(1000) });
-      const { hostname } = await res.json();
-      if (typeof hostname === 'string' && /^[a-z0-9-]+\.trycloudflare\.com$/.test(hostname)) return hostname;
-    } catch {}
-  }
-  return null;
-}
-
 const setupStatus = cachedStatus(createContext());
 
 export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections }) {
@@ -319,19 +306,6 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
       if (!address) return reply(409, { error: readNetwork(config).wifi ? `No Wi-Fi address. Connect ${platform.host.this} to a network first.` : 'The internet link is not connected yet. Wait for it, or turn Wi-Fi access back on.' });
       if (kind === 'login') return ok(await auth.admin.mintQr());
       return ok({ url: address, svg: await svgQr(address) });
-    },
-    'GET /api/quick-link': async () => ok({ hostname: await quickLinkHost() }),
-    'POST /api/quick-link/qr': async () => {
-      if (!access.view().connected) return reply(409, { error: 'Phone access is off. Connect first, then show the code.' });
-      const hostname = await quickLinkHost();
-      if (!hostname) return reply(409, { error: 'No Quick link is running. Start one with: cloudflared tunnel --no-autoupdate --url http://127.0.0.1:7777' });
-      const hosts = config.read().allowedHosts;
-      const others = Array.isArray(hosts) ? hosts.filter((h) => typeof h === 'string' && !h.endsWith('.trycloudflare.com')) : [];
-      // Old Quick link names are never reused, so only the current one stays allowed.
-      config.update({ allowedHosts: [...others, hostname] });
-      const { url, expiresAt } = await auth.admin.mintQr();
-      const link = `https://${hostname}/?k=${new URL(url).searchParams.get('k')}`;
-      return ok({ hostname, url: link, svg: await svgQr(link), expiresAt });
     },
     'POST /api/sections/:section/:item': async ({ params }) => {
       const s = Object.hasOwn(sections, params.section) ? sections[params.section] : null;
