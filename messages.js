@@ -39,11 +39,16 @@ const INLINE = {
   'image/png': 'image', 'image/jpeg': 'image', 'image/gif': 'image', 'image/webp': 'image',
   'video/mp4': 'video', 'video/webm': 'video', 'video/quicktime': 'video',
   'audio/mpeg': 'audio', 'audio/mp4': 'audio', 'audio/ogg': 'audio', 'audio/wav': 'audio',
+  'application/pdf': 'pdf', 'text/plain': 'text',
 };
+// A document opens in the browser when its first bytes say so. Text has no signature, so it must also be free of
+// control bytes and carry a plain-text name; it is served as text/plain, which never runs.
+const TEXT_NAME = /\.(txt|md|markdown|csv|tsv|log|json|ya?ml|toml|ini|xml)$/i;
+const isPlainText = (head) => head.length > 0 && ![...head].some((b) => b === 0 || (b < 32 && b !== 9 && b !== 10 && b !== 13));
 const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1']);
 const MP4_BRANDS = new Set(['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'M4V ', 'dash', 'MSNV']);
 
-export function detectType(head) {
+export function detectType(head, name = '') {
   const ascii = (from, to) => head.toString('latin1', from, to);
   if (head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
   if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return 'image/jpeg';
@@ -60,6 +65,8 @@ export function detectType(head) {
   }
   if (head.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3])) && head.includes('webm')) return 'video/webm';
   if (ascii(0, 3) === 'ID3' || (head[0] === 0xff && (head[1] & 0xe0) === 0xe0)) return 'audio/mpeg';
+  if (ascii(0, 5) === '%PDF-') return 'application/pdf';
+  if (TEXT_NAME.test(name) && isPlainText(head)) return 'text/plain';
   return 'application/octet-stream';
 }
 const kindOf = (type) => INLINE[type] ?? (type === 'image/heic' ? 'image' : 'file');
@@ -445,8 +452,9 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
     fs.closeSync(rfd);
     fs.renameSync(part, path.join(filesDir, id));
     usage += size;
-    const type = detectType(head.subarray(0, n));
-    const meta = { id, name: uploadName(req.headers['x-filename']), size, type, kind: kindOf(type) };
+    const name = uploadName(req.headers['x-filename']);
+    const type = detectType(head.subarray(0, n), name);
+    const meta = { id, name, size, type, kind: kindOf(type) };
     pending.set(id, { owner: v.key, at: Date.now(), meta });
     return [201, { id, name: meta.name, size, kind: meta.kind }];
   }
@@ -484,7 +492,7 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
     if (!f) throw httpError(404, 'Not found');
     await ensureLocal(f);
     const inline = Boolean(INLINE[f.type]) && url.searchParams.get('download') !== '1';
-    return stream(req, res, path.join(filesDir, f.id), inline ? f.type : 'application/octet-stream', disposition(inline ? 'inline' : 'attachment', f.name), headers);
+    return stream(req, res, path.join(filesDir, f.id), inline ? (f.type === 'text/plain' ? 'text/plain; charset=utf-8' : f.type) : 'application/octet-stream', disposition(inline ? 'inline' : 'attachment', f.name), headers);
   }
 
   // thumbnailOf treats an existing file as done, so a second request during sips would read a half-written JPEG.
@@ -636,5 +644,39 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
     });
   }
 
-  return { handleApi, handleUpgrade };
+  // A file the owner picked in Files joins Messages as an upload that is not sent yet, copied on this computer so the bytes
+  // never travel through the phone. Only a logged-in device may do this: Files has already checked the path.
+  async function adopt(req, file, name) {
+    const device = auth.deviceFor(req);
+    if (!device) throw httpError(401, 'Not logged in');
+    const v = deviceParticipant(device);
+    sweepPending();
+    const size = fs.statSync(file).size;
+    const max = fileMaxFor(req, false);
+    if (max !== null && size > max) throw httpError(413, overInternet(size));
+    const low = await diskRefusal(size);
+    if (low) throw httpError(507, low);
+    const id = crypto.randomBytes(12).toString('hex');
+    const dest = path.join(filesDir, id);
+    try {
+      await fsp.copyFile(file, dest, fs.constants.COPYFILE_EXCL);
+    } catch (err) {
+      await fsp.rm(dest, { force: true });
+      throw err;
+    }
+    fs.chmodSync(dest, 0o600);
+    const head = Buffer.alloc(64);
+    const rfd = fs.openSync(dest, 'r');
+    const n = fs.readSync(rfd, head, 0, head.length, 0);
+    fs.closeSync(rfd);
+    const actual = fs.statSync(dest).size;
+    usage += actual;
+    const label = uploadName(encodeURIComponent(name));
+    const type = detectType(head.subarray(0, n), label);
+    const meta = { id, name: label, size: actual, type, kind: kindOf(type) };
+    pending.set(id, { owner: v.key, at: Date.now(), meta });
+    return { id, name: meta.name, size: actual, kind: meta.kind };
+  }
+
+  return { handleApi, handleUpgrade, adopt };
 }

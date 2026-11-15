@@ -20,6 +20,7 @@
     download: '<path d="M12 4v12M6.5 10.5 12 16l5.5-5.5M4 20h16"/>',
     rename: '<path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/>',
     trash: '<path d="M4 7h16M9.5 7V4.5h5V7M6 7l1 13h10l1-13M10 11v5.5M14 11v5.5"/>',
+    send: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>',
     copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/>',
     select: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12 3 3 5-6"/>',
     eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
@@ -793,7 +794,36 @@
     const trash = labeled('trash', 'Trash', 'fx-danger');
     rename.hidden = trash.hidden = readOnly();
     const copy = labeled('copy', 'Copy path');
-    acts.append(download, rename, trash, copy);
+    // Copies the file into Messages on the computer, then opens Messages with it attached; pick who gets it and send.
+    const sendMsg = labeled('send', 'Send in Messages');
+    sendMsg.hidden = e.type === 'dir' || !window.pocketDevMessages?.attach || state.places?.scoped;
+    sendMsg.onclick = async () => {
+      sendMsg.disabled = true;
+      try {
+        const meta = await api('POST', '/api/files/send', { path: e.path });
+        overlays.close('files-preview');
+        window.pocketDevMessages.attach(meta);
+      } catch (err) {
+        toast(err.message);
+      }
+      sendMsg.disabled = false;
+    };
+    // The phone's share sheet can save the file to Files, Drive or another app.
+    const share = labeled('download', 'Share or save');
+    share.hidden = !(navigator.canShare && navigator.share);
+    share.onclick = async () => {
+      share.disabled = true;
+      try {
+        const blob = await (await fetch(fileUrl(e.path, false))).blob();
+        const file = new File([blob], e.name, { type: blob.type });
+        if (navigator.canShare({ files: [file] })) await navigator.share({ files: [file] });
+        else toast('This browser cannot share this file. Use Download.');
+      } catch (err) {
+        if (err?.name !== 'AbortError') toast('Could not open the share sheet. Use Download.');
+      }
+      share.disabled = false;
+    };
+    acts.append(download, share, sendMsg, rename, trash, copy);
     panel.append(head, body, info, acts);
     sheet.append(panel);
     sheet.onclick = (ev) => { if (ev.target === sheet) overlays.close('files-preview'); };

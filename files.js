@@ -129,7 +129,7 @@ const DEFAULT_UPLOAD_MAX = 2 * GB;
 const DEFAULT_ZIP_MAX = 4 * GB;
 
 // config is { read(), update(changes) }: read() re-reads config.json, so settings are taken once per request.
-export function createFilesApi({ sendJson, readJson, config }) {
+export function createFilesApi({ sendJson, readJson, config, sendToMessages = null }) {
   const home = fs.realpathSync(os.homedir());
   let settingsKey = null;
   let settings;
@@ -395,6 +395,15 @@ export function createFilesApi({ sendJson, readJson, config }) {
     }
   }
 
+  // Hands one file to Messages as an attachment that is not sent yet. The path goes through the same checks as a download.
+  async function send({ req, body, res }) {
+    if (scope || !sendToMessages) fail(403, 'This action is not allowed for your role.');
+    const file = await resolve(body?.path);
+    if (!(await fsp.stat(file)).isFile()) fail(400, 'Only a file can be sent. Zip a folder first.');
+    res.statusCode = 201;
+    return sendToMessages(req, file, path.basename(file));
+  }
+
   async function mkdir({ body, res }) {
     const dir = path.join(await resolveDir(body.dir), checkName(body.name));
     requireWrite(dir);
@@ -505,6 +514,7 @@ export function createFilesApi({ sendJson, readJson, config }) {
     'POST rename': { run: rename, body: 'json' },
     'POST trash': { run: trash, body: 'json' },
     'POST upload': { run: upload, body: 'raw' },
+    'POST send': { run: send, body: 'json' },
   };
 
   function guardWrite(req, kind) {

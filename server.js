@@ -625,7 +625,7 @@ async function handleApi(req, res, url) {
     }
     if (req.method === 'GET' && url.pathname === '/api/status') return sendJson(res, 200, { status: guest.active ? 'active' : 'expired', role: guest.grant?.role || 'guest' });
     if (req.method === 'GET' && url.pathname === '/api/current-access') return sendJson(res, 200, collaborators.currentAccess(req));
-    if (/^\/api\/files\/(places|list|download|zip|search|upload|mkdir|rename|trash)$/.test(url.pathname)) return handleFiles(req, res, url, collaborators.scope(req, res));
+    if (/^\/api\/files\/(places|list|download|zip|search|upload|send|mkdir|rename|trash)$/.test(url.pathname)) return handleFiles(req, res, url, collaborators.scope(req, res));
     if (resource === 'messages') return messages.handleApi(req, res);
     return sendJson(res, 403, { error: 'Your role does not allow this action.' });
   }
@@ -807,7 +807,7 @@ const handleHistory = createHistoryApi({
   },
 });
 const handleApps = createAppsApi({ sendJson, readJson });
-const handleFiles = createFilesApi({ sendJson, readJson, config });
+const handleFiles = createFilesApi({ sendJson, readJson, config, sendToMessages: (req, file, name) => messages.adopt(req, file, name) });
 
 const PAGES = {
   '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html',

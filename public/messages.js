@@ -235,7 +235,32 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
       download.href = fileUrl(f, '?download=1');
       download.download = f.name;
       download.setAttribute('aria-label', `Download ${f.name}`);
-      card.append(info, download);
+      card.append(info);
+      if (f.kind === 'pdf' || f.kind === 'text') {
+        const open = el('a', 'mx-dl', '↗');
+        Object.assign(open, { href: fileUrl(f), target: '_blank', rel: 'noopener' });
+        open.setAttribute('aria-label', `Open ${f.name}`);
+        card.append(open);
+      }
+      // The phone's own share sheet saves the file to Files, Drive or another app. It needs the bytes in the page first.
+      if (navigator.canShare && navigator.share) {
+        const share = el('button', 'mx-dl', '⇪');
+        share.type = 'button';
+        share.setAttribute('aria-label', `Share or save ${f.name}`);
+        share.onclick = async () => {
+          share.disabled = true;
+          try {
+            const blob = await (await fetch(fileUrl(f, '?download=1'))).blob();
+            const file = new File([blob], f.name, { type: f.type || blob.type });
+            if (navigator.canShare({ files: [file] })) await navigator.share({ files: [file] });
+          } catch (err) {
+            if (err?.name !== 'AbortError') share.title = 'Could not open the share sheet. Use the download arrow.';
+          }
+          share.disabled = false;
+        };
+        card.append(share);
+      }
+      card.append(download);
       wrap.append(card);
     }
     return wrap;
@@ -542,6 +567,12 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     xhr.send(u.file);
   }
 
+  // A file Files already copied into Messages: it joins the tray like an upload that just finished.
+  function attachExisting(meta) {
+    state.uploads.push({ file: { name: meta.name, size: meta.size }, status: 'done', loaded: meta.size, id: meta.id, error: null, xhr: null });
+    renderTray();
+  }
+
   attach.onclick = () => (globalThis.chooseFiles ? globalThis.chooseFiles(attach, picker) : picker.click());
   picker.onchange = () => {
     const refusals = [];
@@ -594,6 +625,7 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     receive,
     sync,
     lastSeq,
+    attachExisting,
     setOnline(on) { state.online = on; renderStatus(); },
     show(chat) {
       state.shown = true;
@@ -652,7 +684,7 @@ export function startPhoneMessages({ api = window.api, badgeOn } = {}) {
     onMessage: (msg) => view.receive(msg),
     onState: (s) => view.setOnline(s === 'connected'),
   });
-  window.pocketDevMessages = { open: show, connection };
+  window.pocketDevMessages = { open: show, connection, attach: (meta) => { show(); view.attachExisting(meta); } };
   return window.pocketDevMessages;
 }
 
