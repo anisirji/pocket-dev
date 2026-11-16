@@ -14,7 +14,7 @@ const folders = Array.from({ length: 16 }, (_, i) => ({ name: `Project ${i}`, pa
 const choices = Array.from({ length: 18 }, (_, i) => ({ value: `model-${i}`, label: `Model ${i}`, description: 'A longer option description that should wrap on narrow screens.' }));
 const chat = { id: 'fixture-chat', tool: 'codex', title: 'Question fixture', cwd: '/tmp', updatedAt: Date.now(), settings: { model: 'model-0' }, status: 'waiting-answer', pending: true, pendingId: 'question-1', capabilities: { queueEdit: true } };
 const question = { id: 'event-1', seq: 1, type: 'question', requestId: 'question-1', questions: [{ id: 'q1', question: 'Which option should we use?', options: choices.map((c) => ({ label: c.label, description: c.description })) }] };
-const chatEvents = [{ id: 'plan-link', seq: 0, type: 'assistant-text', text: '[Fixture plan](/tmp/ROLE_ACCESS_PLAN.md)' }, question];
+const chatEvents = [{ id: 'old-user', seq: -1, at: Date.now() - 3 * 86400_000, type: 'user-text', text: 'Asked three days ago' }, { id: 'plan-link', seq: 0, at: Date.now(), type: 'assistant-text', text: '[Fixture plan](/tmp/ROLE_ACCESS_PLAN.md)' }, question];
 const claudeChat = { ...chat, id: 'claude-fixture', tool: 'claude', title: 'Claude fixture', status: 'idle', pending: false, pendingId: null };
 const messagesHello = {
   t: 'hello', you: { id: 'me', name: 'Pixel', kind: 'device' }, limits: { fileMax: null, largeFile: 50 * 1024 * 1024, lowSpace: false },
@@ -305,6 +305,12 @@ try {
   await page.evaluate(() => setTestViewport({}));
   await page.evaluate(() => window.pocketDevChat.open('fixture-chat'));
   await page.waitForSelector('.chat-submit');
+  // Each message shows when it was sent: just the clock today, the date as well on another day.
+  const answered = await page.locator('.chat-assistant time.chat-time').first().textContent();
+  assert.match(answered, /^\d{1,2}:\d{2}/, `an answer from today shows the clock: ${answered}`);
+  const asked = await page.locator('.chat-user time.chat-time').first().textContent();
+  assert.match(asked, /[A-Za-z]{3}.*, \d{1,2}:\d{2}/, `a message from another day shows its date: ${asked}`);
+  assert.ok(await page.locator('.chat-user time.chat-time').first().getAttribute('title'), 'the full date is the tooltip');
   for (const height of [420, 320]) {
     await page.evaluate((h) => setTestViewport({ height: h, offsetTop: 100 }), height);
     await settle();

@@ -1575,6 +1575,18 @@
     return b;
   }
 
+  // 14:32 today, "Nov 15, 14:32" on another day. The title holds the full date.
+  function timeStamp(at, cls = 'chat-time') {
+    if (!at) return null;
+    const d = new Date(at);
+    const clock = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const today = d.toDateString() === new Date().toDateString();
+    const node = el('time', cls, today ? clock : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${clock}`);
+    node.dateTime = d.toISOString();
+    node.title = d.toLocaleString();
+    return node;
+  }
+
   const RENDER = {
     'user-text': (ev) => {
       if (ev.removed || ev.queued) {
@@ -1592,11 +1604,11 @@
       if (ev.notSent) {
         node.append(el('div', 'chat-queued-tag chat-queued-lost', 'Not sent: the turn failed or the server restarted'));
       }
-      if (ev.text) {
-        const foot = el('div', 'chat-bubble-foot');
-        foot.append(copyButton(ev.text));
-        node.append(foot);
-      }
+      const foot = el('div', 'chat-bubble-foot');
+      const sent = timeStamp(ev.at, 'chat-time chat-time-user');
+      if (sent) foot.append(sent);
+      if (ev.text) foot.append(copyButton(ev.text));
+      if (foot.firstChild) node.append(foot);
       return node;
     },
     'assistant-text': (ev) => {
@@ -1611,10 +1623,12 @@
       if (ev.tool && usedSeveralEngines()) node.prepend(el('div', `chat-by chat-by-${ev.tool}`, TOOLS[ev.tool] || ev.tool));
       const foot = el('div', 'chat-bubble-foot');
       if (ev.model) {
-        const model = el('div', 'chat-model', shortModel(ev.model));
+        const model = el('span', 'chat-model', shortModel(ev.model));
         model.title = ev.model;
         foot.append(model);
       }
+      const said = timeStamp(ev.at);
+      if (said) foot.append(said);
       if (!ev.streaming && ev.text) foot.append(copyButton(ev.text));
       if (foot.firstChild) node.append(foot);
       return node;
@@ -1657,7 +1671,10 @@
     result: (ev) => {
       const bits = [ev.status, duration(ev.durationMs || 0)];
       if (ev.costUsd != null) bits.push(`$${ev.costUsd.toFixed(ev.costUsd < 0.1 ? 3 : 2)}`);
-      return el('div', `chat-result chat-result-${ev.status}`, bits.join(' · '));
+      const line = el('div', `chat-result chat-result-${ev.status}`, bits.join(' · '));
+      const done = timeStamp(ev.at, 'chat-time');
+      if (done) line.append(' · ', done);
+      return line;
     },
     error: (ev) => {
       const node = el('div', 'chat-error', ev.message);

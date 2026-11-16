@@ -11,6 +11,7 @@ const source = fs.readFileSync(new URL('../public/chat.js', import.meta.url), 'u
 // No browser layout or external model is needed for these lifecycle checks.
 const queueView = source.slice(source.indexOf('  function renderQueue()'), source.indexOf('  async function removeQueued('));
 const messageView = source.slice(source.indexOf("    'user-text': (ev) => {"), source.indexOf("    'assistant-text':"));
+const timeView = source.slice(source.indexOf('  function timeStamp('), source.indexOf('  const RENDER = {'));
 const composer = source.slice(source.indexOf('  function renderComposer()'), source.indexOf('  function renderFiles()'));
 const draftView = source.slice(source.indexOf('  function persistQueueEdit('), source.indexOf('  function resetLog()'));
 const serverSource = fs.readFileSync(new URL('../chat/index.js', import.meta.url), 'utf8');
@@ -48,7 +49,7 @@ function fixture(t) {
     IMAGE_EXT: /\.(png|jpg)$/i, attachedImage: () => el('img', 'chat-user-img'), copyButton: () => el('button', 'chat-copy'),
   };
   vm.createContext(runtime);
-  vm.runInContext(`${draftView}\n${composer}\n${queueView}\nObject.assign(this, {renderQueue, renderComposer, editQueued, saveQueuedEdit, finishQueueEdit, saveDraft, restoreQueueEdit, reconcileQueueEdit}); this.patchRoute = ({${patchRoute}})['PATCH :id/queue']; this.renderUser = ({${messageView}})['user-text'];`, runtime);
+  vm.runInContext(`${timeView}\n${draftView}\n${composer}\n${queueView}\nObject.assign(this, {renderQueue, renderComposer, editQueued, saveQueuedEdit, finishQueueEdit, saveDraft, restoreQueueEdit, reconcileQueueEdit}); this.patchRoute = ({${patchRoute}})['PATCH :id/queue']; this.renderUser = ({${messageView}})['user-text'];`, runtime);
   runtime.sendWithTimeout = async (url, body, method) => {
     assert.equal(url, `/api/chat/${chat.id}/queue`);
     assert.equal(method, 'PATCH');
