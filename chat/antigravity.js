@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
+import crypto from 'node:crypto';
 import { findBin, engineEnv, cap, INPUT_MAX } from './env.js';
 
 // Google Antigravity CLI. `agy acp` is an Agent Client Protocol server on standard input and output; the sign-in
@@ -22,11 +23,21 @@ function blocksText(content) {
   return (content ?? []).map((c) => (c.type === 'content' ? textOf(c.content) : c.type === 'diff' ? `${c.path}` : '')).filter(Boolean).join('\n');
 }
 
-function diffOf(content) {
+const lines = (text) => (text ?? '').split('\n').filter(Boolean);
+
+// A file change carries its diff as content blocks, but agy sends them only with the permission request and the final
+// update. Before that, a write names the file and its full content in the tool input.
+function diffOf(content, tc = {}) {
   const diffs = (content ?? []).filter((c) => c.type === 'diff');
-  if (!diffs.length) return null;
-  return diffs.map((d) => `@@ ${d.path}\n${[...(d.oldText ?? '').split('\n').filter(Boolean).map((l) => `-${l}`), ...(d.newText ?? '').split('\n').filter(Boolean).map((l) => `+${l}`)].join('\n')}`).join('\n');
+  if (diffs.length) return diffs.map((d) => `@@ ${d.path}\n${[...lines(d.oldText).map((l) => `-${l}`), ...lines(d.newText).map((l) => `+${l}`)].join('\n')}`).join('\n');
+  const input = tc.rawInput;
+  if (tc.kind === 'edit' && typeof input?.Content === 'string') return `@@ ${input.Path ?? ''}\n${lines(input.Content).map((l) => `+${l}`).join('\n')}`;
+  return null;
 }
+
+const pathOf = (tc) => tc.locations?.[0]?.path ?? tc.rawInput?.Path;
+// agy titles an edit with a path relative to a resolved symlink, such as ../../private/tmp/x, so show the file name alone.
+const titleOf = (tc) => (tc.kind === 'edit' && pathOf(tc) ? `File ${pathOf(tc).split(/[\\/]/).pop()}` : tc.title);
 
 export function createAntigravityEngine(chat) {
   let child = null;
@@ -34,9 +45,12 @@ export function createAntigravityEngine(chat) {
   let nextId = 1;
   let stopping = false;
   const calls = new Map();
-  const thinkingId = () => `agy-thinking-${chat.turn?.id ?? 0}`;
+  // A resumed chat starts a new engine but keeps its old events, so ids must not repeat across engines.
+  const freshId = (kind) => `agy-${kind}-${crypto.randomBytes(6).toString('hex')}`;
   let textId = null;
   let thoughtId = null;
+  // session/load replays the whole conversation as updates before it answers. They are already in the chat.
+  let loading = false;
 
   const write = (message) => {
     if (child?.stdin.writable) child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
@@ -67,12 +81,12 @@ export function createAntigravityEngine(chat) {
     if (kind === 'text') {
       if (thoughtId) { chat.update(thoughtId, { streaming: false }); thoughtId = null; }
       if (!textId) {
-        textId = `agy-text-${nextId++}`;
+        textId = freshId('text');
         chat.emit({ id: textId, type: 'assistant-text', text, streaming: true });
       } else chat.delta(textId, 'text', text);
     } else {
       if (!thoughtId) {
-        thoughtId = `${thinkingId()}-${nextId++}`;
+        thoughtId = freshId('thinking');
         chat.emit({ id: thoughtId, type: 'thinking', text, streaming: true });
       } else chat.delta(thoughtId, 'text', text);
     }
@@ -86,10 +100,10 @@ export function createAntigravityEngine(chat) {
     tool_call: (u) => {
       closeText();
       const id = toolId(u.toolCallId);
-      const diff = diffOf(u.content);
-      const fields = diff
-        ? { type: 'file-edit', path: u.locations?.[0]?.path ?? u.title, diff: cap(diff), status: TOOL_STATUS[u.status] ?? 'running' }
-        : { type: 'tool-run', name: u.title || u.kind || 'Tool', summary: '', input: cap(u.rawInput ?? '', INPUT_MAX), output: cap(blocksText(u.content)), status: TOOL_STATUS[u.status] ?? 'running' };
+      const diff = diffOf(u.content, u);
+      const fields = u.kind === 'edit' || diff
+        ? { type: 'file-edit', path: pathOf(u) ?? u.title, diff: cap(diff ?? ''), status: TOOL_STATUS[u.status] ?? 'running' }
+        : { type: 'tool-run', name: titleOf(u) || u.kind || 'Tool', summary: u.kind === 'execute' ? cap(u.rawInput?.CommandLine ?? '', 200) : '', input: cap(u.rawInput ?? '', INPUT_MAX), output: cap(blocksText(u.content)), status: TOOL_STATUS[u.status] ?? 'running' };
       if (chat.find(id)) chat.update(id, fields);
       else chat.emit({ id, ...fields });
     },
@@ -98,8 +112,9 @@ export function createAntigravityEngine(chat) {
       if (!chat.find(id)) return;
       const patch = {};
       if (u.status) patch.status = TOOL_STATUS[u.status] ?? 'running';
-      const diff = diffOf(u.content);
-      if (diff) patch.diff = cap(diff);
+      const edit = chat.find(id).type === 'file-edit';
+      const diff = diffOf(u.content, u);
+      if (edit) { if (diff) patch.diff = cap(diff); }
       else if (u.content) patch.output = cap(blocksText(u.content));
       chat.update(id, patch);
     },
@@ -109,13 +124,14 @@ export function createAntigravityEngine(chat) {
     const tc = params.toolCall ?? {};
     const options = params.options ?? [];
     const pick = (...kinds) => options.find((o) => kinds.includes(o.kind))?.optionId;
-    const grantKey = `tool:${tc.title || tc.kind || 'tool'}`;
+    const grantKey = `tool:${titleOf(tc) || tc.kind || 'tool'}`;
     const answer = (optionId) => write({ id, result: { outcome: optionId ? { outcome: 'selected', optionId } : { outcome: 'cancelled' } } });
     if (chat.grants.includes(grantKey) && pick('allow_once', 'allow_always')) return answer(pick('allow_once', 'allow_always'));
-    const diff = diffOf(tc.content);
+    const diff = diffOf(tc.content, tc);
     const res = await chat.ask({
-      type: 'permission-request', kind: diff ? 'file' : 'command', title: tc.title || 'Antigravity wants to use a tool',
-      detail: cap(tc.rawInput ?? blocksText(tc.content), INPUT_MAX), diff: diff ? cap(diff) : undefined,
+      type: 'permission-request', kind: diff ? 'file' : 'command', title: titleOf(tc) || 'Antigravity wants to use a tool',
+      detail: (tc.kind === 'execute' && tc.rawInput?.CommandLine) || (diff ? pathOf(tc) : cap(tc.rawInput ?? blocksText(tc.content), INPUT_MAX)),
+      diff: diff ? cap(diff) : undefined,
       rule: grantLabel(grantKey),
       options: [{ id: 'allow', label: 'Approve' }, { id: 'allow-chat', label: 'Approve for this chat' }, { id: 'deny', label: 'Deny' }],
     });
@@ -142,7 +158,7 @@ export function createAntigravityEngine(chat) {
       if (msg.method === 'session/request_permission') {
         requestPermission(msg.id, msg.params ?? {}).catch(() => write({ id: msg.id, result: { outcome: { outcome: 'cancelled' } } }));
       } else write({ id: msg.id, error: { code: -32601, message: `Pocket Dev cannot answer ${msg.method}` } });
-    } else if (msg.method === 'session/update' && msg.params?.sessionId === sessionId) {
+    } else if (msg.method === 'session/update' && !loading && msg.params?.sessionId === sessionId) {
       UPDATES[msg.params.update?.sessionUpdate]?.(msg.params.update);
     }
   }
@@ -174,8 +190,9 @@ export function createAntigravityEngine(chat) {
         const params = { cwd: chat.cwd, mcpServers: [] };
         let res;
         if (chat.sessionId && init.agentCapabilities?.loadSession) {
-          await call('session/load', { sessionId: chat.sessionId, ...params });
           sessionId = chat.sessionId;
+          loading = true;
+          try { await call('session/load', { sessionId, ...params }); } finally { loading = false; }
         } else {
           res = await call('session/new', params);
           sessionId = res.sessionId;

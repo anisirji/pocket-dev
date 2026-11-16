@@ -15,10 +15,16 @@ let slow = null;
 readline.createInterface({ input: process.stdin }).on('line', (line) => {
   const m = JSON.parse(line);
   if (m.id != null && !m.method) return waiting.get(m.id)?.(m.result);
-  if (m.method === 'initialize') return send({ id: m.id, result: { protocolVersion: 1, agentCapabilities: { loadSession: false }, authMethods: [] } });
+  if (m.method === 'initialize') return send({ id: m.id, result: { protocolVersion: 1, agentCapabilities: { loadSession: Boolean(process.env.FAKE_AGY_LOAD) }, authMethods: [] } });
   if (m.method === 'session/new') {
     if (process.env.FAKE_AGY_SIGNED_OUT) return send({ id: m.id, error: { code: -32000, message: 'Authentication required' } });
     return send({ id: m.id, result: { sessionId: 'agy-session-1' } });
+  }
+  if (m.method === 'session/load') {
+    // Like the real agy, replay the whole conversation as updates before answering.
+    update(m.params.sessionId, { sessionUpdate: 'user_message_chunk', content: text('old question') });
+    update(m.params.sessionId, { sessionUpdate: 'agent_message_chunk', content: text('old answer') });
+    return send({ id: m.id, result: { sessionId: m.params.sessionId } });
   }
   if (m.method === 'session/cancel') return slow?.();
   if (m.method !== 'session/prompt') return send({ id: m.id, error: { code: -32601, message: 'no' } });

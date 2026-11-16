@@ -77,3 +77,15 @@ test('an agy that cannot start says so', { timeout: 60000 }, async (t) => {
   const chat = await c.until((x) => x.events.some((e) => e.type === 'error'));
   assert.match(chat.events.find((e) => e.type === 'error').message, /Could not start Antigravity/);
 });
+
+test('a chat that went to sleep resumes its agy session without replaying the old conversation', { timeout: 60000 }, async (t) => {
+  const c = await open(t, { FAKE_AGY_LOAD: '1', POCKET_DEV_CHAT_IDLE_SECONDS: '1' });
+  await c.call('POST', `/api/chat/${c.id}/message`, { text: 'hello' });
+  await c.until((x) => x.status === 'idle' && x.events.some((e) => e.type === 'assistant-text'));
+  await pause(3500);
+  await c.call('POST', `/api/chat/${c.id}/message`, { text: 'again' });
+  const chat = await c.until((x) => x.status === 'idle' && x.events.filter((e) => e.type === 'result').length === 2);
+  assert.ok(chat.events.some((e) => e.type === 'status' && /Waking up/.test(e.text)), 'the engine really slept and woke');
+  assert.deepEqual(chat.events.filter((e) => e.type === 'assistant-text').map((e) => e.text), ['Hello from agy', 'Hello from agy']);
+  assert.ok(!JSON.stringify(chat.events).includes('old answer'), 'the replayed history is not shown again');
+});

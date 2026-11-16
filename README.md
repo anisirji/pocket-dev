@@ -66,7 +66,7 @@ More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/d
 
 ## Upcoming
 
-- **Google Antigravity CLI (`agy`)**, as a third engine in Chat next to Claude Code and Codex. **Experimental:** built on `agy acp` and tested only against a stand-in, not yet against a real signed-in Antigravity. Details and open questions: [Roadmap](https://github.com/anisirji/pocket-dev/blob/main/docs/ROADMAP.md).
+- **Google Antigravity CLI (`agy`)**, as a third engine in Chat next to Claude Code and Codex. **Experimental:** tested by hand on macOS with Antigravity CLI 1.5.9, not yet on Windows or Linux. Details and open questions: [Roadmap](https://github.com/anisirji/pocket-dev/blob/main/docs/ROADMAP.md).
 
 ## Community and support
 
