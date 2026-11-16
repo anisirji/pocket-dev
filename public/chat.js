@@ -1967,6 +1967,7 @@
       if (!stack.length) push({ layer: 'list' });
     },
     current: () => convoIdOf(stack),
+    currentSession: () => (convoIdOf(stack) && convo.chat?.sessionId ? { tool: convo.chat.tool, id: convo.chat.sessionId } : null),
     async startFromSession({ tool, id, cwd, title }) {
       const chat = await api('POST', '/api/chat', { tool, cwd, resume: { sessionId: id }, ...(title && { title: title.slice(0, 200) }) });
       showChat(chat);

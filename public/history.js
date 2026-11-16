@@ -50,7 +50,6 @@
     <div class="hist-list hist-scroll"></div>
     <div class="hist-detail hist-scroll" hidden></div>
     <div class="hist-foot" hidden>
-      <div class="hist-open" hidden><strong class="hist-open-title"></strong><span class="hist-open-where"></span></div>
       <p class="hist-warn" role="alert" hidden></p>
       <button class="hist-fix" hidden></button>
       <div class="hist-actions">
@@ -63,7 +62,6 @@
   const ui = {
     back: q('.hist-back'), heading: q('.hist-heading'), refresh: q('.hist-refresh'), close: q('.hist-close'),
     chips: q('.hist-chips'), list: q('.hist-list'), detail: q('.hist-detail'), foot: q('.hist-foot'),
-    open: q('.hist-open'), openTitle: q('.hist-open-title'), openWhere: q('.hist-open-where'),
     warn: q('.hist-warn'), fix: q('.hist-fix'), actions: q('.hist-actions'), go: q('.hist-in-terminal'), chat: q('.hist-in-chat'),
   };
 
@@ -151,12 +149,10 @@
   async function loadDetail(item) {
     const seq = ++detailSeq;
     status(ui.detail, 'Loading conversation…');
-    renderOpen();
     try {
       const data = await api('GET', `/api/history/${item.tool}/${encodeURIComponent(item.id)}`);
       if (seq !== detailSeq) return;
       current = { ...item, ...data };
-      renderOpen();
       const title = el('div', 'hist-detail-title', current.title);
       const meta = el('div', 'hist-meta', [current.cwd && shortPath(current.cwd), ago(current.lastActive), msgs(current.messageCount)].filter(Boolean).join(' · '));
       const shown = current.messages.filter((m) => m.role !== 'tool').length;
@@ -184,25 +180,11 @@
     loadList();
   }
 
-  // A live conversation has a writer somewhere else. The buttons take it over: that copy closes first, so only one
-  // program ever writes the conversation's file.
-  function renderOpen() {
-    const live = Boolean(current?.live);
-    ui.open.hidden = !live;
-    ui.actions.classList.toggle('stacked', live);
-    if (!ui.go.disabled) setLabels();
-    if (!live) return;
-    const tool = TOOLS[current.tool];
-    ui.openTitle.textContent = current.openIn === 'pocket-dev' ? 'Open in Pocket Dev' : 'Open on your Mac';
-    const where = current.copies?.length ? current.copies.map((c) => c.label).join(', ')
-      : current.copies ? 'Changed in the last 2 minutes' : '';
-    ui.openWhere.textContent = [where, current.busy && `${tool} is working on it now`].filter(Boolean).join(' · ');
-  }
-
+  // A live conversation has a writer somewhere else. Opening it here closes that copy first, so only one program ever
+  // writes the conversation's file. The list's badge already says where it is open.
   function setLabels() {
-    const verb = current?.live ? 'Take over and continue' : 'Continue';
-    ui.go.textContent = `${verb} in terminal`;
-    ui.chat.textContent = `${verb} in chat`;
+    ui.go.textContent = 'Open here in terminal';
+    ui.chat.textContent = 'Open here in chat';
   }
 
   function clearFailure() {
@@ -305,7 +287,6 @@
     if (r.ok) {
       // Nothing else has it open now, so if continuing fails, trying again just continues.
       current = { ...current, live: false, copies: [] };
-      renderOpen();
       const closed = r.data.stopped.map((s) => s.label).join(', ');
       return continueIn(where, closed && `Closed ${closed}.`);
     }
@@ -314,24 +295,23 @@
       if (confirm(r.data.error)) takeOver(where, { ...body, confirmBusy: true });
       return;
     }
-    ui.warn.textContent = r.data.error || 'Could not take over this conversation.';
+    ui.warn.textContent = r.data.error || 'Could not open this conversation here.';
     ui.warn.hidden = false;
     if (r.data.code === 'still-running' && r.data.canForce) {
-      offerFix(`Force quit and continue in ${where}`, 'Force quit ends it at once. Anything it has not saved, including a reply it is writing, is lost.',
+      offerFix(`Force quit and open here in ${where}`, 'Force quit ends it at once. Anything it has not saved, including a reply it is writing, is lost.',
         () => takeOver(where, { ...body, confirmBusy: true, force: true }));
     } else if (r.data.code === 'not-found') {
-      offerFix(`Continue in ${where} anyway`, 'If it is still open on the Mac, both copies write to this conversation and can damage it.',
+      offerFix(`Open here in ${where} anyway`, 'If it is still open on the Mac, both copies write to this conversation and can damage it.',
         () => continueIn(where));
     }
   }
 
+  // A live conversation is closed where it is open, then opened here. The server asks for one yes, and only when that
+  // copy is in the middle of a reply.
   function choose(where) {
     if (!current) return;
     if (!current.live) return continueIn(where);
-    const question = current.openIn === 'pocket-dev'
-      ? 'This conversation is open in another Pocket Dev terminal or chat. Take it over? That copy will close.'
-      : "This conversation is open on your Mac. Take it over? The Mac's copy will close.";
-    if (confirm(question)) takeOver(where);
+    takeOver(where);
   }
 
   ui.go.onclick = () => choose('terminal');
@@ -340,4 +320,43 @@
   ui.close.onclick = leave;
   ui.refresh.onclick = loadList;
   document.getElementById('resumeBtn').addEventListener('click', open);
+
+  // "Continue on Mac" in the More menu: closes Pocket Dev's copy of the chat or terminal on screen, then shows the command
+  // that resumes it on the Mac. The command is plain text to select; nothing is copied to the clipboard.
+  function showMacCommand(r) {
+    const card = el('div', 'hist-mac');
+    const box = el('div', 'hist-mac-box');
+    const lines = [r.cwd && `cd ${r.cwd}`, r.command].filter(Boolean).join('\n');
+    const closed = r.stopped.map((s) => s.label).join(', ');
+    const done = () => { card.remove(); overlays.close('mac-command'); };
+    box.append(
+      el('strong', null, 'Ready on your Mac'),
+      el('p', null, `${closed ? `Closed ${closed}. ` : ''}Open a terminal on your Mac and run:`),
+      el('pre', 'hist-mac-cmd', lines),
+      el('p', 'hist-mac-hint', 'Touch the command to select it. Opening this conversation here again closes the Mac copy.'),
+    );
+    const ok = el('button', 'hist-continue', 'Done');
+    ok.onclick = done;
+    box.append(ok);
+    card.append(box);
+    card.onclick = (e) => { if (e.target === card) done(); };
+    document.body.appendChild(card);
+    overlays.open('mac-command', () => card.remove());
+  }
+
+  async function continueOnMac(confirmBusy = false) {
+    const view = window.pocketDev.view();
+    const chat = view === 'chat' ? window.pocketDevChat.currentSession() : null;
+    const body = view === 'terminal' ? { terminalId: window.pocketDev.activeSession() } : chat;
+    if (!body?.terminalId && !body?.id) return toast(view === 'chat' ? 'Send a message first, then continue on your Mac.' : 'Open a chat or terminal first.');
+    const res = await fetch('/api/history/mac', {
+      method: 'POST', headers: { 'x-pocket-dev': '1', 'content-type': 'application/json' }, body: JSON.stringify({ ...body, ...(confirmBusy && { confirmBusy }) }),
+    }).catch(() => null);
+    const data = await res?.json().catch(() => ({})) ?? {};
+    if (res?.status === 401 || data.blocked || data.pending) return location.replace('/login.html');
+    if (res?.ok) return showMacCommand(data);
+    if (data.code === 'busy' && !confirmBusy) return confirm(data.error) && continueOnMac(true);
+    toast(data.error || 'Could not continue on your Mac.');
+  }
+  document.getElementById('macBtn').addEventListener('click', () => continueOnMac());
 })();

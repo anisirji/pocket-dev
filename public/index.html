@@ -188,6 +188,7 @@
     <div id="moreMenu" popover>
       <button id="appsBtn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>Apps</button>
       <button id="resumeBtn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>Resume a laptop conversation</button>
+      <button id="macBtn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Continue on Mac</button>
     </div>
     <button id="settingsBtn" class="icon-btn glyph" aria-label="Settings">⚙︎<span id="gearBattery" hidden></span></button>
   </header>
@@ -1252,6 +1253,7 @@ window.pocketDev = {
     window.pocketDev.openSession(await api('POST', '/api/sessions', { cwd: dir }));
   },
   activeSession: () => activeId,
+  view: () => $('app').dataset.view,
 };
 
 (async () => {
