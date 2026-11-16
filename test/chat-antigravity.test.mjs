@@ -89,3 +89,15 @@ test('a chat that went to sleep resumes its agy session without replaying the ol
   assert.deepEqual(chat.events.filter((e) => e.type === 'assistant-text').map((e) => e.text), ['Hello from agy', 'Hello from agy']);
   assert.ok(!JSON.stringify(chat.events).includes('old answer'), 'the replayed history is not shown again');
 });
+
+test('the chosen model is sent to agy, and can be changed between turns', { timeout: 60000 }, async (t) => {
+  const c = await open(t);
+  const picked = await c.call('PATCH', `/api/chat/${c.id}`, { settings: { model: 'claude-opus-4-6-thinking' } });
+  assert.equal(picked.status, 200, JSON.stringify(picked.data));
+  await c.call('POST', `/api/chat/${c.id}/message`, { text: 'hello' });
+  const chat = await c.until((x) => x.status === 'idle' && x.events.some((e) => e.type === 'assistant-text'));
+  assert.equal(chat.settings.model, 'claude-opus-4-6-thinking');
+  const again = await c.call('PATCH', `/api/chat/${c.id}`, { settings: { model: 'gemini-3.8-flash-low' } });
+  assert.equal(again.status, 200, JSON.stringify(again.data));
+  assert.equal(again.data.applied.model, 'next-turn');
+});

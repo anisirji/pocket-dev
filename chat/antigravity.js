@@ -9,7 +9,18 @@ const AGY_BIN = process.env.POCKET_DEV_AGY || findBin('agy');
 const PROTOCOL_VERSION = 1;
 const CALL_TIMEOUT_MS = 60_000;
 
-export const settingsSchema = async () => [];
+// The models `agy` listed on 1.5.9. Any other id that `agy` accepts can be typed in, and a newer agy may offer more.
+const MODELS = [
+  { value: 'default', label: 'Default', description: 'The model agy is set to' },
+  { value: 'gemini-3.8-flash-high', label: 'Gemini 3.8 Flash (High)', description: '' },
+  { value: 'gemini-3.8-flash-medium', label: 'Gemini 3.8 Flash (Medium)', description: '' },
+  { value: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)', description: 'Fastest' },
+  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Thinking)', description: '' },
+  { value: 'claude-opus-4-6-thinking', label: 'Claude Opus 4.6 (Thinking)', description: 'Most thorough' },
+  { value: 'gpt-oss-120b-medium', label: 'GPT-OSS 120B (Medium)', description: '' },
+];
+
+export const settingsSchema = async () => [{ key: 'model', label: 'Model', default: 'default', custom: true, choices: MODELS }];
 
 export const grantLabel = (grant) => grant.replace(/^tool:/, 'Tool: ');
 
@@ -197,6 +208,7 @@ export function createAntigravityEngine(chat) {
           res = await call('session/new', params);
           sessionId = res.sessionId;
         }
+        if (chat.settings.model && chat.settings.model !== 'default') await call('session/set_model', { sessionId, modelId: chat.settings.model });
         chat.setSession(sessionId);
       } catch (err) {
         const message = err.code === -32000 || /auth/i.test(err.message) ? signInHint : err.message;
@@ -224,8 +236,12 @@ export function createAntigravityEngine(chat) {
       if (sessionId) write({ method: 'session/cancel', params: { sessionId } });
     },
 
-    async configure() {
-      return {};
+    // A model change applies to the next prompt in the same session.
+    async configure(changes) {
+      if (!changes.model) return {};
+      if (changes.model === 'default') return { model: 'restart' };
+      await call('session/set_model', { sessionId, modelId: changes.model });
+      return { model: 'next-turn' };
     },
 
     async stop() {
