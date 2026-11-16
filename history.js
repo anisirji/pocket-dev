@@ -385,9 +385,37 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
   // The first scan reads a few hundred MB of jsonl; do it at startup so the phone's first list is warm.
   listSessions(Object.keys(TOOLS), 30).catch(() => {});
 
+  // "Continue on Mac": closes Pocket Dev's own copy of a conversation so the Mac's Claude or Codex can resume it, and
+  // answers with the command to run there. A terminal is named by its id; the conversation it holds is found from its
+  // processes. A chat is named by tool and conversation id, and a chat that is asleep has no copy to close.
+  async function continueOnMac(req, res) {
+    const device = deviceFor(req);
+    if (!device) return sendJson(res, 403, { error: `Only your own devices can continue a conversation on ${platform.host.the}.` });
+    const body = await readJson(req);
+    let { tool, id } = body;
+    let terminal;
+    if (typeof body.terminalId === 'string') {
+      const copy = (await takeover.survey()).find((c) => c.kind === 'terminal' && c.terminal.id === body.terminalId);
+      if (!copy) return sendJson(res, 404, { error: 'No Claude or Codex conversation is open in this terminal.' });
+      ({ tool, id, terminal } = copy);
+    }
+    if (!Object.hasOwn(TOOLS, tool) || !ID_RE.test(id ?? '')) return sendJson(res, 400, { error: 'Name a terminal, or a tool and conversation id.' });
+    const s = await findSession(tool, id);
+    if (!s) return sendJson(res, 404, { error: 'This conversation has no history to resume yet. Send a message first.' });
+    const r = await takeover.takeOver({
+      tool, id: s.id, mtimeMs: s.mtimeMs, scope: 'pocket-dev', confirmBusy: toBool(body.confirmBusy, 'confirmBusy'),
+      note: `Continued on your ${platform.host.mac}`, who: { by: 'phone', deviceId: device.id, name: device.name, ip: device.ip },
+    });
+    if (r.status !== 200) return sendJson(res, r.status, r.body);
+    const cwd = s.cwd ?? terminal?.cwd ?? null;
+    return sendJson(res, 200, { ...r.body, tool, id: s.id, cwd, command: resumeCommand(tool, s.id) });
+  }
+
   async function handleHistory(req, res, pathname) {
     const [, , , tool, id, action] = pathname.split('/');
     const url = new URL(req.url, 'http://localhost');
+
+    if (req.method === 'POST' && tool === 'mac' && !id) return continueOnMac(req, res);
 
     if (req.method === 'GET' && !tool) {
       const filter = url.searchParams.get('tool') || 'all';
@@ -430,12 +458,13 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
     return sendJson(res, 201, { ...sessionView(session), note });
   }
 
-  // The Admin page's "Open in Pocket Dev": conversations a Pocket Dev terminal or chat has open, each with the command
-  // that moves it to a terminal on the Mac. That command, `pocket-dev takeover`, calls act() to close Pocket Dev's copy.
-  // The page has no button for it, so the section has no `action`.
+  // The Admin page's "Open in Pocket Dev": conversations a Pocket Dev terminal or chat has open. "Continue on Mac" calls
+  // act() to close Pocket Dev's copy, and the row shows the command that resumes it in a terminal here.
   handleHistory.openHere = {
     title: 'Open in Pocket Dev',
     empty: 'No conversation is open in a Pocket Dev terminal or chat.',
+    action: 'Continue on Mac',
+    warning: `Pocket Dev closes its copy so only one program writes the conversation. Then run the command shown in a terminal on ${platform.host.the}.`,
     async list() {
       const held = byConversation((await takeover.survey()).filter((c) => c.kind === 'terminal' || c.kind === 'chat'));
       const names = await codex.names();
@@ -446,7 +475,7 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
         return {
           id: `${tool}:${id}`,
           label: s ? view(s, held, names).title : copies[0].chat?.title || copies[0].terminal?.title || id,
-          details: [`${TOOL_LABELS[tool]} in ${copies.map((c) => copyView(c).label.replace(/^Pocket Dev /, '')).join(', ')}`, ...(cwd ? [cwd] : []), `On ${platform.host.the}, run: pocket-dev takeover ${id}`],
+          details: [`${TOOL_LABELS[tool]} in ${copies.map((c) => copyView(c).label.replace(/^Pocket Dev /, '')).join(', ')}`, ...(cwd ? [cwd] : []), `Then run: ${resumeCommand(tool, id)}`],
           tool, conversationId: id, cwd,
           busy: Boolean(s && Date.now() - s.mtimeMs < BUSY_MS) || copies.some((c) => c.busy || c.chat?.status === 'running'),
           activeAt: Math.max(...copies.map((c) => c.chat?.updatedAt ?? c.terminal?.activeAt ?? 0)),

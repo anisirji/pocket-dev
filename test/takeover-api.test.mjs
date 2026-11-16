@@ -101,7 +101,7 @@ test('POST takeover: busy needs confirmBusy, bad flags are refused, and no devic
   assert.deepEqual(nobody.system.signals, []);
 });
 
-test('the Open in Pocket Dev section lists Pocket Dev copies with the Mac command, and act closes only those', async () => {
+test('the Open in Pocket Dev section lists Pocket Dev copies with the resume command, and Continue on Mac closes only those', async () => {
   age(60 * 60_000);
   const shell = { pid: 7001, ppid: 1, uid: ME, stat: 'S', started: 0, exe: '/bin/zsh', args: '/bin/zsh -l' };
   const inTerminal = { pid: 7002, ppid: 7001, uid: ME, stat: 'S', started: 0, exe: '/usr/local/bin/claude', args: `claude --resume ${ID}` };
@@ -119,12 +119,69 @@ test('the Open in Pocket Dev section lists Pocket Dev copies with the Mac comman
   assert.equal(items[0].id, `claude:${ID}`);
   assert.equal(items[0].label, 'Fix the login page');
   assert.equal(items[0].cwd, app);
-  assert.ok(items[0].details.includes(`On the Mac, run: pocket-dev takeover ${ID}`));
+  assert.ok(items[0].details.includes(`Then run: claude --resume ${ID}`));
   assert.equal(await t.handle.openHere.act(`claude:${ID}`), true);
   assert.deepEqual(ended, [['term9', 'Continued on your Mac']]);
   assert.deepEqual(system.signals, [[7002, 'SIGHUP']], 'take over itself sent nothing; VS Code was left alone');
   assert.equal(t.logged[0].by, 'mac');
   assert.equal(await t.handle.openHere.act('claude:not-a-real-id!'), false);
+});
+
+test('Continue on Mac closes only Pocket Dev copies, names the resume command, and leaves VS Code alone', async () => {
+  age(60 * 60_000);
+  const shell = { pid: 7001, ppid: 1, uid: ME, stat: 'S', started: 0, exe: '/bin/zsh', args: '/bin/zsh -l' };
+  const inTerminal = { pid: 7002, ppid: 7001, uid: ME, stat: 'S', started: 0, exe: '/usr/local/bin/claude', args: `claude --resume ${ID}` };
+  const ended = [];
+  let system;
+  const own = {
+    terminals: () => [{ id: 'term9', title: 'claude · app', cwd: app, pid: 7001, activeAt: 5 }],
+    endTerminal: (id, note) => { ended.push([id, note]); system.kill(7002, 'SIGHUP'); return true; },
+  };
+  const t = api({ procs: [vscode, shell, inTerminal], own });
+  system = t.system;
+
+  const byTerminal = await t.call('POST', '/api/history/mac', { terminalId: 'term9' });
+  assert.equal(byTerminal.status, 200, JSON.stringify(byTerminal.body));
+  assert.deepEqual([byTerminal.body.tool, byTerminal.body.id, byTerminal.body.cwd, byTerminal.body.command], ['claude', ID, app, `claude --resume ${ID}`]);
+  assert.deepEqual(ended, [['term9', 'Continued on your Mac']]);
+  assert.deepEqual(system.signals, [[7002, 'SIGHUP']], 'VS Code was left alone');
+  assert.deepEqual([t.logged[0].type, t.logged[0].by, t.logged[0].deviceId], ['conversation-taken-over', 'phone', 'dev1']);
+
+  const none = await t.call('POST', '/api/history/mac', { terminalId: 'term-unknown' });
+  assert.equal(none.status, 404);
+});
+
+test('Continue on Mac for a chat that is asleep has nothing to close and still gives the command', async () => {
+  age(60 * 60_000);
+  const t = api({ procs: [] });
+  const r = await t.call('POST', '/api/history/mac', { tool: 'claude', id: ID });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual([r.body.stopped, r.body.command, r.body.cwd], [[], `claude --resume ${ID}`, app]);
+  const codex = await t.call('POST', '/api/history/mac', { tool: 'codex', id: '0b3c1d2e-9999-4222-8333-944455556666' });
+  assert.equal(codex.status, 404, 'no history file means nothing to resume');
+});
+
+test('Continue on Mac: a reply in progress needs one yes, a bad request or a stranger signals nothing', async () => {
+  age(2000);
+  const shell = { pid: 7001, ppid: 1, uid: ME, stat: 'S', started: 0, exe: '/bin/zsh', args: '/bin/zsh -l' };
+  const inTerminal = { pid: 7002, ppid: 7001, uid: ME, stat: 'S', started: 0, exe: '/usr/local/bin/claude', args: `claude --resume ${ID}` };
+  let system;
+  const own = { terminals: () => [{ id: 'term9', title: 'claude · app', cwd: app, pid: 7001, activeAt: 5 }], endTerminal: () => { system.kill(7002, 'SIGHUP'); return true; } };
+  const busy = api({ procs: [shell, inTerminal], own });
+  system = busy.system;
+  const first = await busy.call('POST', '/api/history/mac', { terminalId: 'term9' });
+  assert.deepEqual([first.status, first.body.code], [409, 'busy']);
+  assert.match(first.body.error, /still replying in a Pocket Dev terminal\. Continuing stops that reply\./);
+  const second = await busy.call('POST', '/api/history/mac', { terminalId: 'term9', confirmBusy: true });
+  assert.equal(second.status, 200);
+
+  const quiet = api({ procs: [] });
+  assert.equal((await quiet.call('POST', '/api/history/mac', {})).status, 400);
+  assert.equal((await quiet.call('POST', '/api/history/mac', { tool: 'claude', id: '../etc' })).status, 400);
+  assert.equal((await quiet.call('POST', '/api/history/mac', { tool: 'nope', id: ID })).status, 400);
+  const stranger = api({ device: null, procs: [vscode] });
+  assert.equal((await stranger.call('POST', '/api/history/mac', { tool: 'claude', id: ID })).status, 403);
+  assert.deepEqual(stranger.system.signals, []);
 });
 
 test('findConversation looks an id up in either tool', async () => {

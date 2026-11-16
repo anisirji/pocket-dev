@@ -248,7 +248,7 @@ export function createTakeover({
       return { status: 200, body: { stopped: [], busy } };
     }
     if (busy && !confirmBusy) {
-      return refuse({ code: 'busy', busy, copies: found.map(copyView), error: `${TOOL_LABELS[tool]} is still working ${where(found)}. Taking over stops that reply.` });
+      return refuse({ code: 'busy', busy, copies: found.map(copyView), error: `${TOOL_LABELS[tool]} is still replying ${where(found)}. Continuing stops that reply.` });
     }
 
     const stopped = [];

@@ -200,7 +200,7 @@ test('the busy flag: a file written in the last 10 s needs a second confirmation
   assert.equal(first.status, 409);
   assert.equal(first.body.code, 'busy');
   assert.equal(first.body.busy, true);
-  assert.equal(first.body.error, 'Claude is still working on the Mac. Taking over stops that reply.');
+  assert.equal(first.body.error, 'Claude is still replying on the Mac. Continuing stops that reply.');
   assert.deepEqual(sys.signals, [], 'nothing is stopped before the second confirmation');
   const second = await takeOver({ tool: 'claude', id: ID, mtimeMs: 1_000_000 - 3000, confirmBusy: true });
   assert.equal(second.status, 200);

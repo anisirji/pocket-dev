@@ -193,7 +193,7 @@ test('a pending device on Windows is told to wait on the host computer, and the 
 
 test('no message that a non-Mac can show still says "Mac" (source scan of server-side strings)', () => {
   // Strings built with platform.host are fine; these files must not hold a bare "the Mac" / "this Mac" literal any more.
-  const files = ['auth.js', 'admin.js', 'config.js', 'files.js', 'collaborators.js', 'tunnel.js', 'server.js', 'performance.js', 'power.js', 'screen.js', 'takeover.js', 'messages.js', 'history.js', 'takeover-cli.js'];
+  const files = ['auth.js', 'admin.js', 'config.js', 'files.js', 'collaborators.js', 'tunnel.js', 'server.js', 'performance.js', 'power.js', 'screen.js', 'takeover.js', 'messages.js', 'history.js'];
   for (const f of files) {
     const bare = fs.readFileSync(path.join(REPO, f), 'utf8').split('\n')
       .filter((l) => !/^\s*(\/\/|\*)/.test(l) && /['"`][^'"`]*\b(the|this|The|This) Mac\b/.test(l.replace(/\/\/.*$/, '')));

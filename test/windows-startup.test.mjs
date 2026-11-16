@@ -13,6 +13,6 @@ test('takeover loads without process.getuid, as on Windows', () => {
   const pre = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pd-win-')), 'pre.cjs');
   fs.writeFileSync(pre, "for (const k of ['getuid', 'getgid', 'geteuid', 'getegid']) delete process[k];\n");
   const out = execFileSync(process.execPath, ['--require', pre, '--input-type=module', '-e',
-    "const t = await import('./takeover.js'); t.createTakeover({}); const c = await import('./takeover-cli.js'); console.log('ok');"], { cwd: REPO, encoding: 'utf8' });
+    "const t = await import('./takeover.js'); t.createTakeover({}); console.log('ok');"], { cwd: REPO, encoding: 'utf8' });
   assert.match(out, /ok/);
 });

@@ -36,7 +36,6 @@ Usage: pocket-dev <command>
   internet domain --hostname <host> --token-stdin  Your own domain through a Cloudflare tunnel; the token
                                                    comes from stdin, or from a file with --token-file <path>
   awake on|plugged|off|status                      Keep this computer awake
-  takeover <id> | --last                           Continue a phone conversation in this terminal
   version | help
 
 Settings you can change with config set:
@@ -279,7 +278,6 @@ switch (command) {
   case 'connect': case 'disconnect': runScript('admin.js', [command]); break;
   case 'internet': await internet(args); break;
   case 'awake': runScript('awake.js', args); break;
-  case 'takeover': process.exit(await (await import('../takeover-cli.js')).takeoverCommand(args)); break;
   case 'message': runScript('message.js', args); break;
   case 'version': case '--version': case '-v': console.log(VERSION); break;
   case undefined: case 'help': case '--help': case '-h': console.log(HELP); break;
