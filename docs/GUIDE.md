@@ -136,7 +136,7 @@ The repository list holds the repositories found under `repoRoots`. To open anot
 
 <table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/07-chat.png" width="240" alt="Chat with an approval card"><br><sub>Chat with approval cards</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/08-chat-agents.png" width="240" alt="The agents panel in a chat"><br><sub>Agents panel</sub></td></tr></table>
 
-Start or continue Claude Code and Codex conversations from the phone, with your existing logins. Approval cards (**Allow once**, **Always allow in this chat**, **Always allow in this project** when Claude offers it, and **Deny**; Codex shows **Approve**, **Approve for this chat** and **Deny**), permission modes, a message queue, limits notices and a Copy button are built in. New in 1.1: an agents panel in the chat. You can also resume any conversation from the terminal and take it over from the Mac with `pocket-dev takeover`.
+Start or continue Claude Code and Codex conversations from the phone, with your existing logins. Approval cards (**Allow once**, **Always allow in this chat**, **Always allow in this project** when Claude offers it, and **Deny**; Codex shows **Approve**, **Approve for this chat** and **Deny**), permission modes, a message queue, limits notices and a Copy button are built in. New in 1.1: an agents panel in the chat. Resume any laptop conversation with **Open here**, which closes the other copy for you. To go the other way, tap **Continue on Mac** in the More menu and run the command it shows.
 
 ### Messages
 
@@ -239,7 +239,6 @@ Full table (cookies, CSRF, approval, block, lockdown, security log): [docs/REFER
 | `pocket-dev config path` | Print the config file path. |
 | `pocket-dev service install\|restart\|uninstall\|status\|logs` | Run it in the background (launchd, macOS), or manage that. |
 | `pocket-dev service autostart on\|off\|status` | Start at login or not (macOS). |
-| `pocket-dev takeover <id>\|--last` | Close Pocket Dev's copy of a conversation, then continue it in this terminal with `claude --resume` or `codex resume`. |
 | `pocket-dev internet status\|off\|quick` | Show internet access and the link's status, turn it off, or allow a Quick link. |
 | `pocket-dev internet domain --hostname <host> --token-stdin` | Use your own domain through a Cloudflare tunnel. The token comes from stdin, or from a file with `--token-file <path>`, never as an argument. |
 | `pocket-dev qr [--link <address>]`, `admin`, `connect`, `disconnect`, `awake` | Print a one-time login QR (for an internet address with `--link`), open the Admin page, turn phone access on or off, set Keep awake (`on\|plugged\|off\|status`). |

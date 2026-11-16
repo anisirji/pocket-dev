@@ -95,11 +95,11 @@ Each opening is in the security log as `port-remote-opened`. It needs `cloudflar
 | Close and reopen | `gh pr close` and `gh pr reopen`. | Delete the branch. |
 | Create PR | Head, base (default branch first), title, description, draft. Pushes first with `git push -u origin <branch>` when the branch is not on GitHub or has unpushed commits. | |
 
-## Resume and take over
+## Resume and continue
 
-Lists the 30 most recent Claude Code and Codex conversations from `~/.claude/projects` and `~/.codex`, filtered by **All**, **Claude**, or **Codex**. Shows the latest 20 messages. **Continue in terminal** opens a terminal in the conversation's folder and types `claude --resume <id>` or `codex resume <id>`. Resume reads the history files. The selected engine writes its normal history when you continue. Codex Chat reuses the local daemon when available.
+Lists the 30 most recent Claude Code and Codex conversations from `~/.claude/projects` and `~/.codex`, filtered by **All**, **Claude**, or **Codex**. Shows the latest 20 messages. **Open here in terminal** opens a terminal in the conversation's folder and types `claude --resume <id>` or `codex resume <id>`. **Open here in chat** continues it in a Pocket Dev chat. Resume reads the history files. The selected engine writes its normal history when you continue. Codex Chat reuses the local daemon when available.
 
-### Take over a conversation that is open somewhere else
+### Open a conversation that is open somewhere else
 
 A conversation has one writer at a time, because every copy appends to the same history file. Two writers corrupt it. A conversation is open when one of these has it:
 
@@ -109,21 +109,23 @@ A conversation has one writer at a time, because every copy appends to the same 
 
 Only `claude`, `codex`, or `node` running their CLI script count, owned by your user. `grep`, `tail`, editors, and shells that mention the id never count. Pocket Dev itself and the programs it runs under never count either.
 
-The list marks such a conversation **open on Mac** or **open in Pocket Dev**. When only its file changed in the last 2 minutes, the mark is **open on Mac?**. Its detail shows **Open on your Mac** with the program, and the buttons become **Take over and continue in terminal** and **Take over and continue in chat**.
+The list marks such a conversation **open on Mac** or **open in Pocket Dev**. When only its file changed in the last 2 minutes, the mark is **open on Mac?**. There is one way in: **Open here in terminal** or **Open here in chat**. Pocket Dev closes the other copy for you, with no extra screen.
 
-Take over asks first. If the file changed in the last 10 seconds, or Claude reports the session busy, it asks again: "Claude is still working on the Mac. Taking over stops that reply." It then closes the other copy and continues:
+It asks only when the other copy is in the middle of a reply (the file changed in the last 10 seconds, or Claude reports the session busy): "Claude is still replying on the Mac. Continuing stops that reply." It then closes the other copy and continues:
 
 - A program on the Mac gets SIGINT, then SIGTERM after 5 seconds, then 5 more seconds to exit. Pocket Dev rechecks each process before it signals it, so a reused pid is never signalled.
 - A Pocket Dev terminal ends its shell and keeps the tab, which shows why it ended. A Pocket Dev chat stops its engine, holds any waiting messages, and shows why.
 - The phone continues only after every copy has exited. The toast names what closed.
 
-If a program ignores both signals, the sheet says so and offers **Force quit and continue**, which sends SIGKILL after a warning. If the conversation is live but no program can be found, the sheet says "Couldn't find the program that has this conversation open. Close it on the Mac, then try again." It also offers **Continue anyway**, with a warning. Every take over, and every failed one, goes in the security log with the tool, the conversation id, the pids, and the device. The route is `POST /api/history/<tool>/<id>/takeover` with `{ force?, confirmBusy? }`. It answers `{ stopped, busy }`, or 409 with a `code` of `busy`, `not-found`, or `still-running`. Collaborators can't use it.
+If a program ignores both signals, the sheet says so and offers **Force quit and open here**, which sends SIGKILL after a warning. If the conversation is live but no program can be found, the sheet says "Couldn't find the program that has this conversation open. Close it on the Mac, then try again." It also offers **Open here anyway**, with a warning. Every release, and every failed one, goes in the security log with the tool, the conversation id, the pids, and the device. The route is `POST /api/history/<tool>/<id>/takeover` with `{ force?, confirmBusy? }`. It answers `{ stopped, busy }`, or 409 with a `code` of `busy`, `not-found`, or `still-running`. Collaborators can't use it.
 
 Codex conversations open in the VS Code Codex extension can't be identified, because its `codex app-server` command line has no conversation id. Close those on the Mac first.
 
-### Move a phone conversation to the Mac
+### Continue on the Mac
 
-Run `pocket-dev takeover <id>` in a Mac terminal, or `pocket-dev takeover --last` for the conversation most recently active in Pocket Dev. The command asks the running server to close Pocket Dev's copy. The phone's terminal or chat then shows "Continued on your Mac". Next, the command checks that no other program has the conversation open. Last, it runs `claude --resume <id>` or `codex resume <id>` in the conversation's folder. The Admin page's **Open in Pocket Dev** list shows each conversation open in a Pocket Dev terminal or chat, with the exact command.
+Open **More** at the top of the phone and tap **Continue on Mac** while a chat or terminal is on screen. Pocket Dev closes its own copy of that conversation, and the phone's terminal or chat shows "Continued on your Mac". A card then shows the exact command to run in a terminal on the Mac, `cd <folder>` and `claude --resume <id>` or `codex resume <id>`. Touch the command to select it. Pocket Dev never uses the clipboard. It leaves a copy open in VS Code or a Mac terminal alone. The route is `POST /api/history/mac` with `{ terminalId }` or `{ tool, id }`, and `{ confirmBusy? }`. It answers `{ stopped, tool, id, cwd, command }`, or 409 with `code: 'busy'`. A chat that is asleep has nothing to close, and the command is still shown.
+
+On the Mac itself, the Admin page's **Open in Pocket Dev** list shows each conversation open in a Pocket Dev terminal or chat, with the command. Its **Continue on Mac** button does the same release.
 
 ## Chat
 
@@ -284,7 +286,6 @@ Viewer can preview and download scoped files. Developer can change a separate pr
 | `pocket-dev config path` | Print the config file path. |
 | `pocket-dev service install\|restart\|uninstall\|status\|logs` | Run it in the background (launchd), or manage that. |
 | `pocket-dev service autostart on\|off\|status` | Start at login or not. |
-| `pocket-dev takeover <id>\|--last` | Close Pocket Dev's copy of a conversation, then continue it in this terminal with `claude --resume` or `codex resume`. `--last` picks the conversation most recently active in Pocket Dev. |
 | `pocket-dev internet status\|off\|quick` | Show internet access and the link's status, turn it off, or allow a Quick link. |
 | `pocket-dev internet domain --hostname <host> --token-stdin` | Use your own domain through a Cloudflare tunnel. The token comes from stdin, or from a file with `--token-file <path>`, never as an argument. See [Connect over the internet](#internet-access-in-detail). |
 | `pocket-dev qr`, `admin`, `connect`, `disconnect`, `awake` | The same as the `npm run` commands below. |
