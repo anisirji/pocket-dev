@@ -1,6 +1,6 @@
 (() => {
-  const TOOLS = { claude: 'Claude', codex: 'Codex' };
-  const FILTERS = [['all', 'All'], ['claude', 'Claude'], ['codex', 'Codex']];
+  const TOOLS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity' };
+  const FILTERS = [['all', 'All'], ['claude', 'Claude'], ['codex', 'Codex'], ['antigravity', 'Antigravity']];
   const OPEN_BADGE = { mac: 'open on Mac', 'pocket-dev': 'open in Pocket Dev' };
 
   const el = (tag, cls, text) => {
@@ -22,7 +22,7 @@
     return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   }
 
-  const msgs = (n) => `${n} msg${n === 1 ? '' : 's'}`;
+  const msgs = (n, tool) => (tool === 'antigravity' ? `${n} step${n === 1 ? '' : 's'}` : `${n} msg${n === 1 ? '' : 's'}`);
   const shortPath = (p) => (p.length > 36 ? `…/${p.split('/').slice(-2).join('/')}` : p);
   const badge = (tool) => el('span', `hist-badge ${tool}`, TOOLS[tool]);
 
@@ -115,7 +115,7 @@
     const top = el('div', 'hist-card-top');
     top.append(badge(item.tool), el('span', 'hist-project', item.project || '—'));
     if (item.live) top.append(el('span', 'hist-live', OPEN_BADGE[item.openIn] ?? 'open on Mac?'));
-    node.append(top, el('div', 'hist-title', item.title), el('div', 'hist-meta', `${ago(item.lastActive)} · ${msgs(item.messageCount)}`));
+    node.append(top, el('div', 'hist-title', item.title), el('div', 'hist-meta', `${ago(item.lastActive)} · ${msgs(item.messageCount, item.tool)}`));
     node.onclick = () => openDetail(item);
     return node;
   }
@@ -128,7 +128,7 @@
       const items = await api('GET', `/api/history?limit=30&tool=${filter}`);
       if (seq !== listSeq) return;
       if (!items.length) {
-        const where = filter === 'all' ? '~/.claude or ~/.codex' : filter === 'claude' ? '~/.claude' : '~/.codex';
+        const where = { all: '~/.claude, ~/.codex or ~/.gemini', claude: '~/.claude', codex: '~/.codex', antigravity: '~/.gemini/antigravity-cli' }[filter];
         status(ui.list, `No conversations found in ${where} on this device.`);
       } else {
         ui.list.replaceChildren(...items.map(card));
@@ -154,9 +154,9 @@
       if (seq !== detailSeq) return;
       current = { ...item, ...data };
       const title = el('div', 'hist-detail-title', current.title);
-      const meta = el('div', 'hist-meta', [current.cwd && shortPath(current.cwd), ago(current.lastActive), msgs(current.messageCount)].filter(Boolean).join(' · '));
+      const meta = el('div', 'hist-meta', [current.cwd && shortPath(current.cwd), ago(current.lastActive), msgs(current.messageCount, current.tool)].filter(Boolean).join(' · '));
       const shown = current.messages.filter((m) => m.role !== 'tool').length;
-      const older = current.messageCount > shown ? [el('div', 'hist-older', `Latest ${shown} of ${msgs(current.messageCount)}`)] : [];
+      const older = current.note ? [el('div', 'hist-older', current.note)] : current.messageCount > shown ? [el('div', 'hist-older', `Latest ${shown} of ${msgs(current.messageCount)}`)] : [];
       ui.detail.replaceChildren(title, meta, ...older, ...current.messages.map(bubble));
       ui.detail.scrollTop = ui.detail.scrollHeight;
     } catch (err) {
