@@ -1,6 +1,6 @@
 # Pocket Dev multi-machine: status for the owner's test (2026-11-09)
 
-Branch `mm-int` (worktree `.claude/worktrees/mm-int`). Not merged into `live`; the live service was not changed by this work. Full suite on this branch: 402 tests, 400 pass; the 2 failures are the known "over the connector a file may be 100 MB" test and its parent. Every Linux and Windows path was only tested with fake commands. Nothing ran on a second real machine.
+Branch `mm-int` (its own git worktree). Not merged into `live`; the live service was not changed by this work. Full suite on this branch: 402 tests, 400 pass; the 2 failures are the known "over the connector a file may be 100 MB" test and its parent. Every Linux and Windows path was only tested with fake commands. Nothing ran on a second real machine.
 
 ## Built
 - Rooms: create, invite (single-use 10-minute code), join with a chosen level (admin, or collaborator with folders), kick, leave, hand over. One host per room, one room per device.

@@ -4,7 +4,7 @@ Updated 2026-11-08 after taking over the interrupted Claude session.
 
 Current status: the owner subsequently requested merging into the actual server checkout, `/Users/ani/Desktop/pocket-dev` on `live`. The source merge includes `integration-review` at `d155681` and the existing live commit `0010a82`. The Admin conflict was resolved in the working file by keeping the new Messages, tunnel and folder-browser wiring alongside the existing manual Remote quick-link recovery controls and `qr --link`. Staging that resolution and committing are blocked by `Unable to create '.git/index.lock': Operation not permitted`; Git still lists `admin.js` as unmerged until it is staged. The service has not been restarted and publication remains blocked. Earlier statements below that the live checkout was untouched describe the pre-merge state.
 
-The three feature branches are combined in order: Take over, Messages, Internet access. They are on `integration-review` in `.claude/worktrees/codex-integration`, backed by the separate local repository `.claude/integration-repo`. These branches live in that repository, not in the live checkout's Git metadata. The original feature worktrees retain their contents, including the Internet access worktree's uncommitted documentation edits.
+The three feature branches are combined in order: Take over, Messages, Internet access. They are on `integration-review` in a separate local worktree, backed by a separate local repository. These branches live in that repository, not in the live checkout's Git metadata. The original feature worktrees retain their contents, including the Internet access worktree's uncommitted documentation edits.
 
 The live checkout remains on `live` at `0010a82`. Its stopgap Remote quick link section remains available there. The combined checkout starts from the feature branches' common base `0c71403` and does not include that stopgap; Internet access supplies the replacement. The running service, real devices, conversations and tunnel were not restarted, migrated or taken over. Nothing from this session was pushed.
 
@@ -21,7 +21,7 @@ The live checkout remains on `live` at `0010a82`. Its stopgap Remote quick link 
 
 Results and limits are recorded in the final section of [VALIDATION.md](VALIDATION.md). The original combined branch passed 134 model-free checks; see VALIDATION.md for the later folder-browser and monitoring results. Full-suite and browser execution remain pending because this sandbox denies TCP listeners and Unix sockets.
 
-The isolated branch `admin-port-fix`, in `.claude/worktrees/codex-admin-port-fix`, contains only the Admin-port forwarding fix on top of `0c71403` (commit `c453473`). It is prepared separately for review and has not been applied to the live checkout or main.
+The isolated branch `admin-port-fix`, in a separate local worktree, contains only the Admin-port forwarding fix on top of `0c71403` (commit `c453473`). It is prepared separately for review and has not been applied to the live checkout or main.
 
 ## Remaining work
 
@@ -74,4 +74,4 @@ git add admin.js docs/INTEGRATION_STATUS.md docs/VALIDATION.md
 git commit -m "Merge integrated features into the live server checkout"
 ```
 
-Other incoming files are already staged by Git's merge. Do not add the untracked `.claude/` directory. This only commits the prepared local merge; it does not restart the server or publish to GitHub.
+Other incoming files are already staged by Git's merge. Do not add the untracked local workspace folders. This only commits the prepared local merge; it does not restart the server or publish to GitHub.

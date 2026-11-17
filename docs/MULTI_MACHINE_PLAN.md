@@ -4,7 +4,7 @@ Source of decisions: `docs/MULTI_MACHINE_SCOPE.md`. This plan is based on a read
 
 ## Rules
 
-- Every step is built in its own worktree under `.claude/worktrees/`, branched from `multi-machine-design`.
+- Every step is built in its own git worktree, branched from `multi-machine-design`.
 - Nothing merges into `live`, and the `dev.pocket.server` service is never restarted, until the owner has seen the step working and says so.
 - Every step ends with: `node --test test/*.test.mjs` (the test "over the connector a file may be 100 MB" already fails before any change) and, for UI, a look in a browser at phone size.
 - At most three agents work at the same time.
