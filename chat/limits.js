@@ -86,3 +86,16 @@ export function antigravityQuotaNotice(answer) {
   const reset = /Resets in ([0-9hms ]+\w)/i.exec(text)?.[1];
   return { type: 'error', message: `Antigravity usage limit reached.${reset ? ` Resets in ${reset}.` : ''}` };
 }
+
+// Copilot says a spent allowance either as an error on the prompt or as a short answer ("You have exceeded your premium
+// request allowance. ... Resets on ..."). Both become the same limit error Claude and Codex give, so the chat offers
+// "Continue with". Long answers are ordinary text and are left alone.
+export function copilotLimitNotice(textOrError) {
+  const text = String(textOrError ?? '').trim();
+  if (!text || text.length > 600) return null;
+  const spent = /\b(quota|usage limit|rate limit|premium requests?|allowance|monthly limit)\b/i.test(text)
+    && /\b(reached|exceeded|used up|exhausted|depleted|no (?:more|remaining))\b/i.test(text);
+  if (!spent) return null;
+  const reset = /resets? (on|in|at) ([^.\n]+)/i.exec(text);
+  return { type: 'error', message: `Copilot usage limit reached.${reset ? ` Resets ${reset[1].toLowerCase()} ${reset[2].trim()}.` : ''}` };
+}

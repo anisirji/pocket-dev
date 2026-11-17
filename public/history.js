@@ -1,6 +1,6 @@
 (() => {
-  const TOOLS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity' };
-  const FILTERS = [['all', 'All'], ['claude', 'Claude'], ['codex', 'Codex'], ['antigravity', 'Antigravity']];
+  const TOOLS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' };
+  const FILTERS = [['all', 'All'], ['claude', 'Claude'], ['codex', 'Codex'], ['antigravity', 'Antigravity'], ['copilot', 'Copilot']];
   const OPEN_BADGE = { mac: 'open on Mac', 'pocket-dev': 'open in Pocket Dev' };
 
   const el = (tag, cls, text) => {
@@ -128,7 +128,7 @@
       const items = await api('GET', `/api/history?limit=30&tool=${filter}`);
       if (seq !== listSeq) return;
       if (!items.length) {
-        const where = { all: '~/.claude, ~/.codex or ~/.gemini', claude: '~/.claude', codex: '~/.codex', antigravity: '~/.gemini/antigravity-cli' }[filter];
+        const where = { all: '~/.claude, ~/.codex, ~/.gemini or ~/.copilot', claude: '~/.claude', codex: '~/.codex', antigravity: '~/.gemini/antigravity-cli', copilot: '~/.copilot' }[filter];
         status(ui.list, `No conversations found in ${where} on this device.`);
       } else {
         ui.list.replaceChildren(...items.map(card));

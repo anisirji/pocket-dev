@@ -7,6 +7,7 @@ export const ENGINE_HELP = {
   claude: { install: ['npm install -g @anthropic-ai/claude-code'], login: 'claude auth login', note: PM_NOTE },
   codex: { install: ['npm install -g @openai/codex'], login: 'codex login', note: PM_NOTE },
   antigravity: { install: [], login: 'agy acp --login', note: 'Install the Antigravity CLI (agy) from Google, then sign in with your Google account. Support is experimental.' },
+  copilot: { install: ['npm install -g @github/copilot'], login: 'copilot login', note: `${PM_NOTE} Needs a GitHub Copilot plan. Support is experimental.` },
 };
 
 export const GENERIC_HELP = { install: [], login: null, note: 'Run pocket-dev setup on your computer to see what is missing.' };

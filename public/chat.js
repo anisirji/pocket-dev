@@ -9,7 +9,7 @@
     };
     return;
   }
-  const TOOLS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity' };
+  const TOOLS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' };
   const WAITING = ['waiting for you', 'wait'];
   const STATUS = {
     running: ['running', 'run'],
@@ -662,12 +662,15 @@
     path.setAttribute('enterkeyhint', 'done');
     const start = button('chat-primary chat-start', 'Start');
 
+    const segNote = el('div', 'chat-seg-note');
     const renderSeg = () => seg.replaceChildren(...Object.keys(opts.tools).map((tool) => button(
       `chat-seg-btn chat-seg-${tool}${tool === draft.tool ? ' on' : ''}`, opts.tools[tool].label || TOOLS[tool], () => {
         draft.tool = tool;
         renderSeg();
+        renderSegNote();
         renderDraftChips();
       })));
+    const renderSegNote = () => { segNote.hidden = !opts.tools[draft.tool]?.experimental; segNote.textContent = 'Experimental: not yet proven on every system.'; };
     renderDraftChips = () => chips.replaceChildren(...schemaOf(draft.tool).map((s) => settingChip(
       s, valueOf(draft.settings[draft.tool], s), () => push({ layer: 'pick', key: s.key, scope: 'new' }))));
     const renderFolders = () => folders.replaceChildren(...groups.flatMap((g) => [
@@ -709,11 +712,12 @@
     };
 
     renderSeg();
+    renderSegNote();
     renderDraftChips();
     renderFolders();
     const body = el('div', 'chat-sheet-body');
     const folderField = window.PocketDevFolderPicker?.field(path, { api, label: 'Folder', onSelect: () => { draft.cwd = path.value; renderFolders(); } }) ?? field('Folder', path);
-    body.append(seg, chips, folderField, folders);
+    body.append(seg, segNote, chips, folderField, folders);
     const foot = el('div', 'chat-sheet-foot');
     foot.append(start);
     sheet.replaceChildren(sheetHead('New chat'), body, foot);
@@ -1513,7 +1517,7 @@
     if (here) return 'This chat · pick model';
     if (info.installed === false) return 'Not installed';
     if (info.loggedIn === false) return 'Not logged in';
-    return '';
+    return info.experimental ? 'Experimental' : '';
   }
   // Two steps in one place, the settings row: the Provider pill first, then the Model pill and the engine's other pills. The
   // Provider pill looks like the others and opens the list of providers.

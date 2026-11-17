@@ -3,6 +3,7 @@
   --chat-claude: #e08a5f; --chat-claude-bg: #3a2216;
   --chat-codex: #4cc79a; --chat-codex-bg: #12322a;
   --chat-antigravity: #d6a64a; --chat-antigravity-bg: #33260f;
+  --chat-copilot: #e58bb2; --chat-copilot-bg: #3a1a28;
   --chat-warn: #f0c674; --chat-warn-bg: #3a2a10;
   --chat-add: #7ee787; --chat-add-bg: #12261a;
   --chat-del: #ff7b72; --chat-del-bg: #2d1416;
@@ -62,6 +63,7 @@
 .chat-badge.chat-claude { background: var(--chat-claude-bg); color: var(--chat-claude); }
 .chat-badge.chat-codex { background: var(--chat-codex-bg); color: var(--chat-codex); }
 .chat-badge.chat-antigravity { background: var(--chat-antigravity-bg); color: var(--chat-antigravity); }
+.chat-badge.chat-copilot { background: var(--chat-copilot-bg); color: var(--chat-copilot); }
 
 .chat-primary { height: 44px; padding: 0 18px; border-radius: 10px; background: var(--accent); color: #08101e; font-weight: 600; }
 .chat-secondary { height: 44px; padding: 0 14px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); color: var(--text); }
@@ -277,6 +279,8 @@
 .chat-seg-btn.on.chat-seg-claude { background: var(--chat-claude-bg); color: var(--chat-claude); }
 .chat-seg-btn.on.chat-seg-codex { background: var(--chat-codex-bg); color: var(--chat-codex); }
 .chat-seg-btn.on.chat-seg-antigravity { background: var(--chat-antigravity-bg); color: var(--chat-antigravity); }
+.chat-seg-btn.on.chat-seg-copilot { background: var(--chat-copilot-bg); color: var(--chat-copilot); }
+.chat-seg-note { margin: 6px 2px 0; color: var(--muted); font-size: 12px; }
 .chat-folders { display: flex; flex-direction: column; max-height: 232px; overflow-y: auto; overscroll-behavior: contain; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
 .chat-folder-group { padding: 8px 12px 4px; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .chat-folder { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 1px; min-height: 48px; padding: 6px 12px; text-align: left; border-left: 3px solid transparent; }
@@ -372,5 +376,6 @@
 .chat-by-claude { color: var(--chat-claude); }
 .chat-by-codex { color: var(--chat-codex); }
 .chat-by-antigravity { color: var(--chat-antigravity); }
+.chat-by-copilot { color: var(--chat-copilot); }
 .chat-limit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .chat-limit-switch { min-height: 44px; padding: 8px 14px; border: 1px solid currentColor; border-radius: 10px; background: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }

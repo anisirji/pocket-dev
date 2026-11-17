@@ -8,6 +8,7 @@ import { IMAGE_FILE_RE, CONTENT_TYPE, ATTACHMENT_NAME_RE, ATTACHMENT_TYPES, thum
 import * as claude from './claude.js';
 import * as codex from './codex.js';
 import * as antigravity from './antigravity.js';
+import * as copilot from './copilot.js';
 import { createChatReplica } from './replica.js';
 import { STATE_DIR } from '../paths.js';
 import { buildHandoff, wrapFirstMessage } from './handoff.js';
@@ -22,8 +23,12 @@ const BUILT_IN_ENGINES = {
     projectRules: () => [], removeProjectRule: () => { throw new BadRequest('Codex has no project rules here'); },
   },
   antigravity: {
-    label: 'Antigravity', installed: antigravity.isInstalled, create: antigravity.createAntigravityEngine, settingsSchema: antigravity.settingsSchema, grantLabel: antigravity.grantLabel,
+    label: 'Antigravity', experimental: true, installed: antigravity.isInstalled, create: antigravity.createAntigravityEngine, settingsSchema: antigravity.settingsSchema, grantLabel: antigravity.grantLabel,
     projectRules: () => [], removeProjectRule: () => { throw new BadRequest('Antigravity has no project rules here'); },
+  },
+  copilot: {
+    label: 'Copilot', experimental: true, installed: copilot.isInstalled, create: copilot.createCopilotEngine, settingsSchema: copilot.settingsSchema, grantLabel: copilot.grantLabel,
+    projectRules: () => [], removeProjectRule: () => { throw new BadRequest('Copilot has no project rules here'); },
   },
 };
 
@@ -326,7 +331,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     const remembered = chatDefaults();
     const tools = Object.fromEntries(await Promise.all(Object.entries(ENGINES).map(async ([tool, e]) => {
       const settings = await e.settingsSchema();
-      return [tool, { label: e.label, installed: e.installed?.() ?? true, help: engineHelp(tool), settings, defaults: safeDefaults(settings, remembered[tool]) }];
+      return [tool, { label: e.label, ...(e.experimental && { experimental: true }), installed: e.installed?.() ?? true, help: engineHelp(tool), settings, defaults: safeDefaults(settings, remembered[tool]) }];
     })));
     const recent = [...new Set(list().map((c) => c.cwd))].filter(isDir).slice(0, RECENT_MAX);
     return {

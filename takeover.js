@@ -11,7 +11,7 @@ export const BUSY_MS = 10_000;
 export const LIVE_MS = 2 * 60_000;
 export const STOP_GRACE_MS = 5000;
 const POLL_MS = 100;
-const TOOL_LABELS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity' };
+const TOOL_LABELS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' };
 
 export const NOT_FOUND = `Couldn't find the program that has this conversation open. Close it on ${platform.host.the}, then try again.`;
 
@@ -22,6 +22,8 @@ const PROGRAMS = [
   ['claude', /\/@anthropic-ai\/claude-(code|agent-sdk)\/cli\.js$/],
   ['codex', /(^|\/)codex$/],
   ['codex', /\/@openai\/codex\/bin\/codex\.js$/],
+  ['copilot', /(^|\/)copilot(\.exe)?$/],
+  ['copilot', /\/@github\/copilot\/npm-loader\.js$/],
 ];
 const programOf = (file) => PROGRAMS.find(([, re]) => re.test(file))?.[0] ?? null;
 
@@ -46,12 +48,24 @@ function claudeId(args) {
   return null;
 }
 
+// Copilot continues a session with --resume <id>, -r <id> or --session-id <id>; a bare --continue names none.
+const COPILOT_FLAGS = new Set(['--resume', '-r', '--session-id']);
+function copilotId(args) {
+  for (let i = 0; i < args.length; i++) {
+    const [flag, inline] = args[i].split(/=(.*)/s);
+    if (!COPILOT_FLAGS.has(flag)) continue;
+    const value = inline ?? args[i + 1];
+    if (CODEX_ID.test(value ?? '')) return value;
+  }
+  return null;
+}
+
 const codexId = (args) => {
   const at = args.indexOf('resume');
   return at === -1 ? null : args.slice(at + 1).find((a) => CODEX_ID.test(a)) ?? null;
 };
 
-// 'claude' or 'codex' when this process is one of them (directly, or a CLI script run by node), else null; with the
+// 'claude', 'codex' or 'copilot' when this process is one of them (directly, or a CLI script run by node), else null; with the
 // arguments that follow the program.
 function program(proc) {
   const args = argv(proc);
@@ -64,7 +78,7 @@ function program(proc) {
 // { tool, id } when this process's command line names the conversation it runs, else null.
 export function resumeTarget(proc) {
   const found = program(proc);
-  const id = found && (found.tool === 'claude' ? claudeId(found.args) : codexId(found.args));
+  const id = found && ({ claude: claudeId, codex: codexId, copilot: copilotId }[found.tool])(found.args);
   return id ? { tool: found.tool, id } : null;
 }
 

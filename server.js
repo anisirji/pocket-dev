@@ -139,7 +139,7 @@ function listProjects() {
   return found.sort((a, b) => path.basename(a).localeCompare(path.basename(b), undefined, { sensitivity: 'base' }));
 }
 
-const DEFAULT_SHORTCUTS = ['claude', 'codex', 'npm run dev', 'git status', 'git pull'];
+const DEFAULT_SHORTCUTS = ['claude', 'codex', 'copilot', 'npm run dev', 'git status', 'git pull'];
 const isShortcut = (s) => typeof s === 'string' && s.trim() !== '' && s.length <= 200 && !/[\x00-\x1f\x7f]/.test(s);
 const isShortcutList = (v) => Array.isArray(v) && v.length <= 30 && v.every(isShortcut);
 const stringsIn = (v) => (Array.isArray(v) ? v.filter((p) => typeof p === 'string') : undefined);
@@ -1004,7 +1004,7 @@ const adminSections = {
     list: () => chatApi.active().map((c) => ({
       id: c.id,
       label: c.title || 'New chat',
-      details: [{ codex: 'Codex', antigravity: 'Antigravity' }[c.tool] ?? 'Claude', CHAT_STATUS[c.status], c.cwd],
+      details: [{ codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' }[c.tool] ?? 'Claude', CHAT_STATUS[c.status], c.cwd],
       startedAt: c.runningSince ?? undefined,
     })),
     act: (id) => chatApi.stop(id),

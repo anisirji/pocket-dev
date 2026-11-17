@@ -35,6 +35,9 @@ export const TOOLS = [
     status: ['auth', 'status'], login: ['auth', 'login'], why: 'Chats with Claude.' },
   { id: 'codex', title: 'Codex', level: 'optional', bin: 'codex', env: 'POCKET_DEV_CODEX', npm: '@openai/codex', optIn: true,
     status: ['login', 'status'], login: ['login'], why: 'Chats with Codex.' },
+  // Copilot has no command that says whether it is signed in, so setup shows the login command instead of checking it.
+  { id: 'copilot', title: 'GitHub Copilot', level: 'optional', bin: 'copilot', env: 'POCKET_DEV_COPILOT', npm: '@github/copilot', optIn: true,
+    login: ['login'], loginNote: 'Copilot cannot be asked whether it is signed in. If it is not, run: copilot login', why: 'Chats with GitHub Copilot (experimental).' },
   { id: 'gh', title: 'GitHub CLI', level: 'optional', bin: 'gh', optIn: true, status: ['auth', 'status'], login: ['auth', 'login'], why: 'Pull requests in Git.' },
   { id: 'cloudflared', title: 'cloudflared', level: 'optional', bin: 'cloudflared', env: 'POCKET_DEV_CLOUDFLARED', why: 'The internet link (Cloudflare tunnel).' },
 ];
@@ -325,7 +328,7 @@ async function runShown(ctx, argv, why) {
 async function toolStep(ctx, opts, tool, facts) {
   let d = await detectTool(tool, ctx);
   ctx.out(statusLine(ctx, d));
-  if (d.status === 'ok') return d;
+  if (d.status === 'ok' && !(tool.login && !tool.status)) return d;
   const toolFacts = { ...facts, npmFound: d.npmFound ?? facts.npmFound };
 
   if (!d.installed) {
@@ -340,6 +343,15 @@ async function toolStep(ctx, opts, tool, facts) {
     d = { ...await detectTool(tool, ctx), justInstalled: true };
     ctx.out(statusLine(ctx, d));
     if (!d.installed) { ctx.out('  Installed, but this window cannot see it yet. Open a new terminal and run pocket-dev setup again.'); return d; }
+  }
+
+  // A tool with a login command but no way to check it: say so, and offer the login only right after installing it.
+  if (tool.login && !tool.status && d.installed) {
+    ctx.out(`  ${tool.loginNote}`);
+    if (d.justInstalled && !opts.dry && await yes(ctx, opts, '  Sign in now?', false, true)) {
+      await runShown(ctx, [d.path ?? tool.bin, ...tool.login], `login ${tool.id}`);
+    }
+    return d;
   }
 
   if (tool.login && d.status !== 'ok') {
@@ -626,8 +638,8 @@ function checkTable(ctx, states, facts) {
     }
     ctx.out('Or run the guided setup in a terminal: pocket-dev setup');
   }
-  const chat = states.filter((d) => (d.id === 'claude' || d.id === 'codex') && d.status === 'ok');
-  if (!chat.length) ctx.out('\nNote: neither Claude Code nor Codex is ready. Chats need at least one of them.');
+  const chat = states.filter((d) => ['claude', 'codex', 'copilot'].includes(d.id) && d.status === 'ok');
+  if (!chat.length) ctx.out('\nNote: none of Claude Code, Codex or GitHub Copilot is ready. Chats need at least one of them.');
 }
 
 // Returns the process exit code. `fromStart`: the first `pocket-dev start` runs it, and prints the address and QR itself.

@@ -5,6 +5,7 @@ import { createTakeover, readClaudeSessions, copyView, LIVE_MS, BUSY_MS } from '
 import { readAgents, sessionFile } from './terminal-agents.js';
 import { platform } from './platform.js';
 import { listAntigravity, findAntigravity, antigravityMessages, ANTIGRAVITY_NOTE } from './antigravity-history.js';
+import { listCopilot, findCopilot, copilotMessages, COPILOT_NOTE } from './copilot-history.js';
 
 const LINE_MAX = 256_000;
 const CHUNK = 4 << 20;
@@ -222,9 +223,17 @@ const codex = {
 // Antigravity has no jsonl to scan: its sessions come from agy's summaries database (antigravity-history.js), already shaped
 // like the summaries the two readers above build.
 const antigravity = { custom: true, resumeArgv: (id) => ['agy', ['--conversation', id]] };
+// GitHub Copilot keeps a folder per session (copilot-history.js), also shaped like those summaries.
+const copilot = { custom: true, resumeArgv: (id) => ['copilot', ['--resume', id]] };
 
-const TOOLS = { claude, codex, antigravity };
-const TOOL_LABELS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity' };
+// The tools whose sessions are not a jsonl to scan: how each lists, finds and shows a conversation.
+const CUSTOM = {
+  antigravity: { list: listAntigravity, find: findAntigravity, messages: antigravityMessages, note: ANTIGRAVITY_NOTE },
+  copilot: { list: listCopilot, find: findCopilot, messages: copilotMessages, note: COPILOT_NOTE },
+};
+
+const TOOLS = { claude, codex, antigravity, copilot };
+const TOOL_LABELS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' };
 
 // [program, args] that continue a conversation in a terminal.
 export const resumeArgv = (tool, id) => TOOLS[tool].resumeArgv(id);
@@ -310,7 +319,7 @@ async function statAll(tools) {
 // Walks files newest-first and stops once `limit` sessions qualify, so old multi-hundred-MB sessions
 // are never read for the list. Sorting by mtime approximates sorting by last message time.
 async function listSessions(tools, limit, held = new Map()) {
-  const [entries, names, agy] = await Promise.all([statAll(tools), codex.names(), tools.includes('antigravity') ? listAntigravity() : []]);
+  const [entries, names, ...custom] = await Promise.all([statAll(tools), codex.names(), ...Object.keys(CUSTOM).map((tool) => (tools.includes(tool) ? CUSTOM[tool].list() : []))]);
   const picked = [];
   for (let i = 0; i < entries.length && picked.length < limit; i += PARALLEL) {
     const batch = entries.slice(i, i + PARALLEL);
@@ -318,13 +327,13 @@ async function listSessions(tools, limit, held = new Map()) {
       if (listable(s) && picked.length < limit) picked.push(view(s, held, names));
     }
   }
-  picked.push(...agy.filter(listable).map((s) => view(s, held, names)));
+  picked.push(...custom.flat().filter(listable).map((s) => view(s, held, names)));
   return picked.sort((a, b) => b.lastActive.localeCompare(a.lastActive)).slice(0, limit);
 }
 
 async function findSession(tool, id) {
   if (TOOLS[tool].custom) {
-    const s = await findAntigravity(id);
+    const s = await CUSTOM[tool].find(id);
     return s && listable(s) ? s : null;
   }
   const f = (await TOOLS[tool].files()).find((x) => x.id === id);
@@ -337,7 +346,7 @@ async function findSession(tool, id) {
 // Reads backwards in growing windows until the tail holds enough text messages, so a 150 MB
 // session costs a few hundred KB instead of a full parse.
 async function lastMessages(s) {
-  if (TOOLS[s.tool].custom) return antigravityMessages(s);
+  if (TOOLS[s.tool].custom) return CUSTOM[s.tool].messages(s);
   const adapter = TOOLS[s.tool];
   let window = 512 * 1024;
   for (;;) {
@@ -464,7 +473,7 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
       const [copies, names] = await Promise.all([survey(), codex.names()]);
       const mine = copies.filter((c) => c.tool === tool && c.id === s.id);
       const busy = Date.now() - s.mtimeMs < BUSY_MS || mine.some((c) => c.busy);
-      return sendJson(res, 200, { ...view(s, byConversation(mine), names), busy, copies: mine.map(copyView), messages: await lastMessages(s), ...(TOOLS[tool].custom && { note: ANTIGRAVITY_NOTE }) });
+      return sendJson(res, 200, { ...view(s, byConversation(mine), names), busy, copies: mine.map(copyView), messages: await lastMessages(s), ...(CUSTOM[tool]?.note && { note: CUSTOM[tool].note }) });
     }
 
     // Closes every running copy, so the continue the phone sends next is the only writer.
