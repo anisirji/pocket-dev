@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // A stand-in for `agy acp` that speaks the Agent Client Protocol on stdio, so a test can script what Antigravity does.
 // "permission" asks for permission to run a command and reports what the client chose; "slow" waits until cancelled;
-// anything else streams a short answer.
+// "echo-prompt" answers with the whole prompt it received; anything else streams a short answer.
 import readline from 'node:readline';
 
 if (process.argv[2] !== 'acp') process.exit(2);
@@ -31,6 +31,10 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   if (m.method !== 'session/prompt') return send({ id: m.id, error: { code: -32601, message: 'no' } });
   const sessionId = m.params.sessionId;
   const prompt = m.params.prompt.map((p) => p.text ?? '').join('');
+  if (prompt.includes('echo-prompt')) {
+    update(sessionId, { sessionUpdate: 'agent_message_chunk', content: text(`got: ${prompt}`) });
+    return send({ id: m.id, result: { stopReason: 'end_turn' } });
+  }
   if (prompt.includes('slow')) {
     update(sessionId, { sessionUpdate: 'agent_message_chunk', content: text('working') });
     slow = () => send({ id: m.id, result: { stopReason: 'cancelled' } });

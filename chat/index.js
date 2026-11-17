@@ -9,6 +9,7 @@ import * as codex from './codex.js';
 import * as antigravity from './antigravity.js';
 import { createChatReplica } from './replica.js';
 import { STATE_DIR } from '../paths.js';
+import { buildTranscript, wrapFirstMessage } from './handoff.js';
 
 const BUILT_IN_ENGINES = {
   claude: {
@@ -202,12 +203,43 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     }, 0);
   }
 
+  // After an engine switch, the first message also carries the earlier conversation. It is cleared once the engine took it.
+  function withHandoff(chat, input) {
+    if (chat.handoffSeq === null) return input;
+    const labelOf = (tool) => ENGINES[tool ?? chat.handoffFrom]?.label ?? 'the previous model';
+    const { text: transcript, dropped } = buildTranscript(chat.events, chat.handoffSeq, labelOf);
+    const message = input.text;
+    return { ...input, text: wrapFirstMessage({ transcript, dropped, from: labelOf(chat.handoffFrom), to: labelOf(chat.tool), message }) };
+  }
+
+  // Moves the chat to another engine. The conversation stays; the new engine starts a fresh session and gets it with the next message.
+  async function switchEngine(chat, tool) {
+    if (typeof tool !== 'string' || !Object.hasOwn(ENGINES, tool)) throw new BadRequest(`tool must be one of: ${Object.keys(ENGINES).join(', ')}`);
+    if (tool === chat.tool) throw new BadRequest(`This chat already uses ${ENGINES[tool].label}`);
+    if (chat.turn || chat.queue.length || chat.requests.size || chat.waking) throw new BadRequest('Wait for the reply to finish, or stop it, before switching.', 409);
+    await sleep(chat);
+    const from = chat.tool;
+    chat.tool = tool;
+    chat.sessionId = null;
+    chat.failed = false;
+    chat.settings = safeDefaults(await schemaOf(tool), chatDefaults()[tool]);
+    chat.emit({ type: 'status', text: `Switched from ${ENGINES[from].label} to ${ENGINES[tool].label}. The conversation continues here.` });
+    chat.handoffSeq = chat.seq;
+    chat.handoffFrom = from;
+    chat.changed();
+    return chat.view();
+  }
+
   async function runTurn(chat, input) {
     try {
       if (chat.engine?.stale) await sleep(chat);
       if (!chat.engine) await wake(chat);
       if (chat.turn?.interrupted) return chat.endTurn({ status: 'interrupted', durationMs: Date.now() - chat.turn.startedAt });
-      await chat.engine.send(input);
+      await chat.engine.send(withHandoff(chat, input));
+      if (chat.handoffSeq !== null) {
+        chat.handoffSeq = null;
+        chat.changed();
+      }
     } catch (err) {
       chat.fail(err.message);
     }
@@ -370,6 +402,10 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       chat.startTurn();
       runTurn(chat, prepareInput(text, files));
       return [202, chat.view()];
+    },
+    'POST :id/engine': async (req, chat) => {
+      const { tool } = await readJson(req);
+      return [200, await switchEngine(chat, tool)];
     },
     'PATCH :id/queue': async (req, chat) => {
       const { eventId, text, expectedText } = await readJson(req);

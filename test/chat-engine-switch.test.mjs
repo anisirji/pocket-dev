@@ -1,0 +1,131 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { startServer, pause } from './helpers/server.mjs';
+import { Chat } from '../chat/chat.js';
+import { buildTranscript, wrapFirstMessage } from '../chat/handoff.js';
+
+const FAKE_AGY = path.join(path.dirname(fileURLToPath(import.meta.url)), 'helpers', 'fake-agy.mjs');
+
+async function open(t) {
+  const s = await startServer(t, { env: { POCKET_DEV_AGY: FAKE_AGY } });
+  const A = await s.login();
+  const call = (method, url, body, cookie = A.cookie) => s.request(method, url, { cookie, body });
+  const created = await call('POST', '/api/chat', { tool: 'antigravity', cwd: s.home });
+  assert.equal(created.status, 201, JSON.stringify(created.data));
+  const id = created.data.id;
+  const get = async () => (await call('GET', `/api/chat/${id}`)).data;
+  const until = async (pred, ms = 8000) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { const c = await get(); if (pred(c)) return c; await pause(40); }
+    throw new Error(`timed out: ${JSON.stringify(await get())}`);
+  };
+  const say = async (text, count) => {
+    assert.equal((await call('POST', `/api/chat/${id}/message`, { text })).status, 202);
+    return until((x) => x.status === 'idle' && x.events.filter((e) => e.type === 'assistant-text').length >= count);
+  };
+  return { call, id, get, until, say };
+}
+
+test('every answer records the engine that wrote it', { timeout: 60000 }, async (t) => {
+  const c = await open(t);
+  const chat = await c.say('hello', 1);
+  assert.equal(chat.events.find((e) => e.type === 'assistant-text').tool, 'antigravity');
+});
+
+test('switching keeps the whole history, changes the engine and clears the old session', { timeout: 60000 }, async (t) => {
+  const c = await open(t);
+  const before = await c.say('hello', 1);
+  const res = await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'codex' });
+  assert.equal(res.status, 200, JSON.stringify(res.data));
+  assert.equal(res.data.tool, 'codex');
+  assert.equal(res.data.sessionId, null);
+  const after = await c.get();
+  assert.deepEqual(after.events.slice(0, before.events.length).map((e) => [e.id, e.text]), before.events.map((e) => [e.id, e.text]));
+  assert.match(after.events.at(-1).text, /Switched from Antigravity to Codex/);
+});
+
+test('the next engine gets the earlier conversation with the first message, and only once', { timeout: 60000 }, async (t) => {
+  const c = await open(t);
+  await c.say('hello', 1);
+  await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'codex' });
+  assert.equal((await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'antigravity' })).status, 200);
+  const first = await c.say('echo-prompt one', 2);
+  const got = first.events.filter((e) => e.type === 'assistant-text').at(-1).text;
+  assert.match(got, /continued with Antigravity/);
+  assert.match(got, /User: hello/);
+  assert.match(got, /Assistant \(Antigravity\): Hello from agy/);
+  assert.match(got, /echo-prompt one$/);
+  assert.equal(first.events.find((e) => e.type === 'user-text' && /echo-prompt one/.test(e.text)).text, 'echo-prompt one', 'the chat shows the message as typed');
+  const second = await c.say('echo-prompt two', 3);
+  const again = second.events.filter((e) => e.type === 'assistant-text').at(-1).text;
+  assert.doesNotMatch(again, /Earlier in this conversation/);
+});
+
+test('a switch is refused while a reply runs, and to the same engine or an unknown one', { timeout: 60000 }, async (t) => {
+  const c = await open(t);
+  await c.call('POST', `/api/chat/${c.id}/message`, { text: 'slow' });
+  await c.until((x) => x.status === 'running');
+  const busy = await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'codex' });
+  assert.equal(busy.status, 409);
+  assert.match(busy.data.error, /stop it/);
+  await c.call('POST', `/api/chat/${c.id}/interrupt`);
+  await c.until((x) => x.status !== 'running');
+  assert.equal((await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'antigravity' })).status, 400);
+  assert.equal((await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'gemini' })).status, 400);
+});
+
+test('only a logged-in device can switch the engine', { timeout: 60000 }, async (t) => {
+  const c = await open(t);
+  assert.equal((await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'codex' }, '')).status, 401);
+});
+
+test('the pending handoff and the tool labels survive a restart', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-switch-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const chat = Chat.create({ tool: 'claude', cwd: dir, settings: {} }, dir);
+  chat.emit({ type: 'user-text', text: 'question' });
+  chat.emit({ type: 'assistant-text', text: 'answer' });
+  chat.tool = 'codex';
+  chat.handoffSeq = chat.seq;
+  chat.handoffFrom = 'claude';
+  chat.persist();
+  const loaded = Chat.load(chat.file);
+  assert.equal(loaded.tool, 'codex');
+  assert.equal(loaded.handoffSeq, 2);
+  assert.equal(loaded.handoffFrom, 'claude');
+  assert.equal(loaded.events.find((e) => e.type === 'assistant-text').tool, 'claude');
+});
+
+test('the transcript keeps messages, answers, tool runs and edits, and leaves out thinking and unsent messages', () => {
+  const events = [
+    { seq: 1, type: 'user-text', text: 'fix the bug', attachments: ['/tmp/a.png'] },
+    { seq: 2, type: 'thinking', text: 'secret thoughts' },
+    { seq: 3, type: 'tool-run', name: 'Bash', summary: 'npm test' },
+    { seq: 4, type: 'file-edit', path: 'src/a.js', diff: '+x' },
+    { seq: 5, type: 'assistant-text', text: 'done', tool: 'claude' },
+    { seq: 6, type: 'user-text', text: 'never sent', notSent: true },
+    { seq: 7, type: 'user-text', text: 'after the switch' },
+  ];
+  const { text, dropped } = buildTranscript(events, 6, (tool) => ({ claude: 'Claude' })[tool]);
+  assert.equal(dropped, 0);
+  assert.match(text, /User: fix the bug\n\(attached: \/tmp\/a\.png\)/);
+  assert.match(text, /\[Tool Bash: npm test\]/);
+  assert.match(text, /\[Edited src\/a\.js\n\+x\]/);
+  assert.match(text, /Assistant \(Claude\): done/);
+  assert.doesNotMatch(text, /secret thoughts|never sent|after the switch/);
+});
+
+test('above the size cap the oldest items go first and the message says how many', () => {
+  const events = Array.from({ length: 10 }, (_, i) => ({ seq: i + 1, type: 'user-text', text: `m${i}`.padEnd(100, 'x') }));
+  const { text, dropped } = buildTranscript(events, 10, undefined, 350);
+  assert.equal(dropped, 7);
+  assert.match(text, /m9/);
+  assert.doesNotMatch(text, /m0/);
+  const wrapped = wrapFirstMessage({ transcript: text, dropped, from: 'Claude', to: 'Codex', message: 'next' });
+  assert.match(wrapped, /7 oldest items are left out/);
+  assert.match(wrapped, /next$/);
+});

@@ -452,6 +452,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     assert.equal((await request('POST', '/api/settings/password', { cookie: G, body: { current: 'test-password', next: 'changed-password' } })).status, 403);
     assert.equal((await request('POST', '/api/history/claude/7d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6/takeover', { cookie: G, body: {} })).status, 403, 'a collaborator never takes over a conversation');
     assert.equal((await request('POST', '/api/history/claude/7d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6/takeover', { cookie: `${G}; ${A.cookie}`, body: {} })).status, 403, 'not even with an owner cookie alongside');
+    assert.equal((await request('POST', `/api/chat/${chat.id}/engine`, { cookie: G, body: { tool: 'codex' } })).status, 403, 'a collaborator cannot switch a chat to another model');
     await assert.rejects(socket(`/ws/chat/${chat.id}`, G), /HTTP 403/);
     assert.equal((await request('GET', '/chat.js', { cookie: G })).status, 403);
     assert.match((await request('GET', '/', { cookie: G })).data, /Shared project/);

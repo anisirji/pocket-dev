@@ -7,14 +7,14 @@ const TITLE_MAX = 80;
 const PERSIST_DELAY_MS = 1000;
 export const QUEUE_MAX = 20;
 
-const PERSISTED = ['id', 'tool', 'cwd', 'settings', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt', 'acceptedInputs'];
+const PERSISTED = ['id', 'tool', 'cwd', 'settings', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt', 'acceptedInputs', 'handoffSeq', 'handoffFrom'];
 
 // One conversation. Status is derived from three independent facts (engine awake, turn running, open requests)
 // so it can never disagree with them.
 export class Chat {
   constructor(data, file) {
     Object.assign(this, {
-      title: 'New chat', sessionId: null, grants: [], seq: 0, events: [], failed: false, turnStartedAt: null, acceptedInputs: [],
+      title: 'New chat', sessionId: null, grants: [], seq: 0, events: [], failed: false, turnStartedAt: null, acceptedInputs: [], handoffSeq: null, handoffFrom: null,
       createdAt: Date.now(), updatedAt: Date.now(),
     }, data);
     this.file = file;
@@ -96,7 +96,8 @@ export class Chat {
   }
 
   emit(fields) {
-    const ev = { id: fields.id ?? crypto.randomBytes(6).toString('hex'), seq: ++this.seq, at: Date.now(), ...fields };
+    // An answer records which engine wrote it, so a chat that changed engines reads correctly afterwards.
+    const ev = { id: fields.id ?? crypto.randomBytes(6).toString('hex'), seq: ++this.seq, at: Date.now(), ...(fields.type === 'assistant-text' ? { tool: this.tool } : {}), ...fields };
     this.events.push(ev);
     if (this.events.length > EVENTS_MAX) this.events.splice(0, this.events.length - EVENTS_MAX);
     this.broadcast({ t: 'event', event: ev });
