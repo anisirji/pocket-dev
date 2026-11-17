@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createTakeover, readClaudeSessions, copyView, LIVE_MS, BUSY_MS } from './takeover.js';
+import { readAgents, sessionFile } from './terminal-agents.js';
 import { platform } from './platform.js';
 
 const LINE_MAX = 256_000;
@@ -385,6 +386,21 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
   // The first scan reads a few hundred MB of jsonl; do it at startup so the phone's first list is warm.
   listSessions(Object.keys(TOOLS), 30).catch(() => {});
 
+  // The helper agents of the Claude Code session running in one Pocket Dev terminal. The phone asks every few seconds, so
+  // the process table is read at most once in a while and the session file is read from its end only. A terminal that is
+  // not running Claude Code, and Codex, answer with no agents.
+  const AGENTS_SURVEY_MS = 4000;
+  let agentSurvey = { at: 0, copies: [] };
+  async function terminalAgents(req, res, url) {
+    if (!deviceFor(req)) return sendJson(res, 403, { error: "Only your own devices can see a terminal's agents." });
+    const terminalId = url.searchParams.get('terminalId') ?? '';
+    if (!(own.terminals?.() ?? []).some((t) => t.id === terminalId)) return sendJson(res, 404, { error: 'No such terminal' });
+    if (Date.now() - agentSurvey.at > AGENTS_SURVEY_MS) agentSurvey = { at: Date.now(), copies: await survey() };
+    const copy = agentSurvey.copies.find((c) => c.kind === 'terminal' && c.tool === 'claude' && c.terminal.id === terminalId);
+    const file = copy && sessionFile(copy.id);
+    return sendJson(res, 200, { sessionId: copy?.id ?? null, agents: file ? readAgents(file) : [] });
+  }
+
   // "Continue on Mac": closes Pocket Dev's own copy of a conversation so the Mac's Claude or Codex can resume it, and
   // answers with the command to run there. A terminal is named by its id; the conversation it holds is found from its
   // processes. A chat is named by tool and conversation id, and a chat that is asleep has no copy to close.
@@ -416,6 +432,7 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
     const url = new URL(req.url, 'http://localhost');
 
     if (req.method === 'POST' && tool === 'mac' && !id) return continueOnMac(req, res);
+    if (req.method === 'GET' && tool === 'agents' && !id) return terminalAgents(req, res, url);
 
     if (req.method === 'GET' && !tool) {
       const filter = url.searchParams.get('tool') || 'all';
