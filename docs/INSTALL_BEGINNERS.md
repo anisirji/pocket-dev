@@ -502,7 +502,7 @@ The first `pocket-dev start` (or `pocket-dev setup`) begins by checking whether 
 pocket-dev update
 ```
 
-(`pocket-dev update --check` only says whether a newer version exists.) The phone and the Admin page also show `Version X is available`, but installing is done in a terminal on the computer. If it says `EACCES permission denied`, use the own-folder fix above; **do not use `sudo`**. The only thing looked up online is the newest version number on npm, at most once a day. To turn that off: `pocket-dev config set updateCheck false`.
+(`pocket-dev update --check` only says whether a newer version exists.) The phone shows an update icon and the Admin page has an **Update** button when a newer version exists; installing is done on the computer, from that button or in a terminal. If it says `EACCES permission denied`, use the own-folder fix above; **do not use `sudo`**. The only thing looked up online is the newest version number on npm, at most every six hours. To turn that off: `pocket-dev config set updateCheck false`.
 
 ### Windows: `ENOENT ... node-pty` or `TAR_ENTRY_ERROR` while installing
 
