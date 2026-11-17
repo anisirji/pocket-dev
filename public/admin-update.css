@@ -1,0 +1,18 @@
+.upd { margin: 12px 16px 0; padding: 12px 14px; border-radius: 12px; border: 1px solid #e8954a; background: #2a1c10; color: #f4e6d6; }
+.upd[hidden] { display: none; }
+.upd-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.upd-icon { flex: none; color: #ffb454; }
+.upd-text { flex: 1; min-width: 200px; display: grid; gap: 2px; }
+.upd-title { font-size: 15px; }
+.upd-sub { color: #d9c3ad; font-size: 13px; }
+.upd-actions { display: flex; align-items: center; gap: 12px; }
+.upd-btn { background: #e8954a; border-color: #e8954a; color: #1b1008; font-weight: 600; }
+.upd-btn:disabled { opacity: .5; }
+.upd-link { color: #ffb454; font-size: 13px; }
+.upd-log { margin: 10px 0 0; padding: 8px 10px; max-height: 190px; overflow: auto; border-radius: 8px; background: #140c06; color: #f4e6d6; font: 12px/1.45 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.upd-help { margin: 8px 0 0; font-size: 13px; color: #f4e6d6; }
+.upd-dialog { max-width: 460px; padding: 18px; border-radius: 14px; border: 1px solid #e8954a; background: #1d130b; color: #f4e6d6; }
+.upd-dialog::backdrop { background: #000a; }
+.upd-d-title { margin: 0 0 8px; font-size: 18px; }
+.upd-d-body { margin: 0 0 14px; font-size: 14px; line-height: 1.5; }
+.upd-d-actions { display: flex; justify-content: flex-end; gap: 10px; }
