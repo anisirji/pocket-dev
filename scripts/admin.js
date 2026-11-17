@@ -1,9 +1,9 @@
 import fs from 'node:fs';
-import { spawn } from 'node:child_process';
 import { ADMIN_URL_PATH } from '../admin.js';
+import { platform as host } from '../platform.js';
 
 // npm run admin: open the admin page. npm run connect / disconnect: open or close phone access.
-const NOT_RUNNING = 'Pocket Dev is not running. Start it with npm start (or npm run service:install), then try again.';
+const NOT_RUNNING = 'Pocket Dev is not running. Start it with: pocket-dev start (or pocket-dev service install), then try again.';
 const command = process.argv[2] ?? 'open';
 
 let url;
@@ -32,8 +32,7 @@ async function admin(method, path, body) {
 
 if (command === 'open') {
   await admin('GET', '/api/state');
-  spawn('open', [url], { stdio: 'inherit' });
-  console.log(`Opened ${url}`);
+  console.log(host.openUrl(url) ? `Opened ${url}` : `Could not open a browser from here. Open this address yourself: ${url}`);
 } else if (command === 'connect' || command === 'disconnect') {
   const state = await admin('PUT', '/api/access', { connected: command === 'connect', by: 'cli' });
   console.log(state.connected ? `Phone access is on (port ${state.port}).` : 'Phone access is off. Terminals keep running on the Mac.');

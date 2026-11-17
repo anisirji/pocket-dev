@@ -29,7 +29,7 @@ Usage: pocket-dev <command>
                                                    --quiet hides the greeting at the end
   doctor [--fix] [--yes]                           Check this installation (Node, PATH, terminals, tools, port); --fix repairs terminals
   qr [--link <address>]                            Print a one-time login QR code (for an internet address with --link)
-  admin                                            Open the admin page (this computer only)
+  admin [pin [--status] | unpin]                   Open the admin page (this computer only), or add it to / remove it from the Dock or taskbar
   connect | disconnect                             Open or close phone access
   message [text] [--to NAME] [--file PATH]         Send to Messages as this computer (text or piped stdin)
   internet status|off|quick                        Internet access: show it, turn it off, or allow a Quick link
@@ -274,7 +274,7 @@ switch (command) {
   case 'setup': process.exit(await setup(args)); break;
   case 'doctor': process.exit(await doctor(args)); break;
   case 'qr': runScript('qr.js', args); break;
-  case 'admin': runScript('admin.js', ['open']); break;
+  case 'admin': if (args[0] === 'pin' || args[0] === 'unpin') process.exit(await (await import('../taskbar-pin.js')).pinCommand(args)); else runScript('admin.js', ['open']); break;
   case 'connect': case 'disconnect': runScript('admin.js', [command]); break;
   case 'internet': await internet(args); break;
   case 'awake': runScript('awake.js', args); break;

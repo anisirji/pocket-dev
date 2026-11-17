@@ -37,7 +37,7 @@ export const TOOLS = [
   { id: 'gh', title: 'GitHub CLI', level: 'optional', bin: 'gh', optIn: true, status: ['auth', 'status'], login: ['auth', 'login'], why: 'Pull requests in Git.' },
   { id: 'cloudflared', title: 'cloudflared', level: 'optional', bin: 'cloudflared', env: 'POCKET_DEV_CLOUDFLARED', why: 'The internet link (Cloudflare tunnel).' },
 ];
-export const STEP_IDS = [...TOOLS.map((t) => t.id), 'terminals', 'password', 'network', 'always-on', 'finish'];
+export const STEP_IDS = [...TOOLS.map((t) => t.id), 'terminals', 'password', 'network', 'always-on', 'pin', 'finish'];
 const toolById = (id) => TOOLS.find((t) => t.id === id);
 
 const NAMES = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' };
@@ -652,6 +652,10 @@ export async function runSetup(args, ctx, { fromStart = false } = {}) {
       ctx.out('');
       ctx.out(t.available ? '✓ Terminals (node-pty): works' : `✗ Terminals (node-pty): ${t.reason}. Fix: pocket-dev doctor --fix`);
     }
+    if (!opts.only || opts.only === 'pin') {
+      const line = (await import('./taskbar-pin.js')).pinCheckLine(ctx);
+      if (line) ctx.out(line);
+    }
     const required = states.filter((d) => d.level === 'required');
     const ok = required.every((d) => d.status === 'ok');
     ctx.out('');
@@ -676,6 +680,7 @@ export async function runSetup(args, ctx, { fromStart = false } = {}) {
       cloudflaredReady ??= !!ctx.find(toolById('cloudflared'));
       await networkStep(ctx, opts, cloudflaredReady);
     } else if (id === 'always-on') started = await alwaysOnStep(ctx, opts);
+    else if (id === 'pin') await (await import('./taskbar-pin.js')).pinStep(ctx, opts, yes);
     else if (id === 'finish') await finishStep(ctx, opts, started);
   }
   ctx.out('');
@@ -756,6 +761,7 @@ export async function createRealContext(extra = {}) {
   };
   ctx.hasBattery = async () => (await host.battery()).battery !== null;
   ctx.keepAwake = host.capabilities().keepAwake;
+  ctx.pin = (await import('./taskbar-pin.js')).realPinDeps(ctx.platform);
   ctx.qr = terminalQr;
   if (!extra.noTerminals) {
     const doctor = await import('./doctor.js');

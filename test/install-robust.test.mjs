@@ -29,14 +29,16 @@ test('the bin file starts with the node shebang, has no BOM or CRLF, and its fir
 test('node-pty is optional, so a failed build or download cannot fail an install', () => {
   assert.equal(pkg.dependencies['node-pty'], undefined);
   assert.ok(pkg.optionalDependencies['node-pty']);
-  for (const hook of ['preinstall', 'install', 'postinstall', 'prepare', 'prepack', 'prepublish']) {
+  for (const hook of ['preinstall', 'install', 'prepare', 'prepack', 'prepublish']) {
     assert.equal(pkg.scripts[hook], undefined, `${hook} runs during npm install and can fail it (a Git install runs it in a folder that may be gone)`);
   }
-  assert.equal(fs.existsSync(path.join(REPO, 'scripts', 'postinstall.js')), false);
+  // The one hook allowed is the Admin shortcut. It cannot fail an install: the script swallows every error and exits 0, and
+  // `|| exit 0` covers the script not being there at all. test/taskbar-pin.test.mjs runs it both ways.
+  assert.equal(pkg.scripts.postinstall, 'node scripts/postinstall.js || exit 0');
   const lock = JSON.parse(fs.readFileSync(path.join(REPO, 'package-lock.json'), 'utf8'));
   assert.equal(lock.packages['node_modules/node-pty'].optional, true);
   assert.ok(lock.packages[''].optionalDependencies['node-pty']);
-  assert.equal(lock.packages[''].hasInstallScript, undefined);
+  assert.equal(lock.packages[''].hasInstallScript, true);
 });
 
 test('the package ships the files the installed app needs', () => {
