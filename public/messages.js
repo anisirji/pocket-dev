@@ -542,7 +542,7 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     xhr.send(u.file);
   }
 
-  attach.onclick = () => picker.click();
+  attach.onclick = () => (globalThis.chooseFiles ? globalThis.chooseFiles(attach, picker) : picker.click());
   picker.onchange = () => {
     const refusals = [];
     for (const file of picker.files) {

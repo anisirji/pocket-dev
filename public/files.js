@@ -226,7 +226,7 @@
     bottom.append(fabs, selbar, uploads);
 
     const picker = h('input');
-    Object.assign(picker, { type: 'file', multiple: true, accept: '*/*', hidden: true });
+    Object.assign(picker, { type: 'file', multiple: true, hidden: true });
     root.append(head, list, bottom, picker);
     document.body.append(root);
 
@@ -255,7 +255,7 @@
       clear.hidden = true;
       runSearch('');
     };
-    uploadBtn.onclick = () => picker.click();
+    uploadBtn.onclick = () => (globalThis.chooseFiles ? globalThis.chooseFiles(uploadBtn, picker) : picker.click());
     picker.onchange = () => {
       addUploads([...picker.files]);
       picker.value = '';

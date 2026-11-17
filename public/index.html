@@ -32,6 +32,7 @@
 <script src="/health.js" defer></script>
 <script src="/macstatus.js" defer></script>
 <link rel="stylesheet" href="/chat.css">
+<script src="/file-choice.js" defer></script>
 <script src="/keep-caret.js" defer></script>
 <script src="/chat.js" defer></script>
 <script src="/term-agents.js" defer></script>
@@ -220,7 +221,7 @@
   </main>
   <form id="inputBar">
     <button id="attach" type="button" aria-label="Attach a file">📎</button>
-    <input id="file" type="file" accept="image/*,*/*" multiple hidden>
+    <input id="file" type="file" multiple hidden>
     <input id="cmd" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" placeholder="Type a command">
     <button id="send">Send</button>
   </form>
@@ -1041,7 +1042,7 @@ async function uploadFiles(files) {
 }
 
 keepFocus($('attach'));
-$('attach').addEventListener('click', () => $('file').click());
+$('attach').addEventListener('click', () => (window.chooseFiles ? window.chooseFiles($('attach'), $('file')) : $('file').click()));
 $('file').addEventListener('change', () => {
   const files = [...$('file').files];
   $('file').value = '';

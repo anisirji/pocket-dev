@@ -1982,7 +1982,7 @@
     }
   });
 
-  ui.attach.onclick = () => ui.fileInput.click();
+  ui.attach.onclick = () => (globalThis.chooseFiles ? globalThis.chooseFiles(ui.attach, ui.fileInput) : ui.fileInput.click());
   async function attachFiles(picked) {
     if (!picked.length || queueEdits.has(convo.id)) return;
     if (ui.attach.disabled) return notice(convo.uploadsOff ? 'This server cannot receive attachments yet.' : 'Attachments are not available right now.');
