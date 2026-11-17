@@ -28,6 +28,8 @@ pocket-dev doctor
 
 `pocket-dev doctor` is the check. It prints a tick or a cross for Node, npm's global folder on PATH, the `pocket-dev` command, terminals, the tools and port 7777, and the exact next command for each cross. It exits 0 when everything required works.
 
+Installing also adds **Pocket Dev Admin** shortcuts, with the Pocket Dev logo, to your Desktop and Start menu. Windows does not let a program pin itself to the taskbar, so the last click is yours: right-click the shortcut and choose **Pin to taskbar**. This is the one change the install makes without asking. Undo: `pocket-dev admin unpin` (and unpin it from the taskbar yourself). Skip: `$env:POCKET_DEV_NO_PIN=1` before installing, or `npm install -g --ignore-scripts`; `pocket-dev setup` still offers it. This part is written and covered by tests, but it has not been run on a real Windows PC yet.
+
 ## 3. Start
 
 ```powershell

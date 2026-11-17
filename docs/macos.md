@@ -25,6 +25,8 @@ pocket-dev doctor
 
 If the install fails while building `node-pty`, run `xcode-select --install` once, then repeat. `pocket-dev doctor` checks Node, npm's global folder on PATH, the command, terminals, tools and port 7777, and prints the exact fix for each cross.
 
+Installing also adds a **Pocket Dev Admin** tile with the Pocket Dev logo to your Dock (it builds `~/Applications/Pocket Dev Admin.app` and restarts the Dock once, so the Dock flickers). It is a one-click way to the Admin page. This is the one change the install makes without asking. Undo: `pocket-dev admin unpin`. Skip: `POCKET_DEV_NO_PIN=1` or `npm install -g --ignore-scripts`; `pocket-dev setup` still offers it.
+
 ## 3. Start
 
 ```sh

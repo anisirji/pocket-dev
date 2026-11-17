@@ -134,6 +134,10 @@ A commit graph of all branches, per-file diffs, and a Changes tab that commits e
 
 The repository list holds the repositories found under `repoRoots`. To open another one, choose **Open folder…** at the end of the list and pick any folder inside it. Every Chat and Terminal page also has a Git graph button that opens the Graph for that chat's or terminal's folder. Opened repositories stay in the list.
 
+### The Admin shortcut and the logo
+
+Installing adds a **Pocket Dev Admin** shortcut with the Pocket Dev logo (the orange square with a prompt): a Dock tile on macOS, Desktop and Start menu shortcuts on Windows, an applications menu entry on Linux (also a GNOME favourite). Clicking it opens the Admin page of the Pocket Dev that is running, whatever its port, and says so if Pocket Dev is not running. Windows does not let a program pin itself to the taskbar, so right-click the shortcut and choose Pin to taskbar. Undo: `pocket-dev admin unpin`. Skip at install: `POCKET_DEV_NO_PIN=1` or `--ignore-scripts`. The same logo is the browser tab icon on the phone pages and the Admin page.
+
 ### Chat with Claude Code and Codex
 
 <table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/07-chat.png" width="240" alt="Chat with an approval card"><br><sub>Chat with approval cards</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/08-chat-agents.png" width="240" alt="The agents panel in a chat"><br><sub>Agents panel</sub></td></tr></table>
