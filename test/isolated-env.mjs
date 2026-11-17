@@ -2,7 +2,7 @@ import path from 'node:path';
 
 // These name the owner's Claude Code and Codex history, or their running Codex daemon. A copy inherited from the shell
 // that runs the tests would send a test's claude or codex there however HOME is set.
-const OWNER_PATHS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'POCKET_DEV_CLAUDE_DIR', 'POCKET_DEV_CODEX_DIR', 'POCKET_DEV_CODEX_SOCKET', 'POCKET_DEV_CHAT_DIR'];
+const OWNER_PATHS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'POCKET_DEV_CLAUDE_DIR', 'POCKET_DEV_CODEX_DIR', 'POCKET_DEV_CODEX_SOCKET', 'POCKET_DEV_CHAT_DIR', 'POCKET_DEV_AGY_DIR'];
 
 // The environment for a Pocket Dev server, CLI or shell that a test starts. A claude or codex started under it (a resumed
 // terminal, a chat engine, a shortcut typed into a test terminal) writes its history inside `home`, never in ~/.claude or
@@ -16,6 +16,7 @@ export function isolatedEnv(home, extra = {}) {
     CODEX_HOME: path.join(home, '.codex'),
     POCKET_DEV_CLAUDE_DIR: path.join(home, '.claude', 'projects'),
     POCKET_DEV_CODEX_DIR: path.join(home, '.codex'),
+    POCKET_DEV_AGY_DIR: path.join(home, '.gemini', 'antigravity-cli'),
     ...extra,
   };
 }
