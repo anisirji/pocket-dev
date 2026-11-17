@@ -1436,6 +1436,7 @@
         else if (tail?.matches('.chat-codewrap')) tail = tail.querySelector('pre');
         (tail || node).append(el('span', 'chat-caret-blink'));
       }
+      if (ev.tool && usedSeveralEngines()) node.prepend(el('div', `chat-by chat-by-${ev.tool}`, TOOLS[ev.tool] || ev.tool));
       if (ev.model) {
         const model = el('div', 'chat-model', shortModel(ev.model));
         model.title = ev.model;
@@ -1483,7 +1484,17 @@
       if (ev.costUsd != null) bits.push(`$${ev.costUsd.toFixed(ev.costUsd < 0.1 ? 3 : 2)}`);
       return el('div', `chat-result chat-result-${ev.status}`, bits.join(' · '));
     },
-    error: (ev) => el('div', 'chat-error', ev.message),
+    error: (ev) => {
+      const node = el('div', 'chat-error', ev.message);
+      if (!/\blimit reached\b/i.test(ev.message || '')) return node;
+      const c = convo.chat;
+      const others = Object.entries(options?.tools || {}).filter(([tool, info]) => tool !== c?.tool && info.installed !== false);
+      if (!c || !others.length) return node;
+      const row = el('div', 'chat-limit-actions');
+      for (const [tool, info] of others) row.append(button('chat-limit-switch', `Continue with ${info.label || TOOLS[tool]}`, () => switchTo(tool)));
+      node.append(row);
+      return node;
+    },
     status: (ev) => el('div', 'chat-sys', ev.text),
   };
 
@@ -1493,13 +1504,79 @@
     return node;
   }
 
+  // The model chip names the engine and opens the list of the others. Switching keeps the conversation: the server hands the
+  // earlier messages to the new engine with the next one.
+  const BUSY = new Set(['running', 'waiting-permission', 'waiting-answer']);
+  function modelChip(c) {
+    const chip = button('chat-model-chip', null, () => toggleSwitchMenu(chip));
+    chip.setAttribute('aria-haspopup', 'true');
+    chip.setAttribute('aria-label', `Model: ${TOOLS[c.tool] || c.tool}. Tap to switch the model for this chat`);
+    chip.append(badge(c.tool), el('span', 'chat-model-caret', '▾'));
+    return chip;
+  }
+
+  let switchMenu = null;
+  function closeSwitchMenu() {
+    switchMenu?.remove();
+    switchMenu = null;
+    document.removeEventListener('pointerdown', outsideSwitchMenu, true);
+  }
+  function outsideSwitchMenu(e) {
+    if (switchMenu && !switchMenu.contains(e.target) && !e.target.closest('.chat-model-chip')) closeSwitchMenu();
+  }
+  function toggleSwitchMenu(chip) {
+    if (switchMenu) return closeSwitchMenu();
+    const c = convo.chat;
+    if (!c) return;
+    if (BUSY.has(c.status) || c.queued || c.waking) return toast('Wait for the reply to finish, or stop it, before switching.');
+    const menu = el('div', 'chat-switch-menu');
+    menu.setAttribute('role', 'menu');
+    for (const [tool, info] of Object.entries(options?.tools || {})) {
+      const here = tool === c.tool;
+      const item = button(`chat-switch-item${here ? ' on' : ''}`, null, () => switchTo(tool));
+      item.setAttribute('role', 'menuitem');
+      item.disabled = here || info.installed === false;
+      item.append(badge(tool), el('span', 'chat-switch-name', info.label || TOOLS[tool] || tool),
+        el('span', 'chat-switch-note', here ? 'this chat' : info.installed === false ? 'not installed' : ''));
+      menu.append(item);
+    }
+    menu.append(el('div', 'chat-switch-hint', 'The whole conversation goes with you.'));
+    chip.closest('.chat-head').append(menu);
+    switchMenu = menu;
+    document.addEventListener('pointerdown', outsideSwitchMenu, true);
+  }
+
+  async function switchTo(tool) {
+    closeSwitchMenu();
+    const c = convo.chat;
+    if (!c || tool === c.tool) return;
+    try {
+      await api('POST', `/api/chat/${c.id}/engine`, { tool });
+      toast(`Continuing with ${options?.tools?.[tool]?.label || TOOLS[tool] || tool}`);
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  // Which engine wrote each answer shows only once a chat has used more than one.
+  let engineCountKey = '';
+  let engineCount = 0;
+  function usedSeveralEngines() {
+    const key = `${convo.id}:${convo.events.length}:${convo.chat?.tool}`;
+    if (key !== engineCountKey) {
+      engineCountKey = key;
+      engineCount = new Set([convo.chat?.tool, ...convo.events.filter((e) => e.type === 'assistant-text' && e.tool).map((e) => e.tool)].filter(Boolean)).size;
+    }
+    return engineCount > 1;
+  }
+
   function renderChrome() {
     const c = convo.chat;
     if (!c) return;
     ui.title.textContent = c.title || 'New chat';
     const path = el('span', 'chat-sub-path', shortPath(c.cwd));
     path.title = c.cwd;
-    ui.sub.replaceChildren(badge(c.tool), path);
+    ui.sub.replaceChildren(modelChip(c), path);
     renderChips();
     ui.input.placeholder = `Message ${TOOLS[c.tool] || c.tool}`;
     renderComposer();

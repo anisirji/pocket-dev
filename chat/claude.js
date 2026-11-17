@@ -6,6 +6,7 @@ import { findBin, nativeBin, engineEnv, ENGINE_SETTINGS, cap, lineDiff, INPUT_MA
 import { saveToolImages, resultText } from './tool-images.js';
 
 const CLAUDE_BIN = process.env.POCKET_DEV_CLAUDE || nativeBin(findBin('claude')) || '/usr/local/bin/claude';
+export const isInstalled = () => fs.existsSync(CLAUDE_BIN);
 
 // The permission modes `claude --help` lists for --permission-mode in 2.1.139.
 const MODES = [

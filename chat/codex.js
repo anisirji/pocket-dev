@@ -48,6 +48,7 @@ export async function settingsSchema() {
   ];
 }
 
+export const isInstalled = () => Boolean(CODEX_BIN);
 export const grantLabel = (grant) => (grant === 'files' ? 'All file changes' : grant.replace(/^command:/, 'Command: '));
 
 // Reuse the terminal's daemon so resuming its threads does not compete for the writer lock.

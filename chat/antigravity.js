@@ -22,6 +22,7 @@ const MODELS = [
 
 export const settingsSchema = async () => [{ key: 'model', label: 'Model', default: 'default', custom: true, choices: MODELS }];
 
+export const isInstalled = () => Boolean(AGY_BIN);
 export const grantLabel = (grant) => grant.replace(/^tool:/, 'Tool: ');
 
 const TOOL_STATUS = { pending: 'running', in_progress: 'running', completed: 'ok', failed: 'error' };

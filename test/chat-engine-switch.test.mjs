@@ -11,7 +11,7 @@ import { buildTranscript, wrapFirstMessage } from '../chat/handoff.js';
 const FAKE_AGY = path.join(path.dirname(fileURLToPath(import.meta.url)), 'helpers', 'fake-agy.mjs');
 
 async function open(t) {
-  const s = await startServer(t, { env: { POCKET_DEV_AGY: FAKE_AGY } });
+  const s = await startServer(t, { env: { POCKET_DEV_AGY: FAKE_AGY, POCKET_DEV_CODEX: FAKE_AGY } });
   const A = await s.login();
   const call = (method, url, body, cookie = A.cookie) => s.request(method, url, { cookie, body });
   const created = await call('POST', '/api/chat', { tool: 'antigravity', cwd: s.home });

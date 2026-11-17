@@ -13,15 +13,15 @@ import { buildTranscript, wrapFirstMessage } from './handoff.js';
 
 const BUILT_IN_ENGINES = {
   claude: {
-    label: 'Claude', create: claude.createClaudeEngine, settingsSchema: claude.settingsSchema, grantLabel: (g) => g,
+    label: 'Claude', installed: claude.isInstalled, create: claude.createClaudeEngine, settingsSchema: claude.settingsSchema, grantLabel: (g) => g,
     projectRules: claude.projectRules, removeProjectRule: claude.removeProjectRule,
   },
   codex: {
-    label: 'Codex', create: codex.createCodexEngine, settingsSchema: codex.settingsSchema, grantLabel: codex.grantLabel,
+    label: 'Codex', installed: codex.isInstalled, create: codex.createCodexEngine, settingsSchema: codex.settingsSchema, grantLabel: codex.grantLabel,
     projectRules: () => [], removeProjectRule: () => { throw new BadRequest('Codex has no project rules here'); },
   },
   antigravity: {
-    label: 'Antigravity', create: antigravity.createAntigravityEngine, settingsSchema: antigravity.settingsSchema, grantLabel: antigravity.grantLabel,
+    label: 'Antigravity', installed: antigravity.isInstalled, create: antigravity.createAntigravityEngine, settingsSchema: antigravity.settingsSchema, grantLabel: antigravity.grantLabel,
     projectRules: () => [], removeProjectRule: () => { throw new BadRequest('Antigravity has no project rules here'); },
   },
 };
@@ -216,6 +216,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   async function switchEngine(chat, tool) {
     if (typeof tool !== 'string' || !Object.hasOwn(ENGINES, tool)) throw new BadRequest(`tool must be one of: ${Object.keys(ENGINES).join(', ')}`);
     if (tool === chat.tool) throw new BadRequest(`This chat already uses ${ENGINES[tool].label}`);
+    if (ENGINES[tool].installed && !ENGINES[tool].installed()) throw new BadRequest(`${ENGINES[tool].label} is not installed on this computer.`);
     if (chat.turn || chat.queue.length || chat.requests.size || chat.waking) throw new BadRequest('Wait for the reply to finish, or stop it, before switching.', 409);
     await sleep(chat);
     const from = chat.tool;
@@ -290,7 +291,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     const remembered = chatDefaults();
     const tools = Object.fromEntries(await Promise.all(Object.entries(ENGINES).map(async ([tool, e]) => {
       const settings = await e.settingsSchema();
-      return [tool, { label: e.label, settings, defaults: safeDefaults(settings, remembered[tool]) }];
+      return [tool, { label: e.label, installed: e.installed?.() ?? true, settings, defaults: safeDefaults(settings, remembered[tool]) }];
     })));
     const recent = [...new Set(list().map((c) => c.cwd))].filter(isDir).slice(0, RECENT_MAX);
     return {

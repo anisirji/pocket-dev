@@ -2,6 +2,7 @@
   --chat-h: calc(var(--viewport-h, 100dvh) - var(--status-h, 0px) - env(safe-area-inset-bottom, 0px));
   --chat-claude: #e08a5f; --chat-claude-bg: #3a2216;
   --chat-codex: #4cc79a; --chat-codex-bg: #12322a;
+  --chat-antigravity: #d6a64a; --chat-antigravity-bg: #33260f;
   --chat-warn: #f0c674; --chat-warn-bg: #3a2a10;
   --chat-add: #7ee787; --chat-add-bg: #12261a;
   --chat-del: #ff7b72; --chat-del-bg: #2d1416;
@@ -60,6 +61,7 @@
 .chat-badge { flex: none; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.35; }
 .chat-badge.chat-claude { background: var(--chat-claude-bg); color: var(--chat-claude); }
 .chat-badge.chat-codex { background: var(--chat-codex-bg); color: var(--chat-codex); }
+.chat-badge.chat-antigravity { background: var(--chat-antigravity-bg); color: var(--chat-antigravity); }
 
 .chat-primary { height: 44px; padding: 0 18px; border-radius: 10px; background: var(--accent); color: #08101e; font-weight: 600; }
 .chat-secondary { height: 44px; padding: 0 14px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); color: var(--text); }
@@ -271,6 +273,7 @@
 .chat-seg-btn { height: 40px; border-radius: 9px; color: var(--muted); font-weight: 600; }
 .chat-seg-btn.on.chat-seg-claude { background: var(--chat-claude-bg); color: var(--chat-claude); }
 .chat-seg-btn.on.chat-seg-codex { background: var(--chat-codex-bg); color: var(--chat-codex); }
+.chat-seg-btn.on.chat-seg-antigravity { background: var(--chat-antigravity-bg); color: var(--chat-antigravity); }
 .chat-folders { display: flex; flex-direction: column; max-height: 232px; overflow-y: auto; overscroll-behavior: contain; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
 .chat-folder-group { padding: 8px 12px 4px; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .chat-folder { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 1px; min-height: 48px; padding: 6px 12px; text-align: left; border-left: 3px solid transparent; }
@@ -341,3 +344,21 @@
 .chat-user-img { display: block; max-width: 100%; max-height: 200px; border-radius: 10px; border: 1px solid var(--chat-user-line); background: #000; object-fit: cover; }
 
 .chat-convo-screen.chat-dragover { outline: 2px dashed #4c8dff; outline-offset: -6px; }
+
+/* Switching the model inside one chat */
+.chat-head { position: relative; }
+.chat-model-chip { display: inline-flex; align-items: center; gap: 3px; flex: none; min-height: 28px; padding: 0 2px; background: none; border: 0; color: inherit; cursor: pointer; }
+.chat-model-caret { color: var(--muted); font-size: 10px; }
+.chat-switch-menu { position: absolute; left: 44px; top: 100%; z-index: 5; min-width: 220px; max-width: calc(100% - 56px); padding: 6px; border: 1px solid var(--line, #2a3140); border-radius: 12px; background: var(--panel, #161b26); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+.chat-switch-item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.chat-switch-item:hover:not(:disabled), .chat-switch-item:focus-visible { background: rgba(255, 255, 255, 0.06); }
+.chat-switch-item:disabled { opacity: 0.6; cursor: default; }
+.chat-switch-name { flex: 1; min-width: 0; }
+.chat-switch-note { color: var(--muted); font-size: 12px; }
+.chat-switch-hint { padding: 6px 8px 2px; color: var(--muted); font-size: 12px; }
+.chat-by { margin-bottom: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; color: var(--muted); }
+.chat-by-claude { color: var(--chat-claude); }
+.chat-by-codex { color: var(--chat-codex); }
+.chat-by-antigravity { color: var(--chat-antigravity); }
+.chat-limit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.chat-limit-switch { min-height: 44px; padding: 8px 14px; border: 1px solid currentColor; border-radius: 10px; background: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
