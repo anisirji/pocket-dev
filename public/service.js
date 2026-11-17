@@ -4,6 +4,7 @@
 const STYLE = `
 .sv-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 6px 0 12px; }
 .sv-row + .sv-row { padding-top: 12px; border-top: 1px solid var(--line); }
+.sv-row[hidden] { display: none; }
 .sv-text { display: grid; gap: 2px; min-width: 0; }
 .sv-text b { font-size: 15px; font-weight: 600; }
 .sv-text small { color: var(--muted); font-size: 13px; }
@@ -70,7 +71,14 @@ export async function renderServiceSection(container, api = window.api) {
   restartBtn.disabled = true;
   restart.append(restartText, restartBtn);
 
-  container.replaceChildren(title, access, restart, auto, err);
+  // A newer version on npm. Installing software is done in a terminal on the computer, so there is no button here.
+  const newer = h('div', 'sv-row');
+  newer.hidden = true;
+  const newerText = h('div', 'sv-text');
+  newerText.append(h('b'), h('small'));
+  newer.append(newerText);
+
+  container.replaceChildren(title, access, newer, restart, auto, err);
 
   // The restart takes the page's own server down, so wait for it to answer again and then load the new code.
   let busy = false;
@@ -130,6 +138,14 @@ export async function renderServiceSection(container, api = window.api) {
 
   const show = (svc) => {
     if (busy) return;
+    const u = svc.update;
+    newer.hidden = !u?.available;
+    if (u?.available) {
+      newerText.firstChild.textContent = `Version ${u.latest} is available`;
+      newerText.lastChild.textContent = u.command
+        ? `You have ${u.current}. To update, run ${u.command} in a terminal on the computer.`
+        : `You have ${u.current}. This copy is not an npm install, so update it where you got it.`;
+    }
     const canRestart = svc.running && svc.isThisServer;
     restartBtn.disabled = !canRestart;
     restartBtn.classList.toggle('sv-update', canRestart && svc.updateReady);

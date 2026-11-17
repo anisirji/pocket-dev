@@ -17,6 +17,7 @@ import { openTerminalHost } from './terminals.js';
 import { startPower, handlePowerApi, powerStatus } from './power.js';
 import { createAppsApi, snapshot as appsSnapshot } from './apps.js';
 import { startAdmin } from './admin.js';
+import { createVersionCheck, installKind, readInstalledVersion } from './update.js';
 import { createPhoneAccess } from './access.js';
 import { createChatApi } from './chat/index.js';
 import { createFilesApi } from './files.js';
@@ -1023,7 +1024,10 @@ const access = createPhoneAccess({
 tunnel = createTunnel({ port: PORT, isConnected: () => access.view().connected, network, token: readToken, log: auth.admin.log });
 process.once('exit', () => { tunnel.dispose(); remotePorts.closeAll(); });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { tunnel.dispose(); process.exit(0); });
-const admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, sections: adminSections }).catch((err) => {
+// A quiet look at the npm registry, at most once a day, so the Admin page and the phone can say a newer version exists.
+const versionCheck = createVersionCheck({ version: readInstalledVersion(), config, kind: installKind() === 'global' ? 'global' : 'other', log: (line) => console.error(line) });
+versionCheck.start();
+const admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, sections: adminSections, update: versionCheck }).catch((err) => {
   console.error(err.message);
   process.exit(1);
 });

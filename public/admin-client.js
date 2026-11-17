@@ -778,7 +778,14 @@ function renderService() {
         : svc.updateReady ? 'Newer code is on disk than what is running. Restart to start using it.' : 'Loads the latest code. Nothing newer is waiting right now.')),
     h('button', { class: `btn ${canRestart && svc.updateReady && !restarting ? 'btn-primary' : ''}`, type: 'button', disabled: !canRestart || !!restarting, onclick: restartServer },
       restarting ? `${restarting.verb}… ${Math.floor((Date.now() - restarting.at) / 1000)}s` : svc.updateReady ? 'Update now' : 'Restart'));
-  $('svcBody').replaceChildren(h('p', { class: 'status-line' }, status), restartRow, body);
+  // A newer version on npm. Installing software is done in a terminal on this computer, so there is no button.
+  const newer = svc.update?.available
+    ? h('div', { class: 'setting' }, h('div', { class: 'setting-text' }, h('b', {}, `Version ${svc.update.latest} is available`),
+      h('small', {}, svc.update.command
+        ? `You have ${svc.update.current}. To update, run ${svc.update.command} in a terminal on this computer.`
+        : `You have ${svc.update.current}. This copy is not an npm install, so update it where you got it.`)))
+    : null;
+  $('svcBody').replaceChildren(h('p', { class: 'status-line' }, status), ...(newer ? [newer] : []), restartRow, body);
 }
 
 // What an update will and will not interrupt, from the live sections already on this page.

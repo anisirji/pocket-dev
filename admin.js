@@ -110,7 +110,7 @@ function failedLogins(entries) {
 // `urls()` returns the phone listener's current { lan, local, remote } base URLs.
 const setupStatus = cachedStatus(createContext());
 
-export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections }) {
+export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections, update = null }) {
   const browseFolders = createFolderBrowser({ config });
   const port = Number(process.env.POCKET_DEV_ADMIN_PORT) || config.read().adminPort || mainPort + 1;
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
@@ -161,7 +161,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
         remote: urls().remote,
       },
       network: networkState(),
-      service: await serviceStatus(),
+      service: await serviceView(),
       permissionsSetup: config.read().permissionsSetup ?? null,
       sections: await sectionViews(),
     };
@@ -239,6 +239,9 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
     if (connected === false) await access.close(by);
     return ok(access.view());
   }
+
+  // The service status plus what the quiet version check knows: { current, latest, available, command } or null.
+  const serviceView = async () => ({ ...(await serviceStatus()), update: update?.view() ?? null });
 
   async function changeAutostart({ enabled }, by) {
     if (typeof enabled !== 'boolean') return reply(400, { error: 'enabled must be true or false.' });
@@ -389,7 +392,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
 
   // Routes the phone can call on the main listener, after the server checked its login.
   const phoneRoute = router({
-    'GET /api/service': async () => ok(await serviceStatus()),
+    'GET /api/service': async () => ok(await serviceView()),
     'GET /api/setup/status': async () => ok(await setupStatus()),
     'PUT /api/service/autostart': ({ body }) => changeAutostart(body, 'phone'),
     'POST /api/service/restart': ({ req }) => restart('phone', req),

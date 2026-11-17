@@ -17,6 +17,8 @@ export function isolatedEnv(home, extra = {}) {
     POCKET_DEV_CLAUDE_DIR: path.join(home, '.claude', 'projects'),
     POCKET_DEV_CODEX_DIR: path.join(home, '.codex'),
     POCKET_DEV_AGY_DIR: path.join(home, '.gemini', 'antigravity-cli'),
+    // No test server asks the real npm registry for a newer version; the update tests turn it on with a local stand-in.
+    POCKET_DEV_NO_UPDATE_CHECK: '1',
     ...extra,
   };
 }
