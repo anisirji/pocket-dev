@@ -27,6 +27,8 @@ Usage: pocket-dev <command>
                                                    Guided setup: install and log in Git, Claude Code, Codex, GitHub CLI,
                                                    cloudflared, then password, phone access and Always on.
                                                    --quiet hides the greeting at the end
+  update [--check] [--yes]                         Install the newest Pocket Dev from npm and restart the background service.
+                                                   --check only says whether a newer version exists
   doctor [--fix] [--yes]                           Check this installation (Node, PATH, terminals, tools, port); --fix repairs terminals
   qr [--link <address>]                            Print a one-time login QR code (for an internet address with --link)
   admin                                            Open the admin page (this computer only)
@@ -259,6 +261,14 @@ async function setup(args) {
   }
 }
 
+// `update` asks the npm registry for the newest version and, when you say yes, installs it in this terminal.
+async function update(args) {
+  const { createRealContext } = await import('../setup.js');
+  const { updateCommand } = await import('../update.js');
+  process.once('SIGINT', () => { console.log('\nStopped.'); process.exit(130); });
+  return updateCommand(args, await createRealContext({ noTerminals: true }));
+}
+
 // `doctor` shares setup's detection and its terminal question-and-answer plumbing.
 async function doctor(args) {
   const { createRealContext } = await import('../setup.js');
@@ -273,6 +283,7 @@ switch (command) {
   case 'service': await service(args); break;
   case 'setup': process.exit(await setup(args)); break;
   case 'doctor': process.exit(await doctor(args)); break;
+  case 'update': process.exit(await update(args)); break;
   case 'qr': runScript('qr.js', args); break;
   case 'admin': runScript('admin.js', ['open']); break;
   case 'connect': case 'disconnect': runScript('admin.js', [command]); break;

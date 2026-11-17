@@ -32,5 +32,6 @@ export const KEYS = {
   screenView: { parse: boolean, restart: false, help: 'Let a logged-in phone see this computer\u2019s screen: true or false (default true)' },
   allowedHosts: { parse: hostList, restart: false, help: 'Extra Host names to accept, comma separated (a tunnel domain)' },
   greeting: { parse: oneOf('personal', 'plain'), restart: false, help: 'The note at the end of setup: personal (default) or plain (no name, system or time of day)' },
+  updateCheck: { parse: boolean, restart: false, help: 'Look up new Pocket Dev versions on the npm registry once a day and say so when one exists: true or false (default true)' },
   messagesReserveGB: { parse: integer(0, 1000), restart: false, help: 'Refuse Messages uploads that would leave less than this many GB free on this computer (default 5)' },
 };

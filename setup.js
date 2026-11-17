@@ -2,11 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { STATE_DIR } from './paths.js';
+import { PACKAGE_ROOT, STATE_DIR } from './paths.js';
 import { findBin, engineEnv, lstatExists, windowsBinCandidates } from './chat/env.js';
 import { findCloudflared, readNetwork, networkError } from './network.js';
 import { greetingText, boxParts, firstName } from './greeting.js';
 import { COPY } from './public/greeting-copy.js';
+import { createUpdater, latestVersionStep } from './update.js';
 
 // `pocket-dev setup`: one guided pass that takes a computer from nothing to a working, logged-in Pocket Dev.
 // Detection and the plan for each tool are pure functions of a context (platform, a command runner, a lookup), so
@@ -644,6 +645,10 @@ export async function runSetup(args, ctx, { fromStart = false } = {}) {
   if (!check && !opts.only) for (const line of COPY.intro) ctx.out(line);
   ctx.out('');
 
+  // First, make sure this is the newest version. When it updates itself, setup runs again from the new install.
+  const updated = await latestVersionStep(ctx, opts);
+  if (updated) return updated.code;
+
   if (check) {
     const states = await detectAll(ctx, toolIds);
     checkTable(ctx, states, { ...facts, npmFound: facts.npm !== null });
@@ -756,6 +761,19 @@ export async function createRealContext(extra = {}) {
   };
   ctx.hasBattery = async () => (await host.battery()).battery !== null;
   ctx.keepAwake = host.capabilities().keepAwake;
+  ctx.update = createUpdater({
+    env: ctx.env,
+    run: (cmd, args) => realRun(cmd, args, { env: ctx.childEnv }),
+    globalRoot: async () => {
+      const r = await realRun('npm', ['root', '-g'], { env: ctx.childEnv, timeout: 15_000 });
+      if (r.code !== 0 || !r.stdout.trim()) return null;
+      try { return fs.realpathSync(r.stdout.trim()); } catch { return r.stdout.trim(); }
+    },
+    hasService: async () => { try { return Boolean((await host.serviceStatus()).installed); } catch { return false; } },
+    restartService: async () => ({ ok: (await realRun(process.execPath, [path.join(PACKAGE_ROOT, 'bin', 'pocket-dev.js'), 'service', 'restart'], { inherit: true })).code === 0 }),
+    // The new install answers the command that was typed, so setup or the first start carries on with the new code.
+    reexec: async () => (await realRun(process.execPath, [path.join(PACKAGE_ROOT, 'bin', 'pocket-dev.js'), ...process.argv.slice(2)], { inherit: true, env: { ...process.env, POCKET_DEV_UPDATED: '1' } })).code ?? 1,
+  });
   ctx.qr = terminalQr;
   if (!extra.noTerminals) {
     const doctor = await import('./doctor.js');
