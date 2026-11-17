@@ -14,6 +14,8 @@ test('every engine in the list carries install and sign-in help, with generic ad
   assert.equal(ENGINE_HELP.claude.login, 'claude auth login');
   assert.deepEqual(ENGINE_HELP.codex.install, ['npm install -g @openai/codex']);
   assert.equal(ENGINE_HELP.codex.login, 'codex login');
+  assert.deepEqual(ENGINE_HELP.copilot.install, ['npm install -g @github/copilot']);
+  assert.equal(ENGINE_HELP.copilot.login, 'copilot login');
   assert.equal(engineHelp('something-new'), GENERIC_HELP);
   for (const help of [...Object.values(ENGINE_HELP), GENERIC_HELP]) assert.ok(!/(token|password|secret)/i.test(JSON.stringify(help)));
 });
@@ -23,11 +25,13 @@ test('the options the phone loads list all engines with their installed flag and
   const A = await s.login();
   const { status, data } = await s.request('GET', '/api/chat/options', { cookie: A.cookie });
   assert.equal(status, 200);
-  assert.deepEqual(Object.keys(data.tools), ['claude', 'codex', 'antigravity']);
+  assert.deepEqual(Object.keys(data.tools), ['claude', 'codex', 'antigravity', 'copilot']);
   assert.equal(data.tools.codex.installed, false);
   assert.equal(data.tools.antigravity.installed, true);
   for (const [tool, info] of Object.entries(data.tools)) assert.ok(info.help && Array.isArray(info.help.install), tool);
   assert.equal(data.tools.codex.help.login, 'codex login');
+  assert.equal(data.tools.copilot.help.login, 'copilot login');
+  assert.equal(data.tools.copilot.experimental, true);
 });
 
 test('a new chat with no messages can change engine', async (t) => {
