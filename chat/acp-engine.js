@@ -193,13 +193,29 @@ export function createAcpEngine(chat, adapter) {
         const init = await call('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {}, clientInfo: { name: 'pocket-dev', title: 'Pocket Dev' } });
         const params = { cwd: chat.cwd, mcpServers: [] };
         let res;
+        let lost = false;
         if (chat.sessionId && init.agentCapabilities?.loadSession) {
           sessionId = chat.sessionId;
           loading = true;
-          try { await call('session/load', { sessionId, ...params }); } finally { loading = false; }
-        } else {
+          try {
+            await call('session/load', { sessionId, ...params });
+          } catch (err) {
+            // A session the tool never saved (it holds no message yet) or no longer has (its files are gone) cannot be loaded.
+            // The chat still has the whole conversation, so a new session is started and given it with the next message.
+            if (!/not found/i.test(err.message ?? '')) throw err;
+            lost = true;
+          } finally { loading = false; }
+        }
+        if (lost || !(chat.sessionId && init.agentCapabilities?.loadSession)) {
           res = await call('session/new', params);
           sessionId = res.sessionId;
+          if (lost) {
+            if (chat.events.some((e) => e.type === 'user-text' && !e.removed) && chat.handoffSeq === null) {
+              chat.handoffSeq = chat.seq;
+              chat.handoffFrom = chat.tool;
+            }
+            chat.emit({ type: 'status', text: `${label} no longer has its saved session, so it started a new one and is given the conversation so far.` });
+          }
         }
         await adapter.afterSession?.({ call, sessionId, chat, init, created: res });
         chat.setSession(sessionId);

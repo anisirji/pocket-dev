@@ -73,6 +73,8 @@ If you do have winget, `winget install --id Git.Git -e`, `winget install --id Gi
 
 > **Experimental:** Google Antigravity CLI (`agy`) in Chat. Pocket Dev starts `agy acp` and talks to it over the Agent Client Protocol. It was tested by hand on macOS with Antigravity CLI 1.5.9, and not yet on this system, so it may not work here. See the [roadmap](ROADMAP.md).
 
+> **Experimental:** GitHub Copilot CLI (`copilot`) in Chat. Pocket Dev starts `copilot --acp --stdio` and talks to it over the Agent Client Protocol, with the sign-in that `copilot login` made. It was tested on macOS with Copilot CLI 1.0.112, and not yet on this system. See the [roadmap](ROADMAP.md).
+
 ## 6. Keep it running, start at login
 
 - Without a window, for this session: `Start-Process pocket-dev.cmd -ArgumentList 'start','--no-open' -WindowStyle Hidden`

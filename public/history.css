@@ -11,8 +11,9 @@
 .hist-refresh.spin svg { animation: hist-spin 0.9s linear infinite; }
 @keyframes hist-spin { to { transform: rotate(360deg); } }
 
-.hist-chips { flex: none; display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
-.hist-chip { height: 34px; padding: 0 16px; border-radius: 17px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
+.hist-chips { flex: none; display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.hist-chips::-webkit-scrollbar { display: none; }
+.hist-chip { flex: none; height: 34px; padding: 0 14px; border-radius: 17px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); }
 .hist-chip.on { border-color: var(--accent); color: var(--text); background: #1d2a40; }
 
 .hist-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }

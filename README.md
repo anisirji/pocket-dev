@@ -28,7 +28,7 @@ npm install -g @anisirji/pocket-dev
 pocket-dev start
 ```
 
-1. The first time, `pocket-dev start` opens the guided setup. It shows each command before it runs it and asks first. Claude Code, Codex and the GitHub CLI are installed or logged in only if you say yes. The **Always on** step shows one list of recommended changes (start at login, Keep awake) and asks once.
+1. The first time, `pocket-dev start` opens the guided setup. It shows each command before it runs it and asks first. Claude Code, Codex, GitHub Copilot and the GitHub CLI are installed or logged in only if you say yes. The **Always on** step shows one list of recommended changes (start at login, Keep awake) and asks once.
 2. At the end it prints an address like `http://192.168.1.25:7777` and a one-time QR code. If Pocket Dev now runs in the background, do not run `pocket-dev start` again. If you do, it says it is already running and prints a fresh QR code.
 3. On your phone, scan the QR code (or open the address and type the password).
 
@@ -56,7 +56,7 @@ More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/d
 ## What you get
 
 - **Terminals** that keep running when you close the page.
-- **Chat** with your own Claude Code and Codex logins.
+- **Chat** with your own Claude Code and Codex logins, and, experimentally, Antigravity and GitHub Copilot.
 - **Switch the provider and the model in the same chat.** In the settings row, pick the Provider pill, then the Model pill. The whole conversation goes with you, an engine you have not installed yet shows how to install it, and the model can change even while a reply runs (it applies to the next reply).
 - **Git** and **Files** on the computer where your work is.
 - **Open apps, health and power** controls.
@@ -74,6 +74,7 @@ More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/d
 ## Upcoming
 
 - **Google Antigravity CLI (`agy`)**, as a third engine in Chat next to Claude Code and Codex. **Experimental:** tested by hand on macOS with Antigravity CLI 1.5.9, not yet on Windows or Linux. Details and open questions: [Roadmap](https://github.com/anisirji/pocket-dev/blob/main/docs/ROADMAP.md).
+- **GitHub Copilot CLI (`copilot`)**, as a fourth engine in Chat. **Experimental:** tested on macOS against Copilot CLI 1.0.112 signed in with `copilot login`; not yet on Windows or Linux. Needs a GitHub Copilot plan, and every prompt counts against its premium requests. Details and open questions: [Roadmap](https://github.com/anisirji/pocket-dev/blob/main/docs/ROADMAP.md).
 
 ## Community and support
 

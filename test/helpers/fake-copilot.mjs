@@ -32,10 +32,11 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     return send({ id: m.id, result: { protocolVersion: 1, agentCapabilities: { loadSession: process.env.FAKE_COPILOT_LOAD !== '0', promptCapabilities: { image: true, audio: false, embeddedContext: true }, sessionCapabilities: { close: {}, list: {} } }, agentInfo: { name: 'Copilot', version: '1.0.112' }, authMethods: [{ id: 'copilot-login', name: 'Log in with Copilot CLI' }] } });
   }
   if (m.method === 'session/new') {
-    const sessionId = `00000000-0000-4000-8000-${String(++created).padStart(12, '0')}`;
+    const sessionId = `00000000-0000-4000-8000-${String(Date.now() % 1e9).padStart(9, '0')}${String(++created).padStart(3, '0')}`;
     send({ id: m.id, result: { sessionId, modes: { availableModes: MODES, currentModeId: MODES[0].id } } });
     return update(sessionId, { sessionUpdate: 'available_commands_update', availableCommands: [{ name: 'compact', description: 'Summarize' }] });
   }
+  if (m.method === 'session/load' && process.env.FAKE_COPILOT_LOST) return send({ id: m.id, error: { code: -32002, message: `Resource not found: Session ${m.params.sessionId} not found` } });
   if (m.method === 'session/load') {
     // Like the real Copilot, replay the whole conversation as updates before answering.
     update(m.params.sessionId, { sessionUpdate: 'user_message_chunk', content: text('old question') });

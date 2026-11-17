@@ -61,6 +61,8 @@ Chats need at least one of Claude Code or Codex. `pocket-dev setup --check` list
 
 > **Experimental:** Google Antigravity CLI (`agy`) in Chat. Pocket Dev starts `agy acp` and talks to it over the Agent Client Protocol. It was tested by hand on macOS with Antigravity CLI 1.5.9. Google has not said whether starting `agy` from another app is allowed. See the [roadmap](ROADMAP.md).
 
+> **Experimental:** GitHub Copilot CLI (`copilot`) in Chat. Pocket Dev starts `copilot --acp --stdio` and talks to it over the Agent Client Protocol, with the sign-in that `copilot login` made. It was tested on macOS with Copilot CLI 1.0.112. See the [roadmap](ROADMAP.md).
+
 ## 6. Keep it running, start at login
 
 ```sh

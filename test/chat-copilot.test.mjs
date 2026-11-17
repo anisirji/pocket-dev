@@ -351,3 +351,16 @@ test('the docs and the phone screens list all four engines', () => {
   assert.match(read('docs/REFERENCE.md'), /Copilot/);
   assert.match(read('docs/SETUP.md'), /Copilot/);
 });
+
+test('a session Copilot no longer has is replaced by a new one that is given the conversation so far', { timeout: 90000 }, async (t) => {
+  const c = await open(t, { POCKET_DEV_CHAT_IDLE_SECONDS: '1', FAKE_COPILOT_LOST: '1' });
+  const first = await c.say('first question', 1);
+  await pause(3500);
+  const chat = await c.say('echo-prompt please', 2);
+  assert.ok(chat.events.some((e) => e.type === 'status' && /no longer has its saved session/.test(e.text)));
+  assert.notEqual(chat.sessionId, first.sessionId, 'a new session took over');
+  const received = c.answers(chat).at(-1).text;
+  assert.match(received, /first question/, 'the new session was given the earlier question');
+  assert.match(received, /Hello from copilot/, 'and the earlier answer');
+  assert.equal(chat.events.filter((e) => e.type === 'user-text' && !e.removed).length, 2);
+});

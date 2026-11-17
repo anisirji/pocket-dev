@@ -98,6 +98,8 @@
       };
       return chip;
     }));
+    // Five filters are wider than a phone, so the row scrolls sideways and keeps the chosen one in view.
+    ui.chips.querySelector('.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }
 
   function status(container, text, retry) {

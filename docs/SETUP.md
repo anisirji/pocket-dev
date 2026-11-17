@@ -11,7 +11,7 @@ pocket-dev start
 
 These were made without asking, so they are written down here.
 
-- **Required means Node.js 22 or newer with npm.** Pocket Dev cannot run without it, and `pocket-dev setup --check` exits 0 exactly when it is fine. Git is recommended. Claude Code and Codex are each optional, but chats need at least one, so setup says so when neither is ready. GitHub CLI and cloudflared are optional.
+- **Required means Node.js 22 or newer with npm.** Pocket Dev cannot run without it, and `pocket-dev setup --check` exits 0 exactly when it is fine. Git is recommended. Claude Code, Codex and GitHub Copilot are each optional, but chats need at least one, so setup says so when none is ready. GitHub CLI and cloudflared are optional.
 - **Setup never runs administrator commands.** On Linux every package manager command needs `sudo`, so setup prints the exact command for you to run and carries on. The same goes for `npm install -g` when npm's global folder is not writable by you. Setup never runs `sudo`, never asks for an administrator password and never tries to work around it.
 - **winget runs as you.** Windows shows its own permission prompt in its own window if an installer needs one. Setup does not hide or answer it.
 - **Only official packages, never a downloaded script.** `@anthropic-ai/claude-code` and `@openai/codex` from npm; Git, GitHub CLI and cloudflared from Homebrew or winget. No `curl | sh`, no `iex (irm ...)`. A missing Homebrew or winget is not installed for you: setup prints how to get it yourself.
@@ -32,7 +32,7 @@ These were made without asking, so they are written down here.
 - **`--dry-run` runs only read-only checks** (`--version`, login status, `npm prefix -g`, and a look at the start-at-login state). It asks nothing, installs nothing, logs in to nothing and writes nothing, including the log.
 - **Linux start at login uses the existing systemd user unit** (the same code as the admin page). Without systemd, setup says so and prints `pocket-dev start`.
 - **cloudflared needs no login.** A Quick link needs none. A link on your own domain uses a tunnel token you paste in Admin or give to `pocket-dev internet domain`; setup does not handle that token.
-- **Setup and the app find tools the same way.** `POCKET_DEV_CLAUDE`, `POCKET_DEV_CODEX` and `POCKET_DEV_CLOUDFLARED` win when set; otherwise the same PATH and install folders the chats use. If you point one at a file that does not exist, setup reports it as not installed, which is what the app would hit.
+- **Setup and the app find tools the same way.** `POCKET_DEV_CLAUDE`, `POCKET_DEV_CODEX`, `POCKET_DEV_COPILOT` and `POCKET_DEV_CLOUDFLARED` win when set; otherwise the same PATH and install folders the chats use. If you point one at a file that does not exist, setup reports it as not installed, which is what the app would hit.
 
 ## Commands
 
@@ -72,7 +72,7 @@ The guide opens with why it is worth two minutes and what it will never do. On y
   Log in now? [y/N]
 ```
 
-Git and cloudflared ask `[Y/n]`. Claude Code, Codex and GitHub CLI ask `[y/N]`: they are your accounts.
+Git and cloudflared ask `[Y/n]`. Claude Code, Codex, GitHub Copilot and GitHub CLI ask `[y/N]`: they are your accounts. GitHub Copilot has no command that says whether it is signed in, so setup shows `copilot login` and offers it only right after installing Copilot, instead of ticking or crossing the login.
 
 If a step cannot be done by setup, it says why, prints the exact manual steps and a link, and moves on.
 
@@ -146,7 +146,7 @@ Start at login, per OS:
 
 ## On the phone
 
-Settings has a **Tools on this computer** section: a tick or cross for Node, Git, Claude Code, Codex, GitHub CLI and cloudflared, and for anything missing or logged out the exact command to run on that computer, with a Copy button. It reads `GET /api/setup/status` (after login, owner devices only). The answer holds each tool's name, version and yes/no state and the command to fix it. It never holds file paths, account names, emails or what any command printed. It is cached for 20 seconds.
+Settings has a **Tools on this computer** section: a tick or cross for Node, Git, Claude Code, Codex, GitHub Copilot, GitHub CLI and cloudflared, and for anything missing or logged out the exact command to run on that computer, with a Copy button. It reads `GET /api/setup/status` (after login, owner devices only). The answer holds each tool's name, version and yes/no state and the command to fix it. It never holds file paths, account names, emails or what any command printed. It is cached for 20 seconds.
 
 ## Troubleshooting
 
@@ -158,7 +158,7 @@ Settings has a **Tools on this computer** section: a tick or cross for Node, Git
 - **Installed, but this window cannot see it yet.** The installer updated PATH for new windows only. Open a new terminal and run `pocket-dev setup` again.
 - **`EACCES` or "npm cannot write to its global folder".** Run the printed `sudo npm install -g ...` yourself, or install Node with nvm or fnm so npm writes to your home folder.
 - **"Could not check the login in 8 seconds".** The tool's status command was slow (often a network wait). Run it yourself: `claude auth status`, `codex login status` or `gh auth status`.
-- **A tool shows "not installed" but you installed it.** Check `which claude` (macOS, Linux) or `where claude` (Windows) from the same terminal. If it lives somewhere unusual, set `POCKET_DEV_CLAUDE`, `POCKET_DEV_CODEX` or `POCKET_DEV_CLOUDFLARED` to its full path. Setup and the app both honour them.
+- **A tool shows "not installed" but you installed it.** Check `which claude` (macOS, Linux) or `where claude` (Windows) from the same terminal. If it lives somewhere unusual, set `POCKET_DEV_CLAUDE`, `POCKET_DEV_CODEX`, `POCKET_DEV_COPILOT` or `POCKET_DEV_CLOUDFLARED` to its full path. Setup and the app both honour them.
 - **Start at login failed on macOS because port 7777 is in use.** Another Pocket Dev is running. Stop it, or see `pocket-dev service status`.
 - **Start at login is not available on Linux.** There is no `systemctl`. Run `pocket-dev start` in a terminal or write your own service.
 - **"Pocket Dev is not running yet, so there is no address."** Run `pocket-dev start`. It prints the address and a QR code.

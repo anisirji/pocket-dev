@@ -29,11 +29,13 @@ test('GET /api/setup/status needs a login and reports each tool without secrets'
   const r = await s.request('GET', '/api/setup/status', { cookie });
   assert.equal(r.status, 200);
   const byId = Object.fromEntries(r.data.tools.map((x) => [x.id, x]));
-  assert.deepEqual(Object.keys(byId), ['node', 'git', 'claude', 'codex', 'gh', 'cloudflared']);
+  assert.deepEqual(Object.keys(byId), ['node', 'git', 'claude', 'codex', 'copilot', 'gh', 'cloudflared']);
   assert.equal(byId.node.status, 'ok');
   assert.deepEqual([byId.claude.installed, byId.claude.version, byId.claude.loggedIn, byId.claude.status], [true, '9.8.7', false, 'logged-out']);
   assert.equal(byId.claude.fix.command, 'claude auth login');
   assert.deepEqual([byId.codex.installed, byId.codex.status], [false, 'missing']);
+  assert.deepEqual([byId.copilot.installed, byId.copilot.status], [false, 'missing'], 'GitHub Copilot is listed like the other tools');
+  assert.match(byId.copilot.fix.command, /npm install -g @github\/copilot/);
   assert.ok(byId.codex.fix.command === null || typeof byId.codex.fix.command === 'string');
   const json = JSON.stringify(r.data);
   assert.ok(!json.includes('private@example.com'));
