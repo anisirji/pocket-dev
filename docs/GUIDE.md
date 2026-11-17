@@ -160,6 +160,12 @@ Open apps lists what is running with memory and CPU and can quit or force quit. 
 
 Share one project with someone for 1 hour, 1 day or 7 days through a QR invitation: a Viewer previews and downloads, a Developer edits a separate copy, and neither can reach your terminals, chats or other folders. The Admin page runs on `http://localhost:7778` and only a process on the computer can open it: devices, security log, internet access, service, lockdown.
 
+### Update Pocket Dev
+
+`pocket-dev update` asks the npm registry for the newest version, shows `Version X is available, you have Y`, and installs it with `npm install -g @anisirji/pocket-dev@latest` after you say yes (`--yes` skips the question, `--check` only reports). If Pocket Dev runs as the background service it is restarted for you. A copy from a git checkout, `npm link` or `npx` is not touched. If npm answers `EACCES`, use the own-folder fix in the [beginner guide](INSTALL_BEGINNERS.md#eacces-permission-denied-on-mac-or-linux) and never `sudo`. The guided setup starts with the same check, so a fresh install is current before anything else.
+
+Once a day Pocket Dev looks up the newest version on npm (one plain request, nothing about you or your computer) so that **Settings, This device** on the phone and the Admin page can say `Version X is available`. They only tell you the command; installing software is done in a terminal on the computer. Turn the look-up off with `pocket-dev config set updateCheck false` or `POCKET_DEV_NO_UPDATE_CHECK=1`.
+
 ## Rooms: several computers, one phone
 
 Install Pocket Dev on each computer. A **room** joins them so the phone can switch between them, share tasks and messages, and approve what other devices do. The room has one host. Each device keeps its own files, terminals and logins, and nothing private is shared unless its owner allows it.

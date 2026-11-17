@@ -4,7 +4,7 @@ export const COPY = {
   intro: [
     'Two minutes now saves you the usual problems later.',
     'Setup asks before every change and shows each command first. It never runs administrator commands itself and uses official packages only.',
-    'It never reads, stores or sends your Claude, Codex or GitHub logins. Pocket Dev itself sends nothing about you anywhere.',
+    'It never reads, stores or sends your Claude, Codex or GitHub logins. Pocket Dev itself sends nothing about you anywhere. Its one online look-up is the newest version number on npm, which you can turn off.',
     'You can stop at any step with Ctrl+C and run pocket-dev setup again.',
   ],
 
@@ -31,7 +31,7 @@ export const COPY = {
   },
   body: [
     'Thank you for trying Pocket Dev. I built it because I was tired of my work tying me to my desk, and I wanted my own computer to be in my pocket.',
-    'This setup only did what you said yes to. Nothing leaves your computer.',
+    'This setup only did what you said yes to. The only thing Pocket Dev looks up online is whether a newer version exists, once a day, and you can turn that off.',
     'Next time a build is running while you are out, or the coffee line is long, check it from your phone. Go be where your life is. Your code will wait for you.',
     'Happy coding, and have a good one.',
   ],
@@ -59,7 +59,7 @@ export const COPY = {
       "Hi, it's Ani 👋",
       'Congratulations, you did it! 🎉 Your computer is now in your pocket.',
       'Thank you for trying Pocket Dev 🙏 I built it because I was tired of my work tying me to my desk, and I wanted my own computer to be in my pocket.',
-      'This setup only did what you said yes to. Nothing leaves your computer. 🔒',
+      'This setup only did what you said yes to. The only thing Pocket Dev looks up online is whether a newer version exists, once a day, and you can turn that off. 🔒',
       'Next time a build is running while you are out, or the coffee line is long, check it from your phone ☕ Go be where your life is. Your code will wait for you.',
       'Happy coding, and have a good one! 🚀 — Ani',
       'Pocket Dev is free and open source. I am anisirji (Ani), a developer who wanted to stay connected to his work without being tied to a desk. 💛',

@@ -286,6 +286,7 @@ Viewer can preview and download scoped files. Developer can change a separate pr
 | `pocket-dev config path` | Print the config file path. |
 | `pocket-dev service install\|restart\|uninstall\|status\|logs` | Run it in the background (launchd), or manage that. |
 | `pocket-dev service autostart on\|off\|status` | Start at login or not. |
+| `pocket-dev update [--check] [--yes]` | Ask the npm registry for the newest version and install it with `npm install -g @anisirji/pocket-dev@latest`, then restart the background service. `--check` only reports. Does nothing for a git checkout, `npm link` or `npx` copy. A permission error points to the own-folder fix and never to `sudo`. |
 | `pocket-dev internet status\|off\|quick` | Show internet access and the link's status, turn it off, or allow a Quick link. |
 | `pocket-dev internet domain --hostname <host> --token-stdin` | Use your own domain through a Cloudflare tunnel. The token comes from stdin, or from a file with `--token-file <path>`, never as an argument. See [Connect over the internet](#internet-access-in-detail). |
 | `pocket-dev qr`, `admin`, `connect`, `disconnect`, `awake` | The same as the `npm run` commands below. |
@@ -369,6 +370,6 @@ macOS grants TCC permissions to the app that started `node`: Terminal or VS Code
 
 ## Environment variables
 
-Environment variables: `PORT`, `POCKET_DEV_CONFIG`, `POCKET_DEV_PASSWORD` (overrides the stored password and is printed at start), `POCKET_DEV_REPO_ROOTS`, `POCKET_DEV_STATE_DIR` (instead of `~/.pocket-dev` for authentication, security logs, Admin metadata, the tunnel token, and chats), `POCKET_DEV_CHAT_DIR` (an explicit chat-storage override), `POCKET_DEV_ADMIN_PORT`, `POCKET_DEV_NO_OPEN` (do not open the Admin page at start), and `POCKET_DEV_CLOUDFLARED` (the `cloudflared` executable; otherwise `/opt/homebrew/bin/cloudflared`, then `/usr/local/bin/cloudflared`).
+Environment variables: `PORT`, `POCKET_DEV_CONFIG`, `POCKET_DEV_PASSWORD` (overrides the stored password and is printed at start), `POCKET_DEV_REPO_ROOTS`, `POCKET_DEV_STATE_DIR` (instead of `~/.pocket-dev` for authentication, security logs, Admin metadata, the tunnel token, and chats), `POCKET_DEV_CHAT_DIR` (an explicit chat-storage override), `POCKET_DEV_ADMIN_PORT`, `POCKET_DEV_NO_OPEN` (do not open the Admin page at start), `POCKET_DEV_CLOUDFLARED` (the `cloudflared` executable; otherwise `/opt/homebrew/bin/cloudflared`, then `/usr/local/bin/cloudflared`), and `POCKET_DEV_NO_UPDATE_CHECK` (set to `1` to stop the daily npm look-up for a newer version, the notice in Settings and Admin, and the setup step; the same as `pocket-dev config set updateCheck false`).
 
 Codex Chat uses the daemon socket at `$CODEX_HOME/app-server-control/app-server-control.sock` (`CODEX_HOME` defaults to `~/.codex`). `POCKET_DEV_CODEX_SOCKET` selects a different local socket. `POCKET_DEV_CODEX` selects a binary and uses a private stdio server unless a socket override is also supplied.

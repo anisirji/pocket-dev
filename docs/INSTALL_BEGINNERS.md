@@ -494,6 +494,16 @@ npm config set prefix ~/.npm-global
 
 Then add that folder to your PATH. On Mac (zsh): `echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.zshrc`. On Linux (bash): `echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc`. Close the terminal, open a new one, and run the install again.
 
+### Update Pocket Dev
+
+The first `pocket-dev start` (or `pocket-dev setup`) begins by checking whether a newer version exists and asks `Update now? [Y/n]`. Press Enter to say yes; it installs the update and carries on with the new version. Any time later, run:
+
+```
+pocket-dev update
+```
+
+(`pocket-dev update --check` only says whether a newer version exists.) The phone and the Admin page also show `Version X is available`, but installing is done in a terminal on the computer. If it says `EACCES permission denied`, use the own-folder fix above; **do not use `sudo`**. The only thing looked up online is the newest version number on npm, at most once a day. To turn that off: `pocket-dev config set updateCheck false`.
+
 ### Windows: `ENOENT ... node-pty` or `TAR_ENTRY_ERROR` while installing
 
 npm lost some files while unpacking (antivirus or a bad cache). In PowerShell:
