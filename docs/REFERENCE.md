@@ -97,7 +97,7 @@ Each opening is in the security log as `port-remote-opened`. It needs `cloudflar
 
 ## Resume and continue
 
-Lists the 30 most recent Claude Code and Codex conversations from `~/.claude/projects` and `~/.codex`, filtered by **All**, **Claude**, or **Codex**. Shows the latest 20 messages. **Open here in terminal** opens a terminal in the conversation's folder and types `claude --resume <id>` or `codex resume <id>`. **Open here in chat** continues it in a Pocket Dev chat. Resume reads the history files. The selected engine writes its normal history when you continue. Codex Chat reuses the local daemon when available.
+Lists the 30 most recent Claude Code, Codex and Antigravity conversations from `~/.claude/projects`, `~/.codex` and `~/.gemini/antigravity-cli`, filtered by **All**, **Claude**, **Codex** or **Antigravity**. Shows the latest 20 messages. **Open here in terminal** opens a terminal in the conversation's folder and types `claude --resume <id>`, `codex resume <id>` or `agy --conversation <id>`. **Open here in chat** continues it in a Pocket Dev chat. Resume reads the history files. Antigravity keeps each conversation as a protobuf SQLite file that is not read here, so its list comes from agy's summaries database (`conversation_summaries.db`): the title, folder, step count and time. The sheet shows the title only and says so. Pocket Dev reads a temporary copy of that database and never opens agy's own files for writing. Sub-conversations that agy starts for its own helpers are not listed. `POCKET_DEV_AGY_DIR` points to a different Antigravity folder. Reading the database needs Node.js 22.13 or newer (its built-in SQLite); on an older 22.x the Antigravity list is simply empty. The selected engine writes its normal history when you continue. Codex Chat reuses the local daemon when available.
 
 ### Open a conversation that is open somewhere else
 
@@ -140,7 +140,7 @@ On the Mac itself, the Admin page's **Open in Pocket Dev** list shows each conve
 | Questions | Answers `AskUserQuestion` (Claude) and `requestUserInput` (Codex), with **Other…**. | Multi-select on Codex. |
 | Stop | Interrupts the turn. The server ends it after 5 s if the engine does not stop. | |
 | Models and modes | Model lists come from each engine, with custom model names supported. Claude has Ask every time, Accept edits, Plan, Auto, Don’t ask, and Bypass. Codex has independent Approval (Ask first, On request, Never ask), Sandbox (Read only, Workspace, Full access), and Effort controls. Bypass and Full access need confirmation. Chips report whether a change applies now or next turn; replies show their model. | |
-| Sessions | Pocket Dev keeps `~/.pocket-dev/chats/<id>.json`. Claude Code and Codex keep their own transcripts in `~/.claude` and `~/.codex`, shared with VS Code and the CLI. | Delete the engine's own transcripts. |
+| Sessions | Pocket Dev keeps `~/.pocket-dev/chats/<id>.json`. Claude Code, Codex and Antigravity keep their own transcripts in `~/.claude`, `~/.codex` and `~/.gemini/antigravity-cli`, shared with VS Code and the CLI. | Delete the engine's own transcripts. |
 | Idle sleep | Stops an idle engine after `chatIdleMinutes` (default 10). The next message wakes and resumes it. | Sleep a chat with a running turn or a waiting card. |
 
 Switching Codex Approval to **Never ask** immediately declines pending and new permission requests, including during a running turn. It preserves sandbox restrictions and ordinary questions. The next turn also receives the updated Codex policy.
