@@ -101,3 +101,20 @@ test('the chosen model is sent to agy, and can be changed between turns', { time
   assert.equal(again.status, 200, JSON.stringify(again.data));
   assert.equal(again.data.applied.model, 'next-turn');
 });
+
+test('a spent Antigravity quota becomes a usage limit error, so the chat offers to continue with another model', { timeout: 60000 }, async (t) => {
+  const c = await open(t);
+  assert.equal((await c.call('POST', `/api/chat/${c.id}/message`, { text: 'quota-out' })).status, 202);
+  const chat = await c.until((x) => x.status === 'idle' && x.events.some((e) => e.type === 'error'));
+  const error = chat.events.find((e) => e.type === 'error');
+  assert.equal(error.message, 'Antigravity usage limit reached. Resets in 153h25m35s.');
+  assert.match(error.message, /\blimit reached\b/i);
+});
+
+test('only a short spent-quota answer counts as a limit; a normal answer that mentions a quota does not', async () => {
+  const { antigravityQuotaNotice } = await import('../chat/limits.js');
+  assert.equal(antigravityQuotaNotice('Hello from agy'), null);
+  assert.equal(antigravityQuotaNotice('You can raise the quota in settings.'), null);
+  assert.equal(antigravityQuotaNotice(`${'The quota section of the doc explains how limits are reached. '.repeat(10)}`), null);
+  assert.deepEqual(antigravityQuotaNotice('Individual quota reached. Please upgrade.'), { type: 'error', message: 'Antigravity usage limit reached.' });
+});

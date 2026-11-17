@@ -77,3 +77,12 @@ export function codexLimitNotices(snapshot, seen) {
   }
   return notices;
 }
+
+// Antigravity reports a spent quota as an ordinary answer ("Individual quota reached. ... Resets in 153h25m35s."), not
+// as an error. Turn that one answer into the same limit error Claude and Codex give, so the chat offers "Continue with".
+export function antigravityQuotaNotice(answer) {
+  const text = String(answer ?? '').trim();
+  if (!text || text.length > 400 || !/\b(quota|usage limit)\b[^.]*\breached\b/i.test(text)) return null;
+  const reset = /Resets in ([0-9hms ]+\w)/i.exec(text)?.[1];
+  return { type: 'error', message: `Antigravity usage limit reached.${reset ? ` Resets in ${reset}.` : ''}` };
+}

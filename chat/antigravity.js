@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import readline from 'node:readline';
 import crypto from 'node:crypto';
 import { findBin, engineEnv, cap, INPUT_MAX } from './env.js';
+import { antigravityQuotaNotice } from './limits.js';
 
 // Google Antigravity CLI. `agy acp` is an Agent Client Protocol server on standard input and output; the sign-in
 // and the settings are the ones the terminal `agy` already has. One process serves one chat.
@@ -62,6 +63,7 @@ export function createAntigravityEngine(chat) {
   // A resumed chat starts a new engine but keeps its old events, so ids must not repeat across engines.
   const freshId = (kind) => `agy-${kind}-${crypto.randomBytes(6).toString('hex')}`;
   let textId = null;
+  let turnText = '';
   let thoughtId = null;
   // session/load replays the whole conversation as updates before it answers. They are already in the chat.
   let loading = false;
@@ -94,6 +96,7 @@ export function createAntigravityEngine(chat) {
     if (!text) return;
     if (kind === 'text') {
       if (thoughtId) { chat.update(thoughtId, { streaming: false }); thoughtId = null; }
+      turnText += text;
       if (!textId) {
         textId = freshId('text');
         chat.emit({ id: textId, type: 'assistant-text', text, streaming: true });
@@ -222,6 +225,7 @@ export function createAntigravityEngine(chat) {
 
     async send({ text, images }) {
       textId = thoughtId = null;
+      turnText = '';
       const prompt = [{ type: 'text', text }];
       for (const img of images ?? []) prompt.push({ type: 'image', mimeType: img.mediaType, data: img.data });
       let res;
@@ -232,6 +236,8 @@ export function createAntigravityEngine(chat) {
         throw err;
       }
       closeText();
+      const quota = antigravityQuotaNotice(turnText);
+      if (quota) chat.emit(quota);
       chat.endTurn({ status: STOP_STATUS[res?.stopReason] ?? 'done' });
     },
 
