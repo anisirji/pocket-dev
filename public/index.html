@@ -32,6 +32,7 @@
 <script src="/macstatus.js" defer></script>
 <link rel="stylesheet" href="/chat.css">
 <script src="/chat.js" defer></script>
+<script src="/term-agents.js" defer></script>
 <script type="module" src="/room-pages.js"></script>
 <script type="module" src="/room-banner.js"></script>
 <script type="module" src="/room-approvals.js"></script>
@@ -57,7 +58,7 @@
   #tabbar { padding-top: 0; }
   #app.keyboard-open #tabbar { display: none; }
   #headGap { flex: 1; }
-  #app:not([data-view="terminal"]) :is(#tabbar, #headGap) { display: none; }
+  #app:not([data-view="terminal"]) :is(#tabbar, #headGap, #termAgents) { display: none; }
   #tabs { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
   #tabs::-webkit-scrollbar { display: none; }
   .tab { flex: none; display: flex; align-items: center; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
@@ -105,7 +106,7 @@
   #portErr:empty { display: none; }
 
   #terms { position: relative; flex: 1; min-height: 0; }
-  #app.no-terminals :is(#tabbar, #inputBar, #keys) { display: none; }
+  #app.no-terminals :is(#tabbar, #inputBar, #keys, #termAgents) { display: none; }
   .terminals-off { position: absolute; inset: 0; overflow-y: auto; padding: 20px 16px; background: var(--bg); }
   .terminals-off h2 { margin: 0 0 12px; font-size: 18px; }
   .terminals-off p { margin: 0 0 12px; line-height: 1.5; color: var(--text); }

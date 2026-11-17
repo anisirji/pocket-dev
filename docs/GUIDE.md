@@ -118,6 +118,8 @@ Details for every feature are in [docs/REFERENCE.md](REFERENCE.md). A one-page s
 
 Each tab is a login shell in a real pty (zsh or your `$SHELL` on macOS and Linux, PowerShell on Windows). Terminals keep running when the phone sleeps or you change tabs, and reconnect with recent output replayed. A folder picker, shortcuts, uploads and a Copy view are built in. Terminals do not survive a computer restart.
 
+**Agents in a terminal.** When Claude Code runs in a terminal tab and starts helper agents, a slim strip above the terminal says how many are running (for example "2 agents running"). Tap it to see each agent, whether it is running, finished or failed, and the last thing a running agent did. It shows while an agent runs and for about half a minute after the last one ends, and it is hidden in every other view. Pocket Dev reads this from the conversation files Claude Code keeps on the computer, so nothing is added to the terminal and nothing is sent anywhere. Limits: it only works for Claude Code (a Codex tab shows no strip). An agent that was running when its session was closed is shown as stopped after about 90 seconds, or 15 minutes if Claude Code recorded it as unfinished. Collaborators never see it.
+
 ### Files
 
 <table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/03-files.png" width="240" alt="Files browser"><br><sub>Browse and upload</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/04-files-preview.png" width="240" alt="File preview"><br><sub>Preview a file</sub></td></tr></table>
