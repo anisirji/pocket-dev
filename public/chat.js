@@ -1749,6 +1749,7 @@
       scroll.append(more);
     }
     const reason = el('input', 'chat-text chat-reason');
+    globalThis.keepCaretAtEnd?.(reason);
     Object.assign(reason, { type: 'text', placeholder: 'Reason (optional), then tap Deny', hidden: true });
     reason.setAttribute('enterkeyhint', 'send');
     const decide = (o) => () => {
@@ -1846,6 +1847,7 @@
         const input = el('input', 'chat-text chat-q-other');
         Object.assign(input, { type: 'text', placeholder: 'Your answer', hidden: true });
         input.setAttribute('enterkeyhint', 'done');
+        globalThis.keepCaretAtEnd?.(input);
         input.oninput = refresh;
         const state = { on: false, input };
         other.set(qn.id, state);
