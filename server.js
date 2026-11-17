@@ -818,16 +818,16 @@ const PAGES = {
   '/room-pages.js': 'room-pages.js', '/room-pages.css': 'room-pages.css', '/room-screen.js': 'room-screen.js', '/room-invite.js': 'room-invite.js', '/room.css': 'room.css',
   '/modes-core.js': 'modes-core.js', '/room-modes.js': 'room-modes.js', '/room-modes.css': 'room-modes.css', '/room-approvals.js': 'room-approvals.js', '/room-approvals.css': 'room-approvals.css', '/room-banner.js': 'room-banner.js', '/room-banner.css': 'room-banner.css', '/vendor/qrcode/qrcode.js': 'vendor/qrcode/qrcode.js', '/vendor/jsqr/jsQR.js': 'vendor/jsqr/jsQR.js', '/room-scan.js': 'room-scan.js', '/terminals-off.js': 'terminals-off.js',
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
-  '/welcome.js': 'welcome.js', '/greeting-copy.js': 'greeting-copy.js',
+  '/welcome.js': 'welcome.js', '/greeting-copy.js': 'greeting-copy.js', '/favicon.svg': 'favicon.svg',
 };
-const PUBLIC_PAGES = new Set(['login.html', 'invite.html', 'invite.js', 'guest.css']);
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const PUBLIC_PAGES = new Set(['login.html', 'invite.html', 'invite.js', 'guest.css', 'favicon.svg']);
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
 
 function servePage(req, res, pathname) {
   const guest = collaborators.guest(req);
   const file = guest && pathname === '/' ? 'guest.html' : PAGES[pathname];
   if (!file || req.method !== 'GET') return sendJson(res, 404, { error: 'Not found' });
-  if (guest && !new Set(['guest.html', 'guest.js', 'guest.css', 'files.js', 'files.css', 'invite.html', 'invite.js', 'connection.js', 'messages.js', 'messages.css']).has(file)) return sendJson(res, 403, { error: 'Your role does not allow this page.' });
+  if (guest && !new Set(['guest.html', 'guest.js', 'guest.css', 'files.js', 'files.css', 'invite.html', 'invite.js', 'connection.js', 'messages.js', 'messages.css', 'favicon.svg']).has(file)) return sendJson(res, 403, { error: 'Your role does not allow this page.' });
   if (!guest && !PUBLIC_PAGES.has(file) && !auth.deviceFor(req)) {
     if (!file.endsWith('.html')) return sendJson(res, 401, { error: 'Not logged in' });
     res.writeHead(302, { location: '/login.html' });
