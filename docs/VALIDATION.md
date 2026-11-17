@@ -275,3 +275,12 @@ New: an update icon and a ping on the phone, an Update banner and button on the 
 **macOS notification, run for real.** `createNotifier()` with the title `Pocket Dev test, ignore` returned in 146 ms and left no `osascript` process behind, so it was a banner and not a dialog that waits for a click. Whether the banner was visible depends on the Mac's notification settings for the Script Editor app, which was not checked.
 
 **Not run:** a real `npm install -g` of a newer release followed by the real service restart and the page reconnecting; the Windows toast and the Linux `notify-send` paths (commands are built and tested, never run); the Admin page in Safari or Firefox.
+
+## Model dropdown at the top of the chat
+
+`test/chat-engine-switch-ui.test.mjs` (10 tests, tiny DOM) covers the dropdown label with the model name, the list of every engine with none disabled, four engines shown as four rows, the install and sign-in commands for a missing engine and the way back, generic advice when an engine has no help entry, the signed-out case, a switch while a reply runs being refused with the reason, a new empty chat switching, the 44 px touch targets and the absence of any clipboard use. `test/engine-dropdown.test.mjs` (3 tests) runs a real server: the engine list carries each engine's installed flag and help, and a chat with no messages changes engine.
+
+`scripts/check-engine-dropdown.mjs` drove real Chrome at 390 x 844 with touch emulation against a throwaway server with stand-in engines (Claude marked not installed, Codex and Antigravity standing in). A fourth engine was added to the engine list the page loads, so the check proves the list follows the server rather than a fixed number. All 18 checks passed: full-width dropdown 44 px tall, under the Mac status strip and above the title row, four rows each at least 44 px and none disabled, "This chat" and "Not installed" marked, the install commands shown for the missing engine, Back and Escape, a switch to Codex that kept the earlier conversation and changed the chat on the server, no page errors and no horizontal scroll.
+
+Not verified: a real fourth engine (the Copilot engine was added by another change), and a physical phone.
+

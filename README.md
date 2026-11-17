@@ -57,7 +57,7 @@ More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/d
 
 - **Terminals** that keep running when you close the page.
 - **Chat** with your own Claude Code and Codex logins.
-- **Switch the model in the same chat.** Hit a Claude limit? Pick Codex or Antigravity and the whole conversation goes with you.
+- **Switch the model in the same chat.** Use the model dropdown at the top of the chat to pick any engine at any time, for example when you hit a Claude limit. The whole conversation goes with you, and an engine you have not installed yet shows how to install it.
 - **Git** and **Files** on the computer where your work is.
 - **Open apps, health and power** controls.
 - **Several computers, one phone**, with per-device permissions.

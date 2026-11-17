@@ -1,3 +1,4 @@
+import { engineHelp } from './engine-help.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -296,7 +297,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     const remembered = chatDefaults();
     const tools = Object.fromEntries(await Promise.all(Object.entries(ENGINES).map(async ([tool, e]) => {
       const settings = await e.settingsSchema();
-      return [tool, { label: e.label, installed: e.installed?.() ?? true, settings, defaults: safeDefaults(settings, remembered[tool]) }];
+      return [tool, { label: e.label, installed: e.installed?.() ?? true, help: engineHelp(tool), settings, defaults: safeDefaults(settings, remembered[tool]) }];
     })));
     const recent = [...new Set(list().map((c) => c.cwd))].filter(isDir).slice(0, RECENT_MAX);
     return {

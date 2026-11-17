@@ -317,6 +317,7 @@
     </section>
     <section class="chat-screen chat-convo-screen">
       <header class="chat-head chat-convo-head">
+        <div class="chat-engine-row"></div>
         <div class="chat-head-row">
           <button type="button" class="chat-icon chat-back" aria-label="Back to chats">‹</button>
           <div class="chat-head-main">
@@ -370,7 +371,7 @@
   const q = (sel) => root.querySelector(sel);
   const ui = {
     listScreen: q('.chat-list-screen'), rows: q('.chat-rows'), newBtn: q('.chat-new-btn'), close: q('.chat-close'),
-    convoScreen: q('.chat-convo-screen'), back: q('.chat-back'), title: q('.chat-title'), sub: q('.chat-sub'), menu: q('.chat-menu'), chips: q('.chat-chips'),
+    convoScreen: q('.chat-convo-screen'), engineRow: q('.chat-engine-row'), back: q('.chat-back'), title: q('.chat-title'), sub: q('.chat-sub'), menu: q('.chat-menu'), chips: q('.chat-chips'),
     scroll: q('.chat-log-scroll'), empty: q('.chat-empty'), log: q('.chat-log'), latest: q('.chat-latest'), conn: q('.chat-conn'),
     card: q('.chat-card'), work: q('.chat-work'), statusline: q('.chat-statusline'), notice: q('.chat-notice'), queue: q('.chat-queue'), files: q('.chat-files'),
     dock: q('.chat-dock'), composer: q('.chat-composer'), attach: q('.chat-attach'), input: q('.chat-input'), send: q('.chat-send'), fileInput: q('.chat-file-input'),
@@ -1504,52 +1505,112 @@
     return node;
   }
 
-  // The model chip names the engine and opens the list of the others. Switching keeps the conversation: the server hands the
-  // earlier messages to the new engine with the next one.
+  // The model dropdown sits at the top of the chat and is always usable. It lists every engine the server knows, installed
+  // or not: tapping one that is missing shows how to install it. Switching keeps the conversation: the server hands the
+  // earlier messages to the new engine with the next one, and a chat with no messages yet just changes engine.
   const BUSY = new Set(['running', 'waiting-permission', 'waiting-answer']);
-  function modelChip(c) {
-    const chip = button('chat-model-chip', null, () => toggleSwitchMenu(chip));
-    chip.setAttribute('aria-haspopup', 'true');
-    chip.setAttribute('aria-label', `Model: ${TOOLS[c.tool] || c.tool}. Tap to switch the model for this chat`);
-    chip.append(badge(c.tool), el('span', 'chat-model-caret', '▾'));
-    return chip;
+  function engineModelLabel(c) {
+    const setting = schemaOf(c.tool).find((x) => x.key === 'model');
+    if (!setting) return '';
+    const value = valueOf(c.settings, setting);
+    return choiceOf(setting, value)?.label || (value && value !== 'default' ? String(value) : 'Default');
+  }
+  function engineNote(info, here) {
+    if (here) return 'This chat';
+    if (info.installed === false) return 'Not installed';
+    if (info.loggedIn === false) return 'Not logged in';
+    return '';
+  }
+  function engineDropdown(c) {
+    const dd = button('chat-engine-dd', null, () => toggleSwitchMenu(dd));
+    dd.setAttribute('aria-haspopup', 'menu');
+    dd.setAttribute('aria-expanded', 'false');
+    const model = engineModelLabel(c);
+    dd.setAttribute('aria-label', `Model: ${TOOLS[c.tool] || c.tool}${model ? `, ${model}` : ''}. Choose another model for this chat`);
+    dd.append(badge(c.tool), el('span', 'chat-engine-model', model ? `· ${model}` : ''), el('span', 'chat-model-caret', '▾'));
+    return dd;
   }
 
   let switchMenu = null;
+  let switchButton = null;
   function closeSwitchMenu() {
     switchMenu?.remove();
     switchMenu = null;
+    switchButton?.setAttribute('aria-expanded', 'false');
     document.removeEventListener('pointerdown', outsideSwitchMenu, true);
+    document.removeEventListener('keydown', switchMenuKeys, true);
   }
   function outsideSwitchMenu(e) {
-    if (switchMenu && !switchMenu.contains(e.target) && !e.target.closest('.chat-model-chip')) closeSwitchMenu();
+    if (switchMenu && !switchMenu.contains(e.target) && !e.target.closest('.chat-engine-dd')) closeSwitchMenu();
   }
-  function toggleSwitchMenu(chip) {
+  function switchMenuKeys(e) {
+    if (!switchMenu) return;
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      const back = switchButton;
+      closeSwitchMenu();
+      back?.focus();
+      return;
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const items = [...switchMenu.querySelectorAll('button')];
+    if (!items.length) return;
+    e.preventDefault();
+    const at = items.indexOf(document.activeElement);
+    items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+  }
+  function toggleSwitchMenu(dd) {
     if (switchMenu) return closeSwitchMenu();
     const c = convo.chat;
     if (!c) return;
-    if (BUSY.has(c.status) || c.queued || c.waking) return toast('Wait for the reply to finish, or stop it, before switching.');
-    const menu = el('div', 'chat-switch-menu');
-    menu.setAttribute('role', 'menu');
+    switchButton = dd;
+    dd.setAttribute('aria-expanded', 'true');
+    switchMenu = el('div', 'chat-engine-menu');
+    switchMenu.setAttribute('role', 'menu');
+    dd.closest('.chat-engine-row').append(switchMenu);
+    document.addEventListener('pointerdown', outsideSwitchMenu, true);
+    document.addEventListener('keydown', switchMenuKeys, true);
+    showSwitchList(c);
+  }
+  function showSwitchList(c) {
+    const items = [];
     for (const [tool, info] of Object.entries(options?.tools || {})) {
       const here = tool === c.tool;
-      const item = button(`chat-switch-item${here ? ' on' : ''}`, null, () => switchTo(tool));
+      const needsHelp = info.installed === false || info.loggedIn === false;
+      const item = button(`chat-switch-item${here ? ' on' : ''}${needsHelp ? ' missing' : ''}`, null, () => (needsHelp ? showEngineHelp(tool, info) : switchTo(tool)));
       item.setAttribute('role', 'menuitem');
-      item.disabled = here || info.installed === false;
-      item.append(badge(tool), el('span', 'chat-switch-name'),
-        el('span', 'chat-switch-note', here ? 'this chat' : info.installed === false ? 'not installed' : ''));
-      menu.append(item);
+      if (here) item.setAttribute('aria-current', 'true');
+      item.append(badge(tool), el('span', 'chat-switch-name'), el('span', 'chat-switch-note', engineNote(info, here)));
+      items.push(item);
     }
-    menu.append(el('div', 'chat-switch-hint', 'The whole conversation goes with you.'));
-    chip.closest('.chat-head').append(menu);
-    switchMenu = menu;
-    document.addEventListener('pointerdown', outsideSwitchMenu, true);
+    switchMenu.replaceChildren(...items, el('div', 'chat-switch-hint', 'The whole conversation goes with you.'));
+    items.find((i) => i.className.includes(' on'))?.focus?.();
+  }
+  // A missing engine is not a dead row: this panel gives the commands to run on the computer, as plain text that one tap
+  // selects.
+  function showEngineHelp(tool, info) {
+    const label = info.label || TOOLS[tool] || tool;
+    const help = info.help || {};
+    const missing = info.installed === false;
+    const back = button('chat-switch-back', '‹ All models', () => showSwitchList(convo.chat));
+    const code = (text) => el('code', 'chat-switch-code', text);
+    const rows = [back, el('div', 'chat-switch-title', missing ? `${label} is not installed on your computer` : `${label} is not signed in`)];
+    rows.push(el('div', 'chat-switch-step', 'Run these on your computer. A Pocket Dev terminal tab runs there too.'));
+    if (missing && help.install?.length) {
+      rows.push(el('div', 'chat-switch-label', 'Install'), ...help.install.map(code));
+    }
+    if (help.login) rows.push(el('div', 'chat-switch-label', 'Sign in'), code(help.login));
+    if (help.note) rows.push(el('div', 'chat-switch-note-line', help.note));
+    rows.push(el('div', 'chat-switch-label', 'Then check everything'), code('pocket-dev setup'));
+    switchMenu.replaceChildren(...rows);
+    back.focus?.();
   }
 
   async function switchTo(tool) {
     closeSwitchMenu();
     const c = convo.chat;
     if (!c || tool === c.tool) return;
+    if (BUSY.has(c.status) || c.queued || c.waking) return toast('Stop the reply, or wait for it to finish, then switch the model.');
     try {
       await api('POST', `/api/chat/${c.id}/engine`, { tool });
       toast(`Continuing with ${options?.tools?.[tool]?.label || TOOLS[tool] || tool}`);
@@ -1576,7 +1637,8 @@
     ui.title.textContent = c.title || 'New chat';
     const path = el('span', 'chat-sub-path', shortPath(c.cwd));
     path.title = c.cwd;
-    ui.sub.replaceChildren(modelChip(c), path);
+    ui.sub.replaceChildren(path);
+    renderEngine(c);
     renderChips();
     ui.input.placeholder = `Message ${TOOLS[c.tool] || c.tool}`;
     renderComposer();
@@ -1586,6 +1648,18 @@
     const target = pick && pickTarget(pick);
     if (target && pickKeyOf(target) !== pickKey) renderPicker(pick);
     if (hasLayer(stack, 'settings') && ui.settingsSheet.dataset.chat !== c.id) renderSettings();
+  }
+
+  // The dropdown is rebuilt only when the engine, its model or the engine list changed, so an open list is not closed by
+  // every status update.
+  let engineKey = '';
+  function renderEngine(c) {
+    const infoKey = Object.entries(options?.tools || {}).map(([t, i]) => `${t}:${i.installed}:${i.loggedIn}`).join(',');
+    const key = JSON.stringify([c.id, c.tool, engineModelLabel(c), infoKey]);
+    if (key === engineKey) return;
+    engineKey = key;
+    closeSwitchMenu();
+    ui.engineRow.replaceChildren(engineDropdown(c));
   }
 
   // Rebuilding chips under a finger swallows the tap, so only rebuild when a value changed.

@@ -24,3 +24,14 @@ test('every script, style sheet and icon a page asks for is served', () => {
 test('the answer-box caret guard is part of the served files', () => {
   assert.ok(server.includes("'/keep-caret.js': 'keep-caret.js'"));
 });
+
+test('every style sheet has balanced braces', () => {
+  const unbalanced = [];
+  for (const file of fs.readdirSync(new URL('../public/', import.meta.url)).filter((f) => f.endsWith('.css'))) {
+    const css = fs.readFileSync(new URL(`../public/${file}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const open = (css.match(/\{/g) || []).length;
+    const close = (css.match(/\}/g) || []).length;
+    if (open !== close) unbalanced.push(`${file}: ${open} open, ${close} close`);
+  }
+  assert.deepEqual(unbalanced, []);
+});
