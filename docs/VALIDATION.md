@@ -205,3 +205,29 @@ Neither a delayed endpoint nor these readings can prove that macOS or its deskto
 At the owner's explicit request, the integration branch's source was combined with `/Users/ani/Desktop/pocket-dev` on `live`. The Admin conflict resolution retains Messages, managed internet access and folder browsing, and preserves the live branch's manual Remote quick-link recovery controls and `qr --link`. The resolution is present in the working file, but staging and committing fail on `.git/index.lock` with `Operation not permitted`; the merge remains in progress and HEAD is still `0010a82`.
 
 All 163 model-free tests across 23 files passed again in the actual server checkout, with no skips. The full-suite retry failed on sandbox-denied TCP and Unix listeners (`listen EPERM`); terminal-host startup also cannot create its socket. The run was stopped. The responsive harness failed to import the unavailable `playwright` package. These remain release blockers. Syntax checks passed for 65 application/script files and four inline scripts; `git diff --check` passed. No server restart, state migration, tunnel change or publication was performed.
+
+## Model switching with real engines, 2026-11-17
+
+A throwaway Pocket Dev server (spare port, temporary state and config folders, scratch chat folder under the system temp directory, no Codex daemon socket) drove the real Claude Code 2.1.319, Codex 0.166.0 and Antigravity 1.5.9 through the HTTP API. Each chat said "Remember the word X. Reply with the single word ok.", was switched to another engine, and was then asked to repeat the word. About 10 real prompts were sent. The engines wrote their own sessions into the real `~/.claude` and `~/.codex`, and the Claude and Codex test sessions were deleted afterwards. Any Antigravity session folders under `~/.gemini` were left alone.
+
+| Chat | Hop | Engine started | Answered | Used the carried history | Time to answer |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Start on Claude | yes | `ok` | not asked | 2.0 s |
+| 1 | Claude to Codex | yes | `PINEAPPLE` | yes | 7.1 s |
+| 1 | Codex to Antigravity | yes | usage-limit message only | not provable | 5.1 s |
+| 1 | Antigravity to Claude | yes | `PINEAPPLE` | yes, with the Antigravity turn in between | 2.5 s |
+| 2 | Start on Codex | yes | `ok` | not asked | 5.1 s |
+| 2 | Codex to Antigravity | yes | usage-limit message only | not provable | 4.1 s |
+| 2 | Antigravity to Codex | yes | `MANGO` | yes | 5.1 s |
+| 3 | Start on Antigravity | yes | usage-limit message only | not asked | 5.1 s |
+| 3 | Antigravity to Claude | yes | `KIWI` | yes, from a first message Antigravity never answered | 3.0 s |
+| 3 | Claude to Codex | yes | `KIWI` | yes | 12.6 s |
+
+Every answer was labelled with the engine that wrote it (`claude`, `codex`, `antigravity`). The switch call itself returned in under 1.4 s.
+
+What this does not show: the signed-in Antigravity account had used its quota ("Individual quota reached", reset in about 153 hours), so Antigravity never produced a real answer. Handing history to Antigravity is covered only by the fake-engine tests, not by a real answer. Tool use, approvals and file edits after a switch were not tried with the real engines. Claude was run with its default model and settings.
+
+Two things found and fixed:
+
+- Antigravity reports a spent quota as an ordinary answer, so the chat showed no limit error and no "Continue with" buttons. A short quota answer now becomes the same "usage limit reached" error that Claude and Codex give (`antigravityQuotaNotice` in `chat/limits.js`).
+- A harness slip, not a product bug: Codex 0.39 in `/usr/local/bin` has no app-server mode. Pocket Dev prefers `~/.local/bin/codex`, and a Codex that cannot start already reports "codex app-server exited" within 5 seconds, so nothing changed there.
