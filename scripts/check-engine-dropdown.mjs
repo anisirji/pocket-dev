@@ -1,6 +1,6 @@
-// Real Chrome check of the model dropdown at the top of a chat, at phone size with touch emulation, against a throwaway
-// server with stand-in engines. A fourth engine is added to the engine list the page loads, to prove the list follows the
-// server instead of a fixed number. Screenshots go to ENGINE_DROPDOWN_SHOTS when set.
+// Real Chrome check of the Provider and Model pills in a chat's settings row, at phone size with touch emulation, against a
+// throwaway server with stand-in engines. A fourth engine is added to the engine list the page loads, to prove the list
+// follows the server instead of a fixed number. Screenshots go to ENGINE_DROPDOWN_SHOTS when set.
 // Needs Playwright: PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs CHROME_PATH=/path/to/chrome
 import fs from 'node:fs';
 import os from 'node:os';
@@ -19,9 +19,11 @@ const s = await startServer({ after: (fn) => cleanups.push(fn) }, { env: { POCKE
 const A = await s.login();
 const problems = [];
 const check = (ok, what) => { if (!ok) problems.push(what); console.log(ok ? 'ok  ' : 'FAIL', what); };
+const api = (method, url, body) => s.request(method, url, { cookie: A.cookie, body });
 try {
-  const chat = await s.request('POST', '/api/chat', { cookie: A.cookie, body: { tool: 'antigravity', cwd: s.home } });
-  await s.request('POST', `/api/chat/${chat.data.id}/message`, { cookie: A.cookie, body: { text: 'hello' } });
+  const chat = await api('POST', '/api/chat', { tool: 'antigravity', cwd: s.home });
+  const id = chat.data.id;
+  await api('POST', `/api/chat/${id}/message`, { text: 'hello' });
   await pause(1500);
   const browser = await chromium.launch({ executablePath: chrome });
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -47,64 +49,88 @@ try {
   await page.locator('text=hello').first().click();
   await pause(1500);
 
-  const dd = page.locator('.chat-engine-dd');
-  check(await dd.count() === 1, 'the dropdown is on the chat screen');
-  const box = await dd.boundingBox();
-  const strip = await page.locator('#macStatus').boundingBox();
-  const title = await page.locator('.chat-head-row').boundingBox();
-  check(box.height >= 44, `the dropdown is at least 44 px tall (${box.height})`);
-  check(box.width >= 390 - 40, `the dropdown is full width (${box.width})`);
-  check(box.y >= strip.y + strip.height - 1, 'it sits under the Mac status strip');
-  check(box.y + box.height <= title.y + 1, 'it sits above the title row, not over it');
-  check(/Antigravity/.test(await dd.innerText()), 'it names the current engine');
+  // The pills row: Provider first, then Model, in the existing settings row. No separate control.
+  const chips = page.locator('.chat-convo-head .chat-chips');
+  const keys = await chips.locator('.chat-chip').evaluateAll((n) => n.map((x) => x.dataset.key));
+  check(keys[0] === 'provider' && keys[1] === 'model', `the row starts with Provider then Model (${keys.join(', ')})`);
+  check(await page.locator('.chat-engine-row, .chat-model-chip, .chat-engine-dd').count() === 0, 'no separate engine control or row');
+  const provider = page.locator('.chat-provider-chip');
+  const pbox = await provider.boundingBox();
+  check(pbox.x >= 0 && pbox.x + pbox.width <= 390 && await chips.evaluate((n) => n.scrollLeft === 0), `the Provider pill is visible without scrolling (x ${Math.round(pbox.x)}, width ${Math.round(pbox.width)})`);
+  check(pbox.height >= 40, `the Provider pill is a normal pill height (${pbox.height})`);
   check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no horizontal scroll');
-  if (shots) await page.screenshot({ path: path.join(shots, '1-closed.png') });
+  if (shots) await page.screenshot({ path: path.join(shots, '1-pills.png') });
 
-  await dd.click();
+  // Busy: the reply runs, the Provider pill locks, the Model pill keeps working and says the change waits for the next reply.
+  await api('POST', `/api/chat/${id}/message`, { text: 'slow' });
+  for (let i = 0; i < 50 && (await api('GET', `/api/chat/${id}`)).data.status !== 'running'; i++) await pause(60);
+  await pause(600);
+  check(await provider.getAttribute('aria-disabled') === 'true', 'while a reply runs the Provider pill is aria-disabled');
+  check(await provider.evaluate((n) => Number(getComputedStyle(n).opacity) < 0.7), 'and visibly dimmed');
+  await provider.click({ force: true });
+  await pause(300);
+  check(await page.locator('.chat-engine-menu').count() === 0, 'tapping it opens no list');
+  check(/Stop the reply first/.test(await page.locator('.chat-toast').innerText()), 'it says "Stop the reply first"');
+  const modelPill = page.locator('.chat-chip[data-key="model"]');
+  check(await modelPill.getAttribute('aria-disabled') === null, 'the Model pill is not disabled while the reply runs');
+  await modelPill.click();
+  await pause(500);
+  check(/Applies to the next reply/.test(await page.locator('.chat-pick-sheet').innerText()), 'the model sheet says "Applies to the next reply"');
+  if (shots) await page.screenshot({ path: path.join(shots, '2-model-while-busy.png') });
+  await page.locator('.chat-pick-custom input').fill('my-model');
+  await page.locator('.chat-pick-custom button').click();
+  await pause(800);
+  const midRun = (await api('GET', `/api/chat/${id}`)).data;
+  check(midRun.settings.model === 'my-model' && midRun.status === 'running', 'the new model is saved and the running reply carries on');
+  await api('POST', `/api/chat/${id}/interrupt`);
+  for (let i = 0; i < 50 && (await api('GET', `/api/chat/${id}`)).data.status !== 'idle'; i++) await pause(60);
+  await pause(700);
+  check(await provider.getAttribute('aria-disabled') === null, 'the Provider pill works again once the chat is idle');
+
+  // Idle: step one, the provider list.
+  await provider.click();
   await pause(400);
-  const items = page.locator('.chat-switch-item');
-  check(await items.count() === 4, `the open list shows four engines (${await items.count()})`);
+  const rows = page.locator('.chat-switch-item');
+  check(await rows.count() === 4, `the provider list shows four engines (${await rows.count()})`);
   const notes = await page.locator('.chat-switch-item .chat-switch-note').allInnerTexts();
-  check(notes.includes('This chat') && notes.includes('Not installed'), `current and missing engines are marked (${notes.join(' | ')})`);
-  check((await items.evaluateAll((n) => n.every((x) => x.getBoundingClientRect().height >= 44))), 'every row is at least 44 px tall');
-  check(await page.evaluate(() => [...document.querySelectorAll('.chat-switch-item')].every((b) => !b.disabled)), 'no row is disabled');
-  if (shots) await page.screenshot({ path: path.join(shots, '2-open.png') });
-
-  await items.filter({ hasText: 'Not installed' }).click();
+  check(notes.some((n) => /This chat/.test(n)) && notes.includes('Not installed'), `current and missing engines are marked (${notes.join(' | ')})`);
+  check(await rows.evaluateAll((n) => n.every((x) => x.getBoundingClientRect().height >= 44 && !x.disabled)), 'every row is at least 44 px and none is disabled');
+  const menu = await page.locator('.chat-engine-menu').boundingBox();
+  check(menu.x >= 0 && menu.x + menu.width <= 391, 'the list opens inside the screen width');
+  if (shots) await page.screenshot({ path: path.join(shots, '3-provider-list.png') });
+  await rows.filter({ hasText: 'Not installed' }).click();
   await pause(300);
   const helpText = await page.locator('.chat-engine-menu').innerText();
   check(/not installed on your computer/.test(helpText) && /npm install -g @anthropic-ai\/claude-code/.test(helpText) && /pocket-dev setup/.test(helpText), 'a missing engine shows its install commands');
-  if (shots) await page.screenshot({ path: path.join(shots, '3-install-help.png') });
+  if (shots) await page.screenshot({ path: path.join(shots, '4-install-help.png') });
   await page.locator('.chat-switch-back').click();
-  await pause(200);
-  check(await items.count() === 4, 'back returns to the list');
-
   await page.keyboard.press('Escape');
   await pause(200);
   check(await page.locator('.chat-engine-menu').count() === 0, 'Escape closes the list');
 
-  await dd.click();
+  // Step two: choosing a provider switches and offers its models at once.
+  await provider.click();
   await page.locator('.chat-switch-item', { hasText: 'codex' }).first().click();
   await pause(1500);
-  check(/codex/i.test(await page.locator('.chat-engine-dd').innerText()), 'choosing Codex changes the dropdown');
-  check(await page.locator('text=first').count() + await page.locator('text=hello').count() > 0, 'the earlier conversation is still there');
-  check((await s.request('GET', `/api/chat/${chat.data.id}`, { cookie: A.cookie })).data.tool === 'codex', 'the server switched the chat to Codex');
-  if (shots) await page.screenshot({ path: path.join(shots, '4-switched.png') });
-  // With the keyboard open the screen is short: the dropdown shrinks to the badge and sits beside the title.
-  await page.setViewportSize({ width: 390, height: 400 });
-  await pause(600);
-  const small = await page.locator('.chat-engine-dd').boundingBox();
-  const heading = await page.locator('.chat-convo-head .chat-title').boundingBox();
-  check(small && small.height >= 44 && small.y >= 0, `short screen: the dropdown is still there and 44 px tall (${small?.height})`);
-  check(heading.width >= 40, `short screen: the title keeps room (${Math.round(heading.width)} px)`);
-  await page.locator('.chat-engine-dd').click();
-  await pause(300);
-  const list = await page.locator('.chat-engine-menu').boundingBox();
-  check(list.x >= 0 && list.x + list.width <= 391, 'short screen: the list opens inside the screen width');
-  if (shots) await page.screenshot({ path: path.join(shots, '5-short.png') });
+  check((await api('GET', `/api/chat/${id}`)).data.tool === 'codex', 'the server switched the chat to Codex');
+  check(/Model/.test(await page.locator('.chat-pick-sheet').innerText()) && await page.locator('.chat-pick-sheet').isVisible(), 'the model list opens straight away for the new provider');
+  if (shots) await page.screenshot({ path: path.join(shots, '5-model-list.png') });
   await page.keyboard.press('Escape');
+  await page.locator('.chat-pick-wrap .chat-backdrop').click({ position: { x: 10, y: 10 } }).catch(() => {});
+  await pause(500);
+  check(/codex/i.test(await page.locator('.chat-provider-chip').innerText()), 'the Provider pill now shows Codex');
+  check(await page.locator('text=hello').count() > 0, 'the earlier conversation is still there');
+  const restored = (await api('GET', `/api/chat/${id}`)).data;
+  check(typeof restored.settings === 'object', 'the new provider has its own settings');
+
+  // Switching back restores the model this provider last used.
+  await page.locator('.chat-provider-chip').click();
+  await page.locator('.chat-switch-item', { hasText: 'antigravity' }).first().click();
+  await pause(1500);
+  check((await api('GET', `/api/chat/${id}`)).data.settings.model === 'my-model', 'switching back to Antigravity restores its last model');
+  if (shots) await page.screenshot({ path: path.join(shots, '6-back.png') });
   check(errors.length === 0, `no page errors ${errors.join(' ')}`);
   await browser.close();
 } finally { for (const f of cleanups) await f(); }
 if (problems.length) { console.error(`\n${problems.length} problem(s)`); process.exit(1); }
-console.log('\nPASS: model dropdown');
+console.log('\nPASS: provider and model pills');

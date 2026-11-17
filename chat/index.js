@@ -215,17 +215,28 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   }
 
   // Moves the chat to another engine. The conversation stays; the new engine starts a fresh session and gets it with the next message.
+  // A chat is busy while a reply runs, a request waits for an answer, messages are queued, or its engine is waking. The
+  // provider and the model never change in any of those states, whatever client asks.
+  const busy = (chat) => Boolean(chat.turn || chat.queue.length || chat.requests.size || chat.waking);
+  const busyError = (what) => new BadRequest(`Stop the reply first, or wait for it to finish, before ${what}.`, 409);
+
   async function switchEngine(chat, tool) {
     if (typeof tool !== 'string' || !Object.hasOwn(ENGINES, tool)) throw new BadRequest(`tool must be one of: ${Object.keys(ENGINES).join(', ')}`);
     if (tool === chat.tool) throw new BadRequest(`This chat already uses ${ENGINES[tool].label}`);
     if (ENGINES[tool].installed && !ENGINES[tool].installed()) throw new BadRequest(`${ENGINES[tool].label} is not installed on this computer.`);
-    if (chat.turn || chat.queue.length || chat.requests.size || chat.waking) throw new BadRequest('Wait for the reply to finish, or stop it, before switching.', 409);
-    await sleep(chat);
+    if (busy(chat)) throw busyError('switching the provider');
+    // The only wait comes first. A reply can start during it, so the check is repeated right after, and from there to the end of
+    // the change there is no await: a switch that loses the race fails with the engine, settings and history untouched, and
+    // never stops an engine that has a reply running.
+    const settings = safeDefaults(await schemaOf(tool), chatDefaults()[tool]);
+    if (busy(chat)) throw busyError('switching the provider');
+    const old = chat.engine;
+    if (old) old.stale = true;
     const from = chat.tool;
     chat.tool = tool;
     chat.sessionId = null;
     chat.failed = false;
-    chat.settings = safeDefaults(await schemaOf(tool), chatDefaults()[tool]);
+    chat.settings = settings;
     // A long conversation is digested now, so the status line can say so and the digest is kept for the next switch.
     const labelOf = (t) => ENGINES[t ?? from]?.label ?? 'the previous model';
     const handoff = buildHandoff(chat.events, chat.seq, labelOf, chat.handoffDigest);
@@ -234,11 +245,24 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     chat.handoffSeq = chat.seq;
     chat.handoffFrom = from;
     chat.changed();
+    // The old engine is retired now. A reply that arrived since the change already replaced it (stale engines are restarted
+    // before a reply), and that new engine is left alone.
+    if (old && chat.engine === old) await sleep(chat);
     return chat.view();
+  }
+
+  // The model chosen during the previous reply reaches the engine now, before the next reply is sent.
+  async function applyPendingModel(chat) {
+    const pending = chat.pendingModel;
+    chat.pendingModel = null;
+    if (!pending || !chat.engine || chat.waking) return;
+    const how = await chat.engine.configure(pending).catch(() => ({ model: 'restart' }));
+    if (Object.values(how).includes('restart')) chat.engine.stale = true;
   }
 
   async function runTurn(chat, input) {
     try {
+      await applyPendingModel(chat);
       if (chat.engine?.stale) await sleep(chat);
       if (!chat.engine) await wake(chat);
       if (chat.turn?.interrupted) return chat.endTurn({ status: 'interrupted', durationMs: Date.now() - chat.turn.startedAt });
@@ -274,10 +298,15 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     chat.settings = { ...chat.settings, ...changes };
     chat.emit({ type: 'status', text: `Changed ${Object.entries(changes).map(([k, v]) => label(k, v)).join(', ')}` });
     let applied = Object.fromEntries(Object.keys(changes).map((k) => [k, 'next-turn']));
-    if (chat.engine && !chat.waking) {
-      const how = await chat.engine.configure(changes).catch(() => Object.fromEntries(Object.keys(changes).map((k) => [k, 'restart'])));
+    // A model change while a reply runs is saved now but reaches the engine only when the next reply starts, so the running
+    // reply is not disturbed. Every other setting follows its own rules.
+    const midRun = Object.hasOwn(changes, 'model') && busy(chat);
+    if (midRun) chat.pendingModel = { model: changes.model };
+    const live = midRun ? Object.fromEntries(Object.entries(changes).filter(([k]) => k !== 'model')) : changes;
+    if (chat.engine && !chat.waking && Object.keys(live).length) {
+      const how = await chat.engine.configure(live).catch(() => Object.fromEntries(Object.keys(live).map((k) => [k, 'restart'])));
       if (Object.values(how).includes('restart')) chat.engine.stale = true;
-      applied = Object.fromEntries(Object.entries(how).map(([k, v]) => [k, v === 'now' ? 'now' : 'next-turn']));
+      applied = { ...applied, ...Object.fromEntries(Object.entries(how).map(([k, v]) => [k, v === 'now' ? 'now' : 'next-turn'])) };
     }
     chat.changed();
     await rememberDefaults(chat);

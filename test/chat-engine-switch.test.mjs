@@ -71,7 +71,7 @@ test('a switch is refused while a reply runs, and to the same engine or an unkno
   await c.until((x) => x.status === 'running');
   const busy = await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'codex' });
   assert.equal(busy.status, 409);
-  assert.match(busy.data.error, /stop it/);
+  assert.match(busy.data.error, /Stop the reply first/);
   await c.call('POST', `/api/chat/${c.id}/interrupt`);
   await c.until((x) => x.status !== 'running');
   assert.equal((await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'antigravity' })).status, 400);
@@ -238,3 +238,73 @@ test('a long chat switched on a real server says earlier turns were summarised, 
   assert.equal(after.events.filter((e) => e.type === 'user-text').length, 18, 'the chat still shows every message');
   assert.equal(after.events.find((e) => e.type === 'user-text').text, asks[0], 'in full');
 });
+
+for (const [busyState, prompt, wanted] of [['a reply runs', 'slow', 'running'], ['a permission waits', 'permission', 'waiting-permission']]) {
+  test(`a model change while ${busyState} is accepted, saved, remembered, leaves the reply alone and reaches the next reply`, { timeout: 60000 }, async (t) => {
+    const c = await open(t);
+    await c.call('POST', `/api/chat/${c.id}/message`, { text: prompt });
+    await c.until((x) => x.status === wanted);
+    const set = await c.call('PATCH', `/api/chat/${c.id}`, { settings: { model: 'some-other-model' } });
+    assert.equal(set.status, 200, JSON.stringify(set.data));
+    assert.equal(set.data.applied.model, 'next-turn');
+    assert.equal(set.data.settings.model, 'some-other-model');
+    await pause(300);
+    const during = await c.get();
+    assert.equal(during.status, wanted, 'the running reply carries on');
+    assert.ok(!during.events.some((e) => e.type === 'error'), 'the change did not break the reply');
+    assert.equal((await c.call('GET', '/api/chat/options')).data.tools.antigravity.defaults.model, 'some-other-model', 'remembered for this provider');
+    await c.call('POST', `/api/chat/${c.id}/interrupt`);
+    await c.until((x) => x.status === 'idle');
+    const next = await c.say('which-model', (await c.get()).events.filter((e) => e.type === 'assistant-text').length + 1);
+    assert.equal(next.events.filter((e) => e.type === 'assistant-text').at(-1).text, 'model: some-other-model');
+  });
+}
+
+test('each provider keeps its own last model: switching away and back restores it', { timeout: 60000 }, async (t) => {
+  const c = await open(t);
+  assert.equal((await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'codex' })).status, 200);
+  const set = await c.call('PATCH', `/api/chat/${c.id}`, { settings: { model: 'my-custom-model' } });
+  assert.equal(set.status, 200, JSON.stringify(set.data));
+  assert.equal((await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'antigravity' })).status, 200);
+  assert.notEqual((await c.get()).settings.model, 'my-custom-model');
+  const back = await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'codex' });
+  assert.equal(back.status, 200);
+  assert.equal(back.data.settings.model, 'my-custom-model');
+});
+
+test('a switch that races a starting reply fails cleanly or wins completely, never half-way', { timeout: 120000 }, async (t) => {
+  const outcomes = new Set();
+  for (let i = 0; i < 8; i++) {
+    const c = await open(t);
+    await c.say('warm up', 1);
+    // The switch starts first and a reply starts while it is stopping the awake engine.
+    const engine = c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'codex' });
+    await pause(i);
+    const message = c.call('POST', `/api/chat/${c.id}/message`, { text: 'slow' });
+    const [sent, switched] = await Promise.all([message, engine]);
+    assert.equal(sent.status, 202);
+    assert.ok([200, 409].includes(switched.status), `engine answered ${switched.status} ${JSON.stringify(switched.data)}`);
+    outcomes.add(switched.status);
+    await pause(150);
+    const chat = await c.get();
+    const marks = chat.events.filter((e) => e.type === 'status' && /^Switched from/.test(e.text));
+    assert.equal(chat.events.filter((e) => e.type === 'user-text').length, 2, 'each message is stored once');
+    if (switched.status === 409) {
+      assert.equal(chat.tool, 'antigravity', 'a refused switch leaves the engine alone');
+      assert.equal(marks.length, 0, 'a refused switch leaves no trace in the history');
+      assert.ok(!chat.events.some((e) => e.type === 'error'), 'a refused switch does not kill the reply that is starting');
+      assert.notEqual(chat.status, 'idle', 'that reply is still running');
+    } else {
+      assert.equal(chat.tool, 'codex');
+      assert.equal(marks.length, 1);
+      // A half-way switch would be a reply that started on the old engine and then had the chat switched underneath it:
+      // its message would be stored before the switch mark. A won switch has the message after the mark.
+      const markAt = chat.events.findIndex((e) => e.id === marks[0].id);
+      const slowAt = chat.events.findIndex((e) => e.type === 'user-text' && e.text === 'slow');
+      assert.ok(slowAt > markAt, 'the reply started after the switch, on the new engine');
+    }
+    await c.call('POST', `/api/chat/${c.id}/interrupt`).catch(() => {});
+  }
+  console.log('race outcomes (status codes):', [...outcomes].join(', '));
+});
+

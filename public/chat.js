@@ -317,7 +317,6 @@
     </section>
     <section class="chat-screen chat-convo-screen">
       <header class="chat-head chat-convo-head">
-        <div class="chat-engine-row"></div>
         <div class="chat-head-row">
           <button type="button" class="chat-icon chat-back" aria-label="Back to chats">‹</button>
           <div class="chat-head-main">
@@ -371,7 +370,7 @@
   const q = (sel) => root.querySelector(sel);
   const ui = {
     listScreen: q('.chat-list-screen'), rows: q('.chat-rows'), newBtn: q('.chat-new-btn'), close: q('.chat-close'),
-    convoScreen: q('.chat-convo-screen'), engineRow: q('.chat-engine-row'), back: q('.chat-back'), title: q('.chat-title'), sub: q('.chat-sub'), menu: q('.chat-menu'), chips: q('.chat-chips'),
+    convoScreen: q('.chat-convo-screen'), back: q('.chat-back'), title: q('.chat-title'), sub: q('.chat-sub'), menu: q('.chat-menu'), chips: q('.chat-chips'),
     scroll: q('.chat-log-scroll'), empty: q('.chat-empty'), log: q('.chat-log'), latest: q('.chat-latest'), conn: q('.chat-conn'),
     card: q('.chat-card'), work: q('.chat-work'), statusline: q('.chat-statusline'), notice: q('.chat-notice'), queue: q('.chat-queue'), files: q('.chat-files'),
     dock: q('.chat-dock'), composer: q('.chat-composer'), attach: q('.chat-attach'), input: q('.chat-input'), send: q('.chat-send'), fileInput: q('.chat-file-input'),
@@ -816,7 +815,7 @@
 
   // The picker serves both the open chat (a PATCH, applied now or next turn) and the new chat draft.
   let pickKey = null;
-  const pickKeyOf = (t) => `${t.tool}:${t.setting.key}:${t.value}`;
+  const pickKeyOf = (t) => `${t.tool}:${t.setting.key}:${t.value}:${t.setting.key === 'model' && engineBusy(convo.chat)}`;
   function pickTarget(layer) {
     const own = layer.scope === 'new'
       ? draft && { tool: draft.tool, settings: draft.settings[draft.tool] }
@@ -856,6 +855,7 @@
       list.append(b);
     }
     const body = el('div', 'chat-sheet-body chat-pick-body');
+    if (layer.scope === 'chat' && setting.key === 'model' && engineBusy(convo.chat)) body.append(el('div', 'chat-pick-note', MODEL_NEXT_NOTE));
     body.append(list);
     if (setting.custom) {
       const form = el('form', 'chat-pick-custom');
@@ -1509,26 +1509,56 @@
   // or not: tapping one that is missing shows how to install it. Switching keeps the conversation: the server hands the
   // earlier messages to the new engine with the next one, and a chat with no messages yet just changes engine.
   const BUSY = new Set(['running', 'waiting-permission', 'waiting-answer']);
-  function engineModelLabel(c) {
-    const setting = schemaOf(c.tool).find((x) => x.key === 'model');
-    if (!setting) return '';
-    const value = valueOf(c.settings, setting);
-    return choiceOf(setting, value)?.label || (value && value !== 'default' ? String(value) : 'Default');
-  }
   function engineNote(info, here) {
-    if (here) return 'This chat';
+    if (here) return 'This chat · pick model';
     if (info.installed === false) return 'Not installed';
     if (info.loggedIn === false) return 'Not logged in';
     return '';
   }
-  function engineDropdown(c) {
-    const dd = button('chat-engine-dd', null, () => toggleSwitchMenu(dd));
-    dd.setAttribute('aria-haspopup', 'menu');
-    dd.setAttribute('aria-expanded', 'false');
-    const model = engineModelLabel(c);
-    dd.setAttribute('aria-label', `Model: ${TOOLS[c.tool] || c.tool}${model ? `, ${model}` : ''}. Choose another model for this chat`);
-    dd.append(badge(c.tool), el('span', 'chat-engine-model', model ? `· ${model}` : ''), el('span', 'chat-model-caret', '▾'));
-    return dd;
+  // Two steps in one place, the settings row: the Provider pill first, then the Model pill and the engine's other pills. The
+  // Provider pill looks like the others and opens the list of providers.
+  const hasModels = (tool) => schemaOf(tool).some((x) => x.key === 'model');
+  // The provider never changes while a reply runs, a request waits, messages are queued or the engine wakes: its pill shows it
+  // (dimmed, aria-disabled) and says why on a tap, and works again the moment the chat is idle. The model can change at any
+  // time; during a reply the change is kept and applies to the next reply.
+  const ENGINE_BUSY_HINT = 'Stop the reply first.';
+  const MODEL_NEXT_NOTE = 'Applies to the next reply';
+  const engineBusy = (c) => Boolean(c && (BUSY.has(c.status) || c.queued || c.waking || c.runningSince != null || c.pending));
+  function lockChip(chip, c) {
+    if (engineBusy(c)) {
+      chip.classList.add('chat-chip-disabled');
+      chip.setAttribute('aria-disabled', 'true');
+      chip.title = ENGINE_BUSY_HINT;
+    }
+    return chip;
+  }
+  function providerChip(c) {
+    const b = button('chat-chip chat-provider-chip', null, () => (engineBusy(convo.chat) ? toast(ENGINE_BUSY_HINT) : toggleSwitchMenu(b)));
+    const face = el('span', 'chat-chip-face');
+    face.append(el('span', 'chat-chip-k', 'Provider'), badge(c.tool));
+    b.append(face);
+    b.dataset.key = 'provider';
+    b.setAttribute('aria-haspopup', 'menu');
+    b.setAttribute('aria-expanded', 'false');
+    b.setAttribute('aria-label', `Provider: ${TOOLS[c.tool] || c.tool}. Choose another provider for this chat`);
+    return lockChip(b, c);
+  }
+  // A settings pill opens its picker. The Model pill stays usable in every state and says when a change waits for the next reply.
+  function openSetting(setting) {
+    const c = convo.chat;
+    if (!c || top() !== 'convo') return;
+    push({ layer: 'pick', key: setting.key, scope: 'chat' });
+  }
+  function settingPill(setting, c) {
+    const chip = settingChip(setting, valueOf(c.settings, setting), () => openSetting(setting));
+    if (setting.key === 'model' && engineBusy(c)) chip.title = MODEL_NEXT_NOTE;
+    return chip;
+  }
+  // The model sheet is the existing one: its list, its custom name box and its PATCH apply the choice to this chat.
+  function openModelPicker() {
+    closeSwitchMenu();
+    const c = convo.chat;
+    if (c && hasModels(c.tool)) openSetting({ key: 'model' });
   }
 
   let switchMenu = null;
@@ -1563,11 +1593,12 @@
     if (switchMenu) return closeSwitchMenu();
     const c = convo.chat;
     if (!c) return;
+    if (engineBusy(c)) return toast(ENGINE_BUSY_HINT);
     switchButton = dd;
     dd.setAttribute('aria-expanded', 'true');
     switchMenu = el('div', 'chat-engine-menu');
     switchMenu.setAttribute('role', 'menu');
-    dd.closest('.chat-engine-row').append(switchMenu);
+    dd.closest('.chat-head').append(switchMenu);
     document.addEventListener('pointerdown', outsideSwitchMenu, true);
     document.addEventListener('keydown', switchMenuKeys, true);
     showSwitchList(c);
@@ -1577,13 +1608,13 @@
     for (const [tool, info] of Object.entries(options?.tools || {})) {
       const here = tool === c.tool;
       const needsHelp = info.installed === false || info.loggedIn === false;
-      const item = button(`chat-switch-item${here ? ' on' : ''}${needsHelp ? ' missing' : ''}`, null, () => (needsHelp ? showEngineHelp(tool, info) : switchTo(tool)));
+      const item = button(`chat-switch-item${here ? ' on' : ''}${needsHelp ? ' missing' : ''}`, null, () => (needsHelp ? showEngineHelp(tool, info) : here ? openModelPicker() : switchTo(tool)));
       item.setAttribute('role', 'menuitem');
       if (here) item.setAttribute('aria-current', 'true');
       item.append(badge(tool), el('span', 'chat-switch-name'), el('span', 'chat-switch-note', engineNote(info, here)));
       items.push(item);
     }
-    switchMenu.replaceChildren(...items, el('div', 'chat-switch-hint', 'The whole conversation goes with you.'));
+    switchMenu.replaceChildren(...items, el('div', 'chat-switch-hint', 'The whole conversation goes with you. Pick the provider, then its model.'));
     items.find((i) => i.className.includes(' on'))?.focus?.();
   }
   // A missing engine is not a dead row: this panel gives the commands to run on the computer, as plain text that one tap
@@ -1610,10 +1641,13 @@
     closeSwitchMenu();
     const c = convo.chat;
     if (!c || tool === c.tool) return;
-    if (BUSY.has(c.status) || c.queued || c.waking) return toast('Stop the reply, or wait for it to finish, then switch the model.');
+    if (engineBusy(c)) return toast(ENGINE_BUSY_HINT);
     try {
-      await api('POST', `/api/chat/${c.id}/engine`, { tool });
+      const switched = await api('POST', `/api/chat/${c.id}/engine`, { tool });
+      if (switched?.id) setChat(switched);
       toast(`Continuing with ${options?.tools?.[tool]?.label || TOOLS[tool] || tool}`);
+      // Step two: offer that provider's models. Dismissing the sheet keeps the model it last used here, or its default.
+      if (convo.chat?.tool === tool) openModelPicker();
     } catch (err) {
       toast(err.message);
     }
@@ -1637,8 +1671,7 @@
     ui.title.textContent = c.title || 'New chat';
     const path = el('span', 'chat-sub-path', shortPath(c.cwd));
     path.title = c.cwd;
-    ui.sub.replaceChildren(path);
-    renderEngine(c);
+    ui.sub.replaceChildren(badge(c.tool), path);
     renderChips();
     ui.input.placeholder = `Message ${TOOLS[c.tool] || c.tool}`;
     renderComposer();
@@ -1650,29 +1683,17 @@
     if (hasLayer(stack, 'settings') && ui.settingsSheet.dataset.chat !== c.id) renderSettings();
   }
 
-  // The dropdown is rebuilt only when the engine, its model or the engine list changed, so an open list is not closed by
-  // every status update.
-  let engineKey = '';
-  function renderEngine(c) {
-    const infoKey = Object.entries(options?.tools || {}).map(([t, i]) => `${t}:${i.installed}:${i.loggedIn}`).join(',');
-    const key = JSON.stringify([c.id, c.tool, engineModelLabel(c), infoKey]);
-    if (key === engineKey) return;
-    engineKey = key;
-    closeSwitchMenu();
-    ui.engineRow.replaceChildren(engineDropdown(c));
-  }
-
   // Rebuilding chips under a finger swallows the tap, so only rebuild when a value changed.
   let chipsKey = '';
   function renderChips() {
     const c = convo.chat;
     const schema = schemaOf(c.tool);
-    const key = JSON.stringify([c.id, c.tool, c.settings, schema.length]);
+    const providers = Object.entries(options?.tools || {}).map(([t, i]) => `${t}:${i.installed}:${i.loggedIn}`).join(',');
+    const key = JSON.stringify([c.id, c.tool, c.settings, schema.length, providers, engineBusy(c)]);
     if (key === chipsKey) return;
     chipsKey = key;
-    ui.chips.replaceChildren(...schema.map((s) => settingChip(s, valueOf(c.settings, s), () => {
-      if (top() === 'convo') push({ layer: 'pick', key: s.key, scope: 'chat' });
-    })));
+    closeSwitchMenu();
+    ui.chips.replaceChildren(providerChip(c), ...schema.map((s) => settingPill(s, c)));
     fadeChips();
   }
   function fadeChips() {

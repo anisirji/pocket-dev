@@ -57,7 +57,7 @@ More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/d
 
 - **Terminals** that keep running when you close the page.
 - **Chat** with your own Claude Code and Codex logins.
-- **Switch the model in the same chat.** Use the model dropdown at the top of the chat to pick any engine at any time, for example when you hit a Claude limit. The whole conversation goes with you, and an engine you have not installed yet shows how to install it.
+- **Switch the provider and the model in the same chat.** In the settings row, pick the Provider pill, then the Model pill. The whole conversation goes with you, an engine you have not installed yet shows how to install it, and the model can change even while a reply runs (it applies to the next reply).
 - **Git** and **Files** on the computer where your work is.
 - **Open apps, health and power** controls.
 - **Several computers, one phone**, with per-device permissions.

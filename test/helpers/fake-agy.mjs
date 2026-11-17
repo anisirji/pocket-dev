@@ -11,6 +11,7 @@ const text = (t) => ({ type: 'text', text: t });
 const waiting = new Map();
 let nextOut = 100;
 let slow = null;
+let model = null;
 
 readline.createInterface({ input: process.stdin }).on('line', (line) => {
   const m = JSON.parse(line);
@@ -26,11 +27,15 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     update(m.params.sessionId, { sessionUpdate: 'agent_message_chunk', content: text('old answer') });
     return send({ id: m.id, result: { sessionId: m.params.sessionId } });
   }
-  if (m.method === 'session/set_model') { process.stderr.write(`model ${m.params.modelId}\n`); return send({ id: m.id, result: {} }); }
+  if (m.method === 'session/set_model') { model = m.params.modelId; process.stderr.write(`model ${m.params.modelId}\n`); return send({ id: m.id, result: {} }); }
   if (m.method === 'session/cancel') return slow?.();
   if (m.method !== 'session/prompt') return send({ id: m.id, error: { code: -32601, message: 'no' } });
   const sessionId = m.params.sessionId;
   const prompt = m.params.prompt.map((p) => p.text ?? '').join('');
+  if (prompt.includes('which-model')) {
+    update(sessionId, { sessionUpdate: 'agent_message_chunk', content: text(`model: ${model ?? 'default'}`) });
+    return send({ id: m.id, result: { stopReason: 'end_turn' } });
+  }
   if (prompt.includes('echo-prompt')) {
     update(sessionId, { sessionUpdate: 'agent_message_chunk', content: text(`got: ${prompt}`) });
     return send({ id: m.id, result: { stopReason: 'end_turn' } });

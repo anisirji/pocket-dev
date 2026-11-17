@@ -19,6 +19,7 @@ export class Chat {
     }, data);
     this.file = file;
     this.engine = null;
+    this.pendingModel = null;
     this.waking = false;
     this.turn = null;
     this.queue = [];
