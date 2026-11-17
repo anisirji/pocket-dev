@@ -486,6 +486,7 @@ const EVENT_TEXT = {
   'service-installed': () => 'Installed as a launchd service',
   'server-stopped': () => 'Pocket Dev stopped from this page',
   'server-restarted': (e) => `Pocket Dev restarted from ${e.by === 'phone' ? 'a phone' : 'this page'}`,
+  'update-started': (e) => `Pocket Dev update started from this page${e.from ? ` (you had ${e.from})` : ''}`,
   'conversation-taken-over': (e) => `${e.by === 'phone' ? e.name : 'A Mac terminal'} took over ${e.tool} conversation ${e.conversationId.slice(0, 8)}${e.pids.length ? `, closing pid ${e.pids.join(', ')}` : ''}${e.force ? ' (force quit)' : ''}`,
   'conversation-takeover-failed': (e) => `${e.by === 'phone' ? e.name : 'A Mac terminal'} could not take over ${e.tool} conversation ${e.conversationId.slice(0, 8)}: pid ${e.remaining.join(', ') || '?'} kept running`,
 };
@@ -782,7 +783,7 @@ function renderService() {
   const newer = svc.update?.available
     ? h('div', { class: 'setting' }, h('div', { class: 'setting-text' }, h('b', {}, `Version ${svc.update.latest} is available`),
       h('small', {}, svc.update.command
-        ? `You have ${svc.update.current}. To update, run ${svc.update.command} in a terminal on this computer.`
+        ? `You have ${svc.update.current}. Tap Update at the top of this page, or run ${svc.update.command} in a terminal on this computer.`
         : `You have ${svc.update.current}. This copy is not an npm install, so update it where you got it.`)))
     : null;
   $('svcBody').replaceChildren(h('p', { class: 'status-line' }, status), ...(newer ? [newer] : []), restartRow, body);

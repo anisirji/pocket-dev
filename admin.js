@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { PROXY_HEADERS, STATE_DIR, deviceName } from './auth.js';
 import { EVENT_KINDS, isLogFilter } from './security-log.js';
 import { serviceStatus, setAutostart, installService, stopThisServer, restartThisServer } from './launchd.js';
+import { createUpdateRunner } from './update-runner.js';
+import { ADMIN_FRESH_MS } from './update.js';
 import { checkPermissions, openPane } from './permissions.js';
 import { captureScreen } from './screen.js';
 import { svgQr } from './qr.js';
@@ -27,6 +29,8 @@ const FILES = {
   '/admin-nav.js': ['admin-nav.js', 'text/javascript; charset=utf-8'],
   '/admin-heartbeat.js': ['admin-heartbeat.js', 'text/javascript; charset=utf-8'],
   '/admin-permissions.js': ['admin-permissions.js', 'text/javascript; charset=utf-8'],
+  '/admin-update.js': ['admin-update.js', 'text/javascript; charset=utf-8'],
+  '/admin-update.css': ['admin-update.css', 'text/css; charset=utf-8'],
   '/collaborators.js': ['collaborators.js', 'text/javascript; charset=utf-8'],
   '/collaborators.css': ['collaborators.css', 'text/css; charset=utf-8'],
   '/messages.js': ['messages.js', 'text/javascript; charset=utf-8'],
@@ -111,7 +115,7 @@ function failedLogins(entries) {
 // `urls()` returns the phone listener's current { lan, local, remote } base URLs.
 const setupStatus = cachedStatus(createContext());
 
-export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections, update = null }) {
+export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections, update = null, updateMeta = null }) {
   const browseFolders = createFolderBrowser({ config });
   const port = Number(process.env.POCKET_DEV_ADMIN_PORT) || config.read().adminPort || mainPort + 1;
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
@@ -242,7 +246,24 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   }
 
   // The service status plus what the quiet version check knows: { current, latest, available, command } or null.
-  const serviceView = async () => ({ ...(await serviceStatus()), update: update?.view() ?? null });
+  // `os` lets the phone word its update steps for this computer (Dock tile, Start menu, app menu).
+  const serviceView = async () => {
+    const view = update?.view() ?? null;
+    return { ...(await serviceStatus()), update: view && { ...view, os: process.platform } };
+  };
+
+  // The Admin page's Update button. It exists only when the quiet check is on and this copy knows its version.
+  const updateRunner = update && updateMeta ? createUpdateRunner({
+    versionCheck: update, kind: updateMeta.kind, version: updateMeta.version, readVersion: updateMeta.readVersion,
+    serviceInfo: async () => { const svc = await serviceStatus(); return { installed: Boolean(svc.installed), isThisServer: Boolean(svc.isThisServer) }; },
+    restartThisServer, log: (line) => console.error(line),
+  }) : null;
+  // A look at the registry when the last one is over an hour old, so the page does not show old news.
+  async function updateView() {
+    if (!updateRunner || !update.enabled()) return { enabled: false, available: false, phase: 'idle', canUpdate: false };
+    await update.refresh({ maxAgeMs: ADMIN_FRESH_MS }).catch(() => {});
+    return updateRunner.view();
+  }
 
   async function changeAutostart({ enabled }, by) {
     if (typeof enabled !== 'boolean') return reply(400, { error: 'enabled must be true or false.' });
@@ -335,6 +356,13 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
       return reply(r.ok ? 200 : 409, { ...r, service: await serviceStatus() });
     },
     'POST /api/service/restart': () => restart('admin'),
+    'GET /api/update': async () => ok(await updateView()),
+    'POST /api/update': async () => {
+      if (!updateRunner || !update.enabled()) return reply(404, { error: 'Update checks are turned off.' });
+      const r = await updateRunner.start();
+      if (r.status === 202) auth.admin.log('update-started', { by: 'admin', from: updateMeta.version });
+      return reply(r.status, r.body);
+    },
     'POST /api/stop': () => {
       for (const item of sections.terminals?.list() ?? []) sections.terminals.act(item.id);
       auth.admin.log('server-stopped', { by: 'admin' });

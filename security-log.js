@@ -45,6 +45,7 @@ export const EVENT_KINDS = {
   'service-installed': 'change',
   'server-stopped': 'change',
   'server-restarted': 'change',
+  'update-started': 'change',
   'conversation-taken-over': 'change',
   'conversation-takeover-failed': 'failure',
   'messages-cleared': 'change',

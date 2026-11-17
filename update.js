@@ -10,8 +10,10 @@ export const PACKAGE = '@anisirji/pocket-dev';
 export const REGISTRY_URL = `https://registry.npmjs.org/${PACKAGE.replace('/', '%2f')}/latest`;
 export const UPDATE_COMMAND = 'pocket-dev update';
 export const INSTALL_ARGS = ['install', '-g', `${PACKAGE}@latest`];
-export const CHECK_TTL_MS = 24 * 60 * 60_000;
-export const RETRY_AFTER_FAILURE_MS = 6 * 60 * 60_000;
+export const CHECK_TTL_MS = 6 * 60 * 60_000;
+export const RETRY_AFTER_FAILURE_MS = 60 * 60_000;
+// The Admin page asks for a fresh look when the last one is older than this.
+export const ADMIN_FRESH_MS = 60 * 60_000;
 export const CACHE_FILE = 'update-check.json';
 export const RELEASES_URL = 'https://github.com/anisirji/pocket-dev/releases';
 export const EACCES_HELP_URL = 'https://github.com/anisirji/pocket-dev/blob/main/docs/INSTALL_BEGINNERS.md';
@@ -235,7 +237,7 @@ async function versionStepBody(ctx, opts, u) {
 
 // ---- The quiet check inside the server ----------------------------------------------------------------------------
 
-// Looks up the newest version at most once a day (a failed look-up is tried again after six hours) and keeps the answer
+// Looks up the newest version at most every six hours (a failed look-up is tried again after an hour) and keeps the answer
 // in the state folder. `view()` never waits for the network; it answers from the last result.
 export function createVersionCheck({
   version = readInstalledVersion(), stateDir = STATE_DIR, env = process.env, config = null, now = Date.now,
@@ -246,13 +248,14 @@ export function createVersionCheck({
   try { cache = { ...cache, ...JSON.parse(fs.readFileSync(file, 'utf8')) }; } catch { /* no cache yet */ }
   let pending = null;
   const enabled = () => !updateCheckOff(env, config);
-  const due = () => {
-    if (cache.latest && now() - cache.checkedAt < CHECK_TTL_MS) return false;
+  const due = (maxAgeMs) => {
+    if (cache.latest && now() - cache.checkedAt < maxAgeMs) return false;
     return !(cache.failedAt && now() - cache.failedAt < RETRY_AFTER_FAILURE_MS);
   };
 
-  async function refresh() {
-    if (!enabled() || !due()) return view();
+  // `maxAgeMs` lets a caller that wants fresher news than the usual schedule (the Admin page) ask for it.
+  async function refresh({ maxAgeMs = CHECK_TTL_MS } = {}) {
+    if (!enabled() || !due(maxAgeMs)) return view();
     pending ??= (async () => {
       try {
         const latest = await lookup();
@@ -277,13 +280,22 @@ export function createVersionCheck({
     };
   }
 
-  // A look now and then while the server runs; each one is a no-op until the day is up.
-  function start({ everyMs = 60 * 60_000 } = {}) {
+  // A look now and then while the server runs; each one is a no-op until the six hours are up.
+  function start({ everyMs = 30 * 60_000 } = {}) {
     void refresh();
     const timer = setInterval(() => void refresh(), everyMs);
     timer.unref?.();
     return () => clearInterval(timer);
   }
 
-  return { refresh, view, start };
+  return { refresh, view, start, enabled, version };
+}
+
+// The one line `pocket-dev start` and `pocket-dev admin` print when the last look-up found a newer version. It reads
+// only the saved answer, so a command never waits for the network. Null when there is nothing to say or the check is off.
+export function cachedUpdateLine({ version = readInstalledVersion(), stateDir = STATE_DIR, env = process.env, config = null } = {}) {
+  if (updateCheckOff(env, config)) return null;
+  let latest = null;
+  try { latest = JSON.parse(fs.readFileSync(path.join(stateDir, CACHE_FILE), 'utf8')).latest; } catch { return null; }
+  return isNewer(latest, version) ? `Pocket Dev ${latest} is available (you have ${version}). Update with: ${UPDATE_COMMAND}` : null;
 }

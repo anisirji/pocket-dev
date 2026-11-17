@@ -114,6 +114,12 @@ test('pocket-dev update refuses an unknown option, and help lists the command', 
 });
 
 test('updateCheck is a setting you can change from the terminal', (t) => {
-  assert.match(cli(t, 'help').stdout, /updateCheck\s+Look up new Pocket Dev versions on the npm registry once a day/);
+  assert.match(cli(t, 'help').stdout, /updateCheck\s+Look up new Pocket Dev versions on the npm registry every few hours/);
   assert.equal(cli(t, 'config', 'set', 'updateCheck', 'maybe').status, 2);
+});
+
+test('updateNotify is a separate setting for the desktop notification only', (t) => {
+  assert.match(cli(t, 'help').stdout, /updateNotify\s+Show a desktop notification on this computer while a newer Pocket Dev is waiting/);
+  assert.equal(cli(t, 'config', 'set', 'updateNotify', 'maybe').status, 2);
+  assert.equal(cli(t, 'config', 'set', 'updateNotify', 'false').status, 0);
 });
