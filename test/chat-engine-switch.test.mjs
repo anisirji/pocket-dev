@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer, pause } from './helpers/server.mjs';
 import { Chat } from '../chat/chat.js';
-import { buildTranscript, wrapFirstMessage } from '../chat/handoff.js';
+import { buildTranscript, buildHandoff, wrapFirstMessage, HANDOFF_COMPACT_AT, HANDOFF_RECENT_CHARS, HANDOFF_MAX_CHARS } from '../chat/handoff.js';
 
 const FAKE_AGY = path.join(path.dirname(fileURLToPath(import.meta.url)), 'helpers', 'fake-agy.mjs');
 
@@ -140,4 +140,101 @@ test('a switch to an engine that is not installed is refused and the chat stays 
   assert.equal(refused.status, 400);
   assert.match(refused.data.error, /not installed/);
   assert.equal((await call('GET', `/api/chat/${created.data.id}`)).data.tool, 'antigravity');
+});
+
+// Turn n: a question, an answer, an edit and a command, each about `pad` characters.
+function turns(from, to, pad = 1_000) {
+  const events = [];
+  let seq = from * 4;
+  for (let n = from; n < to; n++) {
+    events.push({ seq: ++seq, type: 'user-text', text: `ask-${n} `.padEnd(pad, 'q') });
+    events.push({ seq: ++seq, type: 'assistant-text', tool: 'claude', text: `answer-${n} `.padEnd(pad, 'a') });
+    events.push({ seq: ++seq, type: 'file-edit', path: `src/f${n}.js`, diff: '+x' });
+    events.push({ seq: ++seq, type: 'tool-run', name: 'Bash', summary: `npm test ${n}` });
+  }
+  return events;
+}
+const SMALL = { compactAt: 6_000, recentChars: 3_000, maxChars: 60_000 };
+const claudeLabel = (tool) => ({ claude: 'Claude' })[tool] ?? 'Claude';
+
+test('a short conversation is sent unchanged, byte for byte, with no digest', () => {
+  const events = turns(0, 3);
+  const full = buildTranscript(events, events.at(-1).seq, claudeLabel);
+  const handoff = buildHandoff(events, events.at(-1).seq, claudeLabel);
+  assert.equal(handoff.text, full.text);
+  assert.equal(handoff.digestedTurns, 0);
+  assert.equal(handoff.digest, null);
+  assert.ok(HANDOFF_COMPACT_AT < HANDOFF_MAX_CHARS && HANDOFF_RECENT_CHARS < HANDOFF_COMPACT_AT);
+});
+
+test('a long conversation keeps the recent turns word for word and digests the rest', () => {
+  const events = turns(0, 30);
+  const before = JSON.stringify(events);
+  const upTo = events.at(-1).seq;
+  const handoff = buildHandoff(events, upTo, claudeLabel, null, SMALL);
+  assert.ok(handoff.digestedTurns > 0 && handoff.digestedTurns < 30);
+  assert.match(handoff.text, /^Digest of the \d+ earliest turns \(background only/);
+  assert.match(handoff.text, /Recent conversation, word for word:/);
+  assert.ok(handoff.text.includes(`User: ${events.at(-4).text}`), 'the newest question is word for word');
+  assert.ok(handoff.text.includes(`Assistant (Claude): ${events.at(-3).text}`), 'the newest answer is word for word');
+  assert.doesNotMatch(handoff.text, /User: ask-0 /);
+  assert.match(handoff.text, /- Asked: ask-0 q+… \[shortened\] \| Answered \(Claude\): answer-0 a+… \[shortened\] \| Changed: src\/f0\.js \| Ran: npm test 0/);
+  assert.ok(handoff.text.length < SMALL.maxChars);
+  assert.equal(JSON.stringify(events), before, 'the chat history itself is untouched');
+  assert.equal(handoff.digest.upToSeq > 0 && handoff.digest.entries.length, handoff.digestedTurns);
+});
+
+test('a second switch extends the kept digest instead of rebuilding it', () => {
+  const first = turns(0, 30);
+  const one = buildHandoff(first, first.at(-1).seq, claudeLabel, null, SMALL);
+  const more = [...first, ...turns(30, 45)];
+  const two = buildHandoff(more, more.at(-1).seq, claudeLabel, one.digest, SMALL);
+  assert.ok(two.digest.upToSeq > one.digest.upToSeq);
+  assert.ok(two.digest.entries.length > one.digest.entries.length);
+  assert.deepEqual(two.digest.entries.slice(0, one.digest.entries.length), one.digest.entries, 'earlier lines are reused as they were');
+  const kept = { upToSeq: one.digest.upToSeq, entries: one.digest.entries.map((e) => ({ ...e, line: `kept ${e.line}` })), omitted: 0 };
+  const proof = buildHandoff(more, more.at(-1).seq, claudeLabel, kept, SMALL);
+  assert.match(proof.text, /- kept Asked: ask-0 /, 'the stored lines are what is sent, not a fresh digest');
+});
+
+test('the hard cap is respected, dropping the oldest digest lines first and saying so', () => {
+  const events = turns(0, 120);
+  const handoff = buildHandoff(events, events.at(-1).seq, claudeLabel, null, { compactAt: 6_000, recentChars: 3_000, maxChars: 8_000 });
+  assert.ok(handoff.text.length <= 8_000, `${handoff.text.length} characters`);
+  assert.match(handoff.text, /older ones are left out/);
+  assert.ok(handoff.text.includes(`User: ${events.at(-4).text}`));
+  assert.doesNotMatch(handoff.text, /Asked: ask-0 /);
+  assert.match(wrapFirstMessage({ transcript: handoff.text, dropped: 0, digestedTurns: handoff.digestedTurns, from: 'Claude', to: 'Codex', message: 'next' }), /shortened into a digest/);
+});
+
+test('the stored digest survives a restart', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-digest-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const chat = Chat.create({ tool: 'claude', cwd: dir, settings: {} }, dir);
+  for (const ev of turns(0, 30)) chat.emit(ev);
+  const handoff = buildHandoff(chat.events, chat.seq, claudeLabel, null, SMALL);
+  chat.handoffDigest = handoff.digest;
+  chat.persist();
+  const loaded = Chat.load(chat.file);
+  assert.deepEqual(loaded.handoffDigest, handoff.digest);
+  assert.equal(chat.view().handoffDigest, undefined, 'the phone is not sent the digest');
+});
+
+test('a long chat switched on a real server says earlier turns were summarised, and the next engine gets the digest', { timeout: 180000 }, async (t) => {
+  const c = await open(t);
+  const asks = Array.from({ length: 17 }, (_, i) => `ask-${i} `.padEnd(8_000, 'q'));
+  for (const [i, text] of asks.entries()) await c.say(text, i + 1);
+  const switched = await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'codex' });
+  assert.equal(switched.status, 200, JSON.stringify(switched.data));
+  const status = (await c.get()).events.filter((e) => e.type === 'status').at(-1).text;
+  assert.match(status, /Switched from Antigravity to Codex\. The conversation continues here\. Earlier turns were summarised\./);
+  await c.call('POST', `/api/chat/${c.id}/engine`, { tool: 'antigravity' });
+  const after = await c.say('echo-prompt final', 18);
+  const got = after.events.filter((e) => e.type === 'assistant-text').at(-1).text;
+  assert.match(got, /Digest of the \d+ earliest turns/);
+  assert.ok(got.includes(asks.at(-1).slice(0, 7_990)), 'the newest question is word for word');
+  assert.ok(!got.includes(asks[0]), 'the oldest question is no longer word for word');
+  assert.match(got, /- Asked: ask-0 q+… \[shortened\]/, 'it is in the digest, shortened');
+  assert.equal(after.events.filter((e) => e.type === 'user-text').length, 18, 'the chat still shows every message');
+  assert.equal(after.events.find((e) => e.type === 'user-text').text, asks[0], 'in full');
 });

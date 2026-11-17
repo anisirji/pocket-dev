@@ -9,7 +9,7 @@ import * as codex from './codex.js';
 import * as antigravity from './antigravity.js';
 import { createChatReplica } from './replica.js';
 import { STATE_DIR } from '../paths.js';
-import { buildTranscript, wrapFirstMessage } from './handoff.js';
+import { buildHandoff, wrapFirstMessage } from './handoff.js';
 
 const BUILT_IN_ENGINES = {
   claude: {
@@ -207,9 +207,10 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   function withHandoff(chat, input) {
     if (chat.handoffSeq === null) return input;
     const labelOf = (tool) => ENGINES[tool ?? chat.handoffFrom]?.label ?? 'the previous model';
-    const { text: transcript, dropped } = buildTranscript(chat.events, chat.handoffSeq, labelOf);
+    const { text: transcript, dropped, digestedTurns, digest } = buildHandoff(chat.events, chat.handoffSeq, labelOf, chat.handoffDigest);
+    chat.handoffDigest = digest;
     const message = input.text;
-    return { ...input, text: wrapFirstMessage({ transcript, dropped, from: labelOf(chat.handoffFrom), to: labelOf(chat.tool), message }) };
+    return { ...input, text: wrapFirstMessage({ transcript, dropped, digestedTurns, from: labelOf(chat.handoffFrom), to: labelOf(chat.tool), message }) };
   }
 
   // Moves the chat to another engine. The conversation stays; the new engine starts a fresh session and gets it with the next message.
@@ -224,7 +225,11 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     chat.sessionId = null;
     chat.failed = false;
     chat.settings = safeDefaults(await schemaOf(tool), chatDefaults()[tool]);
-    chat.emit({ type: 'status', text: `Switched from ${ENGINES[from].label} to ${ENGINES[tool].label}. The conversation continues here.` });
+    // A long conversation is digested now, so the status line can say so and the digest is kept for the next switch.
+    const labelOf = (t) => ENGINES[t ?? from]?.label ?? 'the previous model';
+    const handoff = buildHandoff(chat.events, chat.seq, labelOf, chat.handoffDigest);
+    chat.handoffDigest = handoff.digest;
+    chat.emit({ type: 'status', text: `Switched from ${ENGINES[from].label} to ${ENGINES[tool].label}. The conversation continues here.${handoff.digestedTurns ? ' Earlier turns were summarised.' : ''}` });
     chat.handoffSeq = chat.seq;
     chat.handoffFrom = from;
     chat.changed();
