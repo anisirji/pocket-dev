@@ -80,7 +80,7 @@ test('all and the other tools still work next to Antigravity, and an unknown too
   assert.deepEqual((await call('GET', '/api/history?tool=claude')).body, []);
   const bad = await call('GET', '/api/history?tool=gemini');
   assert.equal(bad.status, 400);
-  assert.match(bad.body.error, /claude, codex or antigravity/);
+  assert.match(bad.body.error, /claude, codex, antigravity or copilot/);
 });
 
 test('the detail has the title as its one message and says why', async () => {
