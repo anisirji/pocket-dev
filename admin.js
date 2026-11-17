@@ -21,6 +21,7 @@ const GUESSING_THRESHOLD = 5;
 const SAFE_METHODS = new Set(['GET', 'HEAD']);
 const FILES = {
   '/': ['admin.html', 'text/html; charset=utf-8'],
+  '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
   '/admin.css': ['admin.css', 'text/css; charset=utf-8'],
   '/admin-client.js': ['admin-client.js', 'text/javascript; charset=utf-8'],
   '/admin-nav.js': ['admin-nav.js', 'text/javascript; charset=utf-8'],

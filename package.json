@@ -28,6 +28,7 @@
     "access": "public"
   },
   "scripts": {
+    "postinstall": "node scripts/postinstall.js || exit 0",
     "test": "node --test test/*.test.mjs",
     "start": "node server.js",
     "qr": "node scripts/qr.js",
@@ -61,6 +62,7 @@
     "bin",
     "chat",
     "public",
+    "assets",
     "scripts",
     "*.js",
     "README.md",

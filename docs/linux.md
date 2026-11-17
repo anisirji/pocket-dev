@@ -26,6 +26,8 @@ pocket-dev doctor
 
 `pocket-dev doctor` checks Node, npm's global folder on PATH, the command, terminals, tools and port 7777, and prints the exact fix for each cross.
 
+Installing also adds a **Pocket Dev Admin** entry, with the Pocket Dev logo, to your applications menu, and on GNOME to your favourites (the dock). It does this only when a desktop session is present, so a server installed over SSH is left alone. On other desktops it stops at the menu entry (KDE: right-click it, Pin to Task Manager). This is the one change the install makes without asking. Undo: `pocket-dev admin unpin`. Skip: `POCKET_DEV_NO_PIN=1 npm install -g @anisirji/pocket-dev`, or `--ignore-scripts`; `pocket-dev setup` still offers it. This part is covered by tests with fixtures; it has not been run on a real Linux desktop.
+
 ## 3. Start
 
 ```sh
