@@ -17,7 +17,8 @@ import { openTerminalHost } from './terminals.js';
 import { startPower, handlePowerApi, powerStatus } from './power.js';
 import { createAppsApi, snapshot as appsSnapshot } from './apps.js';
 import { startAdmin } from './admin.js';
-import { createVersionCheck, installKind, readInstalledVersion } from './update.js';
+import { createVersionCheck, installKind, readInstalledVersion, cachedUpdateLine } from './update.js';
+import { createNotifier, createUpdateReminder } from './desktop-notify.js';
 import { createPhoneAccess } from './access.js';
 import { createChatApi } from './chat/index.js';
 import { createFilesApi } from './files.js';
@@ -819,7 +820,7 @@ const PAGES = {
   '/room-pages.js': 'room-pages.js', '/room-pages.css': 'room-pages.css', '/room-screen.js': 'room-screen.js', '/room-invite.js': 'room-invite.js', '/room.css': 'room.css',
   '/modes-core.js': 'modes-core.js', '/room-modes.js': 'room-modes.js', '/room-modes.css': 'room-modes.css', '/room-approvals.js': 'room-approvals.js', '/room-approvals.css': 'room-approvals.css', '/room-banner.js': 'room-banner.js', '/room-banner.css': 'room-banner.css', '/vendor/qrcode/qrcode.js': 'vendor/qrcode/qrcode.js', '/vendor/jsqr/jsQR.js': 'vendor/jsqr/jsQR.js', '/room-scan.js': 'room-scan.js', '/terminals-off.js': 'terminals-off.js',
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
-  '/welcome.js': 'welcome.js', '/greeting-copy.js': 'greeting-copy.js', '/favicon.svg': 'favicon.svg', '/keep-caret.js': 'keep-caret.js', '/file-choice.js': 'file-choice.js',
+  '/welcome.js': 'welcome.js', '/greeting-copy.js': 'greeting-copy.js', '/favicon.svg': 'favicon.svg', '/keep-caret.js': 'keep-caret.js', '/file-choice.js': 'file-choice.js', '/update-notice.js': 'update-notice.js', '/update-notice.css': 'update-notice.css',
 };
 const PUBLIC_PAGES = new Set(['login.html', 'invite.html', 'invite.js', 'guest.css', 'favicon.svg']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
@@ -1024,10 +1025,23 @@ const access = createPhoneAccess({
 tunnel = createTunnel({ port: PORT, isConnected: () => access.view().connected, network, token: readToken, log: auth.admin.log });
 process.once('exit', () => { tunnel.dispose(); remotePorts.closeAll(); });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { tunnel.dispose(); process.exit(0); });
-// A quiet look at the npm registry, at most once a day, so the Admin page and the phone can say a newer version exists.
+// A quiet look at the npm registry, at most every six hours, so the Admin page and the phone can say a newer version exists.
 const versionCheck = createVersionCheck({ version: readInstalledVersion(), config, kind: installKind() === 'global' ? 'global' : 'other', log: (line) => console.error(line) });
 versionCheck.start();
-const admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, sections: adminSections, update: versionCheck }).catch((err) => {
+{
+  // One line in the terminal when the last look-up already found a newer version, or when the first look-up does.
+  const known = cachedUpdateLine({ config });
+  if (known) console.log(known);
+  else void versionCheck.refresh().then((v) => { if (v?.available) console.log(`Pocket Dev ${v.latest} is available (you have ${v.current}). Update with: ${v.command ?? 'npm install -g @anisirji/pocket-dev@latest'}`); });
+}
+{
+  // A desktop notification on this computer while an update waits: once at start, then at most every six hours.
+  const reminder = createUpdateReminder({ versionCheck, notifier: createNotifier(), config });
+  const remind = () => void versionCheck.refresh().then(() => reminder.tick()).catch(() => {});
+  remind();
+  setInterval(remind, 30 * 60_000).unref();
+}
+const admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, sections: adminSections, update: versionCheck, updateMeta: { version: readInstalledVersion(), kind: process.env.POCKET_DEV_INSTALL_KIND || installKind() } }).catch((err) => {
   console.error(err.message);
   process.exit(1);
 });

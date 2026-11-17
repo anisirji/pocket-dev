@@ -19,6 +19,9 @@ export function isolatedEnv(home, extra = {}) {
     POCKET_DEV_AGY_DIR: path.join(home, '.gemini', 'antigravity-cli'),
     // No test server asks the real npm registry for a newer version; the update tests turn it on with a local stand-in.
     POCKET_DEV_NO_UPDATE_CHECK: '1',
+    // Nothing a test starts may show a notification or a dialog on the real screen; a test that wants to see what would
+    // have been shown sets POCKET_DEV_NOTIFY_RECORD to a file.
+    POCKET_DEV_NO_DESKTOP_NOTIFY: '1',
     ...extra,
   };
 }
