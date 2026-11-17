@@ -129,3 +129,15 @@ test('above the size cap the oldest items go first and the message says how many
   assert.match(wrapped, /7 oldest items are left out/);
   assert.match(wrapped, /next$/);
 });
+
+test('a switch to an engine that is not installed is refused and the chat stays as it was', { timeout: 60000 }, async (t) => {
+  const s = await startServer(t, { env: { POCKET_DEV_AGY: FAKE_AGY, POCKET_DEV_CODEX: path.join(os.tmpdir(), 'pocket-dev-no-such-codex') } });
+  const A = await s.login();
+  const call = (method, url, body) => s.request(method, url, { cookie: A.cookie, body });
+  const created = await call('POST', '/api/chat', { tool: 'antigravity', cwd: s.home });
+  assert.equal(created.status, 201);
+  const refused = await call('POST', `/api/chat/${created.data.id}/engine`, { tool: 'codex' });
+  assert.equal(refused.status, 400);
+  assert.match(refused.data.error, /not installed/);
+  assert.equal((await call('GET', `/api/chat/${created.data.id}`)).data.tool, 'antigravity');
+});

@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
 import crypto from 'node:crypto';
@@ -22,7 +24,7 @@ const MODELS = [
 
 export const settingsSchema = async () => [{ key: 'model', label: 'Model', default: 'default', custom: true, choices: MODELS }];
 
-export const isInstalled = () => Boolean(AGY_BIN);
+export const isInstalled = () => Boolean(AGY_BIN) && (!path.isAbsolute(AGY_BIN) || fs.existsSync(AGY_BIN));
 export const grantLabel = (grant) => grant.replace(/^tool:/, 'Tool: ');
 
 const TOOL_STATUS = { pending: 'running', in_progress: 'running', completed: 'ok', failed: 'error' };

@@ -50,7 +50,7 @@ test('the chip names the engine and the menu lists the others, with the current 
   assert.match(t.chip.attributes['aria-label'], /Model: Claude/);
   t.toggleSwitchMenu(t.chip);
   const items = t.menu().all((n) => n.className.startsWith('chat-switch-item'));
-  assert.deepEqual(items.map((i) => [i.children[1].textContent, i.disabled]), [['Claude', true], ['Codex', false], ['Antigravity', true]]);
+  assert.deepEqual(items.map((i) => [i.children[0].textContent, i.disabled]), [['claude', true], ['codex', false], ['antigravity', true]]);
   assert.equal(items[2].children[2].textContent, 'not installed');
 });
 

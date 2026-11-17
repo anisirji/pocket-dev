@@ -138,6 +138,8 @@ The repository list holds the repositories found under `repoRoots`. To open anot
 
 Start or continue Claude Code and Codex conversations from the phone, with your existing logins. Approval cards (**Allow once**, **Always allow in this chat**, **Always allow in this project** when Claude offers it, and **Deny**; Codex shows **Approve**, **Approve for this chat** and **Deny**), permission modes, a message queue, limits notices and a Copy button are built in. New in 1.1: an agents panel in the chat. Resume any laptop conversation with **Open here**, which closes the other copy for you. To go the other way, tap **Continue on Mac** in the More menu and run the command it shows.
 
+**Switch the model in the same chat.** Tap the model chip under the chat title and pick Claude Code, Codex or Antigravity. Pocket Dev keeps the whole conversation in its own copy, so the next model starts a fresh session with everything said so far and carries on. Each answer shows which model wrote it. If Claude reports a usage limit, the chat offers a one-tap **Continue with** button for each other engine that is installed. A switch is refused while a reply is still running. A very long chat sends only its most recent part to the new model, and says how many early turns it left out.
+
 ### Messages
 
 <table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/09-messages.png" width="240" alt="Messages between devices"><br><sub>WhatsApp-style messages</sub></td></tr></table>

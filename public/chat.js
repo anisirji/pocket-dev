@@ -1536,7 +1536,7 @@
       const item = button(`chat-switch-item${here ? ' on' : ''}`, null, () => switchTo(tool));
       item.setAttribute('role', 'menuitem');
       item.disabled = here || info.installed === false;
-      item.append(badge(tool), el('span', 'chat-switch-name', info.label || TOOLS[tool] || tool),
+      item.append(badge(tool), el('span', 'chat-switch-name'),
         el('span', 'chat-switch-note', here ? 'this chat' : info.installed === false ? 'not installed' : ''));
       menu.append(item);
     }
