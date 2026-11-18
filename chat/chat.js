@@ -7,14 +7,14 @@ const TITLE_MAX = 80;
 const PERSIST_DELAY_MS = 1000;
 export const QUEUE_MAX = 20;
 
-const PERSISTED = ['id', 'tool', 'cwd', 'settings', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt', 'acceptedInputs', 'handoffSeq', 'handoffFrom', 'handoffDigest'];
+const PERSISTED = ['id', 'tool', 'cwd', 'settings', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt', 'acceptedInputs', 'handoffSeq', 'handoffFrom', 'handoffDigest', 'sessionRefs', 'nativeReleased', 'nativeSessionStartSeq'];
 
 // One conversation. Status is derived from three independent facts (engine awake, turn running, open requests)
 // so it can never disagree with them.
 export class Chat {
   constructor(data, file) {
     Object.assign(this, {
-      title: 'New chat', sessionId: null, grants: [], seq: 0, events: [], failed: false, turnStartedAt: null, acceptedInputs: [], handoffSeq: null, handoffFrom: null, handoffDigest: null,
+      title: 'New chat', sessionId: null, grants: [], seq: 0, events: [], failed: false, turnStartedAt: null, acceptedInputs: [], handoffSeq: null, handoffFrom: null, handoffDigest: null, sessionRefs: [], nativeReleased: false, nativeSessionStartSeq: 0,
       createdAt: Date.now(), updatedAt: Date.now(),
     }, data);
     this.file = file;
@@ -70,6 +70,7 @@ export class Chat {
     const pendingId = this.requests.keys().next().value ?? null;
     return {
       id, tool, title, cwd, settings, sessionId, createdAt, updatedAt, waking,
+      sessionRefs: this.sessionRefs, nativeReleased: this.nativeReleased,
       queued: this.queue.length, status: this.status, runningSince: this.turn?.startedAt ?? null, pending: pendingId !== null, pendingId,
       capabilities: { queueEdit: true },
     };
@@ -100,7 +101,12 @@ export class Chat {
     // An answer records which engine wrote it, so a chat that changed engines reads correctly afterwards.
     const ev = { id: fields.id ?? crypto.randomBytes(6).toString('hex'), seq: ++this.seq, at: Date.now(), ...(fields.type === 'assistant-text' ? { tool: this.tool } : {}), ...fields };
     this.events.push(ev);
-    if (this.events.length > EVENTS_MAX) this.events.splice(0, this.events.length - EVENTS_MAX);
+    // Text is the durable conversation. Bound diagnostic events without discarding messages.
+    let excess = this.events.length - EVENTS_MAX;
+    if (excess > 0) this.events = this.events.filter((event) => {
+      if (excess > 0 && !['user-text', 'assistant-text'].includes(event.type)) { excess--; return false; }
+      return true;
+    });
     this.broadcast({ t: 'event', event: ev });
     this.touch();
     this.listener?.event(ev.id);
@@ -135,7 +141,77 @@ export class Chat {
   setSession(sessionId) {
     if (this.sessionId === sessionId) return;
     this.sessionId = sessionId;
+    this.rememberSession();
     this.changed();
+  }
+
+  rememberSession() {
+    if (this.sessionId && !this.sessionRefs.some((ref) => ref.tool === this.tool && ref.id === this.sessionId)) {
+      this.sessionRefs.push({ tool: this.tool, id: this.sessionId });
+    }
+  }
+
+  // Native files remain the provider's resume source; these events are Pocket Dev's own durable copy for display and
+  // cross-provider handoff. Stable native keys plus ordered matching avoid duplicating turns written through Pocket Dev.
+  importNativeHistory(messages, note) {
+    this.rememberSession();
+    const session = `${this.tool}:${this.sessionId}`;
+    const occurrences = new Map();
+    const normalized = (text) => String(text ?? '').trim();
+    const native = messages.filter((message) => ['user', 'assistant'].includes(message.role) && normalized(message.text)).map((message) => {
+      const signature = JSON.stringify([message.role, message.text, message.time ?? null]);
+      const occurrence = occurrences.get(signature) ?? 0;
+      occurrences.set(signature, occurrence + 1);
+      const key = crypto.createHash('sha256').update(`${session}:${signature}:${occurrence}`).digest('hex');
+      return { message, key, type: message.role === 'user' ? 'user-text' : 'assistant-text' };
+    });
+    const known = new Map(this.events.filter((event) => event.nativeKey).map((event) => [event.nativeKey, event]));
+    const candidates = this.events.filter((event) => !event.nativeKey && event.seq > this.nativeSessionStartSeq
+      && ['user-text', 'assistant-text'].includes(event.type) && !event.queued && !event.notSent && !event.removed
+      && (event.type !== 'assistant-text' || !event.tool || event.tool === this.tool));
+    let candidateAt = 0;
+    let changed = false;
+    for (const item of native) {
+      item.event = known.get(item.key);
+      if (item.event) continue;
+      const found = candidates.findIndex((event, index) => index >= candidateAt && event.type === item.type
+        && normalized(event.text) === normalized(item.message.text));
+      if (found >= 0) {
+        item.event = candidates[found];
+        candidateAt = found + 1;
+        item.event.nativeKey = item.key;
+        changed = true;
+      }
+    }
+    const cutoffId = this.events.find((event) => event.seq === this.handoffSeq)?.id;
+    const startId = this.events.find((event) => event.seq === this.nativeSessionStartSeq)?.id;
+    let reordered = false;
+    for (let index = 0; index < native.length; index++) {
+      const item = native[index];
+      if (item.event) continue;
+      const at = Date.parse(item.message.time);
+      item.event = { id: crypto.randomBytes(6).toString('hex'), seq: ++this.seq, at: Number.isFinite(at) ? at : Date.now(),
+        type: item.type, text: item.message.text, tool: this.tool, nativeKey: item.key, imported: true };
+      const next = native.slice(index + 1).find((later) => later.event && this.events.includes(later.event));
+      if (next) { this.events.splice(this.events.indexOf(next.event), 0, item.event); reordered = true; }
+      else this.events.push(item.event);
+      changed = true;
+    }
+    if (note && !this.events.some((event) => event.nativeNote === session)) {
+      this.events.push({ id: crypto.randomBytes(6).toString('hex'), seq: ++this.seq, at: Date.now(), type: 'status', text: note, nativeNote: session });
+      changed = true;
+    }
+    if (reordered) {
+      this.events.forEach((event, index) => { event.seq = index + 1; });
+      this.seq = this.events.length;
+      if (cutoffId) this.handoffSeq = this.events.find((event) => event.id === cutoffId).seq;
+      if (startId) this.nativeSessionStartSeq = this.events.find((event) => event.id === startId).seq;
+    }
+    if (changed) {
+      this.changed();
+      this.broadcast({ t: 'hello', chat: this.view(), events: this.events });
+    }
+    return changed;
   }
 
   startTurn() {

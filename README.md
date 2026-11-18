@@ -25,8 +25,8 @@
 
 - **Four chat engines:** Claude Code, Codex, and, experimentally, Antigravity and GitHub Copilot.
 - **Switch the provider and the model in one chat.** The whole conversation goes with you, long chats are compacted for the new model, and you can change the model at any time. The provider can change when no reply is running.
-- **One way to continue between your computer and your phone:** **Open here** in the Resume sheet and **Continue on Mac** in the More menu. Antigravity and Copilot conversations are listed there too.
-- **Removed: `pocket-dev takeover`.** Use **Open here** (phone) or **Continue on Mac** (the More menu) instead.
+- **One way to continue between your computer and your phone:** Open **Chats** to see Pocket Dev chats and recent computer conversations together. Tap a conversation to continue here; use **Continue on computer** in chat settings to go back. Search and **Show more** find older conversations.
+- **Removed: `pocket-dev takeover`.** Open the conversation in **Chats**, or use **Continue on computer** in chat settings instead.
 - **Updating:** `pocket-dev update`, an update step in setup, an update icon on the phone, an **Update** button and banner on the Admin page, and a desktop notification until you are current.
 - **The install now adds an Admin tile** to your Dock, Start menu or applications menu. Skip it with `POCKET_DEV_NO_PIN=1` or `npm install -g --ignore-scripts`, and remove it with `pocket-dev admin unpin`.
 - **Files and photos:** the paperclips and **Upload** ask **Photos and videos** or **Files** on phones, so Android opens its document browser.

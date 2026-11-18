@@ -310,8 +310,10 @@
     <section class="chat-screen chat-list-screen">
       <header class="chat-head">
         <h2 class="chat-h2">Chats</h2>
+        <button type="button" class="chat-icon chat-refresh" aria-label="Refresh chats" title="Refresh chats">↻</button>
         <button type="button" class="chat-icon chat-close" aria-label="Close chats">✕</button>
       </header>
+      <div class="chat-search-wrap"><input class="chat-search" type="search" aria-label="Search conversations" placeholder="Search conversations" autocomplete="off"></div>
       <div class="chat-scroll chat-rows"></div>
       <div class="chat-foot"><button type="button" class="chat-primary chat-new-btn">New chat</button></div>
     </section>
@@ -369,7 +371,7 @@
   document.body.appendChild(root);
   const q = (sel) => root.querySelector(sel);
   const ui = {
-    listScreen: q('.chat-list-screen'), rows: q('.chat-rows'), newBtn: q('.chat-new-btn'), close: q('.chat-close'),
+    listScreen: q('.chat-list-screen'), rows: q('.chat-rows'), newBtn: q('.chat-new-btn'), close: q('.chat-close'), refresh: q('.chat-refresh'), search: q('.chat-search'),
     convoScreen: q('.chat-convo-screen'), back: q('.chat-back'), title: q('.chat-title'), sub: q('.chat-sub'), menu: q('.chat-menu'), chips: q('.chat-chips'),
     scroll: q('.chat-log-scroll'), empty: q('.chat-empty'), log: q('.chat-log'), latest: q('.chat-latest'), conn: q('.chat-conn'),
     card: q('.chat-card'), work: q('.chat-work'), statusline: q('.chat-statusline'), notice: q('.chat-notice'), queue: q('.chat-queue'), files: q('.chat-files'),
@@ -507,36 +509,103 @@
   let list = [];
   let listKey = '';
   let listSeq = 0;
+  let computer = [];
+  let computerLoaded = false;
+  let computerMore = false;
+  let computerError = '';
+  let computerOpening = false;
+  let listLoading = false;
+  let searchTimer;
   const listVisible = () => stack.length && !convoIdOf(stack);
 
-  async function refreshList() {
+  async function refreshList(more = false, statusesOnly = false) {
+    if (statusesOnly && listLoading) return;
     const seq = ++listSeq;
+    listLoading = !statusesOnly;
     if (!list.length && !ui.rows.firstChild) ui.rows.replaceChildren(el('div', 'chat-placeholder', 'Loading chats…'));
+    const query = ui.search.value.trim();
+    ui.refresh.disabled = true;
     try {
-      const items = await api('GET', '/api/chat');
+      let items;
+      if (statusesOnly) {
+        const chats = await api('GET', '/api/chat');
+        items = { chats: chats.filter((c) => matchesSearch(c, query)), computer, hasMore: computerMore };
+      } else {
+        try {
+          items = await api('GET', `/api/history/chats?limit=30&offset=${more ? computer.length : 0}&q=${encodeURIComponent(query)}`);
+          if (!Array.isArray(items.chats) || !Array.isArray(items.computer)) throw new Error('Restart Pocket Dev to load computer conversations.');
+          if (seq === listSeq) computerError = '';
+        } catch (err) {
+          // Existing chats stay usable if history cannot be scanned or the server has not restarted yet.
+          if (err.status === 401) throw err;
+          items = { chats: (await api('GET', '/api/chat')).filter((c) => matchesSearch(c, query)), computer: more ? [] : computer, hasMore: false };
+          computerError = err.status === 403 ? '' : err.message;
+        }
+      }
       if (seq !== listSeq) return;
+      if (!statusesOnly) {
+        computer = more ? [...computer, ...items.computer.filter((c) => !computer.some((old) => old.tool === c.tool && old.id === c.id))] : items.computer;
+        computerLoaded = true;
+        computerMore = items.hasMore;
+      }
       // Replacing rows under a finger swallows the tap, so only rebuild when something visible changed.
-      const key = JSON.stringify(items) + Math.floor(Date.now() / 60000);
+      const key = JSON.stringify([items.chats, computer, computerMore, computerError]) + Math.floor(Date.now() / 60000);
       if (key === listKey && ui.rows.querySelector('.chat-row')) return;
-      list = items;
+      list = items.chats;
       listKey = key;
       renderList();
     } catch (err) {
       if (seq !== listSeq || list.length) return;
       const box = el('div', 'chat-placeholder', `Could not load chats: ${err.message}`);
-      box.append(button('chat-secondary chat-retry', 'Try again', refreshList));
+      box.append(button('chat-secondary chat-retry', 'Try again', () => refreshList()));
       ui.rows.replaceChildren(box);
+    } finally {
+      if (seq === listSeq) { listLoading = false; ui.refresh.disabled = false; }
+    }
+  }
+
+  function matchesSearch(c, query) {
+    return !query || [c.title, c.cwd, c.project, c.tool, TOOLS[c.tool]].filter(Boolean).join(' ').toLowerCase().includes(query.toLowerCase());
+  }
+
+  async function openComputerChat(item, row, body = {}) {
+    if (computerOpening) return;
+    computerOpening = true;
+    row.disabled = true;
+    row.setAttribute('aria-busy', 'true');
+    try {
+      const data = await api('POST', `/api/history/${item.tool}/${encodeURIComponent(item.sessionId || item.id)}/open-chat`, body);
+      if (listVisible()) showChat(data.chat);
+      if (data.note) toast(data.note);
+    } catch (err) {
+      if (err.code === 'busy' && !body.confirmBusy && confirm(err.message)) {
+        computerOpening = false;
+        return openComputerChat(item, row, { ...body, confirmBusy: true });
+      }
+      toast(err.message);
+      let error = ui.rows.querySelector('.chat-open-error');
+      if (!error) {
+        error = el('div', 'chat-open-error');
+        error.setAttribute('role', 'alert');
+        row.after(error);
+      }
+      error.replaceChildren(el('span', null, err.message), button('chat-secondary', 'Try again', () => { error.remove(); openComputerChat(item, row, body); }));
+      if (item.id?.length === 12 && err.status === 404) {
+        error.append(button('chat-secondary', 'Open saved chat', () => showChat(item)));
+      }
+    } finally {
+      computerOpening = false;
+      row.disabled = false;
+      row.removeAttribute('aria-busy');
     }
   }
 
   function renderList() {
-    if (!list.length) {
-      ui.rows.replaceChildren(el('div', 'chat-placeholder', 'No chats yet. Start one to talk to Claude Code or Codex in a folder on this device.'));
-      return;
-    }
-    ui.rows.replaceChildren(...list.map((c) => {
+    const nodes = [];
+    if (list.length) nodes.push(el('h3', 'chat-list-label', 'In Pocket Dev'));
+    nodes.push(...list.map((c) => {
       const [label, cls] = c.pending ? WAITING : STATUS[c.status] || [c.status, 'idle'];
-      const row = button(`chat-row${cls === 'wait' ? ' chat-row-wait' : ''}`, null, () => showChat(c));
+      const row = button(`chat-row${cls === 'wait' ? ' chat-row-wait' : ''}`, null, () => c.sessionId ? openComputerChat(c, row) : showChat(c));
       const line1 = el('div', 'chat-row-line');
       const chip = el('span', `chat-status chat-st-${cls}`);
       if (cls === 'run') chip.append(spinner());
@@ -547,12 +616,37 @@
       row.append(line1, line2);
       return row;
     }));
+    // Filter again after status refreshes so a newly opened native session never appears twice.
+    const native = new Set(list.filter((c) => c.sessionId).map((c) => `${c.tool}:${c.sessionId}`));
+    const available = computer.filter((c) => !native.has(`${c.tool}:${c.id}`));
+    if (available.length || computerError) nodes.push(el('h3', 'chat-list-label', 'From your computer'));
+    for (const c of available) {
+      const row = button('chat-row chat-computer-row', null, () => openComputerChat(c, row));
+      const line = el('div', 'chat-row-line');
+      line.append(badge(c.tool), el('span', 'chat-row-title', c.title || c.project || 'Untitled conversation'));
+      const meta = el('div', 'chat-row-line chat-row-meta');
+      meta.append(el('span', 'chat-row-path', shortPath(c.cwd || c.project)), el('span', 'chat-row-time', ago(Date.parse(c.lastActive))));
+      row.append(line, meta);
+      if (c.live) row.append(el('span', 'chat-row-meta', c.openIn === 'pocket-dev' ? 'Open in a Pocket Dev terminal' : 'Open on your computer'));
+      nodes.push(row);
+    }
+    if (computerError) {
+      const error = el('div', 'chat-open-error', `Could not load computer conversations: ${computerError}`);
+      error.setAttribute('role', 'status');
+      error.append(button('chat-secondary', 'Try again', () => { computerError = ''; refreshList(); }));
+      nodes.push(error);
+    }
+    if (computerMore) nodes.push(button('chat-secondary chat-more', 'Show more', () => refreshList(true)));
+    if (!nodes.length) nodes.push(el('div', 'chat-placeholder', ui.search.value.trim() ? 'No matching conversations.' : computerLoaded ? 'Start a chat here, or open a conversation on your computer. It will appear here too.' : 'Loading conversations…'));
+    ui.rows.replaceChildren(...nodes);
   }
 
   setInterval(() => {
-    if (listVisible() && !document.hidden) refreshList();
+    if (listVisible() && !document.hidden && !computerOpening) refreshList(false, true);
   }, POLL_MS);
 
+  ui.refresh.onclick = () => { computerError = ''; refreshList(); };
+  ui.search.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { computerError = ''; refreshList(); }, 250); };
   ui.close.onclick = closeAll;
   q('.chat-git').hidden = !window.pocketDev?.openGit;
   q('.chat-git').onclick = () => convo.chat && window.pocketDev.openGit(convo.chat.cwd);
@@ -750,7 +844,10 @@
       }
     });
     const body = el('div', 'chat-sheet-body');
-    body.append(where, perms, del);
+    const continueComputer = button('chat-set-row chat-continue-computer', 'Continue on computer', () => window.pocketDevHistory?.continueChat());
+    continueComputer.disabled = !c.sessionId;
+    if (!c.sessionId) continueComputer.title = 'Send a message first.';
+    body.append(where, continueComputer, perms, del);
     sheet.replaceChildren(sheetHead('Chat settings'), body);
   }
 

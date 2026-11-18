@@ -321,7 +321,7 @@
   ui.back.onclick = () => overlays.close('resume-detail');
   ui.close.onclick = leave;
   ui.refresh.onclick = loadList;
-  document.getElementById('resumeBtn').addEventListener('click', open);
+  document.getElementById('resumeBtn')?.addEventListener('click', open);
 
   // "Continue on Mac" in the More menu: closes Pocket Dev's copy of the chat or terminal on screen, then shows the command
   // that resumes it on the Mac. The command is plain text to select; nothing is copied to the clipboard.
@@ -346,9 +346,10 @@
     overlays.open('mac-command', () => card.remove());
   }
 
-  async function continueOnMac(confirmBusy = false) {
-    const view = window.pocketDev.view();
-    const chat = view === 'chat' ? window.pocketDevChat.currentSession() : null;
+  // `target` names a conversation explicitly. The chat screen opens over the terminal view, so the view name cannot tell them apart.
+  async function continueOnMac(confirmBusy = false, target = null) {
+    const view = target ? 'chat' : window.pocketDev.view();
+    const chat = view === 'chat' ? target ?? window.pocketDevChat.currentSession() : null;
     const body = view === 'terminal' ? { terminalId: window.pocketDev.activeSession() } : chat;
     if (!body?.terminalId && !body?.id) return toast(view === 'chat' ? 'Send a message first, then continue on your Mac.' : 'Open a chat or terminal first.');
     const res = await fetch('/api/history/mac', {
@@ -357,8 +358,9 @@
     const data = await res?.json().catch(() => ({})) ?? {};
     if (res?.status === 401 || data.blocked || data.pending) return location.replace('/login.html');
     if (res?.ok) return showMacCommand(data);
-    if (data.code === 'busy' && !confirmBusy) return confirm(data.error) && continueOnMac(true);
+    if (data.code === 'busy' && !confirmBusy) return confirm(data.error) && continueOnMac(true, target);
     toast(data.error || 'Could not continue on your Mac.');
   }
   document.getElementById('macBtn').addEventListener('click', () => continueOnMac());
+  window.pocketDevHistory = { open, continueOnMac, continueChat: () => continueOnMac(false, window.pocketDevChat.currentSession() ?? { id: null }) };
 })();

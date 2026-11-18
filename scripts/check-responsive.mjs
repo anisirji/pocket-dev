@@ -28,6 +28,7 @@ const messagesHello = {
 const historyItem = { tool: 'codex', id: '00000000-0000-4000-8000-000000000001', cwd: '/tmp', title: 'Resume fixture', project: 'Fixture', lastActive: new Date().toISOString(), messageCount: 1, live: false };
 let messagePosts = 0, terminalInputs = 0, terminalCreates = 0;
 const chatCreates = [];
+const historyOpens = [];
 const uploads = [];
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -47,6 +48,7 @@ const server = http.createServer(async (req, res) => {
     '/api/terminals': { available: true }, '/api/sessions': [session], '/api/forwards': [], '/api/info': { forwards: [] },
     '/api/folders': { home: '/tmp', pinned: folders, recent: [], projects: [] },
     '/api/chat': [chat, claudeChat], '/api/history': [historyItem], '/api/apps': { apps: [] },
+    '/api/history/chats': { chats: [chat, claudeChat], computer: [historyItem], hasMore: false },
     [`/api/history/codex/${historyItem.id}`]: { ...historyItem, messages: [{ role: 'user', text: 'A previous message' }] },
     '/api/chat/fixture-chat': chat,
     '/api/settings': { devices: [], maxDevices: 2 },
@@ -61,6 +63,11 @@ const server = http.createServer(async (req, res) => {
     '/api/git/repos': [{ name: 'flutter_school_app', path: '/tmp/flutter_school_app' }],
   };
   if (url.pathname.startsWith('/api/')) {
+    if (req.method === 'POST' && url.pathname === `/api/history/codex/${historyItem.id}/open-chat`) {
+      let body = ''; for await (const chunk of req) body += chunk;
+      historyOpens.push(JSON.parse(body || '{}'));
+      return json({ chat });
+    }
     if (req.method === 'PATCH' && url.pathname === '/api/chat/fixture-chat/queue') {
       let body = ''; for await (const chunk of req) body += chunk;
       const { eventId, text, expectedText } = JSON.parse(body);
@@ -439,18 +446,15 @@ try {
   await page.waitForFunction(() => active()?.online);
   assert.equal(await page.locator('#cmd').inputValue(), 'keep this terminal draft');
   assert.equal(terminalInputs, 0, 'draft restoration must not execute a terminal command');
-  // Cover the actual History -> Continue in chat path, not just opening a chat.
+  // Computer conversations open directly from Chats, without a second history panel.
   async function resumeHistory() {
-    await page.locator('#moreBtn').click();
-    await page.locator('#resumeBtn').click();
-    await page.locator('.hist-card').click();
-    await page.waitForSelector('.hist-detail-title');
-    await page.locator('.hist-in-chat').click();
+    await page.locator('[data-view="chat"]').click();
+    await page.locator('.chat-computer-row').click();
   }
   await resumeHistory();
   await page.waitForFunction(() => document.querySelector('.chat-title')?.textContent === 'Question fixture' && document.querySelector('.chat-conn').hidden);
-  assert.equal(chatCreates.length, 1);
-  assert.deepEqual(chatCreates[0].resume, { sessionId: historyItem.id });
+  assert.equal(historyOpens.length, 1);
+  assert.equal(chatCreates.length, 0, 'the checked history open route creates the chat');
   await page.evaluate(() => window.pocketDev.overlays.closeAll());
 
   // Reproduce an old live server serving new HTML without the new asset route.
@@ -460,10 +464,8 @@ try {
   assert.match(await page.locator('#clientErrorText').textContent(), /Restart Pocket Dev/);
   await page.locator('[data-view="chat"]').click();
   assert.match(await page.locator('#clientErrorText').textContent(), /connection code/);
-  await resumeHistory();
-  await page.waitForSelector('.hist-toast');
-  assert.match(await page.locator('.hist-toast').textContent(), /Restart Pocket Dev/);
-  assert.equal(chatCreates.length, 1, 'missing dependencies must not create a resumed chat');
+  assert.equal(historyOpens.length, 1, 'missing dependencies must not open a resumed chat');
+  assert.equal(chatCreates.length, 0, 'missing dependencies must not create a resumed chat');
   assert.equal(terminalCreates, 0, 'missing dependencies must not create extra terminal sessions');
   await page.unroute('**/connection.js');
   await page.reload();

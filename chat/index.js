@@ -1,3 +1,4 @@
+import { readConversationMessages } from '../history.js';
 import { engineHelp } from './engine-help.js';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -222,7 +223,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   // Moves the chat to another engine. The conversation stays; the new engine starts a fresh session and gets it with the next message.
   // A chat is busy while a reply runs, a request waits for an answer, messages are queued, or its engine is waking. The
   // provider and the model never change in any of those states, whatever client asks.
-  const busy = (chat) => Boolean(chat.turn || chat.queue.length || chat.requests.size || chat.waking);
+  const busy = (chat) => Boolean(chat.turn || chat.queue.length || chat.requests.size || chat.waking || chat.nativeOpening);
   const busyError = (what) => new BadRequest(`Stop the reply first, or wait for it to finish, before ${what}.`, 409);
 
   async function switchEngine(chat, tool) {
@@ -238,6 +239,9 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     const old = chat.engine;
     if (old) old.stale = true;
     const from = chat.tool;
+    chat.rememberSession();
+    chat.nativeSessionStartSeq = chat.seq;
+    chat.nativeReleased = false;
     chat.tool = tool;
     chat.sessionId = null;
     chat.failed = false;
@@ -359,7 +363,11 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     if (title !== undefined && (typeof title !== 'string' || title.length > 200)) throw new BadRequest('title must be text up to 200 characters');
     const chat = Chat.create(fields, dir);
     if (title?.trim()) chat.setTitleFrom(title);
-    if (fields.sessionId) chat.emit({ type: 'status', text: `Continuing ${ENGINES[tool].label} session ${fields.sessionId.slice(0, 8)}` });
+    if (fields.sessionId) {
+      const history = await readConversationMessages(tool, fields.sessionId);
+      chat.importNativeHistory(history.messages, history.note);
+      chat.emit({ type: 'status', text: `Continuing ${ENGINES[tool].label} session ${fields.sessionId.slice(0, 8)}` });
+    }
     chat.afterTurn = (status) => drainQueue(chat, status);
     chats.set(chat.id, chat);
     replica?.track(chat);
@@ -419,6 +427,8 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       return [204];
     },
     'POST :id/message': async (req, chat) => {
+      if (chat.nativeOpening) throw new BadRequest('This conversation is being opened. Please wait a moment.', 409);
+      if (chat.nativeReleased) throw new BadRequest('This conversation is open on your computer. Open it from Chats to continue here safely.', 409, 'NATIVE_SESSION_RELEASED');
       const { text = '', attachments, clientMessageId } = await readJson(req);
       if (typeof text !== 'string' || text.length > TEXT_MAX) throw new BadRequest(`text must be up to ${TEXT_MAX} characters`);
       if (clientMessageId !== undefined && (typeof clientMessageId !== 'string' || !/^[0-9a-zA-Z_-]{16,80}$/.test(clientMessageId))) throw new BadRequest('Invalid clientMessageId');
@@ -570,10 +580,29 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     if (chat.queue.length) chat.holdQueue();
     if (chat.turn) await interrupt(chat);
     await sleep(chat);
+    chat.nativeReleased = true;
     chat.emit({ type: 'status', text: note });
     chat.changed();
     return true;
   }
 
-  return { handleApi, handleUpgrade, active, stop, bound, release, startReplica: () => replica?.start(), handleRoomApi: (req, res, url) => replica.handleApi(req, res, url, sendJson) };
+  // Called only after the history route has checked and closed other native writers.
+  async function resumeSession({ tool, id, cwd, title }) {
+    const existing = [...chats.values()].find((chat) => chat.tool === tool && chat.sessionId === id);
+    if (existing && busy(existing)) throw busyError('opening this conversation');
+    if (existing) existing.nativeOpening = true;
+    try {
+      const history = await readConversationMessages(tool, id);
+      const { chat } = existing ? { chat: existing } : await create({ tool, cwd, title, resume: { sessionId: id } });
+      if (chat.turn || chat.queue.length || chat.requests.size || chat.waking) throw busyError('opening this conversation');
+      chat.importNativeHistory(history.messages, history.note);
+      chat.nativeReleased = false;
+      chat.changed();
+      return chat.view();
+    } finally {
+      if (existing) existing.nativeOpening = false;
+    }
+  }
+
+  return { handleApi, handleUpgrade, active, stop, bound, release, list, resumeSession, startReplica: () => replica?.start(), handleRoomApi: (req, res, url) => replica.handleApi(req, res, url, sendJson) };
 }

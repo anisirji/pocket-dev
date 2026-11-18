@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createInterface } from 'node:readline';
 import { createTakeover, readClaudeSessions, copyView, LIVE_MS, BUSY_MS } from './takeover.js';
 import { readAgents, sessionFile } from './terminal-agents.js';
 import { platform } from './platform.js';
@@ -318,16 +319,19 @@ async function statAll(tools) {
 
 // Walks files newest-first and stops once `limit` sessions qualify, so old multi-hundred-MB sessions
 // are never read for the list. Sorting by mtime approximates sorting by last message time.
-async function listSessions(tools, limit, held = new Map()) {
+async function listSessions(tools, limit, held = new Map(), accept = () => true) {
   const [entries, names, ...custom] = await Promise.all([statAll(tools), codex.names(), ...Object.keys(CUSTOM).map((tool) => (tools.includes(tool) ? CUSTOM[tool].list() : []))]);
   const picked = [];
   for (let i = 0; i < entries.length && picked.length < limit; i += PARALLEL) {
     const batch = entries.slice(i, i + PARALLEL);
     for (const s of await Promise.all(batch.map((e) => summarize(e.tool, e, e.st)))) {
-      if (listable(s) && picked.length < limit) picked.push(view(s, held, names));
+      if (listable(s) && picked.length < limit) {
+        const item = view(s, held, names);
+        if (accept(item)) picked.push(item);
+      }
     }
   }
-  picked.push(...custom.flat().filter(listable).map((s) => view(s, held, names)));
+  picked.push(...custom.flat().filter(listable).map((s) => view(s, held, names)).filter(accept));
   return picked.sort((a, b) => b.lastActive.localeCompare(a.lastActive)).slice(0, limit);
 }
 
@@ -341,6 +345,35 @@ async function findSession(tool, id) {
   if (!st) return null;
   const s = await summarize(tool, f, st);
   return listable(s) ? s : null;
+}
+
+// Import is separate from the small Resume preview: the chat needs every readable user and assistant message,
+// including long messages and old turns. Reading a line at a time avoids loading a large rollout into memory at once.
+export async function readConversationMessages(tool, id) {
+  if (!Object.hasOwn(TOOLS, tool) || !ID_RE.test(id ?? '')) return { messages: [] };
+  const s = await findSession(tool, id);
+  if (!s) return { messages: [] };
+  if (tool === 'antigravity') return { messages: [], note: ANTIGRAVITY_NOTE };
+  const messages = [];
+  const input = fs.createReadStream(s.file, { encoding: 'utf8' });
+  const lines = createInterface({ input, crlfDelay: Infinity });
+  try {
+    for await (const line of lines) {
+      const o = parse(line);
+      if (!o) continue;
+      if (tool === 'copilot') {
+        if (!['user.message', 'assistant.message'].includes(o.type)) continue;
+        const text = typeof o.data?.content === 'string' ? o.data.content.trim() : '';
+        if (text) messages.push({ role: o.type === 'user.message' ? 'user' : 'assistant', text, time: o.timestamp ?? null });
+      } else {
+        messages.push(...TOOLS[tool].messages(o, s.cwd).filter((m) => m.role !== 'tool'));
+      }
+    }
+  } finally {
+    lines.close();
+    input.destroy();
+  }
+  return { messages };
 }
 
 // Reads backwards in growing windows until the tail holds enough text messages, so a 150 MB
@@ -399,12 +432,63 @@ const toBool = (v, name) => {
 // Mount after the auth check. `own` reaches Pocket Dev's own copies of a conversation, { terminals, endTerminal, chats,
 // releaseChat } as createTakeover describes them; `system` replaces process listing and signals in tests. `deviceFor`
 // and `log` name the device that takes a conversation over in the security log.
-export function createHistoryApi({ createSession, sessionView, sendJson, readJson, deviceFor, log, own = {}, system = {} }) {
+export function createHistoryApi({ createSession, sessionView, sendJson, readJson, deviceFor, log, own = {}, system = {}, listChats = () => [], resumeChat, isOwner = (req) => !req.roomPeer && Boolean(deviceFor(req)) }) {
   const takeover = createTakeover({ claudeSessions: () => readClaudeSessions(claudeSessionsDir()), log, ...own, ...system });
   // The list and the detail still load when the process table cannot be read; take over itself reports the error.
   const survey = () => takeover.survey().catch(() => []);
+  const opening = new Set();
   // The first scan reads a few hundred MB of jsonl; do it at startup so the phone's first list is warm.
   listSessions(Object.keys(TOOLS), 30).catch(() => {});
+
+  async function unifiedChats(req, res, url) {
+    if (!isOwner(req)) return sendJson(res, 403, { error: 'Only your own devices can see computer conversations.' });
+    const offsetText = url.searchParams.get('offset') ?? '0';
+    if (!/^\d+$/.test(offsetText) || !Number.isSafeInteger(Number(offsetText)) || Number(offsetText) > 100_000) {
+      return sendJson(res, 400, { error: 'offset must be an integer from 0 to 100000' });
+    }
+    const offset = Number(offsetText);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get('limit'), 10) || 30));
+    const query = (url.searchParams.get('q') || '').trim().toLocaleLowerCase();
+    if (query.length > 200) return sendJson(res, 400, { error: 'Search must be up to 200 characters.' });
+    const matches = (item) => !query || [item.title, item.cwd, item.project, item.tool, TOOL_LABELS[item.tool]].filter(Boolean).join(' ').toLocaleLowerCase().includes(query);
+    const chats = listChats();
+    const represented = new Set();
+    for (const chat of chats) {
+      if (chat.sessionId) represented.add(`${chat.tool}:${chat.sessionId}`);
+      for (const ref of chat.sessionRefs ?? []) if (ref.tool && (ref.id || ref.sessionId)) represented.add(`${ref.tool}:${ref.id || ref.sessionId}`);
+    }
+    const items = await listSessions(Object.keys(TOOLS), offset + limit + 1, byConversation(await survey()), (item) => !represented.has(`${item.tool}:${item.id}`) && matches(item));
+    return sendJson(res, 200, { chats: chats.filter(matches), computer: items.slice(offset, offset + limit), hasMore: items.length > offset + limit });
+  }
+
+  async function openChat(req, res, tool, id, s) {
+    if (!isOwner(req)) return sendJson(res, 403, { error: 'Only your own devices can open computer conversations.' });
+    if (!resumeChat) return sendJson(res, 503, { error: 'Chat continuation is not available.' });
+    const key = `${tool}:${id}`;
+    if (opening.has(key)) return sendJson(res, 409, { code: 'opening', error: 'This conversation is already opening. Try again in a moment.' });
+    opening.add(key);
+    try {
+      const body = await readJson(req);
+      const confirmBusy = toBool(body.confirmBusy, 'confirmBusy');
+      const force = toBool(body.force, 'force');
+      const copies = await takeover.survey();
+      const existing = listChats().find((c) => c.tool === tool && c.sessionId === id);
+      const bound = (own.chats?.() ?? []).some((c) => c.id === existing?.id && c.tool === tool && c.sessionId === id);
+      // Opening another view of an already-running Pocket Dev chat shares that chat. It must not stop its reply.
+      if (existing && bound && !copies.some((c) => c.tool === tool && c.id === id && (c.kind === 'process' || c.kind === 'terminal' || (c.kind === 'chat' && c.chat?.id !== existing.id)))) {
+        return sendJson(res, 200, { chat: existing });
+      }
+      if (!s) return sendJson(res, 404, { error: 'No such conversation' });
+      const device = deviceFor(req);
+      const result = await takeover.takeOver({ tool, id, mtimeMs: s.mtimeMs, confirmBusy, force,
+        note: 'Continued in Pocket Dev chat', who: { by: 'phone', deviceId: device.id, name: device.name, ip: device.ip } });
+      if (result.status !== 200) return sendJson(res, result.status, result.body);
+      const chat = await resumeChat({ tool, id, cwd: s.cwd, title: view(s, new Map(), await codex.names()).title });
+      return sendJson(res, 200, { chat, ...(CUSTOM[tool]?.note && { note: CUSTOM[tool].note }) });
+    } finally {
+      opening.delete(key);
+    }
+  }
 
   // The helper agents of the Claude Code session running in one Pocket Dev terminal. The phone asks every few seconds, so
   // the process table is read at most once in a while and the session file is read from its end only. A terminal that is
@@ -451,6 +535,8 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
     const [, , , tool, id, action] = pathname.split('/');
     const url = new URL(req.url, 'http://localhost');
 
+    if (req.method === 'GET' && tool === 'chats' && !id) return unifiedChats(req, res, url);
+
     if (req.method === 'POST' && tool === 'mac' && !id) return continueOnMac(req, res);
     if (req.method === 'GET' && tool === 'agents' && !id) return terminalAgents(req, res, url);
 
@@ -464,9 +550,13 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
     if (!Object.hasOwn(TOOLS, tool)) return sendJson(res, 400, { error: 'Unknown tool' });
     if (!ID_RE.test(id ?? '')) return sendJson(res, 400, { error: 'Bad session id' });
     const route = `${req.method} ${action ?? ''}`;
-    if (!['GET ', 'POST resume', 'POST takeover'].includes(route)) return sendJson(res, 404, { error: 'Not found' });
+    if (!['GET ', 'POST resume', 'POST takeover', 'POST open-chat'].includes(route)) return sendJson(res, 404, { error: 'Not found' });
+
+    if (route === 'POST open-chat' && !isOwner(req)) return sendJson(res, 403, { error: 'Only your own devices can open computer conversations.' });
 
     const s = await findSession(tool, id);
+    if (route === 'POST open-chat') return openChat(req, res, tool, id, s);
+
     if (!s) return sendJson(res, 404, { error: 'No such conversation' });
 
     if (route === 'GET ') {
