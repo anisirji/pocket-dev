@@ -8,12 +8,9 @@ import { execFile } from 'node:child_process';
 // chat) before the new copy starts.
 
 export const BUSY_MS = 10_000;
-export const LIVE_MS = 2 * 60_000;
 export const STOP_GRACE_MS = 5000;
 const POLL_MS = 100;
 const TOOL_LABELS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' };
-
-export const NOT_FOUND = `Couldn't find the program that has this conversation open. Close it on ${platform.host.the}, then try again.`;
 
 // Only these programs write conversations. Everything else that mentions an id (grep, tail, an editor, a shell) is a reader.
 const PROGRAMS = [
@@ -257,10 +254,7 @@ export function createTakeover({
     const ours = (c) => c.tool === tool && c.id === id && (scope === 'all' || c.kind !== 'process');
     const found = (await survey()).filter(ours);
     const busy = now() - mtimeMs < BUSY_MS || found.some((c) => c.busy);
-    if (!found.length) {
-      if (scope === 'all' && now() - mtimeMs < LIVE_MS) return refuse({ code: 'not-found', busy, error: NOT_FOUND });
-      return { status: 200, body: { stopped: [], busy } };
-    }
+    if (!found.length) return { status: 200, body: { stopped: [], busy } };
     if (busy && !confirmBusy) {
       return refuse({ code: 'busy', busy, copies: found.map(copyView), error: `${TOOL_LABELS[tool]} is still replying ${where(found)}. Continuing stops that reply.` });
     }

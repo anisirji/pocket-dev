@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePs, resumeTarget, findCopies, stopProcesses, createTakeover, NOT_FOUND } from '../takeover.js';
+import { parsePs, resumeTarget, findCopies, stopProcesses, createTakeover } from '../takeover.js';
 
 // Every process here is made up. Nothing in this file lists or signals a real process.
 const ME = 501;
@@ -247,15 +247,11 @@ test('the Mac terminal scope closes only Pocket Dev copies and leaves other prog
   assert.deepEqual(r.body.stopped.map((s) => s.kind), ['chat']);
 });
 
-test('live from a recent write but no program found: a clear refusal, nothing signalled', async () => {
+test('recent write but no program found: continues at once, nothing signalled', async () => {
   const { sys, takeOver } = takeoverWith([proc('/usr/bin/tail', `-f ${ID}.jsonl`)]);
   const r = await takeOver({ tool: 'claude', id: ID, mtimeMs: 1_000_000 - 30_000 });
-  assert.equal(r.status, 409);
-  assert.equal(r.body.code, 'not-found');
-  assert.equal(r.body.error, NOT_FOUND);
+  assert.deepEqual([r.status, r.body.stopped], [200, []]);
   assert.deepEqual(sys.signals, []);
-  const old = await takeOver({ tool: 'claude', id: ID, mtimeMs: OLD });
-  assert.deepEqual([old.status, old.body.stopped], [200, []], 'a conversation nobody has open needs nothing stopped');
 });
 
 test('a program that ignores the signals: a clear error that offers force, and force ends it with SIGKILL', async () => {
