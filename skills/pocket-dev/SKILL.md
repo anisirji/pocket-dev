@@ -21,7 +21,7 @@ Read the current [AI setup guide](https://www.theani.me/work/pocket-dev/docs/ai-
 
 ## Continue a project
 
-Use the user's existing project folder. **Chats → Open here** continues a computer conversation. Respect an active writer and avoid interrupting a response without the user's direction. `pocket-dev takeover` was removed in 2.0. **Continue on computer** returns the conversation to the computer.
+Use the user's existing project folder. In **Chats**, tapping a computer conversation reads along; sending a message from the phone continues it there. Respect an active writer and avoid interrupting a response without the user's direction. `pocket-dev takeover` was removed in 2.0. **Continue on computer** returns the conversation to the computer.
 
 Create a Pocket Dev terminal in the project folder when the user wants to follow a terminal task on the phone. Closing the browser preserves shells; a computer restart does not. Do not restart or stop active work as a setup shortcut.
 

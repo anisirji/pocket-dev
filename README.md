@@ -13,9 +13,10 @@
 - **Switch the provider and the model in the same chat.** The whole conversation goes with you.
 - **One Chats list, newest first:** your Pocket Dev chats and the Claude Code, Codex, Antigravity and Copilot conversations on your computer, together.
 - **Continue between computer and phone.** Open a computer conversation to read along live; send a message to continue it on the phone. **Continue on computer** takes it back.
-- **Files:** browse, upload (with **Take photo** on phones), download and zip.
+- **Copy any chat message** with the icon under it, and see **when each message was sent**.
+- **Files:** browse, upload (with **Take photo** on phones), download and zip. PDFs and text files open from Files and Messages.
 - **Git:** see changes, commit and push.
-- **Messages** between your devices.
+- **Messages** between your devices, with photos, videos and documents.
 - **Open apps, health and power:** see open apps, battery, CPU and temperature, and sleep or shut down.
 - **Several computers, one phone** (rooms), with per-device permissions.
 - **Share one project** with someone for 1 hour, 1 day or 7 days through a QR invitation.
@@ -26,6 +27,7 @@
 
 ## What's new in 2.1
 
+- **New in 2.1.2:** a **copy icon** under every chat message, the **time** on every message, **documents** (PDF and text) that open from Messages and Files, and a tidier code layout.
 - **One Chats list, newest first.** Your Pocket Dev chats and recent computer conversations are mixed by when each was last active, so the conversation you are having on your computer right now sits at the top. The list refreshes by itself while open.
 - **Read along, then continue.** Opening a conversation that is still open on your computer no longer closes it there. You can read along live. Sending a message continues it on the phone and closes the computer's copy gently, so Claude Code exits cleanly instead of showing an error in VS Code. **Stop** takes over at once.
 - **Windows hand-over:** Pocket Dev finds and safely closes the program holding a conversation on Windows too.

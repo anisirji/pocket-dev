@@ -65,7 +65,7 @@ Allow the app through a firewall on the intended private network if required. Do
 
 ### Continue work from the phone
 
-Use the person's current project folder. In Pocket Dev, open **Chats** to find computer conversations and choose **Open here** to continue one. Do not start a second writer against an active conversation or interrupt a running response without the person's direction. The old `pocket-dev takeover` command was removed in 2.0. Use **Continue on computer** in chat settings to go back.
+Use the person's current project folder. In Pocket Dev, open **Chats** and tap a computer conversation: the chat reads along while the computer still has it open, and sending a message continues it on the phone. Do not start a second writer against an active conversation or interrupt a running response without the person's direction. The old `pocket-dev takeover` command was removed in 2.0. Use **Continue on computer** in chat settings to go back.
 
 For a terminal task, open that project folder in a Pocket Dev terminal. Closing the phone's browser does not end the shell. Terminals do not survive a computer restart. Before stopping or restarting a service, account for running chats and terminal work.
 
