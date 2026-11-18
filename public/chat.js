@@ -861,19 +861,6 @@
     const main = el('span', 'chat-set-row-main');
     main.append(el('span', 'chat-set-row-title', 'Permissions'), el('span', 'chat-set-row-hint', 'What runs without asking'));
     perms.append(main, el('span', 'chat-set-chev', '›'));
-    const copyChat = button('chat-set-row', null, async () => {
-      const text = chatTranscript();
-      if (!text) return toast('Nothing to copy yet');
-      try {
-        await copyText(text);
-        toast('Chat copied');
-      } catch {
-        toast('Could not copy');
-      }
-    });
-    const copyMain = el('span', 'chat-set-row-main');
-    copyMain.append(el('span', 'chat-set-row-title', 'Copy chat'), el('span', 'chat-set-row-hint', 'The whole conversation as text'));
-    copyChat.append(copyMain);
     const del = button('chat-danger-link', 'Delete chat', async () => {
       if (!confirm(`Delete "${c.title}"? Its history is removed from Pocket Dev.`)) return;
       convo.leaving = true;
@@ -890,7 +877,7 @@
     const continueComputer = button('chat-set-row chat-continue-computer', 'Continue on computer', () => window.pocketDevHistory?.continueChat());
     continueComputer.disabled = !c.sessionId;
     if (!c.sessionId) continueComputer.title = 'Send a message first.';
-    body.append(where, continueComputer, perms, copyChat, del);
+    body.append(where, continueComputer, perms, del);
     sheet.replaceChildren(sheetHead('Chat settings'), body);
   }
 
@@ -1586,14 +1573,6 @@
     b.title = b.ariaLabel = 'Copy message';
     keepFocus(b);
     return b;
-  }
-  // The whole conversation as plain text: what you said and what the assistant answered, in order.
-  function chatTranscript() {
-    const who = TOOLS[convo.chat?.tool] || 'Assistant';
-    return convo.events
-      .filter((ev) => (ev.type === 'user-text' && !ev.removed && !ev.queued && ev.text) || (ev.type === 'assistant-text' && ev.text))
-      .map((ev) => `${ev.type === 'user-text' ? 'You' : TOOLS[ev.tool] || who}:\n${ev.text}`)
-      .join('\n\n');
   }
 
   const RENDER = {

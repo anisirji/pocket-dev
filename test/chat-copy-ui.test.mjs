@@ -25,25 +25,12 @@ function fixture(events, copied) {
     window: { isSecureContext: true }, navigator: { clipboard: { writeText: async (t) => { copied.push(t); } } },
     setTimeout: () => 0,
     TOOLS: { claude: 'Claude', codex: 'Codex' }, convo: { chat: { tool: 'claude' }, events },
-    md: () => new Element('div'), shortModel: (m) => m, toasts,
+    md: () => new Element('div'), shortModel: (m) => m, usedSeveralEngines: () => false, toasts,
   };
   vm.createContext(runtime);
-  vm.runInContext(`${copyView}\nObject.assign(this, {copyButton, chatTranscript, copyText}); this.renderAssistant = ({${assistantView}})['assistant-text'];`, runtime);
+  vm.runInContext(`${copyView}\nObject.assign(this, {copyButton, copyText}); this.renderAssistant = ({${assistantView}})['assistant-text'];`, runtime);
   return runtime;
 }
-
-test('Copy chat gives the whole conversation in order and skips unsent and removed messages', () => {
-  const rt = fixture([
-    { type: 'user-text', text: 'first question' },
-    { type: 'tool-run', name: 'Bash' },
-    { type: 'assistant-text', text: 'first answer' },
-    { type: 'user-text', text: 'waiting', queued: true },
-    { type: 'user-text', text: 'taken back', removed: true },
-    { type: 'user-text', text: 'second question' },
-    { type: 'assistant-text', text: 'second answer' },
-  ], []);
-  assert.equal(rt.chatTranscript(), 'You:\nfirst question\n\nClaude:\nfirst answer\n\nYou:\nsecond question\n\nClaude:\nsecond answer');
-});
 
 test('the bubble copy button puts that message on the clipboard and says so', async () => {
   const copied = [];
