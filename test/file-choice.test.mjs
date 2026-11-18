@@ -32,10 +32,11 @@ function world({ touch }) {
   return { sandbox, input, anchor: new El('button'), body: sandbox.document.body };
 }
 
-test('Photos and videos lets images and video through, and Files lets every file type through', () => {
+test('Photos and videos lets images and video through, and Files lets documents through with no media type', () => {
   const { PHOTOS, FILES } = world({ touch: false }).sandbox.PocketFileChoice;
   assert.deepEqual(PHOTOS.split(','), ['image/*', 'video/*']);
-  assert.equal(FILES, '*/*', 'a type list greys out files such as a pdf or doc on Android');
+  // Any media type, */* or file extension in this list makes Android Chrome offer Camera and Photos and hides the document picker.
+  assert.deepEqual(FILES.split(','), ['application/*', 'text/*']);
 });
 
 test('a desktop browser opens its one normal picker with no accept list', () => {

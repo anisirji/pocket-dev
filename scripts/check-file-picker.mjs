@@ -48,7 +48,7 @@ try {
     const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('.fc-menu button', { hasText: choice }).click()]);
     const accept = await input.getAttribute('accept');
     const capture = await input.getAttribute('capture');
-    check(choice === 'Files' ? accept === '*/*' : choice === 'Take photo' ? accept === 'image/*' : /^image\/\*,video\/\*$/.test(accept), `${label}: ${choice} sets accept=${accept.slice(0, 40)}…`);
+    check(choice === 'Files' ? accept === 'application/*,text/*' : choice === 'Take photo' ? accept === 'image/*' : /^image\/\*,video\/\*$/.test(accept), `${label}: ${choice} sets accept=${accept.slice(0, 40)}…`);
     check(choice === 'Take photo' ? capture === 'environment' : capture === null, `${label}: ${choice} ${choice === 'Take photo' ? 'opens the camera' : 'does not force the camera'} (capture=${capture})`);
     await chooser.setFiles(file);
     await pause(1500);

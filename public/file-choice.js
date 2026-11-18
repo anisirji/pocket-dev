@@ -5,8 +5,9 @@
 (() => {
   const CAMERA = 'image/*';
   const PHOTOS = 'image/*,video/*';
-  // Every type, so nothing is greyed out in the system picker. A list of document types hid some files on Android.
-  const FILES = '*/*';
+  // Documents only. Android Chrome adds a Camera and Photos chooser whenever the list holds */*, images, video or audio, and
+  // a `.ts` extension counts as video, so the list is two wildcards and no extensions: pdf, doc, zip, txt, json and the rest.
+  const FILES = 'application/*,text/*';
   globalThis.PocketFileChoice = { CAMERA, PHOTOS, FILES };
   if (typeof document === 'undefined') return;
 
