@@ -11,10 +11,12 @@ The npm package is `@anisirji/pocket-dev`. The previous version is 2.0.0. 2.1.0 
 - The separate **Resume** entry is gone. **Continue on computer** is now in chat settings.
 
 ### Opening a conversation the computer is still using
-- Opening a conversation that is mid-reply on the computer no longer asks you to stop it. The chat opens at once, shows the computer's reply and its current step with the spinner, and queues what you type. Once the program on the computer is idle, Pocket Dev takes over by itself.
+- Opening a conversation that a program on the computer still has open never stops that program. This holds whether the program is idle or mid-reply. The chat opens at once and you can read along. While the program replies, the chat shows its reply and its current step with the spinner.
+- Sending a message continues the conversation in the chat. Pocket Dev waits for any reply on the computer to finish, closes the program, and sends your message. The chat says that the program's window may show that the session ended. That is normal, and nothing is lost.
 - **Stop** on such a chat stops the reply on the computer and takes over at once.
+- If the program on the computer closes by itself, the chat continues on its own and nothing is signalled.
 - While the computer holds the conversation, the Provider and Model pills wait and say why.
-- An idle program that holds the conversation is closed in about 2 seconds instead of waiting for a slow interrupt. A Codex app-server that is replying in another thread is never stopped.
+- An idle program is closed with an interrupt (SIGINT) first. Idle Claude Code then exits with code 0 instead of 143, the code the VS Code extension shows as an error. A Codex app-server that is replying in another thread is never stopped.
 - **Windows:** Pocket Dev now finds, watches and stops the program that holds a conversation, including the program holding a Codex thread lock. Interrupts are sent as Ctrl+C to the program's console. If a program had to be ended at once, the note says its last step may be lost.
 
 ### Files and photos
