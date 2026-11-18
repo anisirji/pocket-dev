@@ -8,6 +8,7 @@ import { execFile } from 'node:child_process';
 // chat) before the new copy starts.
 
 export const BUSY_MS = 10_000;
+export const LIVE_MS = 2 * 60_000;
 export const STOP_GRACE_MS = 5000;
 const POLL_MS = 100;
 const TOOL_LABELS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' };
