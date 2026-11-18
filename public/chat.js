@@ -121,8 +121,9 @@
 
   const badge = (tool) => el('span', `chat-badge chat-${tool}`, TOOLS[tool] || tool);
   const spinner = () => el('span', 'chat-spin');
-  // A chat is busy while its reply runs, and while a program on the computer still holds the conversation (`held` names it).
-  const isBusy = (c) => c.runningSince != null || c.status === 'running' || c.pending || !!c.held;
+  // A chat is busy while its reply runs, and while a program on the computer that holds the conversation (`held` names it) is
+  // on a step. A holder that is idle leaves the chat free to send, which continues it here.
+  const isBusy = (c) => c.runningSince != null || c.status === 'running' || c.pending || !!(c.held && c.heldActivity);
 
   // Engine settings come from the tool's schema; schema order is display order.
   const schemaOf = (tool) => options?.tools?.[tool]?.settings || [];
@@ -1858,13 +1859,20 @@
     const c = convo.chat;
     let text = '';
     let cls = '';
+    let spin = true;
     if (c?.waking) {
       text = 'Waking up…';
     } else if (c?.pending) {
       text = 'Waiting for you';
       cls = ' chat-statusline-wait';
+      spin = false;
+    } else if (c?.held && c.heldActivity) {
+      text = `${c.held} on your computer: ${c.heldActivity}. ${c.queued ? `${c.queued} queued, sent here` : 'Sending a message continues it here'} once it finishes.`;
+    } else if (c?.held && c.queued) {
+      text = `Continuing here. Closing ${c.held} on your computer once it is done…`;
     } else if (c?.held) {
-      text = `${c.heldActivity ? `${c.held} on your computer: ${c.heldActivity}` : `${c.held} is finishing on your computer. It continues here when done.`}${c.queued ? ` · ${c.queued} queued` : ''}`;
+      text = `Open in ${c.held} on your computer. You can read along here. Sending a message continues it here and closes it there.`;
+      spin = false;
     } else if (c && isBusy(c)) {
       text = `${TOOLS[c.tool]} is working… ${c.runningSince ? ticking(Date.now() - c.runningSince) : ''}${c.queued ? ` · ${c.queued} queued` : ''}`.trim();
     }
@@ -1877,10 +1885,10 @@
     statusText.textContent = text;
     // Stop shows whenever a turn is in progress, including while it waits for you, so it is never missing.
     const stoppable = !!c && isBusy(c);
-    const mode = `${cls ? 'wait' : c?.waking ? 'wake' : 'busy'}${stoppable ? '+stop' : ''}`;
+    const mode = `${spin ? 'spin' : 'still'}${stoppable ? '+stop' : ''}`;
     if (mode === statusMode) return;
     statusMode = mode;
-    ui.statusline.replaceChildren(...(cls ? [statusText] : [spinner(), statusText]), ...(stoppable ? [statusStop] : []));
+    ui.statusline.replaceChildren(...(spin ? [spinner(), statusText] : [statusText]), ...(stoppable ? [statusStop] : []));
   }
 
   setInterval(() => {
