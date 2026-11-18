@@ -17,7 +17,10 @@ function el(tag, style, text) {
 
 function linksSlide() {
   const box = el('div', '');
-  box.append(el('p', 'margin:0 0 14px;font-size:20px;line-height:1.4', 'Find me and the code 🌐'));
+  box.append(el('p', 'margin:0 0 14px;font-size:20px;line-height:1.4', 'A little more freedom'));
+  COPY.creator.forEach((text, i) => {
+    box.append(el('p', 'margin:0 0 12px;font-size:15px;line-height:1.55', text + (i === COPY.creator.length - 1 ? ' ❤️' : '')));
+  });
   for (const { label, url } of COPY.links) {
     box.append(el('p', 'margin:0 0 2px;font-size:13px;color:var(--muted,#7d8799)', label));
     const line = el('p', 'margin:0 0 12px;font-size:15px');
@@ -56,7 +59,9 @@ function show() {
   const render = () => {
     changing = false;
     const slide = slides[index];
+    stage.style.justifyContent = slide.links ? 'flex-start' : 'center';
     stage.replaceChildren(slide.links ? linksSlide() : el('p', 'margin:0;font-size:21px;line-height:1.45;text-align:center', slide.text));
+    stage.scrollTop = 0;
     fade(stage, 0, 1, 350);
     dotNodes.forEach((d, i) => { d.style.background = i === index ? '#e8964a' : '#3a4252'; });
     const last = index === slides.length - 1;

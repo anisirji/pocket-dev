@@ -100,4 +100,14 @@ More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/d
 - **Report a bug:** [open an issue](https://github.com/anisirji/pocket-dev/issues/new/choose) and paste the output of `pocket-dev doctor`
 - **Source code:** [github.com/anisirji/pocket-dev](https://github.com/anisirji/pocket-dev)
 
+## A little more freedom
+
+I built Pocket Dev because I wanted us to spend less time tied to a desk and more time living, without losing touch with our work.
+
+If it makes your day a little freer, share it with **three people you’d love to see escape the PC cage too.** If they find it useful, invite them to share it with three more.
+
+No pressure. Just something useful, passed from one person to another. ❤️
+
+[Let your AI help you set it up](https://www.theani.me/work/pocket-dev/prompts)
+
 Made by [anisirji](https://theani.me). Licence: ISC. If you use or build on this code, keep the copyright notice in `LICENSE` and please credit and link [theani.me](https://theani.me).
