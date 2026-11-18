@@ -29,7 +29,7 @@
 - **Removed: `pocket-dev takeover`.** Open the conversation in **Chats**, or use **Continue on computer** in chat settings instead.
 - **Updating:** `pocket-dev update`, an update step in setup, an update icon on the phone, an **Update** button and banner on the Admin page, and a desktop notification until you are current.
 - **The install now adds an Admin tile** to your Dock, Start menu or applications menu. Skip it with `POCKET_DEV_NO_PIN=1` or `npm install -g --ignore-scripts`, and remove it with `pocket-dev admin unpin`.
-- **Files and photos:** the paperclips and **Upload** ask **Photos and videos** or **Files** on phones, so Android opens its document browser.
+- **Files and photos:** the paperclips and **Upload** ask **Take photo**, **Photos and videos** or **Files** on phones. Take photo opens the camera, and Files opens Android's document browser.
 - **An agents strip in terminals** for Claude Code helper agents, and the Pocket Dev logo.
 
 Known limits: Antigravity and Copilot are experimental. The Windows and Linux paths for the Admin tile and the update notification were not run on real machines, and the Android file picker and a real four-engine switch are still to be checked on a phone. Details: [release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_2.0.md).

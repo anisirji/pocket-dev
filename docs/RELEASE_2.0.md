@@ -30,7 +30,7 @@
 - The computer shows a desktop notification at start and every six hours until it is current. `pocket-dev config set updateNotify false` turns off only that.
 
 ### Other changes
-- **Files and photos:** the paperclips and **Upload** offer **Photos and videos** or **Files** on phones.
+- **Files and photos:** the paperclips and **Upload** offer **Take photo**, **Photos and videos** or **Files** on phones.
 - **Agents strip:** Claude Code helper agents running in a terminal tab appear in a strip above the terminal.
 - **Fixes:** the answer boxes keep the caret at the end on phone keyboards that move it; page assets are checked by a test so none can go missing; an engine whose configured path does not exist counts as not installed.
 - **Logo and favicon** for the Dock tile, shortcuts and browser tabs.

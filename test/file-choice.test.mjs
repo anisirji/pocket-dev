@@ -49,20 +49,35 @@ test('a desktop browser opens its one normal picker with no accept list', () => 
   assert.equal(w.body.children.length, 0);
 });
 
-test('a phone shows two 44px-class choices and each sets its accept list and opens the picker', () => {
-  for (const [index, key] of [[0, 'PHOTOS'], [1, 'FILES']]) {
+test('a phone shows three 44px-class choices and each sets its accept list and opens the picker', () => {
+  for (const [index, key] of [[0, 'CAMERA'], [1, 'PHOTOS'], [2, 'FILES']]) {
     const w = world({ touch: true });
     w.sandbox.chooseFiles(w.anchor, w.input);
     const menu = w.body.children[0];
     assert.equal(menu.attrs.role, 'menu');
-    assert.deepEqual(menu.children.map((b) => b.textContent), ['Photos and videos', 'Files']);
+    assert.deepEqual(menu.children.map((b) => b.textContent), ['Take photo', 'Photos and videos', 'Files']);
     assert.equal(w.input.clicks, 0);
     menu.children[index].onclick();
     assert.equal(w.input.attrs.accept, w.sandbox.PocketFileChoice[key]);
+    assert.equal(w.input.attrs.capture, key === 'CAMERA' ? 'environment' : undefined, `${key} ${key === 'CAMERA' ? 'opens the camera' : 'never forces the camera'}`);
     assert.equal(w.input.clicks, 1);
     assert.equal(w.body.children.length, 0);
   }
   assert.match(helper, /\.fc-menu button \{ min-height: 44px/);
+});
+
+test('choosing a file after the camera clears the camera setting, and the desktop picker never has one', () => {
+  const w = world({ touch: true });
+  w.sandbox.chooseFiles(w.anchor, w.input);
+  w.body.children[0].children[0].onclick();
+  assert.equal(w.input.attrs.capture, 'environment');
+  w.sandbox.chooseFiles(w.anchor, w.input);
+  w.body.children[0].children[2].onclick();
+  assert.equal('capture' in w.input.attrs, false);
+  const d = world({ touch: false });
+  d.input.setAttribute('capture', 'environment');
+  d.sandbox.chooseFiles(d.anchor, d.input);
+  assert.equal('capture' in d.input.attrs, false);
 });
 
 test('tapping the button again closes the menu', () => {

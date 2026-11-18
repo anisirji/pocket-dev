@@ -1,11 +1,12 @@
 // On a phone, Chrome for Android opens its photo picker, or a photos-first view, for the file box whenever the page lets
 // images through, so people could not reach their documents. On touch devices the paperclip and the Upload button show
-// two plain choices, and each sets an `accept` list that opens the right system screen. A desktop browser keeps its one
-// normal picker.
+// three plain choices, and each sets an `accept` list (and, for the camera, `capture`) that opens the right system screen.
+// That photo picker has no camera, so Take photo asks for the camera directly. A desktop browser keeps its one normal picker.
 (() => {
+  const CAMERA = 'image/*';
   const PHOTOS = 'image/*,video/*';
   const FILES = 'application/*,text/*,audio/*,.pdf,.zip,.txt,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.js,.ts,.py,.log,.apk';
-  globalThis.PocketFileChoice = { PHOTOS, FILES };
+  globalThis.PocketFileChoice = { CAMERA, PHOTOS, FILES };
   if (typeof document === 'undefined') return;
 
   const isTouch = () => matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -29,9 +30,11 @@
   function escape(e) { if (e.key === 'Escape') close(); }
 
   // The click on the input has to happen inside the tap, so each choice clicks it straight away.
-  function pick(input, accept) {
+  function pick(input, accept, capture) {
     close();
     input.setAttribute('accept', accept);
+    if (capture) input.setAttribute('capture', capture);
+    else input.removeAttribute('capture');
     input.click();
   }
 
@@ -39,17 +42,18 @@
     if (open) return close();
     if (!isTouch()) {
       input.removeAttribute('accept');
+      input.removeAttribute('capture');
       return input.click();
     }
     const menu = document.createElement('div');
     menu.className = 'fc-menu';
     menu.setAttribute('role', 'menu');
-    for (const [label, accept] of [['Photos and videos', PHOTOS], ['Files', FILES]]) {
+    for (const [label, accept, capture] of [['Take photo', CAMERA, 'environment'], ['Photos and videos', PHOTOS], ['Files', FILES]]) {
       const b = document.createElement('button');
       b.type = 'button';
       b.setAttribute('role', 'menuitem');
       b.textContent = label;
-      b.onclick = () => pick(input, accept);
+      b.onclick = () => pick(input, accept, capture);
       menu.append(b);
     }
     document.body.append(menu);

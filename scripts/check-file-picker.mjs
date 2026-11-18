@@ -17,6 +17,7 @@ const zip = path.join(tmp, 'bundle.zip'); fs.writeFileSync(zip, Buffer.from([0x5
 
 const cleanups = [];
 const s = await startServer({ after: (fn) => cleanups.push(fn) }, { env: { POCKET_DEV_AGY: FAKE, POCKET_DEV_CODEX: FAKE } });
+fs.writeFileSync(path.join(s.root, 'no-processes.json'), JSON.stringify({ processes: [] }));
 const A = await s.login();
 const problems = [];
 const check = (ok, what) => { if (!ok) problems.push(what); console.log(ok ? 'ok  ' : 'FAIL', what); };
@@ -38,7 +39,7 @@ try {
   async function choose(button, input, choice, file, label) {
     await button.click(); await pause(250);
     const items = await page.locator('.fc-menu button').allInnerTexts();
-    check(items.join('|') === 'Photos and videos|Files', `${label}: the menu offers Photos and videos and Files (${items.join(' | ')})`);
+    check(items.join('|') === 'Take photo|Photos and videos|Files', `${label}: the menu offers Take photo, Photos and videos and Files (${items.join(' | ')})`);
     await page.screenshot({ path: path.join(tmp, `menu-${label.replace(/ /g, '-')}.png`) });
     const box = await page.locator('.fc-menu button').first().boundingBox();
     check(box.height >= 44, `${label}: touch targets are at least 44px (${box.height}px)`);
@@ -46,18 +47,21 @@ try {
     check(menuBox.x >= 0 && menuBox.x + menuBox.width <= 390, `${label}: the menu fits in 390px (${Math.round(menuBox.x)}..${Math.round(menuBox.x + menuBox.width)})`);
     const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('.fc-menu button', { hasText: choice }).click()]);
     const accept = await input.getAttribute('accept');
-    check(choice === 'Files' ? !/image\//.test(accept) && /application\/\*/.test(accept) && /\.pdf/.test(accept) : /^image\/\*,video\/\*$/.test(accept), `${label}: ${choice} sets accept=${accept.slice(0, 40)}…`);
+    const capture = await input.getAttribute('capture');
+    check(choice === 'Files' ? !/image\//.test(accept) && /application\/\*/.test(accept) && /\.pdf/.test(accept) : choice === 'Take photo' ? accept === 'image/*' : /^image\/\*,video\/\*$/.test(accept), `${label}: ${choice} sets accept=${accept.slice(0, 40)}…`);
+    check(choice === 'Take photo' ? capture === 'environment' : capture === null, `${label}: ${choice} ${choice === 'Take photo' ? 'opens the camera' : 'does not force the camera'} (capture=${capture})`);
     await chooser.setFiles(file);
     await pause(1500);
   }
 
   // 1. The chat paperclip.
   await page.locator('#viewSwitch [data-view="chat"]').click(); await pause(800);
-  await page.locator('text=hello').first().click(); await pause(1500);
+  await page.locator('.chat-row:not(.chat-computer-row)').first().click(); await pause(1500);
   await choose(page.locator('.chat-attach'), page.locator('.chat-file-input'), 'Files', pdf, 'chat paperclip');
   check(await page.locator('.chat-files').innerText().then((t) => t.includes('report.pdf')), 'chat paperclip: report.pdf is attached and uploaded');
   await choose(page.locator('.chat-attach'), page.locator('.chat-file-input'), 'Photos and videos', png, 'chat paperclip');
   check(await page.locator('.chat-files').innerText().then((t) => t.includes('pixel.png')), 'chat paperclip: pixel.png is attached and uploaded');
+  await choose(page.locator('.chat-attach'), page.locator('.chat-file-input'), 'Take photo', png, 'chat paperclip');
   check(!(await page.locator('.chat-notice').isVisible().catch(() => false)), 'chat paperclip: no error notice');
   await page.screenshot({ path: path.join(tmp, 'chat.png') });
 
