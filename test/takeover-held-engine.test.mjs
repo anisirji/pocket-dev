@@ -71,7 +71,7 @@ test('a chat awake on the phone while the Mac replies: the hold puts its engine 
     readJson: async (req) => req.body ?? {}, deviceFor: () => ({ id: 'dev1' }), log: () => {}, system,
     listChats: () => chatApi.list(), own: { chats: () => chatApi.bound(), releaseChat: (i, note) => chatApi.release(i, note) },
     resumeChat: (c) => chatApi.resumeSession(c), mirrorChat: (i, m, a) => chatApi.mirrorNative(i, m, a), endChatHold: (i, h) => chatApi.endHold(i, h),
-    handoverTickMs: 15,
+    handoverTickMs: 15, closedCheckMs: 15,
   });
 
   // 3. The person taps the chat row in Chats (public/chat.js:605 calls open-chat for a chat with a sessionId).

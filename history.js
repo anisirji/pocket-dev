@@ -15,6 +15,8 @@ const TITLE_MAX = 120;
 const TEXT_MAX = 1500;
 const DETAIL_MESSAGES = 20;
 const HANDOVER_TICK_MS = 1500;
+// Reading along only needs to notice, now and then, that the program closed; a process listing costs about a second on Windows.
+const CLOSED_CHECK_MS = 10_000;
 const ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 
 const claudeDir = () => process.env.POCKET_DEV_CLAUDE_DIR || path.join(os.homedir(), '.claude', 'projects');
@@ -482,7 +484,7 @@ const toBool = (v, name) => {
 // gone or no longer held, else { wantsTakeOver }.
 export function createHistoryApi({
   createSession, sessionView, sendJson, readJson, deviceFor, log, own = {}, system = {}, listChats = () => [],
-  resumeChat, mirrorChat = () => false, endChatHold = () => false, handoverTickMs = HANDOVER_TICK_MS,
+  resumeChat, mirrorChat = () => false, endChatHold = () => false, handoverTickMs = HANDOVER_TICK_MS, closedCheckMs = CLOSED_CHECK_MS,
   isOwner = (req) => !req.roomPeer && Boolean(deviceFor(req)),
 }) {
   const takeover = createTakeover({
@@ -590,10 +592,13 @@ export function createHistoryApi({
       end({ note: `Could not continue here: ${err.message}. Open it from Chats to try again.`, failed: true });
     }));
     const closed = `${holder} closed on your ${platform.host.mac}. The conversation continues here.`;
+    let checkedAt = 0;
     const attempt = async (stopping) => {
       const held = await mirror();
       if (!held) return end();
       if (!stopping && !held.wantsTakeOver) {
+        if (Date.now() - checkedAt < closedCheckMs) return undefined;
+        checkedAt = Date.now();
         const open = (await takeover.survey()).some((c) => c.tool === tool && c.id === id);
         return open ? undefined : end({ note: closed });
       }

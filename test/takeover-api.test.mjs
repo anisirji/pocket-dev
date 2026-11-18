@@ -266,7 +266,7 @@ function heldSetup({ took, status = 'busy' } = {}) {
     readJson: async (req) => req.body ?? {}, deviceFor: () => ({ id: 'dev1' }), log: () => {}, system,
     listChats: () => chatApi.list(), own: { chats: () => chatApi.bound(), releaseChat: (id, note) => chatApi.release(id, note) },
     resumeChat: (c) => chatApi.resumeSession(c), mirrorChat: (id, m, a) => chatApi.mirrorNative(id, m, a), endChatHold: (id, h) => chatApi.endHold(id, h),
-    handoverTickMs: 15,
+    handoverTickMs: 15, closedCheckMs: 15,
   });
   const call = async (handle, method, url, body) => {
     const res = {};
@@ -293,7 +293,7 @@ test('a busy Mac reply opens the chat at once, held: messages queue, the model w
   const model = await t.chat('PATCH', `/api/chat/${id}`, { settings: { model: 'sonnet' } });
   assert.deepEqual([model.status, model.body.error], [409, 'The model can change once Claude Code in VS Code finishes.']);
   const provider = await t.chat('POST', `/api/chat/${id}/engine`, { tool: 'codex' });
-  assert.deepEqual([provider.status, provider.body.error], [409, 'Claude Code in VS Code is finishing on your computer. Wait for it before switching the provider.']);
+  assert.deepEqual([provider.status, provider.body.error], [409, 'Claude Code in VS Code has this conversation on your computer. Send a message to continue it here before switching the provider.']);
 
   const before = (await t.get(id)).events.length;
   line({ type: 'assistant', timestamp: '2026-11-01T10:00:05Z', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'npm test' } }] } });

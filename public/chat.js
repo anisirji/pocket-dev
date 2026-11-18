@@ -1653,20 +1653,22 @@
   // (dimmed, aria-disabled) and says why on a tap, and works again the moment the chat is idle. The model can change at any
   // time; during a reply the change is kept and applies to the next reply.
   const ENGINE_BUSY_HINT = 'Stop the reply first.';
+  // While the computer has the conversation, nothing changes here until a message sent here takes it over.
+  const busyHint = (c) => (c?.held ? `Send a message first to continue here from ${c.held}.` : ENGINE_BUSY_HINT);
   const MODEL_NEXT_NOTE = 'Applies to the next reply';
   const engineBusy = (c) => Boolean(c && (BUSY.has(c.status) || c.queued || c.waking || c.runningSince != null || c.pending || c.held));
   // The program on the computer keeps its model until it finishes, so the Model pill waits too.
-  const heldModelHint = (c) => `The model can change once ${c.held} finishes.`;
+  const heldModelHint = (c) => `The model can change once this chat continues here. Send a message first.`;
   function lockChip(chip, c) {
     if (engineBusy(c)) {
       chip.classList.add('chat-chip-disabled');
       chip.setAttribute('aria-disabled', 'true');
-      chip.title = ENGINE_BUSY_HINT;
+      chip.title = busyHint(c);
     }
     return chip;
   }
   function providerChip(c) {
-    const b = button('chat-chip chat-provider-chip', null, () => (engineBusy(convo.chat) ? toast(ENGINE_BUSY_HINT) : toggleSwitchMenu(b)));
+    const b = button('chat-chip chat-provider-chip', null, () => (engineBusy(convo.chat) ? toast(busyHint(convo.chat)) : toggleSwitchMenu(b)));
     const face = el('span', 'chat-chip-face');
     face.append(el('span', 'chat-chip-k', 'Provider'), badge(c.tool));
     b.append(face);
@@ -1731,7 +1733,7 @@
     if (switchMenu) return closeSwitchMenu();
     const c = convo.chat;
     if (!c) return;
-    if (engineBusy(c)) return toast(ENGINE_BUSY_HINT);
+    if (engineBusy(c)) return toast(busyHint(c));
     switchButton = dd;
     dd.setAttribute('aria-expanded', 'true');
     switchMenu = el('div', 'chat-engine-menu');
@@ -1779,7 +1781,7 @@
     closeSwitchMenu();
     const c = convo.chat;
     if (!c || tool === c.tool) return;
-    if (engineBusy(c)) return toast(ENGINE_BUSY_HINT);
+    if (engineBusy(c)) return toast(busyHint(c));
     try {
       const switched = await api('POST', `/api/chat/${c.id}/engine`, { tool });
       if (switched?.id) setChat(switched);

@@ -225,7 +225,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   // on the Mac still holds the conversation. The provider never changes in any of those states, whatever client asks.
   const busy = (chat) => Boolean(chat.turn || chat.queue.length || chat.requests.size || chat.waking || chat.nativeOpening || chat.nativeHeld);
   const busyError = (what, chat) => new BadRequest(chat?.nativeHeld
-    ? `${chat.nativeHeld} is finishing on your computer. Wait for it before ${what}.`
+    ? `${chat.nativeHeld} has this conversation on your computer. Send a message to continue it here before ${what}.`
     : `Stop the reply first, or wait for it to finish, before ${what}.`, 409);
 
   async function switchEngine(chat, tool) {

@@ -235,10 +235,10 @@ test('while a program on the computer holds the chat, the Model pill is locked w
   const model = t.settingPill(modelSetting, t.ctx.convo.chat);
   assert.ok(model.className.includes('chat-chip-disabled'));
   assert.equal(model.attributes['aria-disabled'], 'true');
-  assert.equal(model.title, 'The model can change once Claude Code in VS Code finishes.');
+  assert.equal(model.title, 'The model can change once this chat continues here. Send a message first.');
   model.onclick();
   assert.deepEqual(t.ctx.pushes, [], 'no model list opens');
-  assert.deepEqual(t.ctx.toasts, ['The model can change once Claude Code in VS Code finishes.']);
+  assert.deepEqual(t.ctx.toasts, ['The model can change once this chat continues here. Send a message first.']);
   assert.ok(t.pill.className.includes('chat-chip-disabled'), 'the provider waits too');
   const mode = t.settingPill(modeSetting, t.ctx.convo.chat);
   assert.ok(!mode.className.includes('chat-chip-disabled'), 'other settings keep their own rules');
