@@ -6,6 +6,34 @@
 
 [![npm](https://img.shields.io/npm/v/@anisirji/pocket-dev?color=4c8dff&label=npm)](https://www.npmjs.com/package/@anisirji/pocket-dev) ![Node 22+](https://img.shields.io/node/v/@anisirji/pocket-dev?color=4c8dff&label=node) ![macOS, Windows, Linux](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-4c8dff)
 
+## Features
+
+- **Terminals** on your computer that keep running when you close the page, with a compact key bar for phone keyboards and a strip that shows Claude Code's helper agents.
+- **Chat with Claude Code and Codex** using your own logins, plus **Antigravity** and **GitHub Copilot** (experimental). Approval cards, permission modes and a message queue work from the phone.
+- **Switch the provider and the model in the same chat.** The whole conversation goes with you.
+- **One Chats list, newest first:** your Pocket Dev chats and the Claude Code, Codex, Antigravity and Copilot conversations on your computer, together.
+- **Continue between computer and phone.** Open a computer conversation to read along live; send a message to continue it on the phone. **Continue on computer** takes it back.
+- **Files:** browse, upload (with **Take photo** on phones), download and zip.
+- **Git:** see changes, commit and push.
+- **Messages** between your devices.
+- **Open apps, health and power:** see open apps, battery, CPU and temperature, and sleep or shut down.
+- **Several computers, one phone** (rooms), with per-device permissions.
+- **Share one project** with someone for 1 hour, 1 day or 7 days through a QR invitation.
+- **Internet access** through a Cloudflare Tunnel: optional, off by default.
+- **Admin page** with a Dock, Start menu or app menu tile, and **self-update** (`pocket-dev update` or the Admin **Update** button).
+- **Private by design:** runs on your own computer as your user, logs in with a password or a one-time QR code, needs no cloud account and nothing installed on the phone.
+- **Set up with AI:** [copyable prompts](https://www.theani.me/work/pocket-dev/prompts) for your coding assistant, an [agent setup guide](docs/AI_SETUP.md) and a reusable agent skill.
+
+## What's new in 2.1
+
+- **One Chats list, newest first.** Your Pocket Dev chats and recent computer conversations are mixed by when each was last active, so the conversation you are having on your computer right now sits at the top. The list refreshes by itself while open.
+- **Read along, then continue.** Opening a conversation that is still open on your computer no longer closes it there. You can read along live. Sending a message continues it on the phone and closes the computer's copy gently, so Claude Code exits cleanly instead of showing an error in VS Code. **Stop** takes over at once.
+- **Windows hand-over:** Pocket Dev finds and safely closes the program holding a conversation on Windows too.
+- **Take photo** in the paperclip and Upload menus opens the camera directly, and **Files** opens Android's document picker.
+- **Set up with AI:** copyable prompts, an agent setup guide and a reusable agent skill.
+
+2.0 added four chat engines, provider and model switching in one chat, self-update and the Admin tile. Details: [2.1 release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_2.1.md) · [2.0 release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_2.0.md).
+
 > [!IMPORTANT]
 > **Important before you start**
 >
@@ -18,16 +46,6 @@
 > - **The install itself makes one change without asking:** `npm install -g` adds a **Pocket Dev Admin** shortcut with the Pocket Dev logo: a Dock tile on macOS, Desktop and Start menu shortcuts on Windows, an applications menu entry on Linux. Undo it with `pocket-dev admin unpin`. Skip it with `POCKET_DEV_NO_PIN=1` or `npm install -g --ignore-scripts`. `npx` and CI never add it.
 >
 > Step by step for your system: [Windows](https://github.com/anisirji/pocket-dev/blob/main/docs/windows.md), [macOS](https://github.com/anisirji/pocket-dev/blob/main/docs/macos.md), [Linux](https://github.com/anisirji/pocket-dev/blob/main/docs/linux.md).
-
-## What's new in 2.1
-
-- **One Chats list:** your Pocket Dev chats and recent Claude Code, Codex, Antigravity and Copilot conversations from the computer, in one list, newest first. It refreshes while open, so a conversation you just started on the computer shows up by itself.
-- **No more "stop it first":** open a conversation the computer is still replying in, and the chat follows that reply live, queues your messages, and takes over once the computer is done. **Stop** takes over at once.
-- **Windows hand-over:** Pocket Dev finds and safely stops the program holding a conversation on Windows too.
-- **Take photo** in the paperclip and Upload menus opens the camera directly, and **Files** opens Android's document picker.
-- **Set up with AI:** [copyable prompts](https://www.theani.me/work/pocket-dev/prompts) for your coding assistant, an [agent setup guide](docs/AI_SETUP.md) and a reusable agent skill.
-
-2.0 added four chat engines, provider and model switching in one chat, self-update and the Admin tile. Details: [2.1 release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_2.1.md) · [2.0 release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_2.0.md).
 
 ## Quick start
 
@@ -65,16 +83,6 @@ Just trying it? `npx -y @anisirji/pocket-dev start` runs it once and installs no
 
 More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#troubleshooting).
 
-## What you get
-
-- **Terminals** that keep running when you close the page.
-- **Chat** with your own Claude Code and Codex logins, and, experimentally, Antigravity and GitHub Copilot.
-- **Switch the provider and the model in the same chat.** In the settings row, pick the Provider pill, then the Model pill. The whole conversation goes with you, an engine you have not installed yet shows how to install it, and the model can change even while a reply runs (it applies to the next reply).
-- **Git** and **Files** on the computer where your work is.
-- **Open apps, health and power** controls.
-- **Several computers, one phone**, with per-device permissions.
-- **Internet access** is optional and off by default.
-
 ## Docs
 
 - [Set up with AI](https://www.theani.me/work/pocket-dev/prompts): copyable setup and project prompts, with an [agent setup guide](docs/AI_SETUP.md).
@@ -83,11 +91,6 @@ More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/d
 - [Full guide](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md): commands, configuration, rooms, internet access, security, limitations.
 - [Guided setup](https://github.com/anisirji/pocket-dev/blob/main/docs/SETUP.md) and [reference](https://github.com/anisirji/pocket-dev/blob/main/docs/REFERENCE.md).
 
-
-## Upcoming
-
-- **Google Antigravity CLI (`agy`)**, as a third engine in Chat next to Claude Code and Codex. **Experimental:** tested by hand on macOS with Antigravity CLI 1.5.9, not yet on Windows or Linux. Details and open questions: [Roadmap](https://github.com/anisirji/pocket-dev/blob/main/docs/ROADMAP.md).
-- **GitHub Copilot CLI (`copilot`)**, as a fourth engine in Chat. **Experimental:** tested on macOS against Copilot CLI 1.0.112 signed in with `copilot login`; not yet on Windows or Linux. Needs a GitHub Copilot plan, and every prompt counts against its premium requests. Details and open questions: [Roadmap](https://github.com/anisirji/pocket-dev/blob/main/docs/ROADMAP.md).
 
 ## Community and support
 
