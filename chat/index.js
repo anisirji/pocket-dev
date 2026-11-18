@@ -605,12 +605,14 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   // program that still writes the conversation: the chat then shows it and queues messages until endHold().
   async function resumeSession({ tool, id, cwd, title, heldBy = null, stopHolder = null }) {
     const existing = [...chats.values()].find((chat) => chat.tool === tool && chat.sessionId === id);
-    if (existing && busy(existing)) throw busyError('opening this conversation');
+    if (existing && busy(existing)) throw busyError('opening this conversation', existing);
     if (existing) existing.nativeOpening = true;
     try {
       const history = await readConversationMessages(tool, id);
       const { chat } = existing ? { chat: existing } : await create({ tool, cwd, title, resume: { sessionId: id } });
-      if (chat.turn || chat.queue.length || chat.requests.size || chat.waking) throw busyError('opening this conversation');
+      if (chat.turn || chat.queue.length || chat.requests.size || chat.waking) throw busyError('opening this conversation', chat);
+      // An awake engine would be a second copy of the conversation, and the hand over would then close this chat as one.
+      if (heldBy) await sleep(chat);
       chat.importNativeHistory(history.messages, history.note);
       Object.assign(chat, { nativeReleased: false, nativeHeld: heldBy, heldActivity: null, holdStop: heldBy ? stopHolder : null });
       chat.changed();

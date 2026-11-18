@@ -571,8 +571,12 @@ export function createHistoryApi({
     };
     const end = (hold) => {
       ended = true;
-      handovers.delete(key);
-      if (hold) endChatHold(chatId, hold);
+      if (handovers.get(key) === handover) handovers.delete(key);
+      try {
+        if (hold) endChatHold(chatId, hold);
+      } catch (err) {
+        console.warn(`Could not end the hold on chat ${chatId}: ${err.message}`);
+      }
     };
     const serial = (step) => (queue = queue.then(() => (ended ? undefined : step())).catch((err) => {
       end({ note: `Could not continue here: ${err.message}. Open it from Chats to try again.`, failed: true });

@@ -130,9 +130,13 @@ export function parseLsof(text) {
 export async function readCodexLocks(dir) {
   if (fixtureFile()) return JSON.parse(fs.readFileSync(fixtureFile(), 'utf8')).codexLocks ?? [];
   if (win) return winCodexLocks(dir).catch(() => []);
-  // lsof exits 1 with no output when nothing holds a lock.
-  return new Promise((resolve) => {
-    execFile('lsof', ['-n', '-F', 'pn', '+d', dir], { timeout: 5000, maxBuffer: 4 << 20 }, (err, out) => resolve(parseLsof(out ?? '')));
+  // lsof exits 1 with no output when nothing holds a lock. Without lsof, Codex's own writer lock still refuses a second
+  // writer. Any other failure must not read as "nobody holds it".
+  return new Promise((resolve, reject) => {
+    execFile('lsof', ['-n', '-F', 'pn', '+d', dir], { timeout: 5000, maxBuffer: 4 << 20 }, (err, out) => {
+      if (err && err.code !== 'ENOENT' && !(err.code === 1 && !out?.trim())) return reject(err);
+      resolve(parseLsof(out ?? ''));
+    });
   });
 }
 
