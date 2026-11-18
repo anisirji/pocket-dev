@@ -796,6 +796,8 @@ const handleHistory = createHistoryApi({
   createSession, sessionView, sendJson, readJson, deviceFor: auth.deviceFor, log: auth.admin.log,
   listChats: () => chatApi.list(),
   resumeChat: (conversation) => chatApi.resumeSession(conversation),
+  mirrorChat: (id, messages, activity) => chatApi.mirrorNative(id, messages, activity),
+  endChatHold: (id, hold) => chatApi.endHold(id, hold),
   isOwner: (req) => !req.roomPeer && !collaborators.guest(req) && Boolean(auth.deviceFor(req)),
   own: {
     terminals: () => [...sessions.values()].filter((s) => s.exitCode === null).map((s) => ({ id: s.id, title: s.title, cwd: s.cwd, pid: s.pty.pid, activeAt: s.activeAt })),

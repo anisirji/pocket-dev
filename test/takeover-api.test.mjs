@@ -11,7 +11,8 @@ process.env.POCKET_DEV_CODEX_DIR = path.join(root, 'codex');
 process.env.POCKET_DEV_CHAT_DIR = path.join(root, 'chats');
 const { createHistoryApi, findConversation } = await import('../history.js');
 const { createChatApi } = await import('../chat/index.js');
-test.after(() => fs.rmSync(root, { recursive: true, force: true }));
+// A chat saves itself a second after it changes, so the store stays until those saves are done.
+test.after(async () => { await new Promise((r) => setTimeout(r, 1500)); fs.rmSync(root, { recursive: true, force: true }); });
 
 const ME = process.getuid();
 const ID = '0b3c1d2e-1111-4222-8333-944455556666';
@@ -75,8 +76,8 @@ test('POST takeover stops the Mac copy, returns what it stopped, and logs the de
   const { call, system, logged } = api();
   const r = await call('POST', `/api/history/claude/${ID}/takeover`, {});
   assert.equal(r.status, 200, JSON.stringify(r.body));
-  assert.deepEqual(r.body, { busy: false, stopped: [{ kind: 'process', pid: 2865, label: 'Claude Code in VS Code (pid 2865)', signals: ['SIGINT'] }] });
-  assert.deepEqual(system.signals, [[2865, 'SIGINT']]);
+  assert.deepEqual(r.body, { busy: false, stopped: [{ kind: 'process', pid: 2865, label: 'Claude Code in VS Code (pid 2865)', signals: ['SIGTERM'] }] });
+  assert.deepEqual(system.signals, [[2865, 'SIGTERM']]);
   assert.deepEqual(logged, [{ type: 'conversation-taken-over', tool: 'claude', conversationId: ID, pids: [2865], stopped: ['process'], force: false, by: 'phone', deviceId: 'dev1', name: 'Pixel 8', ip: '192.168.1.20' }]);
 });
 
@@ -228,4 +229,130 @@ test("a chat's copy closes through the chat API: the turn stops, waiting message
   await new Promise((resolve) => setTimeout(resolve, 50));
   assert.equal(calls.filter((c) => c === 'start').length, 1, 'and the engine did not wake again');
   assert.equal(await chatApi.release('ffffffffffff', 'x'), false);
+});
+
+// The chat API and the history API wired as server.js wires them, over a made-up process table where one VS Code Claude
+// holds the conversation and says through its session file whether it is replying.
+const HELD = '0b3c1d2e-2222-4222-8333-944455556666';
+const heldFile = path.join(process.env.POCKET_DEV_CLAUDE_DIR, app.replace(/[^A-Za-z0-9]/g, '-'), `${HELD}.jsonl`);
+const line = (o) => fs.appendFileSync(heldFile, `${JSON.stringify(o)}\n`);
+const until = async (check, what) => {
+  for (let i = 0; i < 200; i++) { if (await check()) return; await new Promise((r) => setTimeout(r, 10)); }
+  assert.fail(`timed out waiting for ${what}`);
+};
+
+function heldSetup() {
+  process.env.POCKET_DEV_CHAT_DIR = fs.mkdtempSync(path.join(root, 'chats-'));
+  fs.writeFileSync(heldFile, `${JSON.stringify({ type: 'user', cwd: app, timestamp: '2026-11-01T10:00:00Z', message: { role: 'user', content: 'Refactor the parser' } })}\n`);
+  const sent = [];
+  const engines = {
+    claude: {
+      label: 'Claude', grantLabel: (g) => g, projectRules: () => [],
+      settingsSchema: async () => [{ key: 'model', label: 'Model', default: 'opus', custom: true, choices: [{ value: 'opus', label: 'Opus' }, { value: 'sonnet', label: 'Sonnet' }] }],
+      create: () => ({ start: async () => {}, send: async (input) => sent.push(input.text), interrupt: async () => {}, stop: async () => {}, configure: async () => ({}) }),
+    },
+  };
+  engines.codex = { ...engines.claude, label: 'Codex' };
+  const config = { data: {}, read() { return this.data; }, update(c) { Object.assign(this.data, c); } };
+  const chatApi = createChatApi({ sendJson: (res, status, body) => Object.assign(res, { status, body }), readJson: async (req) => req.body, config, wss: null, engines });
+  const holder = { pid: 3100, ppid: 1, uid: ME, stat: 'S', started: 0, exe: vscode.exe, args: vscode.exe };
+  const session = { pid: holder.pid, sessionId: HELD, startedAt: 1000, status: 'busy' };
+  const system = { ...fakeSystem([holder]), claudeSessions: () => [session] };
+  const history = createHistoryApi({
+    createSession: async () => {}, sessionView: (s) => s, sendJson: (res, status, body) => Object.assign(res, { status, body }),
+    readJson: async (req) => req.body ?? {}, deviceFor: () => ({ id: 'dev1' }), log: () => {}, system,
+    listChats: () => chatApi.list(), own: { chats: () => chatApi.bound(), releaseChat: (id, note) => chatApi.release(id, note) },
+    resumeChat: (c) => chatApi.resumeSession(c), mirrorChat: (id, m, a) => chatApi.mirrorNative(id, m, a), endChatHold: (id, h) => chatApi.endHold(id, h),
+    handoverTickMs: 15,
+  });
+  const call = async (handle, method, url, body) => {
+    const res = {};
+    await handle({ method, url, headers: {}, body }, res, url.split('?')[0]);
+    return res;
+  };
+  const chat = (method, url, body) => call(chatApi.handleApi, method, url, body);
+  const open = () => call(history, 'POST', `/api/history/claude/${HELD}/open-chat`, {});
+  const get = async (id) => (await chat('GET', `/api/chat/${id}`)).body;
+  return { chatApi, chat, open, get, sent, session, signals: system.signals, holder };
+}
+
+test('a busy Mac reply opens the chat at once, held: messages queue, the model waits, and the idle holder hands over by itself', async () => {
+  const t = heldSetup();
+  const opened = await t.open();
+  assert.equal(opened.status, 200, JSON.stringify(opened.body));
+  const { id } = opened.body.chat;
+  assert.equal(opened.body.chat.held, 'Claude Code in VS Code');
+  assert.deepEqual(t.signals, [], 'the reply on the Mac is not stopped');
+  assert.equal((await t.open()).body.chat.id, id, 'a second tap opens the same held chat');
+
+  const queued = await t.chat('POST', `/api/chat/${id}/message`, { text: 'then add tests' });
+  assert.deepEqual([queued.status, queued.body.queued], [202, 1]);
+  const model = await t.chat('PATCH', `/api/chat/${id}`, { settings: { model: 'sonnet' } });
+  assert.deepEqual([model.status, model.body.error], [409, 'The model can change once Claude Code in VS Code finishes.']);
+  const provider = await t.chat('POST', `/api/chat/${id}/engine`, { tool: 'codex' });
+  assert.deepEqual([provider.status, provider.body.error], [409, 'Claude Code in VS Code is finishing on your computer. Wait for it before switching the provider.']);
+
+  const before = (await t.get(id)).events.length;
+  line({ type: 'assistant', timestamp: '2026-11-01T10:00:05Z', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'npm test' } }] } });
+  await until(async () => (await t.get(id)).heldActivity === '▶ ran Bash: npm test', 'the tool step to show');
+  assert.equal((await t.get(id)).events.length, before, 'a tool step is not a chat event');
+  line({ type: 'assistant', timestamp: '2026-11-01T10:00:09Z', message: { content: [{ type: 'text', text: 'All 40 tests pass.' }] } });
+  await until(async () => (await t.get(id)).events.some((e) => e.text === 'All 40 tests pass.'), 'the Mac reply to appear');
+  assert.equal((await t.get(id)).heldActivity, null, 'a message ends the step');
+  assert.deepEqual(t.sent, [], 'nothing is sent while the Mac holds the conversation');
+
+  t.session.status = 'idle';
+  await until(async () => (await t.get(id)).held === null, 'the hand over');
+  assert.deepEqual(t.signals, [[t.holder.pid, 'SIGTERM']]);
+  await until(() => t.sent.length === 1, 'the queued message to go out');
+  assert.deepEqual(t.sent, ['then add tests']);
+  const view = await t.get(id);
+  assert.ok(view.events.some((e) => e.type === 'status' && e.text === 'Continued here from your Mac'));
+  assert.equal((await t.chat('PATCH', `/api/chat/${id}`, { settings: { model: 'sonnet' } })).status, 200, 'the model can change again');
+});
+
+test('queued messages can be edited and removed while the chat is held', async () => {
+  const t = heldSetup();
+  const { id } = (await t.open()).body.chat;
+  await t.chat('POST', `/api/chat/${id}/message`, { text: 'first' });
+  await t.chat('POST', `/api/chat/${id}/message`, { text: 'second' });
+  const [first, second] = (await t.get(id)).events.filter((e) => e.queued);
+  const edited = await t.chat('PATCH', `/api/chat/${id}/queue`, { eventId: first.id, text: 'first, edited', expectedText: 'first' });
+  assert.equal(edited.status, 200, JSON.stringify(edited.body));
+  const removed = await t.chat('DELETE', `/api/chat/${id}/queue`, { eventId: second.id });
+  assert.deepEqual([removed.status, removed.body.queued, removed.body.held], [200, 1, 'Claude Code in VS Code']);
+  t.session.status = 'idle';
+  await until(() => t.sent.length === 1, 'the queue to drain');
+  assert.deepEqual(t.sent, ['first, edited']);
+});
+
+test('Stop on a held chat stops the Mac reply with SIGINT, takes over, and sends the queued message', async () => {
+  const t = heldSetup();
+  const { id } = (await t.open()).body.chat;
+  await t.chat('POST', `/api/chat/${id}/message`, { text: 'do this instead' });
+  const stop = await t.chat('POST', `/api/chat/${id}/interrupt`);
+  assert.equal(stop.status, 200);
+  await until(async () => (await t.get(id)).held === null, 'the hold to end');
+  assert.deepEqual(t.signals, [[t.holder.pid, 'SIGINT']], 'the busy holder gets SIGINT to finish its write, as a confirmed take over');
+  await until(() => t.sent.length === 1, 'the queued message to go out');
+  assert.deepEqual(t.sent, ['do this instead']);
+  assert.ok((await t.get(id)).events.some((e) => e.text === 'Stopped the reply on your Mac. The conversation continues here.'));
+});
+
+test('a chat still held when Pocket Dev restarts comes back released, with its waiting messages not sent', async () => {
+  const t = heldSetup();
+  const { id } = (await t.open()).body.chat;
+  await t.chat('POST', `/api/chat/${id}/message`, { text: 'later' });
+  t.chatApi.list();
+  const saved = JSON.parse(fs.readFileSync(path.join(process.env.POCKET_DEV_CHAT_DIR, `${id}.json`), 'utf8'));
+  assert.equal(saved.nativeHeld, 'Claude Code in VS Code', 'the hold is saved');
+  const config = { data: {}, read() { return this.data; }, update() {} };
+  const engines = { claude: { label: 'Claude', settingsSchema: async () => [], grantLabel: (g) => g, projectRules: () => [], create: () => assert.fail('no engine wakes') } };
+  const restarted = createChatApi({ sendJson: (res, status, body) => Object.assign(res, { status, body }), readJson: async (req) => req.body, config, wss: null, engines });
+  const res = {};
+  await restarted.handleApi({ method: 'GET', url: `/api/chat/${id}`, headers: {} }, res, `/api/chat/${id}`);
+  assert.deepEqual([res.body.held, res.body.nativeReleased], [null, true]);
+  assert.equal(res.body.events.find((e) => e.text === 'later').notSent, true);
+  assert.match(res.body.events.at(-1).text, /restarted before Claude Code in VS Code finished/);
+  t.session.status = 'idle';
 });

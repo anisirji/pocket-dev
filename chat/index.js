@@ -221,16 +221,18 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   }
 
   // Moves the chat to another engine. The conversation stays; the new engine starts a fresh session and gets it with the next message.
-  // A chat is busy while a reply runs, a request waits for an answer, messages are queued, or its engine is waking. The
-  // provider and the model never change in any of those states, whatever client asks.
-  const busy = (chat) => Boolean(chat.turn || chat.queue.length || chat.requests.size || chat.waking || chat.nativeOpening);
-  const busyError = (what) => new BadRequest(`Stop the reply first, or wait for it to finish, before ${what}.`, 409);
+  // A chat is busy while a reply runs, a request waits for an answer, messages are queued, its engine is waking, or a program
+  // on the Mac still holds the conversation. The provider never changes in any of those states, whatever client asks.
+  const busy = (chat) => Boolean(chat.turn || chat.queue.length || chat.requests.size || chat.waking || chat.nativeOpening || chat.nativeHeld);
+  const busyError = (what, chat) => new BadRequest(chat?.nativeHeld
+    ? `${chat.nativeHeld} is finishing on your computer. Wait for it before ${what}.`
+    : `Stop the reply first, or wait for it to finish, before ${what}.`, 409);
 
   async function switchEngine(chat, tool) {
     if (typeof tool !== 'string' || !Object.hasOwn(ENGINES, tool)) throw new BadRequest(`tool must be one of: ${Object.keys(ENGINES).join(', ')}`);
     if (tool === chat.tool) throw new BadRequest(`This chat already uses ${ENGINES[tool].label}`);
     if (ENGINES[tool].installed && !ENGINES[tool].installed()) throw new BadRequest(`${ENGINES[tool].label} is not installed on this computer.`);
-    if (busy(chat)) throw busyError('switching the provider');
+    if (busy(chat)) throw busyError('switching the provider', chat);
     // The only wait comes first. A reply can start during it, so the check is repeated right after, and from there to the end of
     // the change there is no await: a switch that loses the race fails with the engine, settings and history untouched, and
     // never stops an engine that has a reply running.
@@ -320,6 +322,13 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     chat.changed();
     await rememberDefaults(chat);
     return applied;
+  }
+
+  // Stop while the Mac holds the conversation stops the reply there. It can take seconds, so it answers through the chat.
+  async function stopHolder(chat) {
+    const label = chat.nativeHeld;
+    await chat.holdStop();
+    if (chat.nativeHeld && !chat.closed) chat.emit({ type: 'status', text: `${label} did not stop when asked. This chat continues here once it finishes.` });
   }
 
   // The interval stays short so a lowered chatIdleMinutes takes effect without a restart.
@@ -412,6 +421,8 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       const { settings, confirmBypass } = await readJson(req);
       const parsed = parseSettings(await schemaOf(chat.tool), settings, confirmBypass);
       const changes = Object.fromEntries(Object.entries(parsed).filter(([k, v]) => chat.settings[k] !== v));
+      // The Mac program keeps its own model until it finishes, and the handover resumes the conversation as it left it.
+      if (chat.nativeHeld && Object.hasOwn(changes, 'model')) throw new BadRequest(`The model can change once ${chat.nativeHeld} finishes.`, 409);
       const applied = await configure(chat, changes);
       return [200, { ...chat.view(), applied }];
     },
@@ -440,8 +451,8 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
         if (previous.signature !== signature) throw new BadRequest('clientMessageId already belongs to another message', 409);
         return [202, chat.view()];
       }
-      // While a turn runs (or earlier messages still wait) this one joins the queue and goes out after the turn.
-      if (chat.turn || chat.queue.length) {
+      // While a turn runs, earlier messages still wait, or the Mac still holds the conversation, this one joins the queue.
+      if (chat.turn || chat.queue.length || chat.nativeHeld) {
         if (chat.queue.length >= QUEUE_MAX) throw new BadRequest(`Up to ${QUEUE_MAX} messages can wait. Stop the turn or wait.`, 429);
         if (clientMessageId) chat.acceptedInputs = [...chat.acceptedInputs, { id: clientMessageId, signature }].slice(-256);
         chat.enqueue({ text, files });
@@ -482,6 +493,10 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       return [200, chat.view()];
     },
     'POST :id/interrupt': async (req, chat) => {
+      if (chat.holdStop) {
+        stopHolder(chat);
+        return [200, chat.view()];
+      }
       await interrupt(chat);
       return [200, chat.view()];
     },
@@ -586,8 +601,9 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     return true;
   }
 
-  // Called only after the history route has checked and closed other native writers.
-  async function resumeSession({ tool, id, cwd, title }) {
+  // Called only after the history route has checked and closed other native writers, or with `heldBy`, the name of the
+  // program that still writes the conversation: the chat then shows it and queues messages until endHold().
+  async function resumeSession({ tool, id, cwd, title, heldBy = null, stopHolder = null }) {
     const existing = [...chats.values()].find((chat) => chat.tool === tool && chat.sessionId === id);
     if (existing && busy(existing)) throw busyError('opening this conversation');
     if (existing) existing.nativeOpening = true;
@@ -596,7 +612,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       const { chat } = existing ? { chat: existing } : await create({ tool, cwd, title, resume: { sessionId: id } });
       if (chat.turn || chat.queue.length || chat.requests.size || chat.waking) throw busyError('opening this conversation');
       chat.importNativeHistory(history.messages, history.note);
-      chat.nativeReleased = false;
+      Object.assign(chat, { nativeReleased: false, nativeHeld: heldBy, heldActivity: null, holdStop: heldBy ? stopHolder : null });
       chat.changed();
       return chat.view();
     } finally {
@@ -604,5 +620,31 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     }
   }
 
-  return { handleApi, handleUpgrade, active, stop, bound, release, list, resumeSession, startReplica: () => replica?.start(), handleRoomApi: (req, res, url) => replica.handleApi(req, res, url, sendJson) };
+  // While held: new messages the Mac program wrote, and the step it is on (null for none). False once the chat is gone or
+  // no longer held, which ends the caller's watch.
+  function mirrorNative(id, messages, activity) {
+    const chat = chats.get(id);
+    if (!chat?.nativeHeld) return false;
+    if (messages.length) chat.importNativeHistory(messages);
+    if (activity !== chat.heldActivity) {
+      chat.heldActivity = activity;
+      chat.changed();
+    }
+    return true;
+  }
+
+  // The hold ends: the conversation continues here and waiting messages go out, or (`failed`) it stays on the computer and
+  // they are held, as after a release.
+  function endHold(id, { note, failed = false }) {
+    const chat = chats.get(id);
+    if (!chat?.nativeHeld) return false;
+    Object.assign(chat, { nativeHeld: null, heldActivity: null, holdStop: null, nativeReleased: failed });
+    if (failed && chat.queue.length) chat.holdQueue();
+    chat.emit({ type: 'status', text: note });
+    chat.changed();
+    if (!failed) drainQueue(chat, 'done');
+    return true;
+  }
+
+  return { handleApi, handleUpgrade, active, stop, bound, release, list, resumeSession, mirrorNative, endHold, startReplica: () => replica?.start(), handleRoomApi: (req, res, url) => replica.handleApi(req, res, url, sendJson) };
 }

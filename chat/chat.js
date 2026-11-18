@@ -7,19 +7,23 @@ const TITLE_MAX = 80;
 const PERSIST_DELAY_MS = 1000;
 export const QUEUE_MAX = 20;
 
-const PERSISTED = ['id', 'tool', 'cwd', 'settings', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt', 'acceptedInputs', 'handoffSeq', 'handoffFrom', 'handoffDigest', 'sessionRefs', 'nativeReleased', 'nativeSessionStartSeq'];
+const PERSISTED = ['id', 'tool', 'cwd', 'settings', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt', 'acceptedInputs', 'handoffSeq', 'handoffFrom', 'handoffDigest', 'sessionRefs', 'nativeReleased', 'nativeHeld', 'nativeSessionStartSeq'];
 
 // One conversation. Status is derived from three independent facts (engine awake, turn running, open requests)
 // so it can never disagree with them.
 export class Chat {
   constructor(data, file) {
     Object.assign(this, {
-      title: 'New chat', sessionId: null, grants: [], seq: 0, events: [], failed: false, turnStartedAt: null, acceptedInputs: [], handoffSeq: null, handoffFrom: null, handoffDigest: null, sessionRefs: [], nativeReleased: false, nativeSessionStartSeq: 0,
+      title: 'New chat', sessionId: null, grants: [], seq: 0, events: [], failed: false, turnStartedAt: null, acceptedInputs: [], handoffSeq: null, handoffFrom: null, handoffDigest: null, sessionRefs: [], nativeReleased: false, nativeHeld: null, nativeSessionStartSeq: 0,
       createdAt: Date.now(), updatedAt: Date.now(),
     }, data);
     this.file = file;
     this.engine = null;
     this.pendingModel = null;
+    // The step the Mac program is on while it holds the conversation, for the status line only.
+    this.heldActivity = null;
+    // Stops the Mac program's reply and takes the conversation over; set with the hold, by whoever watches the holder.
+    this.holdStop = null;
     this.waking = false;
     this.turn = null;
     this.queue = [];
@@ -47,6 +51,11 @@ export class Chat {
       if ((ev.type === 'permission-request' || ev.type === 'question') && !ev.resolution) ev.resolution = { cancelled: true };
       if ((ev.type === 'tool-run' || ev.type === 'file-edit') && ev.status === 'running') ev.status = 'error';
     }
+    // No watcher survives a restart, and waking an engine while the Mac program may still write would make two writers.
+    if (chat.nativeHeld) {
+      chat.emit({ type: 'status', text: `Pocket Dev restarted before ${chat.nativeHeld} finished. Open it from Chats to continue here.` });
+      Object.assign(chat, { nativeHeld: null, nativeReleased: true });
+    }
     if (chat.turnStartedAt) {
       chat.turnStartedAt = null;
       chat.failed = true;
@@ -70,7 +79,7 @@ export class Chat {
     const pendingId = this.requests.keys().next().value ?? null;
     return {
       id, tool, title, cwd, settings, sessionId, createdAt, updatedAt, waking,
-      sessionRefs: this.sessionRefs, nativeReleased: this.nativeReleased,
+      sessionRefs: this.sessionRefs, nativeReleased: this.nativeReleased, held: this.nativeHeld, heldActivity: this.heldActivity,
       queued: this.queue.length, status: this.status, runningSince: this.turn?.startedAt ?? null, pending: pendingId !== null, pendingId,
       capabilities: { queueEdit: true },
     };

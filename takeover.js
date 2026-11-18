@@ -10,8 +10,18 @@ import { execFile } from 'node:child_process';
 export const BUSY_MS = 10_000;
 export const LIVE_MS = 2 * 60_000;
 export const STOP_GRACE_MS = 5000;
+export const IDLE_GRACE_MS = 2000;
 const POLL_MS = 100;
-const TOOL_LABELS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' };
+const PRODUCTS = { claude: 'Claude Code', codex: 'Codex', copilot: 'Copilot' };
+const REPLYING = new Set(['running', 'waiting-permission', 'waiting-answer']);
+
+// How a holder is stopped. One that is idle has nothing to lose, so it gets SIGTERM and, after a short wait, SIGKILL. One
+// that is replying gets SIGINT to finish its write first; SIGKILL only with force, because it can cut off that write.
+export const STOPS = {
+  idle: { signals: ['SIGTERM', 'SIGKILL'], graceMs: IDLE_GRACE_MS },
+  replying: { signals: ['SIGINT', 'SIGTERM'], graceMs: STOP_GRACE_MS },
+  forced: { signals: ['SIGINT', 'SIGTERM', 'SIGKILL'], graceMs: STOP_GRACE_MS },
+};
 
 // Only these programs write conversations. Everything else that mentions an id (grep, tail, an editor, a shell) is a reader.
 const PROGRAMS = [
@@ -96,6 +106,29 @@ export function readClaudeSessions(dir) {
   });
 }
 
+// Codex keeps ~/.codex/thread-writer-locks/<thread id>.lock open in the process that writes that thread, and refuses a
+// second writer itself. The VS Code extension runs one app-server that holds several threads and names none of them on its
+// command line, so the locks are the only way to see what it holds.
+export function parseLsof(text) {
+  const out = [];
+  let pid = null;
+  for (const line of text.split('\n')) {
+    if (line[0] === 'p') pid = Number(line.slice(1));
+    const m = line[0] === 'n' && /\/([^/]+)\.lock$/.exec(line);
+    if (m && Number.isInteger(pid) && CODEX_ID.test(m[1])) out.push({ pid, threadId: m[1] });
+  }
+  return out;
+}
+
+export async function readCodexLocks(dir) {
+  if (fixtureFile()) return JSON.parse(fs.readFileSync(fixtureFile(), 'utf8')).codexLocks ?? [];
+  if (process.platform !== 'darwin' && process.platform !== 'linux') return [];
+  // lsof exits 1 with no output when nothing holds a lock.
+  return new Promise((resolve) => {
+    execFile('lsof', ['-n', '-F', 'pn', '+d', dir], { timeout: 5000, maxBuffer: 4 << 20 }, (err, out) => resolve(parseLsof(out ?? '')));
+  });
+}
+
 // Two listings joined by pid: `comm` is the executable path and may hold spaces, `args` is the whole command line.
 export function parsePs(statusText, argsText) {
   const commands = new Map();
@@ -135,7 +168,10 @@ export function kill(pid, signal) {
   const proc = table.processes.find((p) => p.pid === pid);
   if (!proc) throw Object.assign(new Error('no such process'), { code: 'ESRCH' });
   table.signals = [...(table.signals ?? []), { pid, signal }];
-  if (!proc.ignores?.includes(signal)) table.processes = table.processes.filter((p) => p !== proc);
+  if (!proc.ignores?.includes(signal)) {
+    table.processes = table.processes.filter((p) => p !== proc);
+    if (table.codexLocks) table.codexLocks = table.codexLocks.filter((l) => l.pid !== pid);
+  }
   fs.writeFileSync(fixtureFile(), JSON.stringify(table));
 }
 
@@ -145,8 +181,9 @@ const sleepFor = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // program under one of them is that terminal's copy. A program under `selfPid` that is not in a terminal is a chat
 // engine, which stops with its chat. Pocket Dev itself and the programs it runs under are never copies. `sessions` is
 // readClaudeSessions(); a process it names holds that conversation as well as the one on its command line, because
-// after /clear the command line still shows the conversation the process started with.
-export function findCopies({ processes, uid, selfPid, terminals = [], sessions = [] }) {
+// after /clear the command line still shows the conversation the process started with. `codexLocks` is readCodexLocks().
+// `busy` is true or false when the program says whether it is replying in that conversation, null when it cannot tell.
+export function findCopies({ processes, uid, selfPid, terminals = [], sessions = [], codexLocks = [] }) {
   const byPid = new Map(processes.map((p) => [p.pid, p]));
   const lineage = (pid) => {
     const out = [];
@@ -163,12 +200,16 @@ export function findCopies({ processes, uid, selfPid, terminals = [], sessions =
     if (!found) continue;
     const entry = found.tool === 'claude' && registered.get(proc.pid);
     const current = entry && entry.startedAt >= proc.started ? entry : null;
-    const ids = new Set([resumeTarget(proc)?.id, current?.sessionId].filter(Boolean));
+    const locked = found.tool === 'codex' ? codexLocks.filter((l) => l.pid === proc.pid).map((l) => l.threadId) : [];
+    const ids = new Set([resumeTarget(proc)?.id, current?.sessionId, ...locked].filter(Boolean));
     const chain = lineage(proc.pid);
     const terminal = chain.map((pid) => shells.get(pid)).find(Boolean);
     const kind = terminal ? 'terminal' : chain.includes(selfPid) ? 'engine' : 'process';
+    // Claude says busy, idle, or (waiting on a prompt) something else, for the one conversation it is in now.
+    const known = typeof current?.status === 'string';
     for (const id of ids) {
-      copies.push({ kind, tool: found.tool, id, proc, ...(terminal && { terminal }), busy: current?.sessionId === id && current.status === 'busy' });
+      const busy = known ? current.sessionId === id && current.status !== 'idle' : null;
+      copies.push({ kind, tool: found.tool, id, proc, ...(terminal && { terminal }), busy });
     }
   }
   return copies;
@@ -176,12 +217,21 @@ export function findCopies({ processes, uid, selfPid, terminals = [], sessions =
 
 const APPS = [['VS Code', /\/\.vscode(-insiders)?\/extensions\//], ['Cursor', /\/\.cursor\/extensions\//], ['the Claude app', /\/Application Support\/Claude\//]];
 
+const appOf = (copy) => APPS.find(([, re]) => re.test(copy.proc.exe))?.[0];
+
 export function copyView(copy) {
   if (copy.kind === 'chat') return { kind: 'chat', id: copy.chat.id, label: `Pocket Dev chat "${copy.chat.title || 'New chat'}"` };
   if (copy.kind === 'terminal') return { kind: 'terminal', id: copy.terminal.id, pid: copy.proc.pid, label: `Pocket Dev terminal "${copy.terminal.title}"` };
-  const app = APPS.find(([, re]) => re.test(copy.proc.exe))?.[0];
-  const name = app ? `${copy.tool === 'claude' ? 'Claude Code' : 'Codex'} in ${app}` : path.basename(copy.proc.exe);
+  const app = appOf(copy);
+  const name = app ? `${PRODUCTS[copy.tool]} in ${app}` : path.basename(copy.proc.exe);
   return { kind: copy.kind, pid: copy.proc.pid, label: `${copy.kind === 'engine' ? 'Pocket Dev chat engine' : name} (pid ${copy.proc.pid})` };
+}
+
+// Who holds a copy, in words for a person: "Claude Code in VS Code", "Codex", 'Pocket Dev terminal "app"'.
+export function holderName(copy) {
+  if (copy.kind !== 'process') return copyView(copy).label.replace(/ \(pid \d+\)$/, '');
+  const app = appOf(copy);
+  return app ? `${PRODUCTS[copy.tool]} in ${app}` : PRODUCTS[copy.tool];
 }
 
 async function waitForExit(procs, { isAlive, sleep, graceMs, pollMs = POLL_MS }) {
@@ -194,11 +244,11 @@ async function waitForExit(procs, { isAlive, sleep, graceMs, pollMs = POLL_MS })
   }
 }
 
-// SIGINT lets the program finish its write and exit; SIGTERM follows for one that keeps going. SIGKILL only with force,
-// because it can cut off the last write. Each signal goes only to a process that is still the one that was matched, so a
-// pid the system reused for something else is never signalled. Returns the signals sent per pid and what is still running.
-export async function stopProcesses(procs, { kill: send, isAlive, sleep, force = false, graceMs = STOP_GRACE_MS }) {
-  const steps = force ? ['SIGINT', 'SIGTERM', 'SIGKILL'] : ['SIGINT', 'SIGTERM'];
+// Sends each signal of `stop` (one of STOPS) in turn to whatever is still running, waiting `graceMs` after each. Each signal goes
+// only to a process that is still the one that was matched, so a pid the system reused for something else is never
+// signalled. Returns the signals sent per pid and what is still running.
+export async function stopProcesses(procs, { kill: send, isAlive, sleep, stop = STOPS.replying }) {
+  const { signals: steps, graceMs } = stop;
   const pids = new Set(procs.map((p) => p.pid));
   const sent = new Map();
   let alive = procs;
@@ -220,17 +270,19 @@ export async function stopProcesses(procs, { kill: send, isAlive, sleep, force =
   return { sent, remaining: alive };
 }
 
-function where(copies) {
-  if (copies.some((c) => c.kind === 'process')) return `on ${platform.host.the}`;
-  if (copies.some((c) => c.kind === 'terminal')) return 'in a Pocket Dev terminal';
-  return 'in a Pocket Dev chat';
+function where(copy) {
+  if (copy.kind === 'process') return `on ${platform.host.the}`;
+  if (copy.kind === 'terminal') return 'in a Pocket Dev terminal';
+  return 'in Pocket Dev';
 }
 
-// `claudeSessions()` returns readClaudeSessions() for the Claude config folder in use. `terminals()` lists Pocket Dev's running shells as { id, title, cwd, pid, activeAt }; `endTerminal(id, note)` ends one.
+// `claudeSessions()` returns readClaudeSessions() for the Claude config folder in use; `codexLocks()` returns
+// readCodexLocks() for the Codex folder in use; `codexBusy(threadId)` says whether a Codex thread is in a turn (true or
+// false), or null when it cannot tell. `terminals()` lists Pocket Dev's running shells as { id, title, cwd, pid, activeAt }; `endTerminal(id, note)` ends one.
 // `chats()` lists chats whose engine is awake as { id, title, tool, sessionId, cwd, updatedAt }; `releaseChat(id, note)`
 // stops one's engine. `log(type, fields)` writes the security log.
 export function createTakeover({
-  listProcesses: list = listProcesses, claudeSessions = () => [], kill: send = kill, isAlive, sleep = sleepFor, now = Date.now,
+  listProcesses: list = listProcesses, claudeSessions = () => [], codexLocks = async () => [], codexBusy = async () => null, kill: send = kill, isAlive, sleep = sleepFor, now = Date.now,
   uid = process.getuid?.() ?? 0, selfPid = process.pid, log = () => {},
   terminals = () => [], endTerminal = () => false, chats = () => [], releaseChat = async () => false,
 }) {
@@ -242,8 +294,10 @@ export function createTakeover({
   };
 
   async function survey() {
-    const copies = findCopies({ processes: await list(), uid, selfPid, terminals: terminals(), sessions: claudeSessions() });
-    for (const chat of chats()) if (chat.sessionId) copies.push({ kind: 'chat', tool: chat.tool, id: chat.sessionId, chat });
+    const [processes, locks] = await Promise.all([list(), codexLocks()]);
+    const copies = findCopies({ processes, uid, selfPid, terminals: terminals(), sessions: claudeSessions(), codexLocks: locks });
+    await Promise.all(copies.filter((c) => c.tool === 'codex' && c.busy === null).map(async (c) => { c.busy = await codexBusy(c.id).catch(() => null); }));
+    for (const chat of chats()) if (chat.sessionId) copies.push({ kind: 'chat', tool: chat.tool, id: chat.sessionId, chat, busy: REPLYING.has(chat.status) });
     return copies;
   }
 
@@ -253,18 +307,27 @@ export function createTakeover({
   // conversation itself. `note` is what the closed Pocket Dev terminal or chat shows. `who` names who asked, for the log.
   async function takeOver({ tool, id, mtimeMs, force = false, confirmBusy = false, scope = 'all', note, who = {} }) {
     const ours = (c) => c.tool === tool && c.id === id && (scope === 'all' || c.kind !== 'process');
-    const found = (await survey()).filter(ours);
-    const busy = now() - mtimeMs < BUSY_MS || found.some((c) => c.busy);
+    const all = await survey();
+    const found = all.filter(ours);
+    // Closing a holder stops every conversation it has open (one Codex app-server holds several), so a reply in any of
+    // them blocks. A copy that cannot tell falls back to how recently this conversation's file was written.
+    const pids = new Set(found.filter((c) => c.proc).map((c) => c.proc.pid));
+    const replying = (c) => c.busy ?? (c.tool === tool && c.id === id && now() - mtimeMs < BUSY_MS);
+    const blocking = all.filter((c) => (found.includes(c) || pids.has(c.proc?.pid)) && replying(c));
+    const busy = blocking.length > 0;
     if (!found.length) return { status: 200, body: { stopped: [], busy } };
     if (busy && !confirmBusy) {
-      return refuse({ code: 'busy', busy, copies: found.map(copyView), error: `${TOOL_LABELS[tool]} is still replying ${where(found)}. Continuing stops that reply.` });
+      const first = blocking[0];
+      const holder = holderName(first);
+      const what = ours(first) ? `is still replying ${where(first)}` : `is replying in another conversation ${where(first)}`;
+      return refuse({ code: 'busy', busy, holder, copies: found.map(copyView), error: `${holder} ${what}. Continuing stops that reply.` });
     }
 
     const stopped = [];
     const external = found.filter((c) => c.kind === 'process');
     const terminalIds = [...new Set(found.filter((c) => c.kind === 'terminal').map((c) => c.terminal.id))];
     const [{ sent }] = await Promise.all([
-      stopProcesses(external.map((c) => c.proc), { kill: send, isAlive, sleep, force }),
+      stopProcesses(external.map((c) => c.proc), { kill: send, isAlive, sleep, stop: STOPS[!busy ? 'idle' : force ? 'forced' : 'replying'] }),
       ...found.filter((c) => c.kind === 'chat').map(async (c) => { if (await releaseChat(c.chat.id, note)) stopped.push(copyView(c)); }),
       ...terminalIds.map(async (tid) => {
         if (await endTerminal(tid, note)) stopped.push(copyView(found.find((c) => c.terminal?.id === tid)));
@@ -277,9 +340,8 @@ export function createTakeover({
     for (const c of external) {
       if (!left.some((l) => l.proc?.pid === c.proc.pid)) stopped.push({ ...copyView(c), signals: sent.get(c.proc.pid) ?? [] });
     }
-    const pids = found.filter((c) => c.proc).map((c) => c.proc.pid);
     if (left.length) {
-      log('conversation-takeover-failed', { tool, conversationId: id, pids, remaining: left.filter((c) => c.proc).map((c) => c.proc.pid), force, ...who });
+      log('conversation-takeover-failed', { tool, conversationId: id, pids: [...pids], remaining: left.filter((c) => c.proc).map((c) => c.proc.pid), force, ...who });
       const canForce = !force && left.every((c) => c.kind === 'process');
       const names = left.map((c) => copyView(c).label).join(', ');
       return refuse({
@@ -289,7 +351,7 @@ export function createTakeover({
           : `${names} did not close. Close it on ${platform.host.the}, then try again.`,
       });
     }
-    log('conversation-taken-over', { tool, conversationId: id, pids, stopped: stopped.map((s) => s.kind), force, ...who });
+    log('conversation-taken-over', { tool, conversationId: id, pids: [...pids], stopped: stopped.map((s) => s.kind), force, ...who });
     return { status: 200, body: { stopped, busy } };
   }
 

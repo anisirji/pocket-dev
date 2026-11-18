@@ -111,7 +111,7 @@ test('opening a native conversation stops its external writer before importing',
   const res = await f.call('POST', `/api/history/claude/${ids.claude}/open-chat`, {});
   assert.equal(res.status, 200);
   assert.equal(res.body.chat.sessionId, ids.claude);
-  assert.deepEqual(f.signals, [[12345, 'SIGINT']]);
+  assert.deepEqual(f.signals, [[12345, 'SIGTERM']]);
   assert.equal(f.imported.length, 1);
   assert.equal(f.imported[0].cwd, app);
 });
@@ -128,24 +128,20 @@ test('an already open Pocket Dev chat shares its current reply without release o
   assert.deepEqual(f.imported, []);
 });
 
-test('busy and unknown writers refuse opening without changing the chat', async () => {
+test('a busy writer never refuses opening: the chat opens held by it and nothing is signalled; no writer opens at once', async () => {
   const fresh = new Date();
   fs.utimesSync(claudeFile, fresh, fresh);
   try {
     const f = fixture({ procs: [liveProcess()] });
     const busy = await f.call('POST', `/api/history/claude/${ids.claude}/open-chat`, {});
-    assert.equal(busy.status, 409);
-    assert.equal(busy.body.code, 'busy');
-    assert.deepEqual(f.signals, []);
-    assert.deepEqual(f.imported, []);
-    const confirmed = await f.call('POST', `/api/history/claude/${ids.claude}/open-chat`, { confirmBusy: true });
-    assert.equal(confirmed.status, 200);
-    assert.equal(f.imported.length, 1);
+    assert.equal(busy.status, 200, JSON.stringify(busy.body));
+    assert.equal(busy.body.chat.sessionId, ids.claude);
+    assert.deepEqual(f.signals, [], 'the reply on the computer keeps running');
+    assert.deepEqual(f.imported.map((s) => s.heldBy), ['Claude Code']);
     const unknown = fixture();
-    const refused = await unknown.call('POST', `/api/history/claude/${ids.claude}/open-chat`, {});
-    assert.equal(refused.status, 409);
-    assert.equal(refused.body.code, 'not-found');
-    assert.deepEqual(unknown.imported, []);
+    const opened = await unknown.call('POST', `/api/history/claude/${ids.claude}/open-chat`, {});
+    assert.equal(opened.status, 200);
+    assert.deepEqual(unknown.imported.map((s) => s.heldBy ?? null), [null]);
   } finally { fs.utimesSync(claudeFile, old, old); }
 });
 

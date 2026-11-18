@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
-import { createTakeover, readClaudeSessions, copyView, LIVE_MS, BUSY_MS } from './takeover.js';
+import { createTakeover, readClaudeSessions, readCodexLocks, copyView, LIVE_MS, BUSY_MS } from './takeover.js';
 import { readAgents, sessionFile } from './terminal-agents.js';
 import { platform } from './platform.js';
 import { listAntigravity, findAntigravity, antigravityMessages, ANTIGRAVITY_NOTE } from './antigravity-history.js';
@@ -14,6 +14,7 @@ const PARALLEL = 8;
 const TITLE_MAX = 120;
 const TEXT_MAX = 1500;
 const DETAIL_MESSAGES = 20;
+const HANDOVER_TICK_MS = 1500;
 const ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 
 const claudeDir = () => process.env.POCKET_DEV_CLAUDE_DIR || path.join(os.homedir(), '.claude', 'projects');
@@ -347,6 +348,14 @@ async function findSession(tool, id) {
   return listable(s) ? s : null;
 }
 
+// Chat messages and tool steps in one native record.
+function messagesOf(tool, o, cwd) {
+  if (tool !== 'copilot') return TOOLS[tool].messages(o, cwd);
+  if (!['user.message', 'assistant.message'].includes(o.type)) return [];
+  const text = typeof o.data?.content === 'string' ? o.data.content.trim() : '';
+  return text ? [{ role: o.type === 'user.message' ? 'user' : 'assistant', text, time: o.timestamp ?? null }] : [];
+}
+
 // Import is separate from the small Resume preview: the chat needs every readable user and assistant message,
 // including long messages and old turns. Reading a line at a time avoids loading a large rollout into memory at once.
 export async function readConversationMessages(tool, id) {
@@ -360,20 +369,57 @@ export async function readConversationMessages(tool, id) {
   try {
     for await (const line of lines) {
       const o = parse(line);
-      if (!o) continue;
-      if (tool === 'copilot') {
-        if (!['user.message', 'assistant.message'].includes(o.type)) continue;
-        const text = typeof o.data?.content === 'string' ? o.data.content.trim() : '';
-        if (text) messages.push({ role: o.type === 'user.message' ? 'user' : 'assistant', text, time: o.timestamp ?? null });
-      } else {
-        messages.push(...TOOLS[tool].messages(o, s.cwd).filter((m) => m.role !== 'tool'));
-      }
+      if (o) messages.push(...messagesOf(tool, o, s.cwd).filter((m) => m.role !== 'tool'));
     }
   } finally {
     lines.close();
     input.destroy();
   }
   return { messages };
+}
+
+// What a program appended to a conversation's file since byte `from`: its messages, and `activity`, the tool step it is on
+// (null after a message, undefined when nothing says). Only whole lines are read; `end` is where the next read starts.
+async function readAppended(s, from) {
+  const { size } = await fs.promises.stat(s.file);
+  if (size < from) from = 0;
+  const buf = Buffer.alloc(size - from);
+  const fh = await fs.promises.open(s.file, 'r');
+  try { await fh.read(buf, 0, buf.length, from); } finally { await fh.close(); }
+  const whole = buf.lastIndexOf(10) + 1;
+  const messages = [];
+  let activity;
+  for (const line of buf.subarray(0, whole).toString('utf8').split('\n')) {
+    const o = parse(line);
+    for (const m of o ? messagesOf(s.tool, o, s.cwd) : []) {
+      if (m.role === 'tool') activity = m.text;
+      else { messages.push(m); activity = null; }
+    }
+  }
+  return { messages, activity, end: from + whole };
+}
+
+// Codex marks a turn in its rollout: task_started opens it, task_complete or turn_aborted closes it. The last of them in the
+// tail says whether the thread is replying now; null when the file is missing or the tail has none.
+const CODEX_TURN = /"type":"event_msg","payload":\{"type":"(task_started|task_complete|turn_aborted)"/;
+const CODEX_TURN_TAIL_MAX = 16 << 20;
+const codexFiles = new Map();
+export async function codexInTurn(id) {
+  if (!codexFiles.has(id)) for (const f of await codex.files()) codexFiles.set(f.id, f.file);
+  const file = codexFiles.get(id);
+  const st = file && await fs.promises.stat(file).catch(() => null);
+  if (!st) return null;
+  for (let window = 256 * 1024; ; window *= 4) {
+    const start = Math.max(0, st.size - window);
+    let last = null;
+    let skipFirst = start > 0;
+    await scanLines(file, start, st.size, (line) => {
+      if (skipFirst) { skipFirst = false; return; }
+      last = CODEX_TURN.exec(line.toString('latin1', 0, 200))?.[1] ?? last;
+    });
+    if (last) return last === 'task_started';
+    if (start === 0 || window >= CODEX_TURN_TAIL_MAX) return null;
+  }
 }
 
 // Reads backwards in growing windows until the tail holds enough text messages, so a 150 MB
@@ -431,12 +477,22 @@ const toBool = (v, name) => {
 
 // Mount after the auth check. `own` reaches Pocket Dev's own copies of a conversation, { terminals, endTerminal, chats,
 // releaseChat } as createTakeover describes them; `system` replaces process listing and signals in tests. `deviceFor`
-// and `log` name the device that takes a conversation over in the security log.
-export function createHistoryApi({ createSession, sessionView, sendJson, readJson, deviceFor, log, own = {}, system = {}, listChats = () => [], resumeChat, isOwner = (req) => !req.roomPeer && Boolean(deviceFor(req)) }) {
-  const takeover = createTakeover({ claudeSessions: () => readClaudeSessions(claudeSessionsDir()), log, ...own, ...system });
+// and `log` name the device that takes a conversation over in the security log. `resumeChat`, `mirrorChat` and
+// `endChatHold` are the chat API's resumeSession, mirrorNative and endHold.
+export function createHistoryApi({
+  createSession, sessionView, sendJson, readJson, deviceFor, log, own = {}, system = {}, listChats = () => [],
+  resumeChat, mirrorChat = () => false, endChatHold = () => false, handoverTickMs = HANDOVER_TICK_MS,
+  isOwner = (req) => !req.roomPeer && Boolean(deviceFor(req)),
+}) {
+  const takeover = createTakeover({
+    claudeSessions: () => readClaudeSessions(claudeSessionsDir()), codexLocks: () => readCodexLocks(path.join(codexDir(), 'thread-writer-locks')),
+    codexBusy: codexInTurn, log, ...own, ...system,
+  });
   // The list and the detail still load when the process table cannot be read; take over itself reports the error.
   const survey = () => takeover.survey().catch(() => []);
   const opening = new Set();
+  // `${tool}:${id}` -> { chatId, stop } for the chat waiting for a program on the computer to finish with that conversation.
+  const handovers = new Map();
   // The first scan reads a few hundred MB of jsonl; do it at startup so the phone's first list is warm.
   listSessions(Object.keys(TOOLS), 30).catch(() => {});
 
@@ -465,11 +521,12 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
     if (!isOwner(req)) return sendJson(res, 403, { error: 'Only your own devices can open computer conversations.' });
     if (!resumeChat) return sendJson(res, 503, { error: 'Chat continuation is not available.' });
     const key = `${tool}:${id}`;
+    const waiting = handovers.has(key) && listChats().find((c) => c.id === handovers.get(key).chatId);
+    if (waiting) return sendJson(res, 200, { chat: waiting });
     if (opening.has(key)) return sendJson(res, 409, { code: 'opening', error: 'This conversation is already opening. Try again in a moment.' });
     opening.add(key);
     try {
       const body = await readJson(req);
-      const confirmBusy = toBool(body.confirmBusy, 'confirmBusy');
       const force = toBool(body.force, 'force');
       const copies = await takeover.survey();
       const existing = listChats().find((c) => c.tool === tool && c.sessionId === id);
@@ -480,14 +537,63 @@ export function createHistoryApi({ createSession, sessionView, sendJson, readJso
       }
       if (!s) return sendJson(res, 404, { error: 'No such conversation' });
       const device = deviceFor(req);
-      const result = await takeover.takeOver({ tool, id, mtimeMs: s.mtimeMs, confirmBusy, force,
-        note: 'Continued in Pocket Dev chat', who: { by: 'phone', deviceId: device.id, name: device.name, ip: device.ip } });
-      if (result.status !== 200) return sendJson(res, result.status, result.body);
-      const chat = await resumeChat({ tool, id, cwd: s.cwd, title: view(s, new Map(), await codex.names()).title });
-      return sendJson(res, 200, { chat, ...(CUSTOM[tool]?.note && { note: CUSTOM[tool].note }) });
+      const who = { by: 'phone', deviceId: device.id, name: device.name, ip: device.ip };
+      const result = await takeover.takeOver({ tool, id, mtimeMs: s.mtimeMs, force, note: 'Continued in Pocket Dev chat', who });
+      if (result.status !== 200 && result.body.code !== 'busy') return sendJson(res, result.status, result.body);
+      const title = view(s, new Map(), await codex.names()).title;
+      const extra = CUSTOM[tool]?.note && { note: CUSTOM[tool].note };
+      if (result.status === 200) return sendJson(res, 200, { chat: await resumeChat({ tool, id, cwd: s.cwd, title }), ...extra });
+      // A program on the computer is still replying. The chat opens now, follows that reply, and takes over once it is idle.
+      const offset = s.file ? (await fs.promises.stat(s.file).catch(() => null))?.size ?? 0 : 0;
+      let handover;
+      const chat = await resumeChat({ tool, id, cwd: s.cwd, title, heldBy: result.body.holder, stopHolder: () => handover.stop() });
+      handover = watchHandover({ key, s, chatId: chat.id, offset, who });
+      return sendJson(res, 200, { chat, ...extra });
     } finally {
       opening.delete(key);
     }
+  }
+
+  // Every tick copies what the program wrote into the chat, then tries the take over again; it succeeds once nothing is
+  // replying, and any other refusal leaves the conversation on the computer. Stop asks the program to stop its reply now.
+  // Ticks and Stop run one after another, so two take overs never signal the same program at once.
+  function watchHandover({ key, s, chatId, offset, who }) {
+    const { tool, id } = s;
+    let activity = null;
+    let ended = false;
+    let queue = Promise.resolve();
+    const mirror = async () => {
+      if (!s.file) return mirrorChat(chatId, [], null);
+      const read = await readAppended(s, offset);
+      offset = read.end;
+      if (read.activity !== undefined) activity = read.activity;
+      return mirrorChat(chatId, read.messages, activity);
+    };
+    const end = (hold) => {
+      ended = true;
+      handovers.delete(key);
+      if (hold) endChatHold(chatId, hold);
+    };
+    const serial = (step) => (queue = queue.then(() => (ended ? undefined : step())).catch((err) => {
+      end({ note: `Could not continue here: ${err.message}. Open it from Chats to try again.`, failed: true });
+    }));
+    const attempt = async (stopping) => {
+      if (!(await mirror())) return end();
+      const st = s.file && await fs.promises.stat(s.file).catch(() => null);
+      const r = await takeover.takeOver({ tool, id, mtimeMs: st?.mtimeMs ?? s.mtimeMs, confirmBusy: stopping, note: 'Continued in Pocket Dev chat', who });
+      if (r.status === 200) {
+        await mirror();
+        return end({ note: stopping ? `Stopped the reply on your ${platform.host.mac}. The conversation continues here.` : `Continued here from your ${platform.host.mac}` });
+      }
+      // A program that did not close after Stop keeps the hold; the ticks go on waiting for it.
+      if (r.body.code === 'busy' || (stopping && r.body.code === 'still-running')) return undefined;
+      return end({ note: `${r.body.error} Open it from Chats to continue here.`, failed: true });
+    };
+    const tick = () => serial(() => attempt(false)).then(() => { if (!ended) setTimeout(tick, handoverTickMs).unref(); });
+    setTimeout(tick, handoverTickMs).unref();
+    const handover = { chatId, stop: () => serial(() => attempt(true)) };
+    handovers.set(key, handover);
+    return handover;
   }
 
   // The helper agents of the Claude Code session running in one Pocket Dev terminal. The phone asks every few seconds, so

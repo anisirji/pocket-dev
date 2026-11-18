@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePs, resumeTarget, findCopies, stopProcesses, createTakeover } from '../takeover.js';
+import { parsePs, parseLsof, resumeTarget, findCopies, stopProcesses, createTakeover, STOPS } from '../takeover.js';
 
 // Every process here is made up. Nothing in this file lists or signals a real process.
 const ME = 501;
@@ -8,6 +8,7 @@ const SERVER = 4000;
 const ID = '28e64788-3976-496f-a7f0-113cf83b11f0';
 const OTHER = '28e64788-3976-496f-a7f0-113cf83b11f1';
 const VSCODE = '/Users/ani/.vscode/extensions/anthropic.claude-code-2.1.286-darwin-arm64/resources/native-binary/claude';
+const CODEX_VSCODE = '/Users/ani/.vscode/extensions/openai.chatgpt-26.5.1-darwin-arm64/bin/macos-aarch64/codex';
 
 let nextPid = 5000;
 const proc = (exe, rest = '', extra = {}) => ({ pid: nextPid++, ppid: 1, uid: ME, stat: 'S', started: 1000, exe, args: `${exe}${rest ? ` ${rest}` : ''}`, ...extra });
@@ -128,7 +129,7 @@ test('stopping sends SIGINT and waits; SIGTERM only for a program that keeps run
   assert.ok(sys3.clock >= 10_000);
 
   const sys4 = fakeSystem([deaf]);
-  const r4 = await stopProcesses([deaf], { ...sys4, kill: sys4.kill, force: true });
+  const r4 = await stopProcesses([deaf], { ...sys4, kill: sys4.kill, stop: STOPS.forced });
   assert.deepEqual(sys4.signals.map(([, s]) => s), ['SIGINT', 'SIGTERM', 'SIGKILL']);
   assert.deepEqual(r4.remaining, []);
 });
@@ -188,8 +189,8 @@ test('take over stops the program, reports what it stopped, and logs it', async 
   const { sys, logged, takeOver } = takeoverWith([vscode]);
   const r = await takeOver({ tool: 'claude', id: ID, mtimeMs: OLD, who: { by: 'phone', deviceId: 'd1', name: 'Pixel', ip: '10.0.0.5' } });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { busy: false, stopped: [{ kind: 'process', pid: vscode.pid, label: `Claude Code in VS Code (pid ${vscode.pid})`, signals: ['SIGINT'] }] });
-  assert.deepEqual(sys.signals, [[vscode.pid, 'SIGINT']]);
+  assert.deepEqual(r.body, { busy: false, stopped: [{ kind: 'process', pid: vscode.pid, label: `Claude Code in VS Code (pid ${vscode.pid})`, signals: ['SIGTERM'] }] });
+  assert.deepEqual(sys.signals, [[vscode.pid, 'SIGTERM']], 'an idle program has no reply to finish, so it gets SIGTERM, not the slow SIGINT wait');
   assert.deepEqual(logged, [{ type: 'conversation-taken-over', tool: 'claude', conversationId: ID, pids: [vscode.pid], stopped: ['process'], force: false, by: 'phone', deviceId: 'd1', name: 'Pixel', ip: '10.0.0.5' }]);
 });
 
@@ -200,7 +201,8 @@ test('the busy flag: a file written in the last 10 s needs a second confirmation
   assert.equal(first.status, 409);
   assert.equal(first.body.code, 'busy');
   assert.equal(first.body.busy, true);
-  assert.equal(first.body.error, 'Claude is still replying on the Mac. Continuing stops that reply.');
+  assert.equal(first.body.error, 'Claude Code in VS Code is still replying on the Mac. Continuing stops that reply.');
+  assert.equal(first.body.holder, 'Claude Code in VS Code');
   assert.deepEqual(sys.signals, [], 'nothing is stopped before the second confirmation');
   const second = await takeOver({ tool: 'claude', id: ID, mtimeMs: 1_000_000 - 3000, confirmBusy: true });
   assert.equal(second.status, 200);
@@ -254,18 +256,70 @@ test('recent write but no program found: continues at once, nothing signalled', 
   assert.deepEqual(sys.signals, []);
 });
 
-test('a program that ignores the signals: a clear error that offers force, and force ends it with SIGKILL', async () => {
+test('a replying program that ignores the signals: a clear error that offers force, and force ends it with SIGKILL', async () => {
   const deaf = proc(VSCODE, `--resume=${ID}`, { ignores: ['SIGINT', 'SIGTERM'] });
   const { sys, logged, takeOver } = takeoverWith([deaf]);
-  const r = await takeOver({ tool: 'claude', id: ID, mtimeMs: OLD });
+  const RECENT = 1_000_000 - 3000;
+  const r = await takeOver({ tool: 'claude', id: ID, mtimeMs: RECENT, confirmBusy: true });
   assert.equal(r.status, 409);
   assert.equal(r.body.code, 'still-running');
   assert.equal(r.body.canForce, true);
   assert.match(r.body.error, new RegExp(`Claude Code in VS Code \\(pid ${deaf.pid}\\) did not close when asked`));
   assert.deepEqual(sys.signals.map(([, s]) => s), ['SIGINT', 'SIGTERM']);
   assert.equal(logged[0].type, 'conversation-takeover-failed');
-  const forced = await takeOver({ tool: 'claude', id: ID, mtimeMs: OLD, force: true });
+  const forced = await takeOver({ tool: 'claude', id: ID, mtimeMs: RECENT, confirmBusy: true, force: true });
   assert.equal(forced.status, 200);
   assert.deepEqual(sys.signals.map(([, s]) => s).slice(2), ['SIGINT', 'SIGTERM', 'SIGKILL']);
   assert.deepEqual(forced.body.stopped[0].signals, ['SIGINT', 'SIGTERM', 'SIGKILL']);
+});
+
+test('lsof output names the Codex threads each process holds; other files and bad names are ignored', () => {
+  const dir = '/Users/ani/.codex/thread-writer-locks';
+  const text = `p77413\nf19\nn${dir}/${ID}.lock\nf48\nn${dir}/${OTHER}.lock\np80000\nf3\nn${dir}/not-a-thread.lock\nn${dir}\n`;
+  assert.deepEqual(parseLsof(text), [{ pid: 77413, threadId: ID }, { pid: 77413, threadId: OTHER }]);
+  assert.deepEqual(parseLsof(''), []);
+});
+
+test("a Codex app-server holds every thread whose lock it has, though its command line names none", () => {
+  const server = proc(CODEX_VSCODE, 'app-server --analytics-default-enabled');
+  const locks = [{ pid: server.pid, threadId: ID }, { pid: server.pid, threadId: OTHER }, { pid: 1234, threadId: ID }];
+  const copies = findCopies({ processes: [server], uid: ME, selfPid: SERVER, codexLocks: locks });
+  assert.deepEqual(copies.map((c) => [c.kind, c.tool, c.id, c.proc.pid, c.busy]), [['process', 'codex', ID, server.pid, null], ['process', 'codex', OTHER, server.pid, null]]);
+  const claude = proc(VSCODE, '');
+  assert.deepEqual(findCopies({ processes: [claude], uid: ME, selfPid: SERVER, codexLocks: [{ pid: claude.pid, threadId: ID }] }), [], 'only a Codex process holds Codex locks');
+});
+
+test('an idle holder is stopped with SIGTERM at once even when its file was just written; SIGKILL follows after 2 s', async () => {
+  const vscode = proc(VSCODE, '', { started: 50_000, ignores: ['SIGTERM'] });
+  const { sys, takeOver } = takeoverWith([vscode], { claudeSessions: () => [{ pid: vscode.pid, sessionId: ID, startedAt: 52_000, status: 'idle' }] });
+  const r = await takeOver({ tool: 'claude', id: ID, mtimeMs: 1_000_000 - 1000 });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.busy, false, "Claude's own idle status wins over the recent write");
+  assert.deepEqual(sys.signals.map(([, s]) => s), ['SIGTERM', 'SIGKILL']);
+  assert.ok(sys.clock >= 2000 && sys.clock < 5000, `SIGKILL after the short grace, waited ${sys.clock} ms`);
+});
+
+test('a Claude session waiting on a prompt counts as busy', async () => {
+  const vscode = proc(VSCODE, '', { started: 50_000 });
+  const { sys, takeOver } = takeoverWith([vscode], { claudeSessions: () => [{ pid: vscode.pid, sessionId: ID, startedAt: 52_000, status: 'waiting' }] });
+  const r = await takeOver({ tool: 'claude', id: ID, mtimeMs: OLD });
+  assert.deepEqual([r.status, r.body.code, r.body.holder], [409, 'busy', 'Claude Code in VS Code']);
+  assert.deepEqual(sys.signals, []);
+});
+
+test('a Codex app-server replying in ANOTHER thread blocks, says so, and is left running; once idle it is stopped', async () => {
+  const server = proc(CODEX_VSCODE, 'app-server');
+  const locks = [{ pid: server.pid, threadId: ID }, { pid: server.pid, threadId: OTHER }];
+  const turns = { [ID]: false, [OTHER]: true };
+  const { sys, takeOver } = takeoverWith([server], { codexLocks: async () => locks, codexBusy: async (thread) => turns[thread] });
+  const r = await takeOver({ tool: 'codex', id: ID, mtimeMs: OLD });
+  assert.equal(r.status, 409);
+  assert.equal(r.body.code, 'busy');
+  assert.equal(r.body.holder, 'Codex in VS Code');
+  assert.equal(r.body.error, 'Codex in VS Code is replying in another conversation on the Mac. Continuing stops that reply.');
+  assert.deepEqual(sys.signals, []);
+  turns[OTHER] = false;
+  const later = await takeOver({ tool: 'codex', id: ID, mtimeMs: OLD });
+  assert.equal(later.status, 200, JSON.stringify(later.body));
+  assert.deepEqual(sys.signals, [[server.pid, 'SIGTERM']]);
 });
