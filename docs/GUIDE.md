@@ -11,6 +11,8 @@
 <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-4c8dff" alt="Platforms: macOS, Windows, Linux">
 </p>
 
+**New in 2.1:** one **Chats** list for Pocket Dev chats and computer conversations, opening a conversation the computer is still replying in without stopping it, the hand-over on Windows, **Take photo** in the file menu, and AI-assisted setup. See [the 2.1 release notes](RELEASE_2.1.md).
+
 **New in 2.0:** four chat engines with one-chat provider and model switching, one **Open here** / **Continue on Mac** flow (the `pocket-dev takeover` command is gone), self-update with an update icon and an Admin **Update** button, and an Admin tile added to your Dock or taskbar when you install. See [the 2.0 release notes](RELEASE_2.0.md).
 
 Pocket Dev is one Node.js server that runs on a computer as your user. Your phone opens `http://<computer-address>:7777` on the same Wi-Fi, logs in with a password or a one-time QR code, and gets a mobile web app. Nothing is installed on the phone. macOS is the best tested system, Windows 11 is tested for the main features on a real PC, and Linux is written but not tested on a real machine.
