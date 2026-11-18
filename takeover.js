@@ -16,10 +16,12 @@ const POLL_MS = 100;
 const PRODUCTS = { claude: 'Claude Code', codex: 'Codex', copilot: 'Copilot' };
 const REPLYING = new Set(['running', 'waiting-permission', 'waiting-answer']);
 
-// How a holder is stopped. One that is idle has nothing to lose, so it gets SIGTERM and, after a short wait, SIGKILL. One
-// that is replying gets SIGINT to finish its write first; SIGKILL only with force, because it can cut off that write.
+// How a holder is stopped. One that is idle has nothing to lose, so it gets a short wait per signal. It still gets SIGINT
+// first: idle Claude Code exits 0 on SIGINT in about half a second, while SIGTERM's exit code 143 shows as an error in the
+// VS Code extension. One that is replying gets SIGINT to finish its write first; SIGKILL only with force, because it can
+// cut off that write.
 export const STOPS = {
-  idle: { signals: ['SIGTERM', 'SIGKILL'], graceMs: IDLE_GRACE_MS },
+  idle: { signals: ['SIGINT', 'SIGTERM', 'SIGKILL'], graceMs: IDLE_GRACE_MS },
   replying: { signals: ['SIGINT', 'SIGTERM'], graceMs: STOP_GRACE_MS },
   forced: { signals: ['SIGINT', 'SIGTERM', 'SIGKILL'], graceMs: STOP_GRACE_MS },
 };

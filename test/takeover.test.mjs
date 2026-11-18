@@ -189,8 +189,8 @@ test('take over stops the program, reports what it stopped, and logs it', async 
   const { sys, logged, takeOver } = takeoverWith([vscode]);
   const r = await takeOver({ tool: 'claude', id: ID, mtimeMs: OLD, who: { by: 'phone', deviceId: 'd1', name: 'Pixel', ip: '10.0.0.5' } });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { busy: false, stopped: [{ kind: 'process', pid: vscode.pid, label: `Claude Code in VS Code (pid ${vscode.pid})`, signals: ['SIGTERM'] }] });
-  assert.deepEqual(sys.signals, [[vscode.pid, 'SIGTERM']], 'an idle program has no reply to finish, so it gets SIGTERM, not the slow SIGINT wait');
+  assert.deepEqual(r.body, { busy: false, stopped: [{ kind: 'process', pid: vscode.pid, label: `Claude Code in VS Code (pid ${vscode.pid})`, signals: ['SIGINT'] }] });
+  assert.deepEqual(sys.signals, [[vscode.pid, 'SIGINT']], 'an idle program exits cleanly on SIGINT, which the VS Code extension does not show as an error');
   assert.deepEqual(logged, [{ type: 'conversation-taken-over', tool: 'claude', conversationId: ID, pids: [vscode.pid], stopped: ['process'], force: false, by: 'phone', deviceId: 'd1', name: 'Pixel', ip: '10.0.0.5' }]);
 });
 
@@ -289,14 +289,14 @@ test("a Codex app-server holds every thread whose lock it has, though its comman
   assert.deepEqual(findCopies({ processes: [claude], uid: ME, selfPid: SERVER, codexLocks: [{ pid: claude.pid, threadId: ID }] }), [], 'only a Codex process holds Codex locks');
 });
 
-test('an idle holder is stopped with SIGTERM at once even when its file was just written; SIGKILL follows after 2 s', async () => {
-  const vscode = proc(VSCODE, '', { started: 50_000, ignores: ['SIGTERM'] });
+test('an idle holder is stopped at once even when its file was just written; SIGTERM and SIGKILL follow 2 s apart', async () => {
+  const vscode = proc(VSCODE, '', { started: 50_000, ignores: ['SIGINT', 'SIGTERM'] });
   const { sys, takeOver } = takeoverWith([vscode], { claudeSessions: () => [{ pid: vscode.pid, sessionId: ID, startedAt: 52_000, status: 'idle' }] });
   const r = await takeOver({ tool: 'claude', id: ID, mtimeMs: 1_000_000 - 1000 });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(r.body.busy, false, "Claude's own idle status wins over the recent write");
-  assert.deepEqual(sys.signals.map(([, s]) => s), ['SIGTERM', 'SIGKILL']);
-  assert.ok(sys.clock >= 2000 && sys.clock < 5000, `SIGKILL after the short grace, waited ${sys.clock} ms`);
+  assert.deepEqual(sys.signals.map(([, s]) => s), ['SIGINT', 'SIGTERM', 'SIGKILL']);
+  assert.ok(sys.clock >= 4000 && sys.clock < 10_000, `SIGKILL after two short graces, waited ${sys.clock} ms`);
 });
 
 test('a Claude session waiting on a prompt counts as busy', async () => {
@@ -321,5 +321,5 @@ test('a Codex app-server replying in ANOTHER thread blocks, says so, and is left
   turns[OTHER] = false;
   const later = await takeOver({ tool: 'codex', id: ID, mtimeMs: OLD });
   assert.equal(later.status, 200, JSON.stringify(later.body));
-  assert.deepEqual(sys.signals, [[server.pid, 'SIGTERM']]);
+  assert.deepEqual(sys.signals, [[server.pid, 'SIGINT']]);
 });

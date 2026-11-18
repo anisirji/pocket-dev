@@ -76,8 +76,8 @@ test('POST takeover stops the Mac copy, returns what it stopped, and logs the de
   const { call, system, logged } = api();
   const r = await call('POST', `/api/history/claude/${ID}/takeover`, {});
   assert.equal(r.status, 200, JSON.stringify(r.body));
-  assert.deepEqual(r.body, { busy: false, stopped: [{ kind: 'process', pid: 2865, label: 'Claude Code in VS Code (pid 2865)', signals: ['SIGTERM'] }] });
-  assert.deepEqual(system.signals, [[2865, 'SIGTERM']]);
+  assert.deepEqual(r.body, { busy: false, stopped: [{ kind: 'process', pid: 2865, label: 'Claude Code in VS Code (pid 2865)', signals: ['SIGINT'] }] });
+  assert.deepEqual(system.signals, [[2865, 'SIGINT']]);
   assert.deepEqual(logged, [{ type: 'conversation-taken-over', tool: 'claude', conversationId: ID, pids: [2865], stopped: ['process'], force: false, by: 'phone', deviceId: 'dev1', name: 'Pixel 8', ip: '192.168.1.20' }]);
 });
 
@@ -305,7 +305,7 @@ test('a busy Mac reply opens the chat at once, held: messages queue, the model w
 
   t.session.status = 'idle';
   await until(async () => (await t.get(id)).held === null, 'the hand over');
-  assert.deepEqual(t.signals, [[t.holder.pid, 'SIGTERM']]);
+  assert.deepEqual(t.signals, [[t.holder.pid, 'SIGINT']]);
   await until(() => t.sent.length === 1, 'the queued message to go out');
   assert.deepEqual(t.sent, ['then add tests']);
   const view = await t.get(id);

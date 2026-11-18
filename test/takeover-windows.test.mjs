@@ -117,8 +117,8 @@ test('a Windows process table in POCKET_DEV_PROCESS_FIXTURE: take over finds the
   const takeover = createTakeover({ codexLocks: () => readCodexLocks('C:\\Users\\ani\\.codex\\thread-writer-locks'), codexBusy: async () => false, uid: 0, selfPid: SELF, sleep: async () => {} });
   const r = await takeover.takeOver({ tool: 'codex', id: OTHER_THREAD, mtimeMs: 0 });
   assert.equal(r.status, 200, JSON.stringify(r.body));
-  assert.deepEqual(r.body.stopped.map((s) => [s.label, s.signals]), [['Codex in VS Code (pid 4300)', ['SIGTERM']]]);
+  assert.deepEqual(r.body.stopped.map((s) => [s.label, s.signals]), [['Codex in VS Code (pid 4300)', ['SIGINT']]]);
   const table = JSON.parse(fs.readFileSync(fixture, 'utf8'));
-  assert.deepEqual(table.signals, [{ pid: 4300, signal: 'SIGTERM' }]);
+  assert.deepEqual(table.signals, [{ pid: 4300, signal: 'SIGINT' }]);
   assert.deepEqual(table.codexLocks, [], 'the lock goes with its holder');
 });

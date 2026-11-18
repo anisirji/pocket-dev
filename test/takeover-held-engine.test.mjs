@@ -91,7 +91,7 @@ test('a chat awake on the phone while the Mac replies: the hold puts its engine 
   await new Promise((r) => setTimeout(r, 100));
   const view = (await chat('GET', `/api/chat/${id}`)).body;
   const queuedEvent = view.events.find((e) => e.text === 'then add tests');
-  assert.deepEqual(fake.signals, [[3100, 'SIGTERM']], 'only the Mac program is stopped');
+  assert.deepEqual(fake.signals, [[3100, 'SIGINT']], 'only the Mac program is stopped');
   assert.equal(queuedEvent.notSent, undefined, 'the queued message is not marked not sent');
   assert.ok(!view.events.some((e) => e.text === 'Continued in Pocket Dev chat'), 'this chat was never closed as a copy');
   assert.deepEqual(sent, ['hello from the phone', 'then add tests'], 'the queued message goes out after the hand over');

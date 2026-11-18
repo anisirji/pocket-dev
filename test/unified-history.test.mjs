@@ -111,7 +111,7 @@ test('opening a native conversation stops its external writer before importing',
   const res = await f.call('POST', `/api/history/claude/${ids.claude}/open-chat`, {});
   assert.equal(res.status, 200);
   assert.equal(res.body.chat.sessionId, ids.claude);
-  assert.deepEqual(f.signals, [[12345, 'SIGTERM']]);
+  assert.deepEqual(f.signals, [[12345, 'SIGINT']]);
   assert.equal(f.imported.length, 1);
   assert.equal(f.imported[0].cwd, app);
 });
