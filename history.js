@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
-import { createTakeover, readClaudeSessions, readCodexLocks, copyView, LIVE_MS, BUSY_MS } from './takeover.js';
+import { createTakeover, readClaudeSessions, readCodexLocks, copyView, holderName, LIVE_MS, BUSY_MS } from './takeover.js';
 import { readAgents, sessionFile } from './terminal-agents.js';
 import { platform } from './platform.js';
 import { listAntigravity, findAntigravity, antigravityMessages, ANTIGRAVITY_NOTE } from './antigravity-history.js';
@@ -478,7 +478,8 @@ const toBool = (v, name) => {
 // Mount after the auth check. `own` reaches Pocket Dev's own copies of a conversation, { terminals, endTerminal, chats,
 // releaseChat } as createTakeover describes them; `system` replaces process listing and signals in tests. `deviceFor`
 // and `log` name the device that takes a conversation over in the security log. `resumeChat`, `mirrorChat` and
-// `endChatHold` are the chat API's resumeSession, mirrorNative and endHold.
+// `endChatHold` are the chat API's resumeSession, mirrorNative and endHold; `mirrorChat` answers false once the chat is
+// gone or no longer held, else { wantsTakeOver }.
 export function createHistoryApi({
   createSession, sessionView, sendJson, readJson, deviceFor, log, own = {}, system = {}, listChats = () => [],
   resumeChat, mirrorChat = () => false, endChatHold = () => false, handoverTickMs = HANDOVER_TICK_MS,
@@ -538,26 +539,33 @@ export function createHistoryApi({
       if (!s) return sendJson(res, 404, { error: 'No such conversation' });
       const device = deviceFor(req);
       const who = { by: 'phone', deviceId: device.id, name: device.name, ip: device.ip };
-      const result = await takeover.takeOver({ tool, id, mtimeMs: s.mtimeMs, force, note: 'Continued in Pocket Dev chat', who });
-      if (result.status !== 200 && result.body.code !== 'busy') return sendJson(res, result.status, result.body);
       const title = view(s, new Map(), await codex.names()).title;
       const extra = CUSTOM[tool]?.note && { note: CUSTOM[tool].note };
-      if (result.status === 200) return sendJson(res, 200, { chat: await resumeChat({ tool, id, cwd: s.cwd, title }), ...extra });
-      // A program on the computer is still replying. The chat opens now, follows that reply, and takes over once it is idle.
+      // Opening only reads along: a program on the computer keeps the conversation until a message is sent here or Stop is
+      // pressed. Pocket Dev's own copies close at once, unless one is replying.
+      const external = copies.find((c) => c.kind === 'process' && c.tool === tool && c.id === id);
+      let holder = external && holderName(external);
+      if (!holder) {
+        const result = await takeover.takeOver({ tool, id, mtimeMs: s.mtimeMs, force, note: 'Continued in Pocket Dev chat', who });
+        if (result.status === 200) return sendJson(res, 200, { chat: await resumeChat({ tool, id, cwd: s.cwd, title }), ...extra });
+        if (result.body.code !== 'busy') return sendJson(res, result.status, result.body);
+        holder = result.body.holder;
+      }
       const offset = s.file ? (await fs.promises.stat(s.file).catch(() => null))?.size ?? 0 : 0;
       let handover;
-      const chat = await resumeChat({ tool, id, cwd: s.cwd, title, heldBy: result.body.holder, stopHolder: () => handover.stop() });
-      handover = watchHandover({ key, s, chatId: chat.id, offset, who });
+      const chat = await resumeChat({ tool, id, cwd: s.cwd, title, heldBy: holder, stopHolder: () => handover.stop() });
+      handover = watchHandover({ key, s, chatId: chat.id, offset, who, holder });
       return sendJson(res, 200, { chat, ...extra });
     } finally {
       opening.delete(key);
     }
   }
 
-  // Every tick copies what the program wrote into the chat, then tries the take over again; it succeeds once nothing is
-  // replying, and any other refusal leaves the conversation on the computer. Stop asks the program to stop its reply now.
-  // Ticks and Stop run one after another, so two take overs never signal the same program at once.
-  function watchHandover({ key, s, chatId, offset, who }) {
+  // Every tick copies what the program wrote into the chat. Once the chat has a message waiting, the tick tries the take
+  // over; it succeeds once nothing is replying, and any other refusal leaves the conversation on the computer. Without one,
+  // nothing is signalled, and the hold ends only when the program closes by itself. Stop asks the program to stop its reply
+  // now. Ticks and Stop run one after another, so two take overs never signal the same program at once.
+  function watchHandover({ key, s, chatId, offset, who, holder }) {
     const { tool, id } = s;
     let activity = null;
     let ended = false;
@@ -581,16 +589,23 @@ export function createHistoryApi({
     const serial = (step) => (queue = queue.then(() => (ended ? undefined : step())).catch((err) => {
       end({ note: `Could not continue here: ${err.message}. Open it from Chats to try again.`, failed: true });
     }));
+    const closed = `${holder} closed on your ${platform.host.mac}. The conversation continues here.`;
     const attempt = async (stopping) => {
-      if (!(await mirror())) return end();
+      const held = await mirror();
+      if (!held) return end();
+      if (!stopping && !held.wantsTakeOver) {
+        const open = (await takeover.survey()).some((c) => c.tool === tool && c.id === id);
+        return open ? undefined : end({ note: closed });
+      }
       const st = s.file && await fs.promises.stat(s.file).catch(() => null);
       const r = await takeover.takeOver({ tool, id, mtimeMs: st?.mtimeMs ?? s.mtimeMs, confirmBusy: stopping, note: 'Continued in Pocket Dev chat', who });
       if (r.status === 200) {
         await mirror();
-        if (!stopping) return end({ note: `Continued here from your ${platform.host.mac}` });
+        if (!r.body.stopped.length) return end({ note: closed });
+        if (!stopping) return end({ note: `Continued here. ${holder} on your ${platform.host.mac} was closed, so its window may say the session ended. That is normal, nothing is lost. Use Continue on computer in chat settings to go back.` });
         // SIGKILL is what Windows does when the program has no console for a Ctrl+C, or ignores it: an end mid-write.
         const cut = r.body.busy && r.body.stopped.some((c) => c.signals?.includes('SIGKILL'));
-        return end({ note: `Stopped the reply on your ${platform.host.mac}.${cut ? ' Its last step may be lost.' : ''} The conversation continues here.` });
+        return end({ note: `Stopped the reply on your ${platform.host.mac}.${cut ? ' Its last step may be lost.' : ''} The conversation continues here. ${holder} was closed, so its window may say the session ended. That is normal.` });
       }
       // A program that did not close after Stop keeps the hold; the ticks go on waiting for it.
       if (r.body.code === 'busy' || (stopping && r.body.code === 'still-running')) return undefined;

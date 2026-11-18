@@ -106,14 +106,13 @@ test('anonymous callers, collaborators and room peers cannot read or open comput
   }
 });
 
-test('opening a native conversation stops its external writer before importing', async () => {
+test('opening a native conversation an idle program holds imports it held by that program and signals nothing', async () => {
   const f = fixture({ procs: [liveProcess()] });
   const res = await f.call('POST', `/api/history/claude/${ids.claude}/open-chat`, {});
   assert.equal(res.status, 200);
   assert.equal(res.body.chat.sessionId, ids.claude);
-  assert.deepEqual(f.signals, [[12345, 'SIGINT']]);
-  assert.equal(f.imported.length, 1);
-  assert.equal(f.imported[0].cwd, app);
+  assert.deepEqual(f.signals, []);
+  assert.deepEqual(f.imported.map((s) => [s.cwd, s.heldBy]), [[app, 'Claude Code']]);
 });
 
 test('an already open Pocket Dev chat shares its current reply without release or import', async () => {

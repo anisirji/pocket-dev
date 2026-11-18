@@ -623,7 +623,8 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   }
 
   // While held: new messages the Mac program wrote, and the step it is on (null for none). False once the chat is gone or
-  // no longer held, which ends the caller's watch.
+  // no longer held, which ends the caller's watch; else whether the chat wants the conversation, which is when a message
+  // sent here waits for it.
   function mirrorNative(id, messages, activity) {
     const chat = chats.get(id);
     if (!chat?.nativeHeld) return false;
@@ -632,7 +633,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       chat.heldActivity = activity;
       chat.changed();
     }
-    return true;
+    return { wantsTakeOver: chat.queue.length > 0 };
   }
 
   // The hold ends: the conversation continues here and waiting messages go out, or (`failed`) it stays on the computer and

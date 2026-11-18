@@ -31,6 +31,7 @@ function fakeSystem(procs) {
     signals,
     listProcesses: async () => [...table.values()],
     kill(pid, signal) { signals.push([pid, signal]); table.delete(pid); },
+    exit(pid) { table.delete(pid); },
     sleep: async () => {},
     uid: ME,
     selfPid: 999_999,
@@ -241,7 +242,7 @@ const until = async (check, what) => {
   assert.fail(`timed out waiting for ${what}`);
 };
 
-function heldSetup({ took } = {}) {
+function heldSetup({ took, status = 'busy' } = {}) {
   process.env.POCKET_DEV_CHAT_DIR = fs.mkdtempSync(path.join(root, 'chats-'));
   fs.writeFileSync(heldFile, `${JSON.stringify({ type: 'user', cwd: app, timestamp: '2026-11-01T10:00:00Z', message: { role: 'user', content: 'Refactor the parser' } })}\n`);
   const sent = [];
@@ -256,7 +257,7 @@ function heldSetup({ took } = {}) {
   const config = { data: {}, read() { return this.data; }, update(c) { Object.assign(this.data, c); } };
   const chatApi = createChatApi({ sendJson: (res, status, body) => Object.assign(res, { status, body }), readJson: async (req) => req.body, config, wss: null, engines });
   const holder = { pid: 3100, ppid: 1, uid: ME, stat: 'S', started: 0, exe: vscode.exe, args: vscode.exe };
-  const session = { pid: holder.pid, sessionId: HELD, startedAt: 1000, status: 'busy' };
+  const session = { pid: holder.pid, sessionId: HELD, startedAt: 1000, status };
   const fake = fakeSystem([holder]);
   // `took` stands in for Windows, where a stop can end up as an immediate end (see winKill).
   const system = { ...fake, claudeSessions: () => [session], kill: (pid, signal) => { fake.kill(pid, signal); return took; } };
@@ -275,10 +276,10 @@ function heldSetup({ took } = {}) {
   const chat = (method, url, body) => call(chatApi.handleApi, method, url, body);
   const open = () => call(history, 'POST', `/api/history/claude/${HELD}/open-chat`, {});
   const get = async (id) => (await chat('GET', `/api/chat/${id}`)).body;
-  return { chatApi, chat, open, get, sent, session, signals: system.signals, holder };
+  return { chatApi, chat, open, get, sent, session, signals: system.signals, holder, exit: () => fake.exit(holder.pid) };
 }
 
-test('a busy Mac reply opens the chat at once, held: messages queue, the model waits, and the idle holder hands over by itself', async () => {
+test('a busy Mac reply opens the chat at once, held: messages queue, the model waits, and the idle holder hands over to the queued message', async () => {
   const t = heldSetup();
   const opened = await t.open();
   assert.equal(opened.status, 200, JSON.stringify(opened.body));
@@ -309,7 +310,7 @@ test('a busy Mac reply opens the chat at once, held: messages queue, the model w
   await until(() => t.sent.length === 1, 'the queued message to go out');
   assert.deepEqual(t.sent, ['then add tests']);
   const view = await t.get(id);
-  assert.ok(view.events.some((e) => e.type === 'status' && e.text === 'Continued here from your Mac'));
+  assert.ok(view.events.some((e) => e.type === 'status' && e.text === 'Continued here. Claude Code in VS Code on your Mac was closed, so its window may say the session ended. That is normal, nothing is lost. Use Continue on computer in chat settings to go back.'));
   assert.equal((await t.chat('PATCH', `/api/chat/${id}`, { settings: { model: 'sonnet' } })).status, 200, 'the model can change again');
 });
 
@@ -338,7 +339,7 @@ test('Stop on a held chat stops the Mac reply with SIGINT, takes over, and sends
   assert.deepEqual(t.signals, [[t.holder.pid, 'SIGINT']], 'the busy holder gets SIGINT to finish its write, as a confirmed take over');
   await until(() => t.sent.length === 1, 'the queued message to go out');
   assert.deepEqual(t.sent, ['do this instead']);
-  assert.ok((await t.get(id)).events.some((e) => e.text === 'Stopped the reply on your Mac. The conversation continues here.'));
+  assert.ok((await t.get(id)).events.some((e) => e.text === 'Stopped the reply on your Mac. The conversation continues here. Claude Code in VS Code was closed, so its window may say the session ended. That is normal.'));
 });
 
 test('a chat still held when Pocket Dev restarts comes back released, with its waiting messages not sent', async () => {
@@ -364,5 +365,64 @@ test('a Stop that had to end the program at once (Windows, no console) says its 
   const { id } = (await t.open()).body.chat;
   await t.chat('POST', `/api/chat/${id}/interrupt`);
   await until(async () => (await t.get(id)).held === null, 'the hold to end');
-  assert.ok((await t.get(id)).events.some((e) => e.text === 'Stopped the reply on your Mac. Its last step may be lost. The conversation continues here.'));
+  assert.ok((await t.get(id)).events.some((e) => e.text === 'Stopped the reply on your Mac. Its last step may be lost. The conversation continues here. Claude Code in VS Code was closed, so its window may say the session ended. That is normal.'));
+});
+
+const ticks = (n) => new Promise((r) => setTimeout(r, n * 15 + 30));
+
+test('opening a conversation an idle Mac program holds signals nothing: the chat opens held and reads along', async () => {
+  const t = heldSetup({ status: 'idle' });
+  const opened = await t.open();
+  assert.equal(opened.status, 200, JSON.stringify(opened.body));
+  const { id } = opened.body.chat;
+  assert.equal(opened.body.chat.held, 'Claude Code in VS Code');
+  line({ type: 'assistant', timestamp: '2026-11-01T10:00:05Z', message: { content: [{ type: 'text', text: 'Written on the Mac.' }] } });
+  await until(async () => (await t.get(id)).events.some((e) => e.text === 'Written on the Mac.'), 'the Mac message to appear');
+  await ticks(10);
+  assert.deepEqual(t.signals, [], 'reading along never stops the Mac program');
+  assert.equal((await t.get(id)).held, 'Claude Code in VS Code', 'the hold stays while nothing is sent');
+});
+
+test('a Mac reply that finishes keeps the hold until a message is sent here', async () => {
+  const t = heldSetup();
+  const { id } = (await t.open()).body.chat;
+  t.session.status = 'idle';
+  await ticks(10);
+  assert.deepEqual(t.signals, [], 'an idle holder is not stopped just because it is idle');
+  assert.equal((await t.get(id)).held, 'Claude Code in VS Code');
+});
+
+test('sending from the phone takes over: the idle Mac program gets SIGINT first and the message goes out here', async () => {
+  const t = heldSetup({ status: 'idle' });
+  const { id } = (await t.open()).body.chat;
+  await ticks(3);
+  assert.deepEqual(t.signals, []);
+  const queued = await t.chat('POST', `/api/chat/${id}/message`, { text: 'continue on the phone' });
+  assert.equal(queued.status, 202);
+  await until(async () => (await t.get(id)).held === null, 'the take over');
+  assert.deepEqual(t.signals, [[t.holder.pid, 'SIGINT']]);
+  await until(() => t.sent.length === 1, 'the message to go out');
+  assert.deepEqual(t.sent, ['continue on the phone']);
+  assert.ok((await t.get(id)).events.some((e) => e.text?.startsWith('Continued here. Claude Code in VS Code on your Mac was closed')));
+});
+
+test('a Mac program that closes by itself ends the hold with no signal sent', async () => {
+  const t = heldSetup({ status: 'idle' });
+  const { id } = (await t.open()).body.chat;
+  await ticks(3);
+  t.exit();
+  await until(async () => (await t.get(id)).held === null, 'the hold to end');
+  assert.deepEqual(t.signals, []);
+  const view = await t.get(id);
+  assert.equal(view.events.at(-1).text, 'Claude Code in VS Code closed on your Mac. The conversation continues here.');
+  assert.equal(view.nativeReleased, false, 'the chat continues here');
+});
+
+test('Stop on a held chat whose Mac program is idle still takes over, with SIGINT', async () => {
+  const t = heldSetup({ status: 'idle' });
+  const { id } = (await t.open()).body.chat;
+  assert.deepEqual(t.signals, []);
+  assert.equal((await t.chat('POST', `/api/chat/${id}/interrupt`)).status, 200);
+  await until(async () => (await t.get(id)).held === null, 'the hold to end');
+  assert.deepEqual(t.signals, [[t.holder.pid, 'SIGINT']]);
 });
