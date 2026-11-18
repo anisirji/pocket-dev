@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { readNetwork, networkError, ipv6Prefix, createSameNetwork } from '../network.js';
-import { createTunnel } from '../tunnel.js';
+import { readNetwork, networkError, ipv6Prefix, createSameNetwork } from '../src/network/network.js';
+import { createTunnel } from '../src/network/tunnel.js';
 
 const config = (network) => ({ read: () => ({ network }) });
 const OFF = { wifi: true, internet: { kind: 'off', hostname: null } };

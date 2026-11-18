@@ -112,7 +112,7 @@ test('a spent Antigravity quota becomes a usage limit error, so the chat offers 
 });
 
 test('only a short spent-quota answer counts as a limit; a normal answer that mentions a quota does not', async () => {
-  const { antigravityQuotaNotice } = await import('../chat/limits.js');
+  const { antigravityQuotaNotice } = await import('../src/chat/limits.js');
   assert.equal(antigravityQuotaNotice('Hello from agy'), null);
   assert.equal(antigravityQuotaNotice('You can raise the quota in settings.'), null);
   assert.equal(antigravityQuotaNotice(`${'The quota section of the doc explains how limits are reached. '.repeat(10)}`), null);

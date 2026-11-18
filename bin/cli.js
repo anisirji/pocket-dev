@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { PACKAGE_ROOT, STATE_DIR, resolveConfigPath } from '../paths.js';
-import { openConfig } from '../config.js';
-import { KEYS } from '../config-keys.js';
-import { INTERNET_KINDS, readNetwork, networkError, isToken, hasToken, writeToken } from '../network.js';
+import { PACKAGE_ROOT, STATE_DIR, resolveConfigPath } from '../src/core/paths.js';
+import { openConfig } from '../src/core/config.js';
+import { KEYS } from '../src/core/config-keys.js';
+import { INTERNET_KINDS, readNetwork, networkError, isToken, hasToken, writeToken } from '../src/network/network.js';
 
 const VERSION = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')).version;
 
@@ -68,8 +68,8 @@ function flagValue(args, name) {
 }
 
 async function start(args) {
-  const { resolvePorts, runningInstance, firstRun } = await import('../startup.js');
-  const { createRealContext, runSetup, printAlreadyRunning, printPhoneLogin, showGreeting } = await import('../setup.js');
+  const { resolvePorts, runningInstance, firstRun } = await import('../src/core/startup.js');
+  const { createRealContext, runSetup, printAlreadyRunning, printPhoneLogin, showGreeting } = await import('../src/setup/setup.js');
   const ctx = await createRealContext();
   if (await runningInstance(STATE_DIR)) return printAlreadyRunning(ctx);
   const port = flagValue(args, '--port');
@@ -88,7 +88,7 @@ async function start(args) {
     await printPhoneLogin(ctx, { tries: 10 });
     return showGreeting(ctx, { quiet: args.includes('--quiet') });
   }
-  const { platform } = await import('../platform.js');
+  const { platform } = await import('../src/core/platform.js');
   try {
     const chosen = await resolvePorts({ config: openConfig(resolveConfigPath()), ownerOf: (p) => platform.portOwner(p) });
     for (const note of chosen.notes) console.log(note);
@@ -96,7 +96,7 @@ async function start(args) {
     process.env.POCKET_DEV_ADMIN_PORT = String(chosen.adminPort);
   } catch (err) { fail(err.message); }
   // server.js prints its address and QR code before this import resolves, so the greeting comes after them.
-  await import('../server.js');
+  await import('../src/server.js');
   if (guided) await showGreeting(ctx, { quiet: args.includes('--quiet') });
 }
 
@@ -219,7 +219,7 @@ async function service([action = 'status', ...rest]) {
     const script = { install: 'install-service.sh', restart: 'install-service.sh', uninstall: 'uninstall-service.sh', status: 'status.sh', autostart: 'autostart.sh' }[action];
     return runScript(script, action === 'install' || action === 'restart' || action === 'autostart' ? rest : []);
   }
-  const { platform } = await import('../platform.js');
+  const { platform } = await import('../src/core/platform.js');
   const plan = platform.servicePlan();
   const log = process.env.LOG || plan.log;
   if (action === 'logs') return followLog(log);
@@ -253,7 +253,7 @@ async function service([action = 'status', ...rest]) {
 
 // Ctrl+C stops between steps. Every change setup makes is a finished write, so nothing is left half done.
 async function setup(args) {
-  const { createRealContext, runSetup } = await import('../setup.js');
+  const { createRealContext, runSetup } = await import('../src/setup/setup.js');
   process.once('SIGINT', () => { console.log(`\n${STOPPED}`); process.exit(130); });
   try { return await runSetup(args, await createRealContext()); } catch (err) {
     if (err.code === 'SIGINT') { console.log(STOPPED); return 130; }
@@ -263,16 +263,16 @@ async function setup(args) {
 
 // `update` asks the npm registry for the newest version and, when you say yes, installs it in this terminal.
 async function update(args) {
-  const { createRealContext } = await import('../setup.js');
-  const { updateCommand } = await import('../update.js');
+  const { createRealContext } = await import('../src/setup/setup.js');
+  const { updateCommand } = await import('../src/setup/update.js');
   process.once('SIGINT', () => { console.log('\nStopped.'); process.exit(130); });
   return updateCommand(args, await createRealContext({ noTerminals: true }));
 }
 
 // `doctor` shares setup's detection and its terminal question-and-answer plumbing.
 async function doctor(args) {
-  const { createRealContext } = await import('../setup.js');
-  const { doctorCommand } = await import('../doctor.js');
+  const { createRealContext } = await import('../src/setup/setup.js');
+  const { doctorCommand } = await import('../src/setup/doctor.js');
   return doctorCommand(args, await createRealContext());
 }
 
@@ -285,7 +285,7 @@ switch (command) {
   case 'doctor': process.exit(await doctor(args)); break;
   case 'update': process.exit(await update(args)); break;
   case 'qr': runScript('qr.js', args); break;
-  case 'admin': if (args[0] === 'pin' || args[0] === 'unpin') process.exit(await (await import('../taskbar-pin.js')).pinCommand(args)); else runScript('admin.js', ['open']); break;
+  case 'admin': if (args[0] === 'pin' || args[0] === 'unpin') process.exit(await (await import('../src/setup/taskbar-pin.js')).pinCommand(args)); else runScript('admin.js', ['open']); break;
   case 'connect': case 'disconnect': runScript('admin.js', [command]); break;
   case 'internet': await internet(args); break;
   case 'awake': runScript('awake.js', args); break;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createSyncLog, reduceChanges, parseReadableId, readableId } from '../sync-log.js';
+import { createSyncLog, reduceChanges, parseReadableId, readableId } from '../src/rooms/sync-log.js';
 
 const clockAt = (t) => () => t;
 const obj = (m) => Object.fromEntries([...m].sort());

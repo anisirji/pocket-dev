@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ADMIN_URL_PATH } from '../admin.js';
+import { ADMIN_URL_PATH } from '../src/auth/admin.js';
 
 // pocket-dev message: send a message to Messages as the Mac, through the Admin page's API.
 const USAGE = `usage: pocket-dev message [text] [--to <name or device code>] [--file <path> ...]

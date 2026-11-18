@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { startServer, until, pause } from './helpers/server.mjs';
-import { createModes, classify } from '../modes.js';
+import { createModes, classify } from '../src/auth/modes.js';
 
 const env = { POCKET_DEV_ROOM_PING_MS: '250', POCKET_DEV_APPROVAL_MS: '4000' };
 

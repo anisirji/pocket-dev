@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { openTerminalHost, hostSocketPath } from '../terminals.js';
+import { openTerminalHost, hostSocketPath } from '../src/terminals/terminals.js';
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };

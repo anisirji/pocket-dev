@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePs, parseLsof, resumeTarget, findCopies, stopProcesses, createTakeover, STOPS } from '../takeover.js';
+import { parsePs, parseLsof, resumeTarget, findCopies, stopProcesses, createTakeover, STOPS } from '../src/conversations/takeover.js';
 
 // Every process here is made up. Nothing in this file lists or signals a real process.
 const ME = 501;

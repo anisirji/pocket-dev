@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import { until, freePort } from './helpers/server.mjs';
 import { device, trio, listing, setConfig } from './helpers/forward-trio.mjs';
-import { createForward } from '../forward.js';
+import { createForward } from '../src/network/forward.js';
 
 const FAKE_CLAUDE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'helpers', 'fake-claude.mjs');
 const wsBase = (s) => s.base.replace('http', 'ws');

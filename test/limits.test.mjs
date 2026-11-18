@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { claudeLimitNotice, codexLimitNotices, resetText } from '../chat/limits.js';
+import { claudeLimitNotice, codexLimitNotices, resetText } from '../src/chat/limits.js';
 
 const inHours = (h) => Math.floor(Date.now() / 1000) + h * 3600;
 

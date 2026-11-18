@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { saveToolImages, resultText, IMAGE_FILE_RE } from '../chat/tool-images.js';
+import { saveToolImages, resultText, IMAGE_FILE_RE } from '../src/chat/tool-images.js';
 
 const PNG = Buffer.from('iVBORw0KGgo=', 'base64');
 const image = (type = 'image/png', data = PNG.toString('base64')) => ({ type: 'image', source: { type: 'base64', media_type: type, data } });

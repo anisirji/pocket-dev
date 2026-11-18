@@ -6,8 +6,8 @@ import path from 'node:path';
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { WebSocketServer } from 'ws';
-import { connectCodexRpc } from '../chat/codex-rpc.js';
-import { Chat } from '../chat/chat.js';
+import { connectCodexRpc } from '../src/chat/codex-rpc.js';
+import { Chat } from '../src/chat/chat.js';
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function until(fn) {
@@ -117,7 +117,7 @@ async function engineFixture(t) {
   process.env.POCKET_DEV_CODEX_SOCKET = f.socketPath;
   process.env.POCKET_DEV_CODEX = '/must-not-spawn';
   let codex;
-  try { codex = await import(`../chat/codex.js?fixture=${encodeURIComponent(f.dir)}`); }
+  try { codex = await import(`../src/chat/codex.js?fixture=${encodeURIComponent(f.dir)}`); }
   finally {
     if (oldSocket === undefined) delete process.env.POCKET_DEV_CODEX_SOCKET; else process.env.POCKET_DEV_CODEX_SOCKET = oldSocket;
     if (oldBin === undefined) delete process.env.POCKET_DEV_CODEX; else process.env.POCKET_DEV_CODEX = oldBin;

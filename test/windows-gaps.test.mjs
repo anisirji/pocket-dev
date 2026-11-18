@@ -6,9 +6,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import net from 'node:net';
 import http from 'node:http';
-import { createPlatform, NO_WINDOWS_ZIP } from '../platform.js';
-import { servicePlan } from '../platform-service.js';
-import { connectToHost } from '../terminals.js';
+import { createPlatform, NO_WINDOWS_ZIP } from '../src/core/platform.js';
+import { servicePlan } from '../src/core/platform-service.js';
+import { connectToHost } from '../src/terminals/terminals.js';
 import { startServer } from './helpers/server.mjs';
 
 const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -333,7 +333,7 @@ test('a real host that starts late is found: the socket appears after the first 
 });
 
 test('setup starts a bare npm through cmd.exe on Windows, and real programs directly', async () => {
-  const { needsShell } = await import('../setup.js');
+  const { needsShell } = await import('../src/setup/setup.js');
   assert.equal(needsShell('npm', 'win32'), true, 'a bare npm is npm.cmd, which spawn cannot start without a shell');
   assert.equal(needsShell('C:\\Program Files\\nodejs\\npm.cmd', 'win32'), true);
   assert.equal(needsShell('claude.CMD', 'win32'), true);

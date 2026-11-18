@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { captureError } from '../screen.js';
+import { captureError } from '../src/machine/screen.js';
 
 const host = { the: 'the Mac' };
 

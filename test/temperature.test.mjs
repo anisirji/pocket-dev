@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseBatteryC, parseThermal, alertsFor } from '../power.js';
+import { parseBatteryC, parseThermal, alertsFor } from '../src/machine/power.js';
 
 const LIMITS = { batteryPercent: 20, temperatureC: 40 };
 const mac = (over = {}) => ({ onAC: false, charging: false, battery: 80, temperature: { batteryC: 31, thermal: 'nominal' }, ...over });

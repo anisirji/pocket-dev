@@ -26,7 +26,7 @@ The isolated branch `admin-port-fix`, in a separate local worktree, contains onl
 ## Remaining work
 
 1. Run `npm test` on the combined checkout with local listeners allowed. The nine socket-dependent files, including the Internet access exploit regressions, have not been verified in this session.
-2. Run `scripts/check-responsive.mjs` with Playwright and Chrome available.
+2. Run `test/browser/check-responsive.mjs` with Playwright and Chrome available.
 3. Use a separate test server and state directory for the phone checks below.
 4. The owner's later instruction authorizes the local merge, now prepared in the server checkout. Complete the outstanding release checks and remote-login recovery preparation before restarting its service; do not ask for the same authorization again.
 5. The owner identified typed folder paths as the blocking Collaborators problem. The shared folder browser now covers repository and related-folder selection on phone and Admin, as well as Chat and Terminal. Verify it on a real phone before release.

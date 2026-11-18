@@ -9,8 +9,8 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-takeover-'));
 process.env.POCKET_DEV_CLAUDE_DIR = path.join(root, 'claude', 'projects');
 process.env.POCKET_DEV_CODEX_DIR = path.join(root, 'codex');
 process.env.POCKET_DEV_CHAT_DIR = path.join(root, 'chats');
-const { createHistoryApi, findConversation } = await import('../history.js');
-const { createChatApi } = await import('../chat/index.js');
+const { createHistoryApi, findConversation } = await import('../src/conversations/history.js');
+const { createChatApi } = await import('../src/chat/index.js');
 // A chat saves itself a second after it changes, so the store stays until those saves are done.
 test.after(async () => { await new Promise((r) => setTimeout(r, 1500)); fs.rmSync(root, { recursive: true, force: true }); });
 

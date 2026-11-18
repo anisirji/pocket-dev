@@ -8,7 +8,7 @@ import path from 'node:path';
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-agents-api-'));
 process.env.POCKET_DEV_CLAUDE_DIR = path.join(root, 'claude', 'projects');
 process.env.POCKET_DEV_CODEX_DIR = path.join(root, 'codex');
-const { createHistoryApi } = await import('../history.js');
+const { createHistoryApi } = await import('../src/conversations/history.js');
 test.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
 const ME = process.getuid();

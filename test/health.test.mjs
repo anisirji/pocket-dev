@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseTop, parseMemoryFree, parseBatteryCondition, judge } from '../health.js';
+import { parseTop, parseMemoryFree, parseBatteryCondition, judge } from '../src/machine/health.js';
 
 const TOP = `Processes: 500 total
 Load Avg: 9.00, 9.00, 9.00

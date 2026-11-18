@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { localRequest } from './local-api.js';
-import { ADMIN_URL_PATH } from '../admin.js';
-import { terminalQr, qrNote } from '../qr.js';
+import { ADMIN_URL_PATH } from '../src/auth/admin.js';
+import { terminalQr, qrNote } from '../src/network/qr.js';
 
 // The phone port is closed while phone access is disconnected; the admin listener says whether the server is up.
 async function disconnected() {

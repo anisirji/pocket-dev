@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   pin, unpin, pinStep, pinCheckLine, pinCommand, postinstallPin, describePin, readRecord, macLauncher, linuxLauncher, linuxEntry, winVbs,
   WIN_LNK_SCRIPT, shq, PIN_COMMAND, parseDockUrls,
-} from '../taskbar-pin.js';
+} from '../src/setup/taskbar-pin.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const NODE = '/opt/my node/bin/node';

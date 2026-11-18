@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 // The model dropdown and its list from public/chat.js, built against a tiny DOM. The real layout is checked in Chrome by
-// scripts/check-engine-dropdown.mjs.
+// test/browser/check-engine-dropdown.mjs.
 const source = fs.readFileSync(new URL('../public/chat.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../public/chat.css', import.meta.url), 'utf8');
 const block = source.slice(source.indexOf('  const BUSY = new Set'), source.indexOf('  function renderChrome() {'));

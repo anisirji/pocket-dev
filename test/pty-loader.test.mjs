@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadPty, terminalsError, REPAIR_COMMAND } from '../pty-loader.js';
+import { loadPty, terminalsError, REPAIR_COMMAND } from '../src/core/pty-loader.js';
 
 test('node-pty loads when it is there', async () => {
   const fake = { spawn() {} };
@@ -50,7 +50,7 @@ test('the real node-pty loads here', async () => {
 
 test('fixHelperPermissions makes a non-executable spawn-helper executable and leaves Windows alone', async (t) => {
   const fs = await import('node:fs'), os = await import('node:os'), path = await import('node:path');
-  const { fixHelperPermissions } = await import('../pty-loader.js');
+  const { fixHelperPermissions } = await import('../src/core/pty-loader.js');
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pd-helper-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const pty = path.join(root, 'node_modules', 'node-pty');

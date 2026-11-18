@@ -277,7 +277,7 @@ test('a spent premium allowance, as an error or as an answer, becomes a usage li
 });
 
 test('only a short spent-allowance message counts as a limit', async () => {
-  const { copilotLimitNotice } = await import('../chat/limits.js');
+  const { copilotLimitNotice } = await import('../src/chat/limits.js');
   assert.equal(copilotLimitNotice('Hello from copilot'), null);
   assert.equal(copilotLimitNotice('You can set a rate limit in nginx with limit_req.'), null);
   assert.equal(copilotLimitNotice(`${'The quota section explains how the limit is reached. '.repeat(20)}`), null);
@@ -319,7 +319,7 @@ test('the terminal shortcuts offer copilot next to claude and codex', () => {
 });
 
 test('Setup knows GitHub Copilot: package, command, no sign-in check, and a login note instead', async () => {
-  const { TOOLS, STEP_IDS, detectTool } = await import('../setup.js');
+  const { TOOLS, STEP_IDS, detectTool } = await import('../src/setup/setup.js');
   const tool = TOOLS.find((x) => x.id === 'copilot');
   assert.equal(tool.bin, 'copilot');
   assert.equal(tool.npm, '@github/copilot');

@@ -25,7 +25,7 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-messages-'));
 const sips = path.join(root, 'sips-stub');
 fs.writeFileSync(sips, '#!/bin/sh\nfor a; do case "$prev" in --out) out="$a";; esac; prev="$a"; done\nfor a; do [ -f "$a" ] && raw="$a"; done\ncp "$raw" "$out"\n', { mode: 0o700 });
 process.env.POCKET_DEV_SIPS = sips;
-const { createMessages, detectType } = await import('../messages.js');
+const { createMessages, detectType } = await import('../src/rooms/messages.js');
 process.on('exit', () => fs.rmSync(root, { recursive: true, force: true }));
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');

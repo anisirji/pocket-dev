@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Chat } from '../chat/chat.js';
+import { Chat } from '../src/chat/chat.js';
 
 function chat(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-queue-'));

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { parseWinProcesses, splitCommandLine, parseLockHolders, winKill, WINDOWS_ACTIONS, encodeScript } from '../takeover-windows.js';
-import { findCopies, copyView, holderName, stopProcesses, createTakeover, STOPS } from '../takeover.js';
+import { parseWinProcesses, splitCommandLine, parseLockHolders, winKill, WINDOWS_ACTIONS, encodeScript } from '../src/conversations/takeover-windows.js';
+import { findCopies, copyView, holderName, stopProcesses, createTakeover, STOPS } from '../src/conversations/takeover.js';
 
 // Windows listings and outputs as the PowerShell scripts in takeover-windows.js print them. Nothing here runs on Windows
 // or signals a real process.
@@ -113,7 +113,7 @@ test('a Windows process table in POCKET_DEV_PROCESS_FIXTURE: take over finds the
   fs.writeFileSync(fixture, JSON.stringify({ processes: procs, codexLocks: [{ pid: 4300, threadId: OTHER_THREAD }] }));
   process.env.POCKET_DEV_PROCESS_FIXTURE = fixture;
   t.after(() => { delete process.env.POCKET_DEV_PROCESS_FIXTURE; fs.rmSync(dir, { recursive: true, force: true }); });
-  const { readCodexLocks } = await import('../takeover.js');
+  const { readCodexLocks } = await import('../src/conversations/takeover.js');
   const takeover = createTakeover({ codexLocks: () => readCodexLocks('C:\\Users\\ani\\.codex\\thread-writer-locks'), codexBusy: async () => false, uid: 0, selfPid: SELF, sleep: async () => {} });
   const r = await takeover.takeOver({ tool: 'codex', id: OTHER_THREAD, mtimeMs: 0 });
   assert.equal(r.status, 200, JSON.stringify(r.body));

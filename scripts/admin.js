@@ -1,9 +1,9 @@
 import fs from 'node:fs';
-import { ADMIN_URL_PATH } from '../admin.js';
-import { platform as host } from '../platform.js';
-import { cachedUpdateLine } from '../update.js';
-import { openConfig } from '../config.js';
-import { resolveConfigPath } from '../paths.js';
+import { ADMIN_URL_PATH } from '../src/auth/admin.js';
+import { platform as host } from '../src/core/platform.js';
+import { cachedUpdateLine } from '../src/setup/update.js';
+import { openConfig } from '../src/core/config.js';
+import { resolveConfigPath } from '../src/core/paths.js';
 
 // npm run admin: open the admin page. npm run connect / disconnect: open or close phone access.
 const NOT_RUNNING = 'Pocket Dev is not running. Start it with: pocket-dev start (or pocket-dev service install), then try again.';

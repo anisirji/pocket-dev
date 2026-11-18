@@ -6,7 +6,7 @@ import http from 'node:http';
 import path from 'node:path';
 import WebSocket from 'ws';
 import { startServer, until, freePort } from './helpers/server.mjs';
-import { createForward } from '../forward.js';
+import { createForward } from '../src/network/forward.js';
 
 import { env, device, project, setConfig, listing, trio } from './helpers/forward-trio.mjs';
 

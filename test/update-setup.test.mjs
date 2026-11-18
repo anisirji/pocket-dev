@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { runSetup } from '../setup.js';
-import { createUpdater } from '../update.js';
-import { firstRun } from '../startup.js';
+import { runSetup } from '../src/setup/setup.js';
+import { createUpdater } from '../src/setup/update.js';
+import { firstRun } from '../src/core/startup.js';
 
 // Setup and the first-run guide begin with a "Latest version" step. A fake computer and a fake updater: no npm, no network.
 const tool = () => null;

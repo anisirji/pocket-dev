@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createContext } from '../setup.js';
-import { collectDoctor, printDoctor, detectInstall, repairPlan, repairTerminals, doctorCommand, probeTerminals } from '../doctor.js';
+import { createContext } from '../src/setup/setup.js';
+import { collectDoctor, printDoctor, detectInstall, repairPlan, repairTerminals, doctorCommand, probeTerminals } from '../src/setup/doctor.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LINUX_ROOT = '/usr/local/lib/node_modules/@anisirji/pocket-dev';
@@ -266,7 +266,7 @@ test('doctor sees a port that a server holds on all interfaces', async () => {
   await new Promise((r) => holder.listen(0, '0.0.0.0', r));
   const { port } = holder.address();
   try {
-    const { doctorDefaults } = await import('../doctor.js');
+    const { doctorDefaults } = await import('../src/setup/doctor.js');
     assert.equal(await (await doctorDefaults()).portFree(port), false);
   } finally { holder.close(); }
 });

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-import { Chat } from '../chat/chat.js';
+import { Chat } from '../src/chat/chat.js';
 
 const source = fs.readFileSync(new URL('../public/chat.js', import.meta.url), 'utf8');
 // Exercise the production view functions together with the real server queue.
@@ -14,7 +14,7 @@ const messageView = source.slice(source.indexOf("    'user-text': (ev) => {"), s
 const timeView = source.slice(source.indexOf('  function timeStamp('), source.indexOf('  const RENDER = {'));
 const composer = source.slice(source.indexOf('  function renderComposer()'), source.indexOf('  function renderFiles()'));
 const draftView = source.slice(source.indexOf('  function persistQueueEdit('), source.indexOf('  function resetLog()'));
-const serverSource = fs.readFileSync(new URL('../chat/index.js', import.meta.url), 'utf8');
+const serverSource = fs.readFileSync(new URL('../src/chat/index.js', import.meta.url), 'utf8');
 const patchRoute = serverSource.slice(serverSource.indexOf("    'PATCH :id/queue':"), serverSource.indexOf("    'DELETE :id/queue':"));
 class Element {
   constructor(tag, className, text = '') { Object.assign(this, { tag, className, textContent: text, children: [], attributes: {}, scrollTop: 0, replacements: 0, value: '', classList: { remove() {} } }); }

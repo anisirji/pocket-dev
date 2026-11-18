@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { startServer, until } from './helpers/server.mjs';
 import { isolatedEnv } from './isolated-env.mjs';
-import { readInstalledVersion } from '../update.js';
+import { readInstalledVersion } from '../src/setup/update.js';
 
 const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 

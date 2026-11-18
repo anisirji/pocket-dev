@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { firstName, partOfDay, greetingText, box } from '../greeting.js';
-import { KEYS } from '../config-keys.js';
+import { firstName, partOfDay, greetingText, box } from '../src/setup/greeting.js';
+import { KEYS } from '../src/core/config-keys.js';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 

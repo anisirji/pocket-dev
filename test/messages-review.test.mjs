@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
-import { createMessages } from '../messages.js';
+import { createMessages } from '../src/rooms/messages.js';
 
 function fixture(t) {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-message-review-'));

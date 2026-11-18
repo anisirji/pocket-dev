@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   createNotifier, createUpdateReminder, macCommand, windowsCommand, linuxCommand, REMIND_EVERY_MS,
-} from '../desktop-notify.js';
+} from '../src/machine/desktop-notify.js';
 
 // Nothing here may show anything on a real screen: every notifier gets an injected `run` and an empty env.
 const tmp = (t) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-notify-')); t.after(() => fs.rmSync(d, { recursive: true, force: true })); return d; };

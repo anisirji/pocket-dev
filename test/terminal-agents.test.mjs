@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { parseAgents, readAgents, sessionFile, tailLines, ACTIVE_MS, QUIET_MS } from '../terminal-agents.js';
+import { parseAgents, readAgents, sessionFile, tailLines, ACTIVE_MS, QUIET_MS } from '../src/conversations/terminal-agents.js';
 
 const SESSION = '0f1e2d3c-aaaa-4bbb-8ccc-123456789abc';
 const T0 = Date.parse('2026-11-17T10:00:00Z');

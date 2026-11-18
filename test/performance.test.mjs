@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpuSnapshot, cpuPercent, parseMemoryFree, readDiskSpace, performanceState, createPerformanceMonitor } from '../performance.js';
+import { cpuSnapshot, cpuPercent, parseMemoryFree, readDiskSpace, performanceState, createPerformanceMonitor } from '../src/machine/performance.js';
 
 const core = (user, idle, sys = 0) => ({ times: { user, nice: 0, sys, idle, irq: 0 } });
 const calm = { cpu: { usedPercent: 20 }, memory: { freePercent: 40 }, disk: { freeGB: 50, totalGB: 256 }, eventLoopDelayMs: 10 };
@@ -79,7 +79,7 @@ test('a stuck sensor times out without wedging monitoring and later readings can
 test('the production performance route checks owner access before taking a reading', async () => {
   const fs = await import('node:fs');
   const vm = await import('node:vm');
-  const source = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const source = fs.readFileSync(new URL('../src/server.js', import.meta.url), 'utf8');
   const dispatcher = source.slice(source.indexOf('async function handleApi('), source.indexOf('const handleGit ='));
   let allowed = false, guest = false, readings = 0;
   const runtime = {

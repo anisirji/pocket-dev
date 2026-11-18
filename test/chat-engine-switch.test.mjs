@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer, pause } from './helpers/server.mjs';
-import { Chat } from '../chat/chat.js';
-import { buildTranscript, buildHandoff, wrapFirstMessage, HANDOFF_COMPACT_AT, HANDOFF_RECENT_CHARS, HANDOFF_MAX_CHARS } from '../chat/handoff.js';
+import { Chat } from '../src/chat/chat.js';
+import { buildTranscript, buildHandoff, wrapFirstMessage, HANDOFF_COMPACT_AT, HANDOFF_RECENT_CHARS, HANDOFF_MAX_CHARS } from '../src/chat/handoff.js';
 
 const FAKE_AGY = path.join(path.dirname(fileURLToPath(import.meta.url)), 'helpers', 'fake-agy.mjs');
 

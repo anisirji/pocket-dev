@@ -389,7 +389,7 @@ Pocket Dev has no npm install scripts, so an install cannot fail on one; node-pt
 
 The suite starts disposable phone and Admin listeners, uses fixture folders, stubbed power commands and a stand-in for `cloudflared`, and exercises authentication, Host/Origin/CSRF checks, terminals, chat persistence, Files, devices, lockdown, the tunnel kinds, rooms and modes. It makes no model calls, opens no real tunnel, and does not install a service or quit user apps.
 
-Before publishing, run `npm test`, `node scripts/check-responsive.mjs` and `npm pack --dry-run`. The README's screenshot links point at the `main` branch, so no per-version rewrite is needed. The release notes for the version are in `docs/RELEASE_<major>.<minor>.md`.
+Before publishing, run `npm test`, `node test/browser/check-responsive.mjs` and `npm pack --dry-run`. The README's screenshot links point at the `main` branch, so no per-version rewrite is needed. The release notes for the version are in `docs/RELEASE_<major>.<minor>.md`.
 
 ## Licence
 

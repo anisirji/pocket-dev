@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   TOOLS, parseLogin, parseVersion, detectTool, installPlan, runSetup, createContext, assertNoSecret, makeLogger, collectStatus, cachedStatus, parseArgs, defaultFind, printPhoneLogin, printAlreadyRunning,
-} from '../setup.js';
-import { findCloudflared } from '../network.js';
+} from '../src/setup/setup.js';
+import { findCloudflared } from '../src/network/network.js';
 
 const tool = (id) => TOOLS.find((t) => t.id === id);
 const res = (o = {}) => ({ code: 0, stdout: '', stderr: '', timedOut: false, error: null, ...o });

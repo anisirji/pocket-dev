@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createUpdateRunner, npmCommand } from '../update-runner.js';
+import { createUpdateRunner, npmCommand } from '../src/setup/update-runner.js';
 import {
   createVersionCheck, cachedUpdateLine, CHECK_TTL_MS, RETRY_AFTER_FAILURE_MS, ADMIN_FRESH_MS, UPDATE_COMMAND,
-} from '../update.js';
+} from '../src/setup/update.js';
 
 const tmp = (t) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-upd-')); t.after(() => fs.rmSync(d, { recursive: true, force: true })); return d; };
 const until = async (fn, ms = 2000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await fn()) return; await new Promise((r) => setTimeout(r, 5)); } assert.fail('timed out'); };

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createFolderBrowser } from '../folder-browser.js';
+import { createFolderBrowser } from '../src/workspace/folder-browser.js';
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-folders-'));
@@ -60,7 +60,7 @@ test('search can find a folder beyond the bounded first page', async (t) => {
 
 test('the production phone dispatcher refuses guests and unauthenticated callers before browsing', async () => {
   const vm = await import('node:vm');
-  const source = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const source = fs.readFileSync(new URL('../src/server.js', import.meta.url), 'utf8');
   const handler = source.slice(source.indexOf('async function handleApi('), source.indexOf('const handleGit ='));
   let allowed = false, guest = false, scans = 0;
   const runtime = {

@@ -35,15 +35,15 @@
     "admin": "node scripts/admin.js open",
     "connect": "node scripts/admin.js connect",
     "disconnect": "node scripts/admin.js disconnect",
-    "autostart": "scripts/autostart.sh",
-    "service:install": "scripts/install-service.sh",
-    "service:uninstall": "scripts/uninstall-service.sh",
-    "service:status": "scripts/status.sh",
+    "autostart": "scripts/service/autostart.sh",
+    "service:install": "scripts/service/install-service.sh",
+    "service:uninstall": "scripts/service/uninstall-service.sh",
+    "service:status": "scripts/service/status.sh",
     "service:logs": "tail -n 50 -f \"${LOG:-$HOME/Library/Logs/pocket-dev.log}\"",
-    "awake": "node scripts/awake.js",
-    "lid": "scripts/lid.sh",
-    "sleep": "scripts/sleep.sh",
-    "shutdown": "scripts/shutdown.sh"
+    "awake": "node scripts/power/awake.js",
+    "lid": "scripts/power/lid.sh",
+    "sleep": "scripts/power/sleep.sh",
+    "shutdown": "scripts/power/shutdown.sh"
   },
   "type": "module",
   "dependencies": {

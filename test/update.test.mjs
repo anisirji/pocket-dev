@@ -6,7 +6,7 @@ import path from 'node:path';
 import {
   compareVersions, isNewer, parseSemver, fetchLatest, installKind, createUpdater, updateCommand, latestVersionStep,
   createVersionCheck, updateCheckOff, CHECK_TTL_MS, RETRY_AFTER_FAILURE_MS, INSTALL_ARGS, REGISTRY_URL,
-} from '../update.js';
+} from '../src/setup/update.js';
 
 const tmp = (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-update-'));

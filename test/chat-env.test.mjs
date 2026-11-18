@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { findBin } from '../chat/env.js';
+import { findBin } from '../src/chat/env.js';
 
 test('Codex prefers the standalone install over launchd PATH, with a PATH fallback', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-bin-'));

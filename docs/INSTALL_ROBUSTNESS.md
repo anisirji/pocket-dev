@@ -1,6 +1,6 @@
 # Install robustness: decisions
 
-Trigger: on a second Windows PC (Node 26, PowerShell) `npm i -g anisirji/pocket-dev` (a GitHub install) printed `TAR_ENTRY_ERROR ENOENT ... scripts\autostart.sh`, then `spawn cmd.exe ENOENT` for `node_modules\node-pty`: node-pty's install script could not start because its folder was never unpacked. Before that, `npm i anisirji/pocket-dev` (no `@`, no `-g`) installed into the Desktop folder and `pocket-dev` was not recognised.
+Trigger: on a second Windows PC (Node 26, PowerShell) `npm i -g anisirji/pocket-dev` (a GitHub install) printed `TAR_ENTRY_ERROR ENOENT ... scripts\service\autostart.sh`, then `spawn cmd.exe ENOENT` for `node_modules\node-pty`: node-pty's install script could not start because its folder was never unpacked. Before that, `npm i anisirji/pocket-dev` (no `@`, no `-g`) installed into the Desktop folder and `pocket-dev` was not recognised.
 
 Goal: no native-module problem can make `npm install -g @anisirji/pocket-dev` fail, and the app says exactly how to repair what is missing.
 

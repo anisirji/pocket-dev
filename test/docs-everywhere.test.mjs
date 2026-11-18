@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { startServer } from './helpers/server.mjs';
 
-const { detectType } = await import('../messages.js');
+const { detectType } = await import('../src/rooms/messages.js');
 
 test('documents are recognised by their first bytes, and text only with a plain-text name', () => {
   assert.equal(detectType(Buffer.from('%PDF-1.7\n')), 'application/pdf');

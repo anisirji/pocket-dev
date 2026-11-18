@@ -11,7 +11,7 @@ process.env.POCKET_DEV_CLAUDE_DIR = path.join(root, 'claude', 'projects');
 process.env.POCKET_DEV_CODEX_DIR = path.join(root, 'codex');
 process.env.POCKET_DEV_CHAT_DIR = path.join(root, 'chats');
 process.env.POCKET_DEV_AGY_DIR = path.join(root, 'agy');
-const { createHistoryApi, findConversation, resumeArgv } = await import('../history.js');
+const { createHistoryApi, findConversation, resumeArgv } = await import('../src/conversations/history.js');
 test.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
 const A = '11111111-aaaa-4bbb-8ccc-000000000001';

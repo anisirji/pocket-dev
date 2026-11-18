@@ -9,7 +9,7 @@ import path from 'node:path';
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-auth-network-review-'));
 process.env.POCKET_DEV_STATE_DIR = root;
 delete process.env.POCKET_DEV_PASSWORD;
-const { createAuth } = await import('../auth.js');
+const { createAuth } = await import('../src/auth/auth.js');
 process.on('exit', () => fs.rmSync(root, { recursive: true, force: true }));
 
 function fixture({ legacy = false } = {}) {

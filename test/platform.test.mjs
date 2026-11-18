@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createPlatform, NO_WINDOWS_ZIP } from '../platform.js';
+import { createPlatform, NO_WINDOWS_ZIP } from '../src/core/platform.js';
 
 function fake(opts = {}) {
   const calls = [];

@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { LOCAL_SECRET_PATH, LOCAL_SECRET_HEADER } from '../auth.js';
+import { LOCAL_SECRET_PATH, LOCAL_SECRET_HEADER } from '../src/auth/auth.js';
 
 // Calls the Pocket Dev server running on this Mac. Each start writes its port and a fresh secret to a 0600 file, so
 // only this Mac user's scripts can make these requests. Resolves to null when no server answers.

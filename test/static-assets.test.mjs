@@ -4,8 +4,8 @@ import fs from 'node:fs';
 
 // The server only serves files named in its route map. A script or style sheet a page asks for that is missing from
 // the map answers 404, and the feature behind it silently never loads.
-const server = fs.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
-const admin = fs.readFileSync(new URL('../admin.js', import.meta.url), 'utf8');
+const server = fs.readFileSync(new URL('../src/server.js', import.meta.url), 'utf8');
+const admin = fs.readFileSync(new URL('../src/auth/admin.js', import.meta.url), 'utf8');
 const pages = fs.readdirSync(new URL('../public/', import.meta.url)).filter((f) => f.endsWith('.html'));
 
 test('every script, style sheet and icon a page asks for is served', () => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createRoom, reachableAddresses } from '../room.js';
+import { createRoom, reachableAddresses } from '../src/rooms/room.js';
 import { startServer, freePort } from './helpers/server.mjs';
 
 const CODE = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;

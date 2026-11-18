@@ -11,8 +11,8 @@ process.env.POCKET_DEV_CODEX_DIR = path.join(root, 'codex');
 process.env.POCKET_DEV_CHAT_DIR = path.join(root, 'chats');
 process.env.POCKET_DEV_AGY_DIR = path.join(root, 'agy');
 process.env.POCKET_DEV_COPILOT_DIR = path.join(root, 'copilot', 'session-state');
-const { createHistoryApi, findConversation, resumeArgv } = await import('../history.js');
-const { parseWorkspace, copilotDir } = await import('../copilot-history.js');
+const { createHistoryApi, findConversation, resumeArgv } = await import('../src/conversations/history.js');
+const { parseWorkspace, copilotDir } = await import('../src/conversations/copilot-history.js');
 test.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
 const ME = process.getuid();
@@ -174,7 +174,7 @@ test('Continue on Mac for a Copilot chat releases the chat, and "Open in Pocket 
 });
 
 test('Copilot is found as a program on a command line, however it was started', async () => {
-  const { resumeTarget } = await import('../takeover.js');
+  const { resumeTarget } = await import('../src/conversations/takeover.js');
   const mk = (exe, args) => ({ pid: 1, ppid: 0, uid: ME, stat: 'S', started: 0, exe, args: `${exe} ${args}` });
   assert.deepEqual(resumeTarget(mk('/usr/local/bin/copilot', `--resume ${A}`)), { tool: 'copilot', id: A });
   assert.deepEqual(resumeTarget(mk('/usr/local/bin/copilot', `-r=${A}`)), { tool: 'copilot', id: A });

@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { startServer } from './helpers/server.mjs';
-import { ENGINE_HELP, GENERIC_HELP, engineHelp } from '../chat/engine-help.js';
+import { ENGINE_HELP, GENERIC_HELP, engineHelp } from '../src/chat/engine-help.js';
 
 const FAKE_AGY = path.join(path.dirname(fileURLToPath(import.meta.url)), 'helpers', 'fake-agy.mjs');
 const MISSING = path.join(os.tmpdir(), 'pocket-dev-no-such-engine');

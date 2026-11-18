@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findBin, windowsBinCandidates, registryPathDirs } from '../chat/env.js';
-import { defaultFind } from '../setup.js';
+import { findBin, windowsBinCandidates, registryPathDirs } from '../src/chat/env.js';
+import { defaultFind } from '../src/setup/setup.js';
 
 const env = {
   PATH: 'C:\\old;C:\\Windows\\System32',

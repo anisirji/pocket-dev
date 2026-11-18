@@ -200,7 +200,7 @@ test('access: bad roles and too many folders are refused; a folder that cannot b
 
 // In process, with a fake clock, a fake timer and a fake network: no real waiting.
 import os from 'node:os';
-import { createRoom } from '../room.js';
+import { createRoom } from '../src/rooms/room.js';
 function inProcess(t, name, net, clock, timers) {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'room-unit-'));
   t.after(() => fs.rmSync(stateDir, { recursive: true, force: true }));

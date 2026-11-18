@@ -5,8 +5,8 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import { openConfig } from '../config.js';
-import { resolvePorts, runningInstance, firstRun, isFree } from '../startup.js';
+import { openConfig } from '../src/core/config.js';
+import { resolvePorts, runningInstance, firstRun, isFree } from '../src/core/startup.js';
 
 const tmp = (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-startup-'));

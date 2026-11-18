@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createPlatform, parseBatt } from '../platform.js';
-import { servicePlan, parseServiceStatus } from '../platform-service.js';
+import { createPlatform, parseBatt } from '../src/core/platform.js';
+import { servicePlan, parseServiceStatus } from '../src/core/platform-service.js';
 import { startServer } from './helpers/server.mjs';
 
 // `files` is the set of programs found on PATH (as /usr/bin/<name>) and `sys` maps /sys and /proc paths to text.

@@ -28,4 +28,4 @@ jobs:
           npm install --no-save --package-lock=false playwright
           npx playwright install chromium
       - name: Check phone, tablet and desktop layouts
-        run: node scripts/check-responsive.mjs
+        run: node test/browser/check-responsive.mjs

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { once } from 'node:events';
 import WebSocket, { WebSocketServer } from 'ws';
-import { createRemotePorts } from '../remote-ports.js';
+import { createRemotePorts } from '../src/network/remote-ports.js';
 import { startServer, until } from './helpers/server.mjs';
 
 // A dev server that reports what reached it, with a WebSocket endpoint like a hot-reload channel.
