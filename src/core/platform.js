@@ -3,7 +3,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { PACKAGE_ROOT } from './paths.js';
 import { servicePlan, parseServiceStatus, DEFAULT_LABEL } from './platform-service.js';
 
 // One place for what differs between macOS, Linux and Windows. Callers ask for an action and get the same answer
@@ -121,7 +121,6 @@ export function parseMemoryFree(text) {
   return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
 }
 
-const REPO_DIR = path.dirname(fileURLToPath(import.meta.url));
 const readTextFile = (file) => { try { return fs.readFileSync(file, 'utf8'); } catch { return null; } };
 const listDirectory = (dir) => { try { return fs.readdirSync(dir); } catch { return []; } };
 
@@ -133,7 +132,7 @@ export function createPlatform({
   env = process.env, platform = env.POCKET_DEV_PLATFORM || process.platform, run = collect, launch: start = launch, exists = fs.existsSync,
   home = os.homedir(), readText = readTextFile, listDir = listDirectory, networkInterfaces = os.networkInterfaces,
   memory = () => ({ total: os.totalmem(), free: os.freemem() }), hostname = os.hostname, uid = process.getuid?.() ?? 0,
-  user = env.USER || env.USERNAME || os.userInfo().username, repoDir = REPO_DIR,
+  user = env.USER || env.USERNAME || os.userInfo().username, repoDir = PACKAGE_ROOT,
   cpus = os.cpus, delay = (ms) => new Promise((r) => setTimeout(r, ms)), now = Date.now,
 } = {}) {
   const win = platform === 'win32';
@@ -345,7 +344,7 @@ export function createPlatform({
   async function updateInProgress() {
     if (!mac) return false;
     try {
-      return (await sh(tool('UPDATE_CHECK', path.join(repoDir, 'scripts', 'update-check.sh')), [], { timeout: 10_000 })).trim() !== 'idle';
+      return (await sh(tool('UPDATE_CHECK', path.join(repoDir, 'scripts', 'service', 'update-check.sh')), [], { timeout: 10_000 })).trim() !== 'idle';
     } catch {
       return true;
     }
@@ -735,7 +734,7 @@ $src.Dispose()`;
   async function installService({ port, force = false, label } = {}) {
     need('service');
     if (mac) {
-      const r = await run(path.join(repoDir, 'scripts', 'install-service.sh'), force ? ['--force'] : [], {
+      const r = await run(path.join(repoDir, 'scripts', 'service', 'install-service.sh'), force ? ['--force'] : [], {
         cwd: repoDir, env: { ...env, LABEL: label ?? (env.LABEL || DEFAULT_LABEL), PORT: String(port) }, timeout: 60_000,
       });
       const output = `${r.stdout}${r.stderr}`.trim();

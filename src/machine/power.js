@@ -1,11 +1,9 @@
 import { spawn } from 'node:child_process';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { PACKAGE_ROOT } from '../core/paths.js';
 import { platform } from '../core/platform.js';
 
 export { parseBatteryC, parseThermal } from '../core/platform.js';
 
-const REPO_DIR = path.dirname(fileURLToPath(import.meta.url));
 // Still running this long after asking macOS to shut down means an app (usually "Save changes?") stopped it.
 const SHUTDOWN_BLOCKED_MS = Number(process.env.POCKET_DEV_SHUTDOWN_BLOCKED_MS) || 45_000;
 const SESSION_EXIT_MS = 5000;
@@ -135,7 +133,7 @@ export async function powerStatus() {
     stayingAwake: caffeinatePid !== null && (mode === 'always' || power.onAC),
     lidSleepDisabled: lid.sleepDisabled ?? false,
     lidClosed: lid.closed ?? false,
-    repoDir: REPO_DIR,
+    repoDir: PACKAGE_ROOT,
     shutdown,
     updateInProgress: updating,
     temperature,

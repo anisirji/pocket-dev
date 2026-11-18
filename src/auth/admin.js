@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { platform } from '../core/platform.js';
-import { fileURLToPath } from 'node:url';
+import { PACKAGE_ROOT } from '../core/paths.js';
 import { PROXY_HEADERS, STATE_DIR, deviceName } from './auth.js';
 import { EVENT_KINDS, isLogFilter } from '../core/security-log.js';
 import { serviceStatus, setAutostart, installService, stopThisServer, restartThisServer } from '../core/launchd.js';
@@ -15,7 +15,6 @@ import { readNetwork, networkError, isToken, hasToken, writeToken, findCloudflar
 import { createContext, cachedStatus } from '../setup/setup.js';
 import { createFolderBrowser } from '../workspace/folder-browser.js';
 
-const ROOT = path.dirname(fileURLToPath(import.meta.url));
 export const ADMIN_URL_PATH = path.join(STATE_DIR, 'admin.json');
 const BODY_MAX = 16_000;
 const HOUR_MS = 60 * 60_000;
@@ -389,7 +388,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
       }
       const file = FILES[pathname];
       if (file && req.method === 'GET') {
-        const text = fs.readFileSync(path.join(ROOT, 'public', file[0]));
+        const text = fs.readFileSync(path.join(PACKAGE_ROOT, 'public', file[0]));
         res.writeHead(200, { ...HEADERS, 'content-type': file[1] });
         return res.end(text);
       }

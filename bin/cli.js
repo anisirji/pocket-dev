@@ -216,7 +216,7 @@ async function followLog(file, lines = 50) {
 async function service([action = 'status', ...rest]) {
   if (!['install', 'restart', 'uninstall', 'status', 'logs', 'autostart'].includes(action)) fail(SERVICE_USAGE, 2);
   if (process.platform === 'darwin' && action !== 'logs') {
-    const script = { install: 'install-service.sh', restart: 'install-service.sh', uninstall: 'uninstall-service.sh', status: 'status.sh', autostart: 'autostart.sh' }[action];
+    const script = { install: 'service/install-service.sh', restart: 'service/install-service.sh', uninstall: 'service/uninstall-service.sh', status: 'service/status.sh', autostart: 'service/autostart.sh' }[action];
     return runScript(script, action === 'install' || action === 'restart' || action === 'autostart' ? rest : []);
   }
   const { platform } = await import('../src/core/platform.js');
@@ -288,7 +288,7 @@ switch (command) {
   case 'admin': if (args[0] === 'pin' || args[0] === 'unpin') process.exit(await (await import('../src/setup/taskbar-pin.js')).pinCommand(args)); else runScript('admin.js', ['open']); break;
   case 'connect': case 'disconnect': runScript('admin.js', [command]); break;
   case 'internet': await internet(args); break;
-  case 'awake': runScript('awake.js', args); break;
+  case 'awake': runScript('power/awake.js', args); break;
   case 'message': runScript('message.js', args); break;
   case 'version': case '--version': case '-v': console.log(VERSION); break;
   case undefined: case 'help': case '--help': case '-h': console.log(HELP); break;

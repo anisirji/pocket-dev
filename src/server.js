@@ -5,14 +5,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
-import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createGitApi } from './workspace/git.js';
 import { createHistoryApi } from './conversations/history.js';
 import { createAuth, QR_TTL_MIN } from './auth/auth.js';
 import { terminalQr, qrNote } from './network/qr.js';
 import { openConfig } from './core/config.js';
-import { resolveConfigPath, STATE_DIR } from './core/paths.js';
+import { PACKAGE_ROOT, resolveConfigPath, STATE_DIR } from './core/paths.js';
 import { openTerminalHost } from './terminals/terminals.js';
 import { startPower, handlePowerApi, powerStatus } from './machine/power.js';
 import { createAppsApi, snapshot as appsSnapshot } from './machine/apps.js';
@@ -41,7 +40,6 @@ import { createFolderBrowser } from './workspace/folder-browser.js';
 import { readNetwork, readToken, createSameNetwork } from './network/network.js';
 import { sameOrigin, fromConnector, clientIp, cookieHost } from './network/transport.js';
 
-const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SCROLLBACK_MAX = 500_000;
 const BODY_MAX = 64_000;
 const UPLOAD_MAX = 25 * 1024 * 1024;
@@ -841,7 +839,7 @@ function servePage(req, res, pathname) {
     return res.end();
   }
   res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY' });
-  fs.createReadStream(path.join(ROOT, 'public', file)).pipe(res);
+  fs.createReadStream(path.join(PACKAGE_ROOT, 'public', file)).pipe(res);
 }
 
 const forward = createForward({ room, auth, collaborators, sendJson, modes, guard: peerGuard, answerMs: Number(process.env.POCKET_DEV_FORWARD_ANSWER_MS) || undefined, writeAnswerMs: Number(process.env.POCKET_DEV_FORWARD_WRITE_MS) || undefined });

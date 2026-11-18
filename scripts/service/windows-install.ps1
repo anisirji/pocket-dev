@@ -64,7 +64,7 @@ if ($listening -and $taskState -ne 'Running') {
 Write-Host 'Registering the start-at-login task...'
 $env:PORT = [string]$Port
 # (single quotes inside: Windows PowerShell 5.1 drops double quotes from arguments it passes to programs)
-$install = 'import { platform } from ''./platform.js''; console.log(await platform.installService({ port: Number(process.env.PORT) }));'
+$install = 'import { platform } from ''./src/core/platform.js''; console.log(await platform.installService({ port: Number(process.env.PORT) }));'
 & node --input-type=module -e $install
 if ($LASTEXITCODE -ne 0) { Stop-Setup 'Could not create the scheduled task. The message above says why.' }
 

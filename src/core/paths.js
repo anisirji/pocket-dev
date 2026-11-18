@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const PACKAGE_ROOT = path.dirname(fileURLToPath(import.meta.url));
+export const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const STATE_DIR = process.env.POCKET_DEV_STATE_DIR || path.join(os.homedir(), '.pocket-dev');
 
 // config.json used to sit in the project folder, which an npm upgrade replaces. It now lives in STATE_DIR next to the

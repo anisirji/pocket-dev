@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { PACKAGE_ROOT } from './paths.js';
 import { platform } from './platform.js';
 
-const ROOT = path.dirname(fileURLToPath(import.meta.url));
 // Tests install a throwaway job under another label; the service scripts read the same variable.
 export const LABEL = process.env.LABEL || 'dev.pocket.server';
 const STARTED_AT = Date.now() - process.uptime() * 1000;
-const CODE_DIRS = ['.', 'chat', 'public', 'scripts'];
+const AREAS = fs.readdirSync(path.join(PACKAGE_ROOT, 'src'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => `src/${e.name}`);
+const CODE_DIRS = ['.', 'src', ...AREAS, 'public', 'scripts', 'scripts/service', 'scripts/power'];
 const CODE_FILE = /\.(js|mjs|css|html|sh|json)$/;
 // config.json is data the app writes, not code, so saving a setting never counts as an update.
 const NOT_CODE = new Set(['config.json']);
@@ -16,9 +16,9 @@ const NOT_CODE = new Set(['config.json']);
 export function updateReady() {
   let newest = 0;
   for (const dir of CODE_DIRS) {
-    for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+    for (const entry of fs.readdirSync(path.join(PACKAGE_ROOT, dir), { withFileTypes: true })) {
       if (!entry.isFile() || !CODE_FILE.test(entry.name) || (dir === '.' && NOT_CODE.has(entry.name))) continue;
-      newest = Math.max(newest, fs.statSync(path.join(ROOT, dir, entry.name)).mtimeMs);
+      newest = Math.max(newest, fs.statSync(path.join(PACKAGE_ROOT, dir, entry.name)).mtimeMs);
     }
   }
   return newest > STARTED_AT + 1000;

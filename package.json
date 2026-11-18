@@ -60,11 +60,11 @@
   },
   "files": [
     "bin",
-    "chat",
     "public",
     "assets",
     "scripts",
-    "*.js",
+    "server.js",
+    "src",
     "README.md",
     "llms.txt",
     "skills/pocket-dev",
