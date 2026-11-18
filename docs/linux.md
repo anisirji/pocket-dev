@@ -1,5 +1,7 @@
 # Install Pocket Dev on Linux
 
+Prefer your coding assistant? **[Copy the setup prompt](https://www.theani.me/work/pocket-dev/prompts)** and paste it into an agent running on your computer. [AI setup details](AI_SETUP.md).
+
 Written from the code and not yet run on a real Linux machine. If something here is wrong, please report the exact error text.
 
 ## 1. Prerequisites

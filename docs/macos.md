@@ -1,5 +1,7 @@
 # Install Pocket Dev on macOS
 
+Prefer your coding assistant? **[Copy the setup prompt](https://www.theani.me/work/pocket-dev/prompts)** and paste it into an agent running on your Mac. [AI setup details](AI_SETUP.md).
+
 Run the commands in Terminal (Cmd+Space, type Terminal, Enter).
 
 ## 1. Prerequisites

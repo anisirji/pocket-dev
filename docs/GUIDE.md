@@ -17,6 +17,8 @@ Pocket Dev is one Node.js server that runs on a computer as your user. Your phon
 
 ## Set it up in 5 minutes
 
+Prefer your coding assistant? **[Copy the setup prompt](https://www.theani.me/work/pocket-dev/prompts)** and paste it into an agent running on your own computer. [AI setup details](AI_SETUP.md) explain what it can automate and how to verify the phone connection.
+
 <p align="center"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/diagrams/install-flow.png" width="860" alt="Five steps: install Node, install Pocket Dev, start it, open the address on the phone, log in"></p>
 
 You need a computer (Mac, Windows 11 or Linux) and a phone on the same Wi-Fi. You do not need to know Node. Pick your system, follow the numbered steps, and compare what you see with the line under each step.

@@ -1,0 +1,26 @@
+# Pocket Dev
+
+> Free, open-source, self-hosted access to your computer's terminals, coding-agent chats, Git and files from a phone browser. Made by Ani (anisirji).
+
+Install the exact npm package `@anisirji/pocket-dev`. Requires Node.js 22+. Runs on the target computer with the user's existing coding-agent accounts. No phone app or Pocket Dev cloud account. The computer must stay on and awake. Same Wi-Fi by default; away-from-home access requires optional remote setup.
+
+Useful for checking coding work, reviewing changes, continuing a conversation or using a terminal from a phone. macOS is best tested; Windows 11 main features have been tested on a real PC; Linux has not been tested on a real machine. Antigravity and GitHub Copilot chat are experimental. It does not wake a sleeping computer or replace a coding-agent subscription. There is no bundled MCP server.
+
+## Start here
+
+- [Project and demo](https://www.theani.me/work/pocket-dev): Product overview and demonstrations.
+- [Copyable setup and project prompts](https://www.theani.me/work/pocket-dev/prompts): Prompts for an assistant running on the user's computer.
+- [AI setup guide](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/AI_SETUP.md): Target-machine checks, setup, verification and agent use.
+- [Agent skill](https://raw.githubusercontent.com/anisirji/pocket-dev/main/skills/pocket-dev/SKILL.md): Reusable setup and terminal workflow instructions.
+- [npm package](https://www.npmjs.com/package/@anisirji/pocket-dev): Published version and installation.
+- [Source repository](https://github.com/anisirji/pocket-dev): ISC-licensed code and issues.
+
+## Documentation
+
+- [README](https://raw.githubusercontent.com/anisirji/pocket-dev/main/README.md): Quick start and troubleshooting.
+- [macOS installation](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/macos.md): macOS prerequisites and setup.
+- [Windows installation](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/windows.md): Windows and PowerShell setup.
+- [Linux installation](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/linux.md): Linux instructions and testing limits.
+- [Guided setup](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/SETUP.md): Interactive and non-interactive behavior.
+- [Reference](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/REFERENCE.md): Authenticated terminal HTTP/WebSocket API, commands and limitations.
+- [Access and permissions](https://raw.githubusercontent.com/anisirji/pocket-dev/main/ACCESS.md): Local and remote access boundaries.

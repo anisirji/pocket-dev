@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pocket Dev"
+  short_description: "Set up and use coding tools from your phone"
+  default_prompt: "Use $pocket-dev to set up phone access to my current coding project on this computer."

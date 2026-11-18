@@ -1,5 +1,7 @@
 # Pocket Dev: the beginner guide
 
+**Want your coding assistant to help? [Copy the setup prompt](https://www.theani.me/work/pocket-dev/prompts)** and paste it into an agent running on your computer. You can also follow the steps below yourself.
+
 **Picture by picture. No experience needed.** You will put Pocket Dev on a computer, then open it on your phone.
 
 Every picture marked **ILLUSTRATION** is a drawing that shows what to look for. Your screen may look a little different. The commands are real: copy them exactly.

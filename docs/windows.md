@@ -1,5 +1,7 @@
 # Install Pocket Dev on Windows
 
+Prefer your coding assistant? **[Copy the setup prompt](https://www.theani.me/work/pocket-dev/prompts)** and paste it into an agent running on your PC. [AI setup details](AI_SETUP.md).
+
 Checked on Windows 11 with Node 26 and npm 11. Run every command in a normal PowerShell window unless a step says "administrator".
 
 ## 1. Prerequisites
