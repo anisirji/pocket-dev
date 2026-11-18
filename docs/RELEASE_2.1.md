@@ -2,6 +2,14 @@
 
 The npm package is `@anisirji/pocket-dev`. The previous version is 2.0.0. 2.1.0 was tagged but never published; 2.1.1 is the first 2.1 on npm and adds the newest-first Chats order. Nothing was removed and no setting changed, so this is a minor version.
 
+## 2.1.2
+
+- **Copy any chat message.** A small copy icon sits under every message, yours and the AI's. Tap it to copy that message; it works on the plain `http://` Wi-Fi address too.
+- **Time on every message.** Each message, answer and finished turn shows when it happened, with the date when it was not today. Press and hold the time for the full date.
+- **Documents everywhere.** PDF and text files open from Messages, with Share or save, and Files can send a file to Messages.
+- **Tidier project layout.** The server code now lives in `src/`, grouped by area. A one-line `server.js` stays at the top of the package, so background services set up by earlier versions keep starting after the update.
+- **README** lists every feature at the top, with a short demo.
+
 ## What is new
 
 ### One Chats list for everything
