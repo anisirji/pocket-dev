@@ -193,9 +193,10 @@ test('a pending device on Windows is told to wait on the host computer, and the 
 
 test('no message that a non-Mac can show still says "Mac" (source scan of server-side strings)', () => {
   // Strings built with platform.host are fine; these files must not hold a bare "the Mac" / "this Mac" literal any more.
-  const files = ['auth.js', 'admin.js', 'config.js', 'files.js', 'collaborators.js', 'tunnel.js', 'server.js', 'performance.js', 'power.js', 'screen.js', 'takeover.js', 'messages.js', 'history.js'];
+  const files = ['auth/auth.js', 'auth/admin.js', 'core/config.js', 'workspace/files.js', 'auth/collaborators.js', 'network/tunnel.js', 'server.js', 'machine/performance.js',
+    'machine/power.js', 'machine/screen.js', 'conversations/takeover.js', 'rooms/messages.js', 'conversations/history.js'];
   for (const f of files) {
-    const bare = fs.readFileSync(path.join(REPO, f), 'utf8').split('\n')
+    const bare = fs.readFileSync(path.join(REPO, 'src', f), 'utf8').split('\n')
       .filter((l) => !/^\s*(\/\/|\*)/.test(l) && /['"`][^'"`]*\b(the|this|The|This) Mac\b/.test(l.replace(/\/\/.*$/, '')));
     assert.deepEqual(bare, [], `${f} has a Mac-only message`);
   }
@@ -264,14 +265,14 @@ test('a path with a quote in the user name cannot break out of the runner string
 });
 
 test('windows-install.ps1 exists, is ASCII, and does what the task asks (text checks; not run: no Windows here)', () => {
-  const script = fs.readFileSync(path.join(REPO, 'scripts', 'windows-install.ps1'));
+  const script = fs.readFileSync(path.join(REPO, 'scripts', 'service', 'windows-install.ps1'));
   assert.ok(script.every((b) => b < 128), 'PowerShell 5.1 reads a script without a byte order mark as ANSI');
   const text = script.toString('utf8');
   for (const needle of ['node --version', 'npm install', 'platform.installService', 'Password:', 'passwordHash', 'schtasks /Run', 'Get-NetFirewallRule', 'Invoke-WebRequest']) {
     assert.ok(text.includes(needle.replace('node --version', '& node --version')) || text.includes(needle), `mentions ${needle}`);
   }
   assert.doesNotMatch(text, /-ArgumentList[^\n]*"/, 'no double quotes passed through native arguments');
-  const pwsh = spawnSync('pwsh', ['-NoProfile', '-Command', `$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile('${path.join(REPO, 'scripts', 'windows-install.ps1')}', [ref]$null, [ref]$e); if ($e) { $e; exit 1 }`], { encoding: 'utf8' });
+  const pwsh = spawnSync('pwsh', ['-NoProfile', '-Command', `$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile('${path.join(REPO, 'scripts', 'service', 'windows-install.ps1')}', [ref]$null, [ref]$e); if ($e) { $e; exit 1 }`], { encoding: 'utf8' });
   if (pwsh.error?.code !== 'ENOENT') assert.equal(pwsh.status, 0, pwsh.stdout + pwsh.stderr);
 });
 

@@ -314,7 +314,7 @@ test('only a logged-in device can use Copilot chats or switch to Copilot', { tim
 // ---- 5. Terminal shortcut, detection, setup, docs ------------------------------------------------------------------
 
 test('the terminal shortcuts offer copilot next to claude and codex', () => {
-  const server = fs.readFileSync(path.join(HERE, '..', 'server.js'), 'utf8');
+  const server = fs.readFileSync(path.join(HERE, '..', 'src', 'server.js'), 'utf8');
   assert.match(server, /DEFAULT_SHORTCUTS = \['claude', 'codex', 'copilot'/);
 });
 
@@ -337,7 +337,7 @@ test('Setup knows GitHub Copilot: package, command, no sign-in check, and a logi
 });
 
 test('the Admin permissions list shows Copilot as an optional tool, installed or missing', async () => {
-  const src = fs.readFileSync(path.join(HERE, '..', 'permissions.js'), 'utf8');
+  const src = fs.readFileSync(path.join(HERE, '..', 'src', 'auth', 'permissions.js'), 'utf8');
   assert.match(src, /copilot: tool\('GitHub Copilot \(copilot\)', findBin\('copilot'\)\)/);
   assert.match(src, /id: 'copilot', group: 'tools', title: 'GitHub Copilot'/);
 });

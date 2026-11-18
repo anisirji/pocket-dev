@@ -474,7 +474,8 @@ test('the install hook cannot fail an install even when the module it needs is m
   delete env.CI;
   const run = () => spawnSync(process.execPath, ['scripts/postinstall.js'], { cwd: dir, env, encoding: 'utf8' });
   assert.equal(run().status, 0, 'taskbar-pin.js is missing');
-  fs.writeFileSync(path.join(dir, 'taskbar-pin.js'), 'throw new Error("broken");');
+  fs.mkdirSync(path.join(dir, 'src', 'setup'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'src', 'setup', 'taskbar-pin.js'), 'throw new Error("broken");');
   const r = run();
   assert.equal(r.status, 0, 'taskbar-pin.js throws');
   assert.equal(r.stdout, '');

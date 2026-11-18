@@ -44,5 +44,5 @@ test('node-pty is optional, so a failed build or download cannot fail an install
 test('the package ships the files the installed app needs', () => {
   const r = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: REPO, encoding: 'utf8' });
   const files = JSON.parse(r.stdout)[0].files.map((f) => f.path);
-  for (const needed of ['bin/pocket-dev.js', 'bin/cli.js', 'doctor.js', 'pty-loader.js', 'public/terminals-off.js', 'docs/SETUP.md']) assert.ok(files.includes(needed), needed);
+  for (const needed of ['bin/pocket-dev.js', 'bin/cli.js', 'server.js', 'src/server.js', 'src/setup/doctor.js', 'src/core/pty-loader.js', 'public/terminals-off.js', 'docs/SETUP.md']) assert.ok(files.includes(needed), needed);
 });

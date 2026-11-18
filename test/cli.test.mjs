@@ -13,11 +13,11 @@ function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-cli-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const pkg = path.join(root, 'pkg');
-  fs.mkdirSync(path.join(pkg, 'bin'), { recursive: true });
-  for (const file of ['paths.js', 'config.js', 'config-keys.js', 'network.js', 'platform.js', 'platform-service.js', 'package.json']) fs.copyFileSync(path.join(REPO, file), path.join(pkg, file));
-  fs.mkdirSync(path.join(pkg, 'chat'));
-  fs.copyFileSync(path.join(REPO, 'chat', 'env.js'), path.join(pkg, 'chat', 'env.js'));
-  for (const file of ['pocket-dev.js', 'cli.js']) fs.copyFileSync(path.join(REPO, 'bin', file), path.join(pkg, 'bin', file));
+  for (const file of ['src/core/paths.js', 'src/core/config.js', 'src/core/config-keys.js', 'src/network/network.js', 'src/core/platform.js',
+    'src/core/platform-service.js', 'src/chat/env.js', 'package.json', 'bin/pocket-dev.js', 'bin/cli.js']) {
+    fs.mkdirSync(path.dirname(path.join(pkg, file)), { recursive: true });
+    fs.copyFileSync(path.join(REPO, file), path.join(pkg, file));
+  }
   const state = path.join(root, 'state');
   const env = { ...process.env, POCKET_DEV_STATE_DIR: state };
   delete env.POCKET_DEV_CONFIG;

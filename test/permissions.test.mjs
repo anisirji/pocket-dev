@@ -24,7 +24,7 @@ function check(t, { osascript, firewall, wait = 15_000 }) {
     POCKET_DEV_OSASCRIPT: stub('osascript', osascript),
     POCKET_DEV_FIREWALL: stub('firewall', firewall),
   };
-  const script = `const { checkPermissions } = await import(${JSON.stringify(path.join(REPO, 'permissions.js'))});
+  const script = `const { checkPermissions } = await import(${JSON.stringify(path.join(REPO, 'src', 'auth', 'permissions.js'))});
     console.log(JSON.stringify(await checkPermissions()));`;
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { env, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);

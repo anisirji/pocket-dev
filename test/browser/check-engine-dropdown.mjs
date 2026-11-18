@@ -9,7 +9,7 @@ import { startServer, pause } from '../helpers/server.mjs';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? 'playwright');
 const chrome = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const FAKE = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'test', 'helpers', 'fake-agy.mjs');
+const FAKE = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'helpers', 'fake-agy.mjs');
 const shots = process.env.ENGINE_DROPDOWN_SHOTS;
 if (shots) fs.mkdirSync(shots, { recursive: true });
 const missingClaude = path.join(os.tmpdir(), 'pocket-dev-no-such-claude');

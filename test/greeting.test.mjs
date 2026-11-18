@@ -55,7 +55,7 @@ test('box: colour and rounded corners, or plain ASCII with no colour codes', () 
 });
 
 test('the greeting code makes no network call and keeps all its words in one copy file', () => {
-  for (const file of ['greeting.js', 'public/greeting-copy.js', 'public/welcome.js']) {
+  for (const file of ['src/setup/greeting.js', 'public/greeting-copy.js', 'public/welcome.js']) {
     assert.doesNotMatch(fs.readFileSync(path.join(REPO, file), 'utf8'), /\bfetch\(|XMLHttpRequest|sendBeacon|node:(http|https|net|dns)/, file);
   }
 });

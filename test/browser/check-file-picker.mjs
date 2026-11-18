@@ -9,7 +9,7 @@ import { startServer, pause } from '../helpers/server.mjs';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? 'playwright');
 const chrome = process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const FAKE = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'test', 'helpers', 'fake-agy.mjs');
+const FAKE = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'helpers', 'fake-agy.mjs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pdv-picker-'));
 const pdf = path.join(tmp, 'report.pdf'); fs.writeFileSync(pdf, '%PDF-1.4\n%%EOF\n');
 const png = path.join(tmp, 'pixel.png'); fs.writeFileSync(png, Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex'));
