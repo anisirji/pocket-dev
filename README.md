@@ -2,8 +2,6 @@
 
 <p align="center"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/pocket-dev-demo.gif" width="760" alt="Short demo of Pocket Dev on a phone: a live terminal, a Claude Code chat and switching between computers (demo data)"></p>
 
-<p align="center"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/hero.png" width="760" alt="Pocket Dev on a phone: terminal, Git, Files and Chat controlling a computer"></p>
-
 **Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files and open apps. Runs on your own machine, nothing to install on the phone, no cloud account.**
 
 [![npm](https://img.shields.io/npm/v/@anisirji/pocket-dev?color=4c8dff&label=npm)](https://www.npmjs.com/package/@anisirji/pocket-dev) ![Node 22+](https://img.shields.io/node/v/@anisirji/pocket-dev?color=4c8dff&label=node) ![macOS, Windows, Linux](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-4c8dff)
