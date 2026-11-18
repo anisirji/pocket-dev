@@ -5,7 +5,8 @@
 (() => {
   const CAMERA = 'image/*';
   const PHOTOS = 'image/*,video/*';
-  const FILES = 'application/*,text/*,audio/*,.pdf,.zip,.txt,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.js,.ts,.py,.log,.apk';
+  // Every type, so nothing is greyed out in the system picker. A list of document types hid some files on Android.
+  const FILES = '*/*';
   globalThis.PocketFileChoice = { CAMERA, PHOTOS, FILES };
   if (typeof document === 'undefined') return;
 

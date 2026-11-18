@@ -32,12 +32,10 @@ function world({ touch }) {
   return { sandbox, input, anchor: new El('button'), body: sandbox.document.body };
 }
 
-test('Photos and videos lets images and video through, Files lets documents through and keeps images out', () => {
+test('Photos and videos lets images and video through, and Files lets every file type through', () => {
   const { PHOTOS, FILES } = world({ touch: false }).sandbox.PocketFileChoice;
   assert.deepEqual(PHOTOS.split(','), ['image/*', 'video/*']);
-  const files = FILES.split(',');
-  for (const kind of ['application/*', 'text/*', 'audio/*', '.pdf', '.zip', '.txt', '.md', '.json', '.csv', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.js', '.ts', '.py', '.log', '.apk']) assert.ok(files.includes(kind), kind);
-  assert.ok(!files.some((f) => f.startsWith('image/') || f.startsWith('video/')));
+  assert.equal(FILES, '*/*', 'a type list greys out files such as a pdf or doc on Android');
 });
 
 test('a desktop browser opens its one normal picker with no accept list', () => {
