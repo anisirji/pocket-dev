@@ -16,6 +16,8 @@ const missingClaude = path.join(os.tmpdir(), 'pocket-dev-no-such-claude');
 
 const cleanups = [];
 const s = await startServer({ after: (fn) => cleanups.push(fn) }, { env: { POCKET_DEV_AGY: FAKE, POCKET_DEV_CODEX: FAKE, POCKET_DEV_CLAUDE: missingClaude } });
+// Opening a chat looks for programs on the computer that hold its conversation; this run has none.
+fs.writeFileSync(path.join(s.root, 'no-processes.json'), JSON.stringify({ processes: [] }));
 const A = await s.login();
 const problems = [];
 const check = (ok, what) => { if (!ok) problems.push(what); console.log(ok ? 'ok  ' : 'FAIL', what); };
@@ -44,7 +46,7 @@ try {
     const next = page.getByRole('button', { name: /^(Next|Done|Got it|Finish|Start)/i });
     if (await next.count()) { await next.first().click().catch(() => {}); await pause(200); } else break;
   }
-  await page.mouse.click(89, 62);
+  await page.locator('[data-view="chat"]').click();
   await pause(1000);
   await page.locator('text=hello').first().click();
   await pause(1500);

@@ -94,21 +94,13 @@ try {
     await page.locator('.chat-search').fill('Laptop request 1');
     await page.waitForFunction(() => [...document.querySelectorAll('.chat-computer-row .chat-row-title')].some((row) => row.textContent === 'Laptop request 1'));
     const row = page.locator('.chat-computer-row').filter({ has: page.locator('.chat-row-title', { hasText: /^Laptop request 1$/ }) });
-    // Exercise busy handoff confirmation without signalling any process on this computer.
-    let attempts = 0;
-    let confirmedBusy = false;
-    await page.route(`**/api/history/claude/${ids[0]}/open-chat`, async (route) => {
-      attempts++;
-      if (attempts === 1) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: 'busy', error: 'This conversation is writing a reply. Stop it and open here?' }) });
-      confirmedBusy = route.request().postDataJSON()?.confirmBusy === true;
-      return route.continue();
-    });
-    page.once('dialog', (dialog) => dialog.accept());
+    // Opening a computer conversation goes straight to the chat: no confirmation, even when the program is busy.
+    let dialogs = 0;
+    page.on('dialog', (dialog) => { dialogs++; dialog.dismiss(); });
     await row.click();
     await page.waitForSelector('.chat-convo-screen:not([hidden]) .chat-input');
     await page.waitForFunction(() => document.querySelector('.chat-log')?.textContent.includes('Laptop answer 1, preserve the complete conversation.'));
-    assert.equal(attempts, 2);
-    assert.equal(confirmedBusy, true, 'busy continuation needs explicit confirmation');
+    assert.equal(dialogs, 0, 'opening a computer conversation asks nothing');
     assert.match(await page.locator('.chat-log').innerText(), /Laptop request 1/);
     await page.locator('.chat-menu').click();
     assert.equal(await page.locator('.chat-continue-computer').isVisible(), true, 'computer continuation belongs to chat settings');
@@ -130,7 +122,7 @@ try {
     const chats = await server.request('GET', '/api/chat', { cookie: login.cookie });
     for (const chat of chats.data) await server.request('DELETE', `/api/chat/${chat.id}`, { cookie: login.cookie });
   }
-  console.log('PASS: real native files, phone and desktop list, search, pagination, failed scan retry, busy confirmation, imported history, dedupe, in-chat computer continuation, back navigation and no horizontal overflow.');
+  console.log('PASS: real native files, phone and desktop list, search, pagination, failed scan retry, direct open without a prompt, imported history, dedupe, in-chat computer continuation, back navigation and no horizontal overflow.');
 } finally {
   await browser?.close();
   for (const cleanup of cleanups.reverse()) await cleanup();
