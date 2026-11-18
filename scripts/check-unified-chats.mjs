@@ -63,6 +63,14 @@ try {
     assert.equal(await page.locator('#resumeBtn').count(), 0, 'no separate Resume entry');
     assert.equal(await page.locator('.hist:not([hidden])').count(), 0, 'the history sheet stays closed');
     assert.equal(await page.locator('.chat-computer-row').count(), 30, 'first page has thirty computer conversations');
+    // A conversation started on the computer while Chats is open shows up without a tap.
+    const liveId = `30000000-0000-4000-8000-${String(width).padStart(12, '0')}`;
+    const liveTitle = `Started while open ${width}`;
+    fs.writeFileSync(nativeFile(liveId),
+      line({ type: 'user', uuid: `u-${liveId}`, sessionId: liveId, cwd: project, timestamp: new Date().toISOString(), message: { role: 'user', content: liveTitle } }) +
+      line({ type: 'assistant', uuid: `a-${liveId}`, sessionId: liveId, cwd: project, timestamp: new Date().toISOString(), message: { role: 'assistant', content: [{ type: 'text', text: 'Answer from the computer.' }] } }));
+    await page.waitForFunction((title) => [...document.querySelectorAll('.chat-computer-row .chat-row-title')].some((n) => n.textContent === title), liveTitle, { timeout: 25000 });
+    assert.equal(await page.locator('.chat-computer-row').count(), 30, 'the list stays one page after a quiet reload');
     await page.locator('.chat-more').click();
     await page.waitForFunction(() => document.querySelectorAll('.chat-computer-row').length >= 35);
     assert.equal(await page.locator('.chat-more').isVisible(), false, 'Show more disappears at the end');

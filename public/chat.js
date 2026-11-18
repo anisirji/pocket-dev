@@ -645,6 +645,29 @@
     if (listVisible() && !document.hidden && !computerOpening) refreshList(false, true);
   }, POLL_MS);
 
+  // New conversations started on the computer appear without a tap. The first page is reloaded quietly: a failed scan keeps
+  // what is on screen, and the list is left alone while someone has paged further down.
+  const COMPUTER_POLL_MS = 8000;
+  async function pollComputer() {
+    if (!listVisible() || document.hidden || computerOpening || listLoading || !computerLoaded || computerError || computer.length > 30) return;
+    const seq = ++listSeq;
+    const query = ui.search.value.trim();
+    try {
+      const items = await api('GET', `/api/history/chats?limit=30&offset=0&q=${encodeURIComponent(query)}`);
+      if (seq !== listSeq || !Array.isArray(items.chats) || !Array.isArray(items.computer) || query !== ui.search.value.trim()) return;
+      const key = JSON.stringify([items.chats, items.computer, items.hasMore, computerError]) + Math.floor(Date.now() / 60000);
+      if (key === listKey && ui.rows.querySelector('.chat-row')) return;
+      list = items.chats;
+      computer = items.computer;
+      computerMore = items.hasMore;
+      listKey = key;
+      renderList();
+    } catch {
+      // The next tick tries again.
+    }
+  }
+  setInterval(pollComputer, COMPUTER_POLL_MS);
+
   ui.refresh.onclick = () => { computerError = ''; refreshList(); };
   ui.search.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { computerError = ''; refreshList(); }, 250); };
   ui.close.onclick = closeAll;
