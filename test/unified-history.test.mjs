@@ -10,7 +10,7 @@ process.env.POCKET_DEV_CLAUDE_DIR = path.join(root, 'claude', 'projects');
 process.env.POCKET_DEV_CODEX_DIR = path.join(root, 'codex');
 process.env.POCKET_DEV_AGY_DIR = path.join(root, 'agy');
 process.env.POCKET_DEV_COPILOT_DIR = path.join(root, 'copilot');
-const { createHistoryApi, readConversationMessages } = await import('../history.js');
+const { createHistoryApi, readConversationMessages, codexInTurn } = await import('../history.js');
 test.after(() => fs.rmSync(root, { recursive: true, force: true }));
 const app = path.join(root, 'app');
 fs.mkdirSync(app);
@@ -157,4 +157,18 @@ test('full native import preserves old turns and long text, and reports Antigrav
   const antigravity = await readConversationMessages('antigravity', ids.antigravity);
   assert.deepEqual(antigravity.messages, []);
   assert.match(antigravity.note, /own format/);
+});
+
+test("a Codex thread is replying while its rollout's last turn marker is task_started, read from the tail only", async () => {
+  const thread = '01a1ec6c-74e2-77f2-a309-a6daa5243871';
+  const file = path.join(process.env.POCKET_DEV_CODEX_DIR, 'sessions', '2026', '11', '18', `rollout-2026-11-18T07-41-33-${thread}.jsonl`);
+  const marker = (type) => ({ timestamp: at, type: 'event_msg', payload: { type, turn_id: 't1' } });
+  const filler = { timestamp: at, type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'x'.repeat(100_000) }] } };
+  writeJsonl(file, [{ timestamp: at, type: 'session_meta', payload: { id: thread, cwd: app } }, marker('task_started'), marker('task_complete'), marker('task_started')]);
+  assert.equal(await codexInTurn(thread), true);
+  fs.appendFileSync(file, `${JSON.stringify(marker('turn_aborted'))}\n`);
+  assert.equal(await codexInTurn(thread), false, 'an aborted turn is over');
+  fs.appendFileSync(file, `${JSON.stringify(marker('task_started'))}\n${Array.from({ length: 6 }, () => JSON.stringify(filler)).join('\n')}\n`);
+  assert.equal(await codexInTurn(thread), true, 'a marker further back than the first window is found by widening');
+  assert.equal(await codexInTurn('01a1ec6c-0000-77f2-a309-a6daa5243871'), null, 'no rollout: cannot tell');
 });
