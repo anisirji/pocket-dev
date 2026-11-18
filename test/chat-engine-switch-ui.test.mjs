@@ -229,3 +229,17 @@ test('the styles keep 44 px touch targets, dim the locked pill, and nothing uses
   assert.match(source, /MODEL_NEXT_NOTE = 'Applies to the next reply'/);
   assert.ok(!/clipboard/i.test(block));
 });
+
+test('while a program on the computer holds the chat, the Model pill is locked with the reason and so is the Provider pill', () => {
+  const t = setup({ chat: { ...idle, status: 'sleeping', held: 'Claude Code in VS Code' }, tools });
+  const model = t.settingPill(modelSetting, t.ctx.convo.chat);
+  assert.ok(model.className.includes('chat-chip-disabled'));
+  assert.equal(model.attributes['aria-disabled'], 'true');
+  assert.equal(model.title, 'The model can change once Claude Code in VS Code finishes.');
+  model.onclick();
+  assert.deepEqual(t.ctx.pushes, [], 'no model list opens');
+  assert.deepEqual(t.ctx.toasts, ['The model can change once Claude Code in VS Code finishes.']);
+  assert.ok(t.pill.className.includes('chat-chip-disabled'), 'the provider waits too');
+  const mode = t.settingPill(modeSetting, t.ctx.convo.chat);
+  assert.ok(!mode.className.includes('chat-chip-disabled'), 'other settings keep their own rules');
+});

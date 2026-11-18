@@ -121,7 +121,8 @@
 
   const badge = (tool) => el('span', `chat-badge chat-${tool}`, TOOLS[tool] || tool);
   const spinner = () => el('span', 'chat-spin');
-  const isBusy = (c) => c.runningSince != null || c.status === 'running' || c.pending;
+  // A chat is busy while its reply runs, and while a program on the computer still holds the conversation (`held` names it).
+  const isBusy = (c) => c.runningSince != null || c.status === 'running' || c.pending || !!c.held;
 
   // Engine settings come from the tool's schema; schema order is display order.
   const schemaOf = (tool) => options?.tools?.[tool]?.settings || [];
@@ -578,10 +579,6 @@
       if (listVisible()) showChat(data.chat);
       if (data.note) toast(data.note);
     } catch (err) {
-      if (err.code === 'busy' && !body.confirmBusy && confirm(err.message)) {
-        computerOpening = false;
-        return openComputerChat(item, row, { ...body, confirmBusy: true });
-      }
       toast(err.message);
       let error = ui.rows.querySelector('.chat-open-error');
       if (!error) {
@@ -1647,7 +1644,9 @@
   // time; during a reply the change is kept and applies to the next reply.
   const ENGINE_BUSY_HINT = 'Stop the reply first.';
   const MODEL_NEXT_NOTE = 'Applies to the next reply';
-  const engineBusy = (c) => Boolean(c && (BUSY.has(c.status) || c.queued || c.waking || c.runningSince != null || c.pending));
+  const engineBusy = (c) => Boolean(c && (BUSY.has(c.status) || c.queued || c.waking || c.runningSince != null || c.pending || c.held));
+  // The program on the computer keeps its model until it finishes, so the Model pill waits too.
+  const heldModelHint = (c) => `The model can change once ${c.held} finishes.`;
   function lockChip(chip, c) {
     if (engineBusy(c)) {
       chip.classList.add('chat-chip-disabled');
@@ -1671,11 +1670,16 @@
   function openSetting(setting) {
     const c = convo.chat;
     if (!c || top() !== 'convo') return;
+    if (setting.key === 'model' && c.held) return toast(heldModelHint(c));
     push({ layer: 'pick', key: setting.key, scope: 'chat' });
   }
   function settingPill(setting, c) {
     const chip = settingChip(setting, valueOf(c.settings, setting), () => openSetting(setting));
-    if (setting.key === 'model' && engineBusy(c)) chip.title = MODEL_NEXT_NOTE;
+    if (setting.key === 'model' && c.held) {
+      chip.classList.add('chat-chip-disabled');
+      chip.setAttribute('aria-disabled', 'true');
+      chip.title = heldModelHint(c);
+    } else if (setting.key === 'model' && engineBusy(c)) chip.title = MODEL_NEXT_NOTE;
     return chip;
   }
   // The model sheet is the existing one: its list, its custom name box and its PATCH apply the choice to this chat.
@@ -1813,7 +1817,7 @@
     const c = convo.chat;
     const schema = schemaOf(c.tool);
     const providers = Object.entries(options?.tools || {}).map(([t, i]) => `${t}:${i.installed}:${i.loggedIn}`).join(',');
-    const key = JSON.stringify([c.id, c.tool, c.settings, schema.length, providers, engineBusy(c)]);
+    const key = JSON.stringify([c.id, c.tool, c.settings, schema.length, providers, engineBusy(c), c.held]);
     if (key === chipsKey) return;
     chipsKey = key;
     closeSwitchMenu();
@@ -1850,6 +1854,8 @@
     } else if (c?.pending) {
       text = 'Waiting for you';
       cls = ' chat-statusline-wait';
+    } else if (c?.held) {
+      text = `${c.heldActivity ? `${c.held} on your computer: ${c.heldActivity}` : `${c.held} is finishing on your computer. It continues here when done.`}${c.queued ? ` · ${c.queued} queued` : ''}`;
     } else if (c && isBusy(c)) {
       text = `${TOOLS[c.tool]} is working… ${c.runningSince ? ticking(Date.now() - c.runningSince) : ''}${c.queued ? ` · ${c.queued} queued` : ''}`.trim();
     }
