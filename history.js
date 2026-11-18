@@ -583,7 +583,10 @@ export function createHistoryApi({
       const r = await takeover.takeOver({ tool, id, mtimeMs: st?.mtimeMs ?? s.mtimeMs, confirmBusy: stopping, note: 'Continued in Pocket Dev chat', who });
       if (r.status === 200) {
         await mirror();
-        return end({ note: stopping ? `Stopped the reply on your ${platform.host.mac}. The conversation continues here.` : `Continued here from your ${platform.host.mac}` });
+        if (!stopping) return end({ note: `Continued here from your ${platform.host.mac}` });
+        // SIGKILL is what Windows does when the program has no console for a Ctrl+C, or ignores it: an end mid-write.
+        const cut = r.body.busy && r.body.stopped.some((c) => c.signals?.includes('SIGKILL'));
+        return end({ note: `Stopped the reply on your ${platform.host.mac}.${cut ? ' Its last step may be lost.' : ''} The conversation continues here.` });
       }
       // A program that did not close after Stop keeps the hold; the ticks go on waiting for it.
       if (r.body.code === 'busy' || (stopping && r.body.code === 'still-running')) return undefined;

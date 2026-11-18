@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { platform } from './platform.js';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
+import { listWinProcesses, winCodexLocks, winKill } from './takeover-windows.js';
 
 // Take over: a conversation has one writer at a time, because every copy appends to the same history file. Taking a
 // conversation over closes the copy that is running (another program on the Mac, a Pocket Dev terminal, or a Pocket Dev
@@ -23,16 +24,20 @@ export const STOPS = {
   forced: { signals: ['SIGINT', 'SIGTERM', 'SIGKILL'], graceMs: STOP_GRACE_MS },
 };
 
+const win = platform.platform === 'win32';
+
 // Only these programs write conversations. Everything else that mentions an id (grep, tail, an editor, a shell) is a reader.
+// Paths may use / or \ (Windows), and a program may end in .exe.
 const PROGRAMS = [
-  ['claude', /(^|\/)claude(\.exe)?$/],
-  ['claude', /\/\.local\/share\/claude\/versions\/[^/]+$/],
-  ['claude', /\/@anthropic-ai\/claude-(code|agent-sdk)\/cli\.js$/],
-  ['codex', /(^|\/)codex$/],
-  ['codex', /\/@openai\/codex\/bin\/codex\.js$/],
-  ['copilot', /(^|\/)copilot(\.exe)?$/],
-  ['copilot', /\/@github\/copilot\/npm-loader\.js$/],
+  ['claude', /(^|[\\/])claude(\.exe)?$/],
+  ['claude', /[\\/]\.local[\\/]share[\\/]claude[\\/]versions[\\/][^\\/]+$/],
+  ['claude', /[\\/]@anthropic-ai[\\/]claude-(code|agent-sdk)[\\/]cli\.js$/],
+  ['codex', /(^|[\\/])codex(\.exe)?$/],
+  ['codex', /[\\/]@openai[\\/]codex[\\/]bin[\\/]codex\.js$/],
+  ['copilot', /(^|[\\/])copilot(\.exe)?$/],
+  ['copilot', /[\\/]@github[\\/]copilot[\\/]npm-loader\.js$/],
 ];
+const NODE = /(^|[\\/])node(\.exe)?$/;
 const programOf = (file) => PROGRAMS.find(([, re]) => re.test(file))?.[0] ?? null;
 
 const CLAUDE_ID = /^[A-Za-z0-9-]{8,64}$/;
@@ -40,8 +45,10 @@ const CODEX_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
 const CLAUDE_FLAGS = new Set(['--resume', '-r', '--session-id']);
 
 // ps prints the command line with spaces between arguments, so an argument that holds a space cannot be told apart. The
-// executable comes from its own column, which keeps paths such as "Application Support" whole.
+// executable comes from its own column, which keeps paths such as "Application Support" whole. Windows quotes its
+// arguments, so its listing carries them already split.
 function argv(proc) {
+  if (proc.argv) return proc.argv;
   const rest = proc.args.startsWith(proc.exe) ? proc.args.slice(proc.exe.length) : proc.args.replace(/^\S+/, '');
   return rest.trim().split(/\s+/).filter(Boolean);
 }
@@ -79,7 +86,7 @@ function program(proc) {
   const args = argv(proc);
   const tool = programOf(proc.exe);
   if (tool) return { tool, args };
-  if (/(^|\/)node$/.test(proc.exe) && args[0] && programOf(args[0])) return { tool: programOf(args[0]), args: args.slice(1) };
+  if (NODE.test(proc.exe) && args[0] && programOf(args[0])) return { tool: programOf(args[0]), args: args.slice(1) };
   return null;
 }
 
@@ -122,7 +129,7 @@ export function parseLsof(text) {
 
 export async function readCodexLocks(dir) {
   if (fixtureFile()) return JSON.parse(fs.readFileSync(fixtureFile(), 'utf8')).codexLocks ?? [];
-  if (process.platform !== 'darwin' && process.platform !== 'linux') return [];
+  if (win) return winCodexLocks(dir).catch(() => []);
   // lsof exits 1 with no output when nothing holds a lock.
   return new Promise((resolve) => {
     execFile('lsof', ['-n', '-F', 'pn', '+d', dir], { timeout: 5000, maxBuffer: 4 << 20 }, (err, out) => resolve(parseLsof(out ?? '')));
@@ -158,12 +165,14 @@ const fixtureFile = () => process.env.POCKET_DEV_PROCESS_FIXTURE;
 export async function listProcesses() {
   if (fixtureFile()) return JSON.parse(fs.readFileSync(fixtureFile(), 'utf8')).processes;
   if (!platform.capabilities().processScan.available) return [];
+  if (win) return listWinProcesses();
   const [status, args] = await Promise.all([ps('pid=,ppid=,uid=,stat=,lstart=,comm='), ps('pid=,args=')]);
   return parsePs(status, args);
 }
 
+// Returns the signal that took effect when it differs from the one asked for (see winKill).
 export function kill(pid, signal) {
-  if (!fixtureFile()) return process.kill(pid, signal);
+  if (!fixtureFile()) return win ? winKill(pid, signal) : process.kill(pid, signal);
   const table = JSON.parse(fs.readFileSync(fixtureFile(), 'utf8'));
   const proc = table.processes.find((p) => p.pid === pid);
   if (!proc) throw Object.assign(new Error('no such process'), { code: 'ESRCH' });
@@ -215,7 +224,10 @@ export function findCopies({ processes, uid, selfPid, terminals = [], sessions =
   return copies;
 }
 
-const APPS = [['VS Code', /\/\.vscode(-insiders)?\/extensions\//], ['Cursor', /\/\.cursor\/extensions\//], ['the Claude app', /\/Application Support\/Claude\//]];
+const APPS = [
+  ['VS Code', /[\\/]\.vscode(-insiders)?[\\/]extensions[\\/]/], ['Cursor', /[\\/]\.cursor[\\/]extensions[\\/]/],
+  ['the Claude app', /\/Application Support\/Claude\/|[\\/]AppData[\\/](Roaming|Local)[\\/](Claude|AnthropicClaude)[\\/]/],
+];
 
 const appOf = (copy) => APPS.find(([, re]) => re.test(copy.proc.exe))?.[0];
 
@@ -223,7 +235,7 @@ export function copyView(copy) {
   if (copy.kind === 'chat') return { kind: 'chat', id: copy.chat.id, label: `Pocket Dev chat "${copy.chat.title || 'New chat'}"` };
   if (copy.kind === 'terminal') return { kind: 'terminal', id: copy.terminal.id, pid: copy.proc.pid, label: `Pocket Dev terminal "${copy.terminal.title}"` };
   const app = appOf(copy);
-  const name = app ? `${PRODUCTS[copy.tool]} in ${app}` : path.basename(copy.proc.exe);
+  const name = app ? `${PRODUCTS[copy.tool]} in ${app}` : copy.proc.exe.split(/[\\/]/).pop();
   return { kind: copy.kind, pid: copy.proc.pid, label: `${copy.kind === 'engine' ? 'Pocket Dev chat engine' : name} (pid ${copy.proc.pid})` };
 }
 
@@ -234,12 +246,14 @@ export function holderName(copy) {
   return app ? `${PRODUCTS[copy.tool]} in ${app}` : PRODUCTS[copy.tool];
 }
 
+// The wait counts real time as well as polls, because one look at the process table takes about a second on Windows.
 async function waitForExit(procs, { isAlive, sleep, graceMs, pollMs = POLL_MS }) {
   let alive = procs;
-  for (let waited = 0; ; waited += pollMs) {
+  const start = Date.now();
+  for (let polls = 0; ; polls++) {
     const checks = await Promise.all(alive.map((p) => isAlive(p)));
     alive = alive.filter((_, i) => checks[i]);
-    if (!alive.length || waited >= graceMs) return alive;
+    if (!alive.length || Math.max(polls * pollMs, Date.now() - start) >= graceMs) return alive;
     await sleep(pollMs);
   }
 }
@@ -258,8 +272,8 @@ export async function stopProcesses(procs, { kill: send, isAlive, sleep, stop = 
     for (const p of targets) {
       if (!(await isAlive(p))) continue;
       try {
-        send(p.pid, signal);
-        sent.set(p.pid, [...(sent.get(p.pid) ?? []), signal]);
+        const took = await send(p.pid, signal);
+        sent.set(p.pid, [...(sent.get(p.pid) ?? []), typeof took === 'string' ? took : signal]);
       } catch (err) {
         if (err.code !== 'ESRCH') throw err;
       }

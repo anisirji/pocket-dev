@@ -871,7 +871,7 @@ $src.Dispose()`;
       service: mac || win || onPath('systemctl') ? yes : missing('systemctl', 'Running in the background at login', 'part of systemd'),
       mdns: mac ? yes : no('Only a Mac announces a .local name on the network. Use the address instead.'),
       portLookup: mac || win || onPath('lsof') || onPath('ss') ? yes : missing('lsof or ss', 'Finding what uses a port'),
-      processScan: win ? no('Finding a program that has a conversation open is not available on Windows yet.') : yes,
+      processScan: yes,
     };
   }
 

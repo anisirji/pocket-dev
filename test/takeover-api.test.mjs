@@ -241,7 +241,7 @@ const until = async (check, what) => {
   assert.fail(`timed out waiting for ${what}`);
 };
 
-function heldSetup() {
+function heldSetup({ took } = {}) {
   process.env.POCKET_DEV_CHAT_DIR = fs.mkdtempSync(path.join(root, 'chats-'));
   fs.writeFileSync(heldFile, `${JSON.stringify({ type: 'user', cwd: app, timestamp: '2026-11-01T10:00:00Z', message: { role: 'user', content: 'Refactor the parser' } })}\n`);
   const sent = [];
@@ -257,7 +257,9 @@ function heldSetup() {
   const chatApi = createChatApi({ sendJson: (res, status, body) => Object.assign(res, { status, body }), readJson: async (req) => req.body, config, wss: null, engines });
   const holder = { pid: 3100, ppid: 1, uid: ME, stat: 'S', started: 0, exe: vscode.exe, args: vscode.exe };
   const session = { pid: holder.pid, sessionId: HELD, startedAt: 1000, status: 'busy' };
-  const system = { ...fakeSystem([holder]), claudeSessions: () => [session] };
+  const fake = fakeSystem([holder]);
+  // `took` stands in for Windows, where a stop can end up as an immediate end (see winKill).
+  const system = { ...fake, claudeSessions: () => [session], kill: (pid, signal) => { fake.kill(pid, signal); return took; } };
   const history = createHistoryApi({
     createSession: async () => {}, sessionView: (s) => s, sendJson: (res, status, body) => Object.assign(res, { status, body }),
     readJson: async (req) => req.body ?? {}, deviceFor: () => ({ id: 'dev1' }), log: () => {}, system,
@@ -355,4 +357,12 @@ test('a chat still held when Pocket Dev restarts comes back released, with its w
   assert.equal(res.body.events.find((e) => e.text === 'later').notSent, true);
   assert.match(res.body.events.at(-1).text, /restarted before Claude Code in VS Code finished/);
   t.session.status = 'idle';
+});
+
+test('a Stop that had to end the program at once (Windows, no console) says its last step may be lost', async () => {
+  const t = heldSetup({ took: 'SIGKILL' });
+  const { id } = (await t.open()).body.chat;
+  await t.chat('POST', `/api/chat/${id}/interrupt`);
+  await until(async () => (await t.get(id)).held === null, 'the hold to end');
+  assert.ok((await t.get(id)).events.some((e) => e.text === 'Stopped the reply on your Mac. Its last step may be lost. The conversation continues here.'));
 });
