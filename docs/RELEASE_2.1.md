@@ -1,11 +1,11 @@
 # Pocket Dev 2.1
 
-The npm package is `@anisirji/pocket-dev`. The previous version is 2.0.0. Nothing was removed and no setting changed, so this is a minor version.
+The npm package is `@anisirji/pocket-dev`. The previous version is 2.0.0. 2.1.0 was tagged but never published; 2.1.1 is the first 2.1 on npm and adds the newest-first Chats order. Nothing was removed and no setting changed, so this is a minor version.
 
 ## What is new
 
 ### One Chats list for everything
-- **Chats** shows **In Pocket Dev** and **From your computer** together: recent Claude Code, Codex, Antigravity and Copilot conversations from the computer sit under your Pocket Dev chats. Search and **Show more** find older ones.
+- **Chats** is one list, newest first: your Pocket Dev chats and recent Claude Code, Codex, Antigravity and Copilot conversations from the computer, mixed by when each was last active. A conversation you are having on the computer right now sits at the top. Computer conversations carry an **on computer** tag. Search and **Show more** find older ones.
 - Tap a computer conversation to continue it in chat, with its earlier messages.
 - While the list is open it reloads every 8 seconds, so a conversation started on the computer appears without a tap. A failed scan keeps the list on screen.
 - The separate **Resume** entry is gone. **Continue on computer** is now in chat settings.

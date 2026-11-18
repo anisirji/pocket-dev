@@ -597,36 +597,45 @@
     }
   }
 
+  function chatRow(c) {
+    const [label, cls] = c.pending ? WAITING : STATUS[c.status] || [c.status, 'idle'];
+    const row = button(`chat-row${cls === 'wait' ? ' chat-row-wait' : ''}`, null, () => c.sessionId ? openComputerChat(c, row) : showChat(c));
+    const line1 = el('div', 'chat-row-line');
+    const chip = el('span', `chat-status chat-st-${cls}`);
+    if (cls === 'run') chip.append(spinner());
+    chip.append(label);
+    line1.append(badge(c.tool), el('span', 'chat-row-title', c.title || 'New chat'), chip);
+    const line2 = el('div', 'chat-row-line chat-row-meta');
+    line2.append(el('span', 'chat-row-path', shortPath(c.cwd)), el('span', 'chat-row-time', ago(c.updatedAt)));
+    row.append(line1, line2);
+    return row;
+  }
+
+  function computerRow(c) {
+    const row = button('chat-row chat-computer-row', null, () => openComputerChat(c, row));
+    const line = el('div', 'chat-row-line');
+    const where = c.live ? (c.openIn === 'pocket-dev' ? 'in a terminal' : 'open on computer') : 'on computer';
+    line.append(badge(c.tool), el('span', 'chat-row-title', c.title || c.project || 'Untitled conversation'), el('span', 'chat-status chat-st-pc', where));
+    const meta = el('div', 'chat-row-line chat-row-meta');
+    meta.append(el('span', 'chat-row-path', shortPath(c.cwd || c.project)), el('span', 'chat-row-time', ago(Date.parse(c.lastActive))));
+    row.append(line, meta);
+    return row;
+  }
+
+  // One timeline, newest first: Pocket Dev chats and computer conversations mixed by their last activity. While more
+  // computer conversations are still unloaded, the list stops at the oldest loaded one so nothing newer hides behind
+  // Show more; a chat that is running or waiting for you is always shown.
   function renderList() {
     const nodes = [];
-    if (list.length) nodes.push(el('h3', 'chat-list-label', 'In Pocket Dev'));
-    nodes.push(...list.map((c) => {
-      const [label, cls] = c.pending ? WAITING : STATUS[c.status] || [c.status, 'idle'];
-      const row = button(`chat-row${cls === 'wait' ? ' chat-row-wait' : ''}`, null, () => c.sessionId ? openComputerChat(c, row) : showChat(c));
-      const line1 = el('div', 'chat-row-line');
-      const chip = el('span', `chat-status chat-st-${cls}`);
-      if (cls === 'run') chip.append(spinner());
-      chip.append(label);
-      line1.append(badge(c.tool), el('span', 'chat-row-title', c.title || 'New chat'), chip);
-      const line2 = el('div', 'chat-row-line chat-row-meta');
-      line2.append(el('span', 'chat-row-path', shortPath(c.cwd)), el('span', 'chat-row-time', ago(c.updatedAt)));
-      row.append(line1, line2);
-      return row;
-    }));
     // Filter again after status refreshes so a newly opened native session never appears twice.
     const native = new Set(list.filter((c) => c.sessionId).map((c) => `${c.tool}:${c.sessionId}`));
     const available = computer.filter((c) => !native.has(`${c.tool}:${c.id}`));
-    if (available.length || computerError) nodes.push(el('h3', 'chat-list-label', 'From your computer'));
-    for (const c of available) {
-      const row = button('chat-row chat-computer-row', null, () => openComputerChat(c, row));
-      const line = el('div', 'chat-row-line');
-      line.append(badge(c.tool), el('span', 'chat-row-title', c.title || c.project || 'Untitled conversation'));
-      const meta = el('div', 'chat-row-line chat-row-meta');
-      meta.append(el('span', 'chat-row-path', shortPath(c.cwd || c.project)), el('span', 'chat-row-time', ago(Date.parse(c.lastActive))));
-      row.append(line, meta);
-      if (c.live) row.append(el('span', 'chat-row-meta', c.openIn === 'pocket-dev' ? 'Open in a Pocket Dev terminal' : 'Open on your computer'));
-      nodes.push(row);
-    }
+    const cutoff = computerMore && available.length ? Math.min(...available.map((c) => Date.parse(c.lastActive) || 0)) : -Infinity;
+    const entries = [
+      ...list.filter((c) => (c.updatedAt ?? 0) >= cutoff || isBusy(c) || STATUS[c.status]?.[1] === 'wait').map((c) => ({ at: c.updatedAt ?? 0, row: () => chatRow(c) })),
+      ...available.map((c) => ({ at: Date.parse(c.lastActive) || 0, row: () => computerRow(c) })),
+    ].sort((a, b) => b.at - a.at);
+    nodes.push(...entries.map((e) => e.row()));
     if (computerError) {
       const error = el('div', 'chat-open-error', `Could not load computer conversations: ${computerError}`);
       error.setAttribute('role', 'status');

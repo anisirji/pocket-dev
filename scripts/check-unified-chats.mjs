@@ -53,6 +53,9 @@ try {
     await context.addInitScript(() => localStorage.setItem('pd-welcome-shown', '1'));
     const [name, value] = login.cookie.split('=');
     await context.addCookies([{ name, value, url: server.base }]);
+    // A Pocket Dev chat that already exists, so the newer computer conversation below must sort above it.
+    const older = await server.request('POST', '/api/chat', { cookie: login.cookie, body: { tool: 'claude', cwd: project } });
+    assert.equal(older.status, 201);
     const page = await context.newPage();
     page.setDefaultTimeout(15000);
     const errors = [];
@@ -71,6 +74,9 @@ try {
       line({ type: 'assistant', uuid: `a-${liveId}`, sessionId: liveId, cwd: project, timestamp: new Date().toISOString(), message: { role: 'assistant', content: [{ type: 'text', text: 'Answer from the computer.' }] } }));
     await page.waitForFunction((title) => [...document.querySelectorAll('.chat-computer-row .chat-row-title')].some((n) => n.textContent === title), liveTitle, { timeout: 25000 });
     assert.equal(await page.locator('.chat-computer-row').count(), 30, 'the list stays one page after a quiet reload');
+    const order = await page.locator('.chat-row .chat-row-title').allInnerTexts();
+    assert.ok(order.indexOf(liveTitle) >= 0 && order.indexOf(liveTitle) < order.indexOf('New chat'), `a newer computer conversation sorts above an older Pocket Dev chat (${order.slice(0, 3).join(' | ')})`);
+    assert.equal(await page.locator('.chat-list-label').count(), 0, 'one timeline, no separate sections');
     await page.locator('.chat-more').click();
     await page.waitForFunction(() => document.querySelectorAll('.chat-computer-row').length >= 35);
     assert.equal(await page.locator('.chat-more').isVisible(), false, 'Show more disappears at the end');
@@ -122,7 +128,7 @@ try {
     const chats = await server.request('GET', '/api/chat', { cookie: login.cookie });
     for (const chat of chats.data) await server.request('DELETE', `/api/chat/${chat.id}`, { cookie: login.cookie });
   }
-  console.log('PASS: real native files, phone and desktop list, search, pagination, failed scan retry, direct open without a prompt, imported history, dedupe, in-chat computer continuation, back navigation and no horizontal overflow.');
+  console.log('PASS: real native files, one newest-first timeline on phone and desktop, search, pagination, failed scan retry, direct open without a prompt, imported history, dedupe, in-chat computer continuation, back navigation and no horizontal overflow.');
 } finally {
   await browser?.close();
   for (const cleanup of cleanups.reverse()) await cleanup();

@@ -21,7 +21,7 @@
 
 ## What's new in 2.1
 
-- **One Chats list:** your Pocket Dev chats and recent Claude Code, Codex, Antigravity and Copilot conversations from the computer, in one place. It refreshes while open, so a conversation you just started on the computer shows up by itself.
+- **One Chats list:** your Pocket Dev chats and recent Claude Code, Codex, Antigravity and Copilot conversations from the computer, in one list, newest first. It refreshes while open, so a conversation you just started on the computer shows up by itself.
 - **No more "stop it first":** open a conversation the computer is still replying in, and the chat follows that reply live, queues your messages, and takes over once the computer is done. **Stop** takes over at once.
 - **Windows hand-over:** Pocket Dev finds and safely stops the program holding a conversation on Windows too.
 - **Take photo** in the paperclip and Upload menus opens the camera directly, and **Files** opens Android's document picker.
