@@ -395,6 +395,10 @@ The suite starts disposable phone and Admin listeners, uses fixture folders, stu
 
 Before publishing, run `npm test`, `node test/browser/check-responsive.mjs` and `npm pack --dry-run`. The README's screenshot links point at the `main` branch, so no per-version rewrite is needed. The release notes for the version are in `docs/RELEASE_<major>.<minor>.md`.
 
+## Follow
+
+[YouTube](https://www.youtube.com/@afk_pocket_dev) · [Instagram](https://www.instagram.com/afk_pocket_dev) · [Ani on Instagram](https://www.instagram.com/hap.pyani) · [Rohit Kumar Das on LinkedIn](https://www.linkedin.com/in/rohit-kumar-das-583b28223)
+
 ## Licence
 
 ISC. See [LICENSE](../LICENSE).

@@ -36,6 +36,8 @@
 
 2.0 added four chat engines, provider and model switching in one chat, self-update and the Admin tile. Details: [2.1 release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_2.1.md) · [2.0 release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_2.0.md).
 
+**Follow Pocket Dev:** [YouTube](https://www.youtube.com/@afk_pocket_dev) · [Instagram](https://www.instagram.com/afk_pocket_dev) · [Ani on Instagram](https://www.instagram.com/hap.pyani) · [Rohit on LinkedIn](https://www.linkedin.com/in/rohit-kumar-das-583b28223)
+
 > [!IMPORTANT]
 > **Important before you start**
 >
@@ -99,6 +101,13 @@ More fixes: [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/d
 - **Ask a question or share a tip:** [GitHub Discussions](https://github.com/anisirji/pocket-dev/discussions)
 - **Report a bug:** [open an issue](https://github.com/anisirji/pocket-dev/issues/new/choose) and paste the output of `pocket-dev doctor`
 - **Source code:** [github.com/anisirji/pocket-dev](https://github.com/anisirji/pocket-dev)
+
+## Follow along
+
+- **YouTube:** [@afk_pocket_dev](https://www.youtube.com/@afk_pocket_dev)
+- **Instagram:** [@afk_pocket_dev](https://www.instagram.com/afk_pocket_dev)
+- **Ani on Instagram:** [@hap.pyani](https://www.instagram.com/hap.pyani)
+- **Rohit Kumar Das on LinkedIn:** [rohit-kumar-das](https://www.linkedin.com/in/rohit-kumar-das-583b28223), building Pocket Dev with Ani
 
 ## A little more freedom
 

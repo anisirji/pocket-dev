@@ -13,6 +13,8 @@ Useful for checking coding work, reviewing changes, continuing a conversation or
 - [AI setup guide](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/AI_SETUP.md): Target-machine checks, setup, verification and agent use.
 - [Agent skill](https://raw.githubusercontent.com/anisirji/pocket-dev/main/skills/pocket-dev/SKILL.md): Reusable setup and terminal workflow instructions.
 - [npm package](https://www.npmjs.com/package/@anisirji/pocket-dev): Published version and installation.
+- [YouTube](https://www.youtube.com/@afk_pocket_dev): Videos and tutorials.
+- [Instagram](https://www.instagram.com/afk_pocket_dev): Short videos and updates.
 - [Source repository](https://github.com/anisirji/pocket-dev): ISC-licensed code and issues.
 
 ## Documentation

@@ -91,5 +91,11 @@
   ],
   "engines": {
     "node": ">=22"
-  }
+  },
+  "contributors": [
+    {
+      "name": "Rohit Kumar Das",
+      "url": "https://www.linkedin.com/in/rohit-kumar-das-583b28223"
+    }
+  ]
 }

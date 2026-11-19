@@ -46,6 +46,8 @@ export const COPY = {
     { label: 'Let your AI help you set it up', url: 'https://www.theani.me/work/pocket-dev/prompts' },
     { label: 'Me and my other work', url: 'https://theani.me' },
     { label: 'Code, docs and help', url: 'https://github.com/anisirji/pocket-dev' },
+    { label: 'Pocket Dev on YouTube', url: 'https://www.youtube.com/@afk_pocket_dev' },
+    { label: 'Pocket Dev on Instagram', url: 'https://www.instagram.com/afk_pocket_dev' },
   ],
 
   madeHere: 'This message was made on your computer. Nothing was sent.',
