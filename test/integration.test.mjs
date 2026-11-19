@@ -294,7 +294,8 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     const created = await request('POST', '/api/sessions', { cookie: A.cookie, body: { cwd: home, command: `printf 'a\\u202fb|%s\\n' "$LANG" >> '${file}'` } });
     assert.equal(created.status, 201);
     session = created.data;
-    await until(() => fs.existsSync(file));
+    // The shell creates the file before printf writes to it, so wait for the whole line.
+    await until(() => fs.existsSync(file) && fs.readFileSync(file, 'utf8').endsWith('\n'));
     assert.equal(fs.readFileSync(file, 'utf8'), 'a\u202fb|en_US.UTF-8\n');
     await socket(`/ws/${session.id}`, A.cookie);
     await pause(400);
