@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePs, parseLsof, resumeTarget, findCopies, stopProcesses, createTakeover, STOPS } from '../src/conversations/takeover.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { parsePs, parseLsof, readCodexLocks, resumeTarget, findCopies, stopProcesses, createTakeover, STOPS } from '../src/conversations/takeover.js';
 
 // Every process here is made up. Nothing in this file lists or signals a real process.
 const ME = 501;
@@ -322,4 +325,19 @@ test('a Codex app-server replying in ANOTHER thread blocks, says so, and is left
   const later = await takeOver({ tool: 'codex', id: ID, mtimeMs: OLD });
   assert.equal(later.status, 200, JSON.stringify(later.body));
   assert.deepEqual(sys.signals, [[server.pid, 'SIGINT']]);
+});
+
+test('lsof exiting 1 with a listing still reports the holders, and a failure other than exit 1 is not "nobody holds it"', async (t) => {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-lsof-'));
+  t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
+  const fake = (code) => {
+    fs.writeFileSync(path.join(bin, 'lsof'), `#!/bin/sh\necho "lsof: WARNING: cannot stat /x" >&2\nprintf 'p4242\\nn/h/.codex/thread-writer-locks/019a0000-0000-7000-8000-000000000001.lock\\n'\nexit ${code}\n`, { mode: 0o755 });
+  };
+  const path0 = process.env.PATH;
+  t.after(() => { process.env.PATH = path0; });
+  process.env.PATH = `${bin}${path.delimiter}${path0}`;
+  fake(1);
+  assert.deepEqual(await readCodexLocks('/h/.codex/thread-writer-locks'), [{ pid: 4242, threadId: '019a0000-0000-7000-8000-000000000001' }]);
+  fake(2);
+  await assert.rejects(readCodexLocks('/h/.codex/thread-writer-locks'), /Command failed/);
 });
