@@ -2,6 +2,14 @@
 
 The npm package is `@anisirji/pocket-dev`. The previous version is 2.0.0. 2.1.0 was tagged but never published; 2.1.1 is the first 2.1 on npm and adds the newest-first Chats order. Nothing was removed and no setting changed, so this is a minor version.
 
+## 2.1.3
+
+- **No upload size limit on the Wi-Fi.** Files uploads from a phone on the same Wi-Fi can be any size. Over the internet address each file is still at most `fileUploadMax` (2 GB by default).
+- **Four uploads at a time.** Files sends four files at once and starts the next as each one finishes, so a batch is done sooner.
+- **Smooth scrolling while uploading.** The upload list no longer freezes touch scrolling when several files are on their way.
+- **Take over** reads a Codex lock listing that `lsof` returns with exit 1.
+- **Social links** for YouTube and Instagram in the README, guide and fallback site.
+
 ## 2.1.2
 
 - **Copy any chat message.** A small copy icon sits under every message, yours and the AI's. Tap it to copy that message; it works on the plain `http://` Wi-Fi address too.
