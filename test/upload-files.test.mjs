@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
-import { startServer } from './helpers/server.mjs';
+import { startServer, HOSTNAME, TOKEN, PHONE_IP } from './helpers/server.mjs';
 
 // Neither upload route looks at the type or the extension of what it is given: a document, an archive, plain text and
 // a picture all arrive byte for byte. Only the size caps apply (25 MB for the chat and terminal paperclip).
@@ -47,4 +48,33 @@ test('the Files Upload route keeps pdf, zip, text and png bytes under the chosen
     assert.equal(res.status, 201, `${name}: ${await res.clone().text()}`);
     assert.deepEqual(fs.readFileSync(path.join(dir, name)), bytes, name);
   }
+});
+
+test('Files uploads have no size cap on the Wi-Fi; only the internet address keeps fileUploadMax', { timeout: 60000 }, async (t) => {
+  const s = await startServer(t, { network: { wifi: true, internet: { kind: 'domain', hostname: HOSTNAME } }, token: TOKEN });
+  await s.tunnelStatus('connected');
+  fs.writeFileSync(s.config, JSON.stringify({ ...JSON.parse(fs.readFileSync(s.config, 'utf8')), fileUploadMax: 1000 }));
+  const dir = path.join(s.home, 'cap-check');
+  fs.mkdirSync(dir);
+  const bytes = Buffer.alloc(5000, 7);
+  // http.request, not fetch, because the tunnel side needs a chosen Host header.
+  const upload = (cookie, name, tunnel) => new Promise((resolve, reject) => {
+    const req = http.request(`${s.base}/api/files/upload?dir=${encodeURIComponent(dir)}&name=${name}`, { method: 'POST', headers: {
+      cookie, 'x-pocket-dev': '1', 'content-type': 'application/octet-stream', 'content-length': bytes.length,
+      ...(tunnel && { host: HOSTNAME, 'x-forwarded-proto': 'https', 'cf-connecting-ip': PHONE_IP }),
+    } }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+    req.on('error', reject);
+    req.end(bytes);
+  });
+
+  const lan = await s.login();
+  assert.equal((await s.request('GET', '/api/files/places', { cookie: lan.cookie })).data.uploadMax, null);
+  assert.equal((await s.request('PUT', '/api/files/pin', { cookie: lan.cookie, body: { path: dir, pinned: true } })).data.uploadMax, null);
+  assert.equal(await upload(lan.cookie, 'lan.bin', false), 201);
+  assert.deepEqual(fs.readFileSync(path.join(dir, 'lan.bin')), bytes);
+
+  const internet = await s.login({ via: 'tunnel' });
+  assert.equal((await s.request('GET', '/api/files/places', { cookie: internet.cookie, via: 'tunnel' })).data.uploadMax, 1000);
+  assert.equal(await upload(internet.cookie, 'internet.bin', true), 413);
+  assert.equal(fs.existsSync(path.join(dir, 'internet.bin')), false);
 });

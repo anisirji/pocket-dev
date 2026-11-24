@@ -132,7 +132,7 @@ Each tab is a login shell in a real pty (zsh or your `$SHELL` on macOS and Linux
 
 <table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/03-files.png" width="240" alt="Files browser"><br><sub>Browse and upload</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/04-files-preview.png" width="240" alt="File preview"><br><sub>Preview a file</sub></td></tr></table>
 
-Browse the folders you allow (your home folder by default), upload several files with progress (2 GB each, never overwriting) (on a phone, **Upload** and the paperclips in Chat, the terminal and Messages first ask **Take photo** (camera), **Photos and videos** or **Files**, so Android opens its document browser instead of only your pictures; the paperclips in Chat and the terminal take files up to 25 MB), download or zip, rename, search by name, and move to the Trash or Recycle Bin. Previews cover images, video, audio, PDF and text, in a sandbox. Every path is checked again after symlinks resolve.
+Browse the folders you allow (your home folder by default), upload several files with progress, four at a time (no size limit on the Wi-Fi, 2 GB each over the internet; never overwriting) (on a phone, **Upload** and the paperclips in Chat, the terminal and Messages first ask **Take photo** (camera), **Photos and videos** or **Files**, so Android opens its document browser instead of only your pictures; the paperclips in Chat and the terminal take files up to 25 MB), download or zip, rename, search by name, and move to the Trash or Recycle Bin. Previews cover images, video, audio, PDF and text, in a sandbox. Every path is checked again after symlinks resolve.
 
 ### Git
 
@@ -305,7 +305,7 @@ Full table (cookies, CSRF, approval, block, lockdown, security log): [docs/REFER
 | `requireApproval` | `false` | New devices wait for approval on the computer. |
 | `approveFromDevices` | `false` | A logged-in owner phone may approve or deny waiting logins. Only the computer turns it on. |
 | `fileRoots` | home folder | Folders Files may show. |
-| `fileUploadMax` | 2 GiB | Files upload limit in bytes. |
+| `fileUploadMax` | 2 GiB | Files upload limit in bytes over the internet. Wi-Fi uploads have no limit. |
 | `fileZipMax` | 4 GiB | Zip limit in bytes, before compression. |
 | `adminPort` | phone port + 1 (`7778`) | Admin page port. `POCKET_DEV_ADMIN_PORT` overrides it. |
 | `access` | `{"connected": true, "keepOpen": true}` | Phone access and Keep connection open. |

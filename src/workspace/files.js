@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { platform } from '../core/platform.js';
+import { fromConnector } from '../network/transport.js';
 import { pipeline } from 'node:stream/promises';
 
 const GB = 1024 ** 3;
@@ -231,11 +232,13 @@ export function createFilesApi({ sendJson, readJson, config, sendToMessages = nu
     }
   }
 
-  async function places() {
-    if (scope) return { home: roots[0]?.real, roots: roots.map((r) => r.real), quick: [], pinned: [], uploadMax, zipMax, readOnly: scope.role !== 'developer', scoped: true };
+  async function places({ req }) {
+    // Local (LAN/loopback) devices have no upload cap; report null so the client does not pre-block large files.
+    const reportedUploadMax = fromConnector(req) ? uploadMax : null;
+    if (scope) return { home: roots[0]?.real, roots: roots.map((r) => r.real), quick: [], pinned: [], uploadMax: reportedUploadMax, zipMax, readOnly: scope.role !== 'developer', scoped: true };
     const quick = (await Promise.all([home, ...QUICK.map((n) => path.join(home, n))].map(folderView))).filter(Boolean);
     const pinned = (await Promise.all(rawFolders().filter((p) => typeof p === 'string').map(folderView))).filter(Boolean);
-    return { home, roots: roots.map((r) => r.real), quick, pinned, uploadMax, zipMax };
+    return { home, roots: roots.map((r) => r.real), quick, pinned, uploadMax: reportedUploadMax, zipMax };
   }
 
   async function list({ q }) {
@@ -368,11 +371,13 @@ export function createFilesApi({ sendJson, readJson, config, sendToMessages = nu
     requireWrite(dir);
     const name = checkName(q.get('name'));
     requireWrite(path.join(dir, name));
+    // Local (LAN/loopback) devices upload with no size cap; only internet (tunnel) uploads are limited.
+    const limit = fromConnector(req) ? uploadMax : Infinity;
     const tooLarge = () => {
       res.setHeader('connection', 'close');
-      fail(413, `Files can be at most ${(uploadMax / GB).toFixed(1)} GB.`);
+      fail(413, `Files can be at most ${(limit / GB).toFixed(1)} GB.`);
     };
-    if (Number(req.headers['content-length']) > uploadMax) tooLarge();
+    if (Number(req.headers['content-length']) > limit) tooLarge();
     const tmp = path.join(dir, UPLOAD_PREFIX + crypto.randomBytes(8).toString('hex'));
     const handle = await fsp.open(tmp, 'wx', 0o644);
     let size = 0;
@@ -381,7 +386,7 @@ export function createFilesApi({ sendJson, readJson, config, sendToMessages = nu
         for await (const chunk of chunks) {
           size += chunk.length;
           assertActive();
-          if (size > uploadMax) tooLarge();
+          if (size > limit) tooLarge();
           yield chunk;
         }
       }, handle.createWriteStream());
@@ -488,14 +493,14 @@ export function createFilesApi({ sendJson, readJson, config, sendToMessages = nu
     return { opened: dir };
   }
 
-  async function pin({ body }) {
+  async function pin({ req, body }) {
     if (typeof body.pinned !== 'boolean') fail(400, 'Expected { path, pinned }.');
     const dir = await resolveDir(body.path);
     // Entries Files cannot read stay in the list; hand-written ones like "~/app" match the resolved folder.
     const sameDir = (p) => typeof p === 'string' && path.resolve(home, expandHome(p.trim(), home)) === dir;
     const current = rawFolders();
     if (current.some(sameDir) !== body.pinned) config.update({ folders: body.pinned ? [...current, dir] : current.filter((p) => !sameDir(p)) });
-    return places();
+    return places({ req });
   }
 
   // Every write needs x-pocket-dev: 1, and 'json' routes also content-type application/json. A page on a forwarded

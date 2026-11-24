@@ -848,7 +848,7 @@
     previewEl = null;
   }
 
-  // Uploads run one at a time so each gets the phone's full bandwidth and its bar moves steadily.
+  // Uploads run a few at a time (UPLOAD_CONCURRENCY); the rest wait and start as slots free up.
   function addUploads(files) {
     if (!files.length) return;
     const max = state.places?.uploadMax ?? Infinity;
@@ -866,10 +866,20 @@
     renderUploads();
   }
 
+  // How many files upload at once. Several in parallel finishes a batch faster on a LAN.
+  const UPLOAD_CONCURRENCY = 4;
+
   function pumpUploads() {
-    if (state.uploads.some((u) => u.status === 'uploading')) return;
-    const u = state.uploads.find((x) => x.status === 'queued');
-    if (!u) return;
+    let active = state.uploads.filter((u) => u.status === 'uploading').length;
+    while (active < UPLOAD_CONCURRENCY) {
+      const u = state.uploads.find((x) => x.status === 'queued');
+      if (!u) break;
+      active++;
+      startUpload(u);
+    }
+  }
+
+  function startUpload(u) {
     u.status = 'uploading';
     const xhr = new XMLHttpRequest();
     u.xhr = xhr;
@@ -914,7 +924,15 @@
     canceled: () => 'Canceled',
   };
 
+  // Progress events fire many times a second (more so with parallel uploads); coalesce the
+  // full panel rebuild to one per frame so it never blocks touch scrolling.
+  let uploadsRaf = 0;
   function renderUploads() {
+    if (uploadsRaf) return;
+    uploadsRaf = requestAnimationFrame(() => { uploadsRaf = 0; renderUploadsNow(); });
+  }
+
+  function renderUploadsNow() {
     const box = state.els?.uploads;
     if (!box) return;
     const ups = state.uploads;
