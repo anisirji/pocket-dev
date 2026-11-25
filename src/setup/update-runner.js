@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createUpdater, notInstalledByNpm, permissionHelp, INSTALL_ARGS, RELEASES_URL, UPDATE_COMMAND } from './update.js';
+import { startWindowsUpdate, takeWindowsUpdateResult, windowsUpdateOptions } from './windows-update.js';
+import { STATE_DIR } from '../core/paths.js';
 
 // The Admin page's Update button. Installing software stays a Mac-side action: this only ever runs behind the admin
 // listener (this computer, x-pocket-admin header), never on the port the phone uses. One update runs at a time, and
@@ -41,10 +43,17 @@ export function runStreaming(cmd, args, { onChunk = () => {}, env = process.env,
 // Every outside action is a parameter: the npm runner, the service questions and the restart.
 export function createUpdateRunner({
   versionCheck, kind = 'global', version, readVersion, run = runStreaming, serviceInfo = async () => ({ installed: false, isThisServer: false }),
-  restartThisServer = () => {}, restartDelayMs = 400, now = Date.now, log = () => {},
+  restartThisServer = () => {}, restartDelayMs = 400, now = Date.now, log = () => {}, platform = process.platform,
+  // Windows: the install runs in a script outside Pocket Dev (windows-update.js), which stops this server first.
+  handOff = ({ from, service }) => startWindowsUpdate(windowsUpdateOptions({ from, npm: npmCommand(), service, startHere: !(service.installed && service.isThisServer) })),
+  takeResult = () => takeWindowsUpdateResult(STATE_DIR),
 } = {}) {
   let state = { phase: 'idle', lines: [], error: null, denied: false, from: null, to: null, message: null, startedAt: null };
   const set = (changes) => { state = { ...state, ...changes }; };
+  const windows = platform === 'win32';
+  // The script started this server again; if npm failed, say so here, since the page that asked was waiting for it.
+  const last = windows ? takeResult() : null;
+  if (last && !last.ok) set({ phase: 'failed', lines: last.output.slice(-OUTPUT_LINES), error: `The update did not finish: npm exited with code ${last.code}. Pocket Dev was not changed.` });
 
   const onChunk = (text) => {
     const lines = text.split(/\r?\n/).map((l) => l.trimEnd()).filter(Boolean);
@@ -66,6 +75,7 @@ export function createUpdateRunner({
       current: version, latest: latest?.latest ?? null, available,
       checkedAt: latest?.checkedAt ?? null,
       canUpdate: available && kind === 'global' && !busy,
+      windows,
       reason: available ? reason : null,
       command: UPDATE_COMMAND, releasesUrl: RELEASES_URL,
       phase: state.phase, output: state.lines, error: state.error, denied: state.denied,
@@ -83,6 +93,12 @@ export function createUpdateRunner({
         const latest = await versionCheck.refresh({ maxAgeMs: 0 });
         if (!latest?.available) { set({ phase: 'idle', message: 'Pocket Dev is up to date.' }); return; }
         set({ phase: 'installing', message: `Installing ${latest.latest}…` });
+        if (windows) {
+          const h = await handOff({ from: version, service: await serviceInfo() });
+          if (!h.ok) { set({ phase: 'failed', error: `The update did not start: ${h.error}. Pocket Dev was not changed.` }); return; }
+          set({ phase: 'restarting', to: latest.latest, message: `Pocket Dev stops, installs ${latest.latest} and starts again. This page reconnects in about a minute.` });
+          return;
+        }
         const r = await updater.install();
         if (!r.ok) {
           set({ phase: 'failed', denied: r.denied, error: r.denied ? 'npm could not write to its global folder.' : `The update did not finish: ${r.error}. Pocket Dev was not changed.` });

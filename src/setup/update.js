@@ -108,6 +108,8 @@ export function createUpdater({
   version = readInstalledVersion(), root = PACKAGE_ROOT, env = process.env, fetchLatest: lookup = fetchLatest,
   run, globalRoot = async () => null, hasService = async () => false, restartService = async () => ({ ok: false }),
   reexec = async () => 1, readVersion = () => readInstalledVersion(root), realpath = fs.realpathSync,
+  // Windows: installs through windows-update.js and resolves its result ({ ok, code, output, to }), or null.
+  handOff = null,
 } = {}) {
   const kind = async () => installKind(root, { realpath, globalRoot: await globalRoot() });
   return {
@@ -132,6 +134,13 @@ export function createUpdater({
     // Runs npm and reports what happened. `output` is what npm printed, for the person to see.
     async install() {
       const service = await hasService();
+      if (handOff) {
+        const h = await handOff({ from: version });
+        if (!h) return { ok: false, output: '', denied: false, error: 'the install did not finish within 10 minutes' };
+        const output = h.output.join('\n');
+        if (!h.ok) return { ok: false, output, denied: false, error: h.code == null ? output || 'the install did not start' : `npm exited with code ${h.code}` };
+        return { ok: true, output, from: version, to: h.to ?? null, hadService: false, restarted: true };
+      }
       const r = await run('npm', INSTALL_ARGS);
       const output = `${r.stdout ?? ''}${r.stderr ?? ''}`.trim();
       if (r.code !== 0) {
@@ -201,7 +210,8 @@ export async function runInstall(ctx) {
     return 1;
   }
   ctx.out(r.to && r.to !== r.from ? `Updated Pocket Dev ${r.from} to ${r.to}.` : 'npm finished.');
-  if (r.hadService) {
+  if (r.restarted) ctx.out('Pocket Dev was stopped for the install and started again.');
+  else if (r.hadService) {
     const s = await u.restart();
     ctx.out(s.ok ? 'Restarted the background service, so it now runs the new version.' : 'Restart the background service to use it: pocket-dev service restart');
   } else ctx.out('If Pocket Dev is running in a terminal, stop it and run pocket-dev start to use the new version.');

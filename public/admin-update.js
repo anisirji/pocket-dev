@@ -83,6 +83,7 @@
       if (status !== 200) return;
       view = body;
       if (waitedFrom && view.phase === 'idle' && view.current !== waitedFrom) { location.reload(); return; }
+      if (view.phase === 'failed') waitedFrom = null;
       render();
       if (BUSY.has(view.phase) || waitedFrom) startPolling(); else stopPolling();
     } catch {
@@ -96,7 +97,7 @@
   updateBtn.onclick = () => {
     const v = view;
     if (!v?.canUpdate) return;
-    dBody.textContent = `This installs Pocket Dev ${v.latest} on this computer with npm install -g, then restarts the background service. Terminals and chats on your phone reconnect after a few seconds. Nothing is deleted. You have ${v.current}.`;
+    dBody.textContent = `This installs Pocket Dev ${v.latest} on this computer with npm install -g, then restarts the background service. Terminals and chats on your phone reconnect after a few seconds. Nothing is deleted. You have ${v.current}.${v.windows ? ' On Windows, Pocket Dev stops while npm installs, because Windows cannot replace files in use: open terminals close, and it starts again by itself in about a minute.' : ''}`;
     dialog.showModal();
   };
   dCancel.onclick = () => dialog.close();

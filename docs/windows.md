@@ -86,10 +86,15 @@ Coming soon: `pocket-dev service` on Windows. Today it is macOS only.
 
 ## 7. Update and uninstall
 
+The Admin page's **Update** button and `pocket-dev update` stop Pocket Dev while npm installs, because Windows cannot replace files that are in use, then start it again. Open terminals close. From 2.1.4 on this happens by itself. To update 2.1.3 or older, or by hand, stop Pocket Dev first:
+
 ```powershell
+schtasks /End /TN dev.pocket.server; Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -like '*pocket-dev*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 npm install -g @anisirji/pocket-dev@latest
-npm uninstall -g @anisirji/pocket-dev
+pocket-dev start
 ```
+
+To remove it: `npm uninstall -g @anisirji/pocket-dev`.
 
 Settings stay in `%USERPROFILE%\.pocket-dev` until you delete that folder.
 
@@ -97,6 +102,7 @@ Settings stay in `%USERPROFILE%\.pocket-dev` until you delete that folder.
 
 | You see | Cause and fix |
 | --- | --- |
+| `npm error code EBUSY` ... `rename` when updating | Pocket Dev was still running, and Windows will not replace a folder in use. Versions before 2.1.4 update from inside Pocket Dev, so this always happens there. Stop it and install by hand, as in [Update and uninstall](#7-update-and-uninstall). |
 | `EEXIST ... pocket-dev.cmd` while installing | A different npm package named `pocket-dev` owns the command. Run `npm uninstall -g pocket-dev`, then `npm install -g @anisirji/pocket-dev`. |
 | `unknown command 'start'. See 'main --help'` | Same cause: you are running the other package. Same fix. |
 | After the fix above, `cli.js` is missing or the command still fails | The install was left half done. In PowerShell: `Remove-Item -Recurse -Force "$env:APPDATA\npm\node_modules\@anisirji"` and `Remove-Item -Force "$env:APPDATA\npm\pocket-dev*"`, then `npm install -g @anisirji/pocket-dev`. |

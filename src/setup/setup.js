@@ -790,6 +790,19 @@ export async function createRealContext(extra = {}) {
     restartService: async () => ({ ok: (await realRun(process.execPath, [path.join(PACKAGE_ROOT, 'bin', 'pocket-dev.js'), 'service', 'restart'], { inherit: true })).code === 0 }),
     // The new install answers the command that was typed, so setup or the first start carries on with the new code.
     reexec: async () => (await realRun(process.execPath, [path.join(PACKAGE_ROOT, 'bin', 'pocket-dev.js'), ...process.argv.slice(2)], { inherit: true, env: { ...process.env, POCKET_DEV_UPDATED: '1' } })).code ?? 1,
+    // Windows cannot replace the package folder while Pocket Dev runs from it, so a script outside it stops Pocket Dev,
+    // installs and starts it again. This command waits for it and is left running.
+    handOff: process.platform === 'win32' ? async ({ from }) => {
+      const { startWindowsUpdate, windowsUpdateOptions, waitForWindowsUpdate } = await import('./windows-update.js');
+      const { npmCommand } = await import('./update-runner.js');
+      const { runningInstance } = await import('../core/startup.js');
+      const service = await host.serviceStatus().catch(() => ({}));
+      const opts = windowsUpdateOptions({ from, npm: npmCommand(), service, startHere: Boolean(await runningInstance(STATE_DIR)), keep: [process.pid, process.ppid] });
+      const started = await startWindowsUpdate(opts);
+      if (!started.ok) return { ok: false, code: null, output: [started.error] };
+      ctx.out(`Pocket Dev stops while npm installs and starts again afterwards. npm's output: ${path.join(STATE_DIR, 'update-windows.log')}`);
+      return waitForWindowsUpdate(STATE_DIR);
+    } : null,
   });
   ctx.pin = (await import('./taskbar-pin.js')).realPinDeps(ctx.platform);
   ctx.qr = terminalQr;

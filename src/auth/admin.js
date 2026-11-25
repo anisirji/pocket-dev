@@ -254,7 +254,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   // The Admin page's Update button. It exists only when the quiet check is on and this copy knows its version.
   const updateRunner = update && updateMeta ? createUpdateRunner({
     versionCheck: update, kind: updateMeta.kind, version: updateMeta.version, readVersion: updateMeta.readVersion,
-    serviceInfo: async () => { const svc = await serviceStatus(); return { installed: Boolean(svc.installed), isThisServer: Boolean(svc.isThisServer) }; },
+    serviceInfo: async () => { const svc = await serviceStatus(); return { installed: Boolean(svc.installed), running: Boolean(svc.running), isThisServer: Boolean(svc.isThisServer) }; },
     restartThisServer, log: (line) => console.error(line),
   }) : null;
   // A look at the registry when the last one is over an hour old, so the page does not show old news.
