@@ -2,6 +2,12 @@
 
 The npm package is `@anisirji/pocket-dev`. The previous version is 2.0.0. 2.1.0 was tagged but never published; 2.1.1 is the first 2.1 on npm and adds the newest-first Chats order. Nothing was removed and no setting changed, so this is a minor version.
 
+## 2.1.4
+
+- **Update works on Windows.** Windows will not replace files that a running program uses, so the Admin page's **Update** button and `pocket-dev update` failed there with `npm error code EBUSY`. They now stop Pocket Dev, install the new version and start it again by themselves. Open terminals close during the update. If npm fails, the Admin page shows its output after Pocket Dev comes back.
+- **Updating to 2.1.4 from an older version on Windows** still needs the manual steps once, because the older version does the updating: see [Update and uninstall](windows.md#7-update-and-uninstall).
+- **README:** the install commands now sit at the top, highlighted, above the demo.
+
 ## 2.1.3
 
 - **No upload size limit on the Wi-Fi.** Files uploads from a phone on the same Wi-Fi can be any size. Over the internet address each file is still at most `fileUploadMax` (2 GB by default).
