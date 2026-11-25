@@ -1,8 +1,15 @@
 # Pocket Dev
 
-<p align="center"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/pocket-dev-demo.gif" width="760" alt="Short demo of Pocket Dev on a phone: a live terminal, a Claude Code chat and switching between computers (demo data)"></p>
-
 **Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files and open apps. Runs on your own machine, nothing to install on the phone, no cloud account.**
+
+> **Install and start** (Node 22 or newer, on macOS, Windows or Linux):
+>
+> ```bash
+> npm install -g @anisirji/pocket-dev
+> pocket-dev start
+> ```
+
+<p align="center"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/pocket-dev-demo.gif" width="760" alt="Short demo of Pocket Dev on a phone: a live terminal, a Claude Code chat and switching between computers (demo data)"></p>
 
 [![npm](https://img.shields.io/npm/v/@anisirji/pocket-dev?color=4c8dff&label=npm)](https://www.npmjs.com/package/@anisirji/pocket-dev) ![Node 22+](https://img.shields.io/node/v/@anisirji/pocket-dev?color=4c8dff&label=node) ![macOS, Windows, Linux](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-4c8dff)
 
@@ -57,7 +64,7 @@ You need [Node.js 22 or newer](https://nodejs.org) (`node -v` to check) and a ph
 
 **Want your coding assistant to set it up? [Copy the AI setup prompt](https://www.theani.me/work/pocket-dev/prompts).** Paste it into an assistant that can run commands on your own computer. The same page has a prompt for continuing your current project from your phone. [Setup details for agents](docs/AI_SETUP.md) · [Reusable agent skill](skills/pocket-dev/SKILL.md).
 
-```
+```bash
 npm install -g @anisirji/pocket-dev
 pocket-dev start
 ```
@@ -80,6 +87,7 @@ Just trying it? `npx -y @anisirji/pocket-dev start` runs it once and installs no
 | You see | Do this |
 | --- | --- |
 | `unknown command 'start'. See 'main --help'` or `EEXIST ... pocket-dev.cmd` | A different npm package, `pocket-dev`, owns the command. Run `npm uninstall -g pocket-dev`, then `npm install -g @anisirji/pocket-dev` again. |
+| Windows: `npm error code EBUSY` ... `rename` after **Update** | Before 2.1.4, Update ran npm while Pocket Dev still used its files. Stop Pocket Dev, then install: see [Update on Windows](docs/windows.md#7-update-and-uninstall). From 2.1.4 on, Update stops and restarts Pocket Dev by itself. |
 | `pocket-dev` is not recognised after installing | Close the terminal and open a new one. |
 | Install fails on `node-pty` | Run `pocket-dev doctor --fix`. On macOS run `xcode-select --install` first. |
 | `Version X is available` (update icon on the phone, banner on the Admin page) | Tap **Update** on the Admin page on your computer, or run `pocket-dev update` in a terminal there. |
