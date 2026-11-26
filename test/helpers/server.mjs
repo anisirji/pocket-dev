@@ -139,6 +139,6 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
     assert.equal(proc.exitCode, null, `server exited before accepting requests:\n${logs}`);
     try { const response = await request('GET', '/api/status'); return response.status === 200 && response.data.status === 'none'; }
     catch { return false; }
-  });
+  }, process.env.CI ? 30000 : 10000);
   return { root, home, stateDir: state, port, adminPort, base, admin, proc, logs: () => logs, request, local, login, status: current, tunnelStatus, recorded, record, config, lanIp };
 }

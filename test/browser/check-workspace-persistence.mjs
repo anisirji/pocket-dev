@@ -69,7 +69,15 @@ try {
   await ctx.setOffline(false); await until(() => fs.readFileSync(path.join(a, 'index.js'), 'utf8').includes('offline edit'));
   await page.reload(); await content.filter({ hasText: 'offline edit' }).waitFor();
   assert.equal((await call('GET', '/api/sessions')).length, sessionCount);
-  await pause(500);
+  // Establish that the expected snapshot is committed before testing a cache-only startup.
+  await until(() => page.evaluate((root) => new Promise((resolve, reject) => {
+    const request = indexedDB.open('pocket-dev-workspaces'); request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result, query = db.transaction('workspaces').objectStore('workspaces').getAll();
+      query.onerror = () => { db.close(); reject(query.error); };
+      query.onsuccess = () => { db.close(); resolve(query.result.some((entry) => entry.data.root === root && entry.data.tabs.some((file) => file.path === entry.data.active && file.content?.includes('offline edit')))); };
+    };
+  }), a));
   let validating = 0, finished = 0, release; const gate = new Promise((resolve) => { release = resolve; }), slow = async (route) => { validating++; await gate; finished++; await route.continue().catch(() => {}); };
   await page.route('**/api/files/text?*', slow); await page.reload({ waitUntil: 'domcontentloaded' }); await content.filter({ hasText: 'offline edit' }).waitFor();
   await until(() => validating > 0); assert.equal(finished, 0, 'cached editor renders before delayed text validation'); release(); await page.unroute('**/api/files/text?*', slow);
@@ -96,5 +104,5 @@ try {
   const cached = await page.evaluate(() => new Promise((resolve) => { const r = indexedDB.open('pocket-dev-workspaces'); r.onsuccess = () => { const q = r.result.transaction('workspaces').objectStore('workspaces').count(); q.onsuccess = () => resolve(q.result); }; })); assert.equal(cached, 0);
   assert.deepEqual(errors, []);
   console.log('PASS: workspace context, independent panels, real persistent terminals, incremental file events, safe conflicts, drafts and layout across reload, project isolation, chat streaming/drafts across collapse, offline queued save and responsive light/dark UI.');
-} catch (e) { if (page) { await page.screenshot({ path: '/tmp/pocket-dev-workspace-redesign-failure.png' }).catch(() => {}); console.error(await page.locator('#workspaceError').textContent().catch(() => '')); console.error(await page.evaluate(async () => ({ context: window.PocketWorkspace?.context.value, currentChat: document.querySelector('#chatFrame').contentWindow?.pocketDevChat?.current(), saved: await new Promise((resolve) => { const r = indexedDB.open('pocket-dev-workspaces'); r.onsuccess = () => { const q = r.result.transaction('workspaces').objectStore('workspaces').getAll(); q.onsuccess = () => resolve(q.result.map((v) => ({ root: v.data.root, chat: v.data.chat }))); }; }) })).catch(() => 'debug unavailable'));  } throw e; }
+} catch (e) { if (page) { await page.screenshot({ path: '/tmp/pocket-dev-workspace-redesign-failure.png' }).catch(() => {}); console.error(await page.locator('#workspaceError').textContent().catch(() => '')); console.error(await page.evaluate(async () => ({ context: window.PocketWorkspace?.context.value, currentChat: document.querySelector('#chatFrame').contentWindow?.pocketDevChat?.current(), saved: await new Promise((resolve) => { const r = indexedDB.open('pocket-dev-workspaces'); r.onsuccess = () => { const q = r.result.transaction('workspaces').objectStore('workspaces').getAll(); q.onsuccess = () => resolve(q.result.map((v) => ({ root: v.data.root, chat: v.data.chat, active: v.data.active, tabs: v.data.tabs.map((f) => ({ path: f.path, offlineEdit: f.content?.includes('offline edit'), queued: !!f.queued })) }))); }; }) })).catch(() => 'debug unavailable'));  } throw e; }
 finally { await browser?.close(); for (const fn of cleanup) await fn(); }

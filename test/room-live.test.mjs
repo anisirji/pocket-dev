@@ -119,6 +119,7 @@ test('retry: a member that leaves while the host is down tells it when the host 
   const back = await restart(t, a);
   await until(async () => (await back.members()).length === 1, 5000);
   assert.equal((await back.api('GET', '')).data.room.revoked[0].reason, 'left');
+  await until(() => b.stored().outbox.length === 0, 5000);
   assert.equal(b.stored().outbox.length, 0, 'the delivered leave left the outbox');
   assert.equal((await back.api('GET', '')).data.room.revoked[0].deviceId, bId);
 });
