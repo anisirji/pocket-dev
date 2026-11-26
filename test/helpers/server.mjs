@@ -75,8 +75,12 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
   const port = reuse ? reuse.port : await freePort(), adminPort = reuse?.adminPort ?? await freePort();
   const stub = path.join(root, 'read-only-stub');
   fs.writeFileSync(stub, '#!/bin/sh\nprintf "No\\n"\n', { mode: 0o700 });
+  const shell = path.join(root, 'test-shell');
+  // macOS's global interactive zsh config saves history after the PTY's parent exits.
+  // A test shell needs no user startup files or history writers racing directory cleanup.
+  fs.writeFileSync(shell, '#!/bin/sh\nexec /bin/zsh -f\n', { mode: 0o700 });
   const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: isolatedEnv(home, {
-    SHELL: '/bin/zsh', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8',
+    SHELL: process.platform === 'darwin' ? shell : '/bin/zsh', HISTFILE: '/dev/null', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8',
     PORT: String(port), POCKET_DEV_ADMIN_PORT: String(adminPort), POCKET_DEV_CONFIG: config,
     POCKET_DEV_STATE_DIR: state, POCKET_DEV_NO_OPEN: '1', POCKET_DEV_CLAUDE: '/nonexistent/claude',
     POCKET_DEV_CODEX: '/nonexistent/codex', POCKET_DEV_PMSET: stub, POCKET_DEV_IOREG: stub, POCKET_DEV_TOP: stub, POCKET_DEV_MEMORY_PRESSURE: stub,
