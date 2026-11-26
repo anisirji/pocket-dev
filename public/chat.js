@@ -119,14 +119,14 @@
     return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
   };
 
-  const badge = (tool) => el('span', `chat-badge chat-${tool}`, TOOLS[tool] || tool);
+  const badge = (source) => { const tool = source.split('@')[0]; return el('span', `chat-badge chat-${tool}`, TOOLS[tool] || tool); };
   const spinner = () => el('span', 'chat-spin');
   // A chat is busy while its reply runs, and while a program on the computer that holds the conversation (`held` names it) is
   // on a step. A holder that is idle leaves the chat free to send, which continues it here.
   const isBusy = (c) => c.runningSince != null || c.status === 'running' || c.pending || !!(c.held && c.heldActivity);
 
   // Engine settings come from the tool's schema; schema order is display order.
-  const schemaOf = (tool) => options?.tools?.[tool]?.settings || [];
+  const schemaOf = (tool) => (convo?.chat?.tool === tool && convo.chat.provider?.schema ? convo.chat.provider.schema : options?.tools?.[tool]?.settings) || [];
   const choiceOf = (setting, value) => setting.choices.find((c) => c.value === value);
   const valueOf = (settings, setting) => settings?.[setting.key] ?? setting.default;
   const choiceLabel = (setting, value) => choiceOf(setting, value)?.label || value;
@@ -788,7 +788,7 @@
 
     const segNote = el('div', 'chat-seg-note');
     const renderSeg = () => seg.replaceChildren(...Object.keys(opts.tools).map((tool) => button(
-      `chat-seg-btn chat-seg-${tool}${tool === draft.tool ? ' on' : ''}`, opts.tools[tool].label || TOOLS[tool], () => {
+      `chat-seg-btn chat-seg-${tool}${tool === draft.tool ? ' on' : ''}`, `${opts.tools[tool].label || TOOLS[tool]}${opts.tools[tool].sourceName ? ` · ${opts.tools[tool].sourceName}` : ''}`, () => {
         draft.tool = tool;
         renderSeg();
         renderSegNote();
@@ -1680,10 +1680,10 @@
       const node = el('div', 'chat-error', ev.message);
       if (!/\blimit reached\b/i.test(ev.message || '')) return node;
       const c = convo.chat;
-      const others = Object.entries(options?.tools || {}).filter(([tool, info]) => tool !== c?.tool && info.installed !== false);
+      const others = Object.entries(options?.tools || {}).filter(([tool, info]) => tool !== providerKey(c) && info.installed !== false);
       if (!c || !others.length) return node;
       const row = el('div', 'chat-limit-actions');
-      for (const [tool, info] of others) row.append(button('chat-limit-switch', `Continue with ${info.label || TOOLS[tool]}`, () => switchTo(tool)));
+      for (const [tool, info] of others) row.append(button('chat-limit-switch', `Continue with ${info.label || TOOLS[tool]}${info.sourceName ? ` · ${info.sourceName}` : ''}`, () => switchTo(tool)));
       node.append(row);
       return node;
     },
@@ -1700,7 +1700,9 @@
   // or not: tapping one that is missing shows how to install it. Switching keeps the conversation: the server hands the
   // earlier messages to the new engine with the next one, and a chat with no messages yet just changes engine.
   const BUSY = new Set(['running', 'waiting-permission', 'waiting-answer']);
+  function providerKey(chat) { return chat?.provider?.name ? `${chat.tool}@${chat.provider.deviceId}` : chat?.tool; }
   function engineNote(info, here) {
+    if (info.sourceName) return `${info.sourceName}${here ? ' · This chat' : ''}`;
     if (here) return 'This chat · pick model';
     if (info.installed === false) return 'Not installed';
     if (info.loggedIn === false) return 'Not logged in';
@@ -1732,6 +1734,7 @@
     const face = el('span', 'chat-chip-face');
     face.append(el('span', 'chat-chip-k', 'Provider'), badge(c.tool));
     b.append(face);
+    if (c.provider?.name) b.append(el('span', 'chat-provider-source', `via ${c.provider.name}`));
     b.dataset.key = 'provider';
     b.setAttribute('aria-haspopup', 'menu');
     b.setAttribute('aria-expanded', 'false');
@@ -1806,7 +1809,7 @@
   function showSwitchList(c) {
     const items = [];
     for (const [tool, info] of Object.entries(options?.tools || {})) {
-      const here = tool === c.tool;
+      const here = tool === providerKey(c);
       const needsHelp = info.installed === false || info.loggedIn === false;
       const item = button(`chat-switch-item${here ? ' on' : ''}${needsHelp ? ' missing' : ''}`, null, () => (needsHelp ? showEngineHelp(tool, info) : here ? openModelPicker() : switchTo(tool)));
       item.setAttribute('role', 'menuitem');
@@ -1840,14 +1843,14 @@
   async function switchTo(tool) {
     closeSwitchMenu();
     const c = convo.chat;
-    if (!c || tool === c.tool) return;
+    if (!c || tool === providerKey(c)) return;
     if (engineBusy(c)) return toast(busyHint(c));
     try {
       const switched = await api('POST', `/api/chat/${c.id}/engine`, { tool });
       if (switched?.id) setChat(switched);
       toast(`Continuing with ${options?.tools?.[tool]?.label || TOOLS[tool] || tool}`);
       // Step two: offer that provider's models. Dismissing the sheet keeps the model it last used here, or its default.
-      if (convo.chat?.tool === tool) openModelPicker();
+      if (providerKey(convo.chat) === tool) openModelPicker();
     } catch (err) {
       toast(err.message);
     }
@@ -1889,7 +1892,7 @@
     const c = convo.chat;
     const schema = schemaOf(c.tool);
     const providers = Object.entries(options?.tools || {}).map(([t, i]) => `${t}:${i.installed}:${i.loggedIn}`).join(',');
-    const key = JSON.stringify([c.id, c.tool, c.settings, schema.length, providers, engineBusy(c), c.held]);
+    const key = JSON.stringify([c.id, c.tool, c.provider?.deviceId, c.settings, schema.length, providers, engineBusy(c), c.held]);
     if (key === chipsKey) return;
     chipsKey = key;
     closeSwitchMenu();

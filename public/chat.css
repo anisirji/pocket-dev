@@ -394,3 +394,7 @@
 .chat-by-copilot { color: var(--chat-copilot); }
 .chat-limit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .chat-limit-switch { min-height: 44px; padding: 8px 14px; border: 1px solid currentColor; border-radius: 10px; background: none; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+
+.chat-provider-source { color: var(--muted); font-size: 12px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-seg:has(.chat-seg-btn:nth-child(5)) { overflow-x: auto; justify-content: flex-start; }
+.chat-seg-btn { flex-shrink: 0; }

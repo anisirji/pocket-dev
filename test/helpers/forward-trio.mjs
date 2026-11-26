@@ -38,9 +38,11 @@ export async function trio(t, { env: extra } = {}) {
   };
   await join(a, 'Alpha', { level: 'admin' });
   await join(b, 'Beta', { level: 'collaborator', folders: [repo], grantRole: 'viewer' });
-  setConfig(b, { roleAccessEnabled: true }); // grants become active; B's own phone login is not needed again
+  /* legacy role settings no longer define computer permissions */ setConfig(b, { roleAccessEnabled: false }); // grants become active; B's own phone login is not needed again
   await until(async () => (await a.api('GET', '')).data.room.members.length === 3);
-  // B made a grant for each other member; A learns the full list from H.
-  await until(async () => (await h.to(b, 'GET', '/api/files/places')).status === 200, 8000);
+  for (const [target, peer] of [[h, a], [a, h], [a, b], [h, b]]) {
+    assert.equal((await target.request('PATCH', `/api/connections/${peer.id}`, { cookie: target.cookie, body: { computerAccess: true, confirmOwnership: true } })).status, 200);
+  }
+  await until(async () => (await a.api('GET', '/devices')).data.devices.find((d) => d.deviceId === h.id)?.rank === 'admin');
   return { h, a, b, repo };
 }

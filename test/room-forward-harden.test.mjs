@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -26,6 +27,17 @@ const within = (promise, ms, what) => Promise.race([promise, new Promise((_, rej
 // What the host presents when it vouches for `from` on a member: the host's own secret for that member.
 const asHost = (h, target, from) => { const m = heldBy(h).members.find((x) => x.deviceId === target.id); return { 'x-room-id': heldBy(h).id, 'x-room-sender': h.id, 'x-room-secret': m.hostSecret, 'x-room-from': from.id }; };
 
+function signed(source, target, pathname) {
+  const identity = JSON.parse(fs.readFileSync(path.join(source.stateDir, 'room.json'), 'utf8')).identity;
+  const stamp = String(Date.now()), nonce = crypto.randomBytes(16).toString('hex');
+  const data = JSON.stringify([source.id, target.id, 'GET', pathname, stamp, nonce, '']);
+  return { 'x-connection-target': target.id, 'x-connection-time': stamp, 'x-connection-nonce': nonce,
+    'x-connection-signature': crypto.sign(null, Buffer.from(data), identity.privateKey).toString('base64') };
+}
+async function authorize(target, source) {
+  assert.equal((await target.request('PATCH', `/api/connections/${source.id}`, { cookie: target.cookie, body: { computerAccess: true, confirmOwnership: true } })).status, 200);
+}
+
 test('a member that leaves closes the terminal it had open through the front device', async (t) => {
   const { h, a } = await trio(t);
   const made = await a.to(h, 'POST', '/api/sessions', { cwd: h.home });
@@ -44,8 +56,9 @@ test('a kick closes sockets the member holds on the host and, through the host, 
   const held = heldBy(a);
   const direct = { 'x-room-id': held.id, 'x-room-sender': a.id, 'x-room-from': a.id, 'x-room-secret': held.memberSecret };
   // The same kind of connection A's front device makes: to the host, and from the host to B on A's behalf.
-  const onHost = await open(`${wsBase(h)}/ws/${made.data.id}`, { ...direct, origin: h.base });
-  const onBeta = await open(`${wsBase(b)}/ws/messages`, { ...asHost(h, b, a), origin: b.base });
+  await authorize(b, a);
+  const onHost = await open(`${wsBase(h)}/ws/${made.data.id}`, { ...direct, ...signed(a, h, `/ws/${made.data.id}`), origin: h.base });
+  const onBeta = await open(`${wsBase(b)}/ws/messages`, { ...asHost(h, b, a), ...signed(a, b, '/ws/messages'), origin: b.base });
   await until(() => onBeta.messages.some((m) => m.t === 'hello'), 5000);
   // A browser of A working on B through the host.
   const viaHost = await open(`${wsBase(a)}/m/${b.id}/ws/messages`, { cookie: a.cookie, origin: a.base });
@@ -59,6 +72,7 @@ test('a kick closes sockets the member holds on the host and, through the host, 
 
 test('a handover closes sockets that went through the old host', async (t) => {
   const { h, a, b } = await trio(t);
+  await authorize(b, a);
   const ws = await open(`${wsBase(a)}/m/${b.id}/ws/messages`, { cookie: a.cookie, origin: a.base });
   t.after(() => ws.terminate());
   await until(() => ws.messages.some((m) => m.t === 'hello'), 5000);
@@ -100,6 +114,7 @@ test('a chat socket works through a forward, in both directions between admin le
 
 test('a messages socket works through a forward, on the host and on a member', async (t) => {
   const { h, a, b } = await trio(t);
+  await authorize(b, a);
   for (const target of [h, b]) {
     const ws = await open(`${wsBase(a)}/m/${target.id}/ws/messages`, { cookie: a.cookie, origin: a.base });
     t.after(() => ws.terminate());
@@ -134,7 +149,7 @@ test('a member reaches another member through the host, with role access on at t
   assert.equal((await b.to(a, 'POST', `/api/chat/${chat.data.id}/message`, { text: 'hi' })).status, 202);
   await until(() => JSON.stringify(ws.messages).includes('first answer'), 8000);
   // The other way: A (admin level on its own device, collaborator rank on B) reaches B and is limited by B.
-  assert.equal((await listing(a, b, repo)).status, 200);
+  assert.equal((await listing(a, b, repo)).status, 403);
   assert.equal((await a.to(b, 'GET', '/api/sessions')).status, 403);
   // A phone that role access left waiting is not a front door.
   const waiting = (await b.login()).cookie;
@@ -193,7 +208,7 @@ test('wrong room secrets are limited on forwarded requests, the peer routes and 
   const { h, a } = await trio(t);
   const held = heldBy(a);
   const guess = (secret, sender = a.id) => h.request('GET', '/api/sessions', { headers: { 'x-room-id': held.id, 'x-room-sender': sender, 'x-room-from': sender, 'x-room-secret': secret } });
-  assert.equal((await guess(held.memberSecret)).status, 200);
+  assert.equal((await a.to(h, 'GET', '/api/sessions')).status, 200);
   for (let i = 0; i < 10; i++) assert.equal((await guess('f'.repeat(64))).status, 403);
   const locked = await guess('f'.repeat(64));
   assert.equal(locked.status, 429);
@@ -208,7 +223,7 @@ test('wrong secrets on the peer routes and wrong join codes are limited, and so 
   const { h, a } = await trio(t);
   const held = heldBy(a);
   const peer = (route, body) => h.request('POST', route, { body });
-  for (const [route, extra] of [['/api/room/ping', {}], ['/api/room/notify', { type: 'members' }], ['/api/room/sync/tasks/pull', {}]]) {
+  for (const [route, extra] of [['/api/room/ping', {}], ['/api/room/notify', { type: 'members' }]]) {
     const body = { roomId: held.id, from: `guesser-${route}`, secret: 'e'.repeat(64), ...extra };
     for (let i = 0; i < 10; i++) assert.equal((await peer(route, body)).status, 403, `${route} #${i}`);
     assert.equal((await peer(route, body)).status, 429, route);
@@ -229,7 +244,7 @@ test('an oversized body on a peer route is refused with a reason', async (t) => 
   const { h, a } = await trio(t);
   const held = heldBy(a);
   const big = { roomId: held.id, from: a.id, secret: held.memberSecret, changes: [{ pad: 'x'.repeat(200_000) }] };
-  for (const route of ['/api/room/notify', '/api/room/sync/tasks/push', '/api/room/ping']) {
+  for (const route of ['/api/room/notify', '/api/room/ping']) {
     const res = await h.request('POST', route, { body: big });
     assert.equal(res.status, 413, route);
     assert.match(res.data.error, /too large/);

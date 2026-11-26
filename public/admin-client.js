@@ -85,7 +85,7 @@ async function act(fn, done) {
 let state = null;
 let collaborators;
 import('/collaborators.js').then((m) => {
-  collaborators = m.mountCollaborators($('collaborators'), { api, local: true, devices: () => state?.devices || [] });
+  collaborators = m.mountCollaborators($('collaborators'), { api, local: true, legacy: true, devices: () => state?.devices || [] });
 }).catch((err) => { $('collaborators').textContent = `Could not load Collaborators: ${err.message}`; });
 import('/messages.js').then((m) => m.mountMacMessages($('messages'), { api, toast }))
   .catch((err) => { $('messages').textContent = `Could not load Messages: ${err.message}`; });

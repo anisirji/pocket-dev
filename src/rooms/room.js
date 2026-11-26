@@ -33,7 +33,7 @@ export function reachableAddresses({ req, urls = {}, allowLoopback = loopbackAll
 // Control flows host to member only: the host keeps one secret per member (hostSecret) and presents it when it tells
 // a member something. A member keeps only the secret the host minted for it at join (memberSecret), which lets it
 // report liveness or leave. Leaving or being kicked deletes the room from room.json, secrets included.
-export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), grants, fetchImpl = fetch, now = Date.now, intervalMs = 30_000, allowLoopback = loopbackAllowed,
+export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fetchImpl = fetch, now = Date.now, intervalMs = 30_000, allowLoopback = loopbackAllowed,
   every = (fn, ms) => { const timer = setInterval(fn, ms); timer.unref?.(); return () => clearInterval(timer); } }) {
   fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   const file = path.join(stateDir, 'room.json');
@@ -41,8 +41,19 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
   try {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (typeof saved.deviceId !== 'string') throw new Error('Invalid room state');
-    data = { deviceId: saved.deviceId, room: saved.room ?? null, outbox: Array.isArray(saved.outbox) ? saved.outbox : [] };
+    data = { deviceId: saved.deviceId, room: saved.room ?? null, identity: saved.identity, outbox: Array.isArray(saved.outbox) ? saved.outbox : [] };
   } catch (err) { if (err.code !== 'ENOENT') throw new Error(`Cannot load room state safely: ${err.message}`); }
+  const legacyMembers = data.room ? JSON.parse(JSON.stringify(data.room.members)) : [];
+  if (!data.identity) {
+    const keys = crypto.generateKeyPairSync('ed25519');
+    data.identity = { publicKey: keys.publicKey.export({ type: 'spki', format: 'pem' }), privateKey: keys.privateKey.export({ type: 'pkcs8', format: 'pem' }) };
+  }
+  if (data.room) {
+    const self = data.room.members.find((m) => m.deviceId === data.deviceId);
+    if (self) self.publicKey = data.identity.publicKey;
+  }
+  let accessResolver = null, keyResolver = null;
+  const nonces = new Map();
   const invitations = new Map();
   // Peers this device could not reach on its last try. Local only; the lastSeen age covers a device that stays silent.
   const unreachable = new Set();
@@ -60,7 +71,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
   const need = () => data.room || fail(409, 'This device is not in a room.');
   const needHost = () => { need(); if (!isHost()) fail(403, 'Only the host can do this.'); };
   const myAddresses = (req) => reachableAddresses({ req, urls: urls(), allowLoopback: allowLoopback() });
-  const publicMember = ({ deviceId, name, addresses, role, joinedAt, level, folders, grantRole, lastSeen }) => ({ deviceId, name, addresses, role, joinedAt, level, folders, ...(grantRole && { grantRole }), ...(lastSeen && { lastSeen }) });
+  const publicMember = ({ deviceId, name, addresses, role, joinedAt, level, folders, grantRole, lastSeen, publicKey, access }) => ({ deviceId, name, addresses, role, joinedAt, level, folders, publicKey, access, ...(grantRole && { grantRole }), ...(lastSeen && { lastSeen }) });
   // A member only reaches the other members through the host, so while the host is out of reach they all count as offline.
   const statusOf = (m) => {
     if (m.deviceId === data.deviceId) return 'online';
@@ -71,46 +82,14 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     const entry = publicMember(m);
     return { ...entry, ...(m.deviceId === data.deviceId && { lastSeen: now() }), status: statusOf(m) };
   });
-  // What this device's owner gave the other members: full admin, or a grant on chosen folders. Both exist only while the
-  // member is in the room.
-  const trustedAdmins = () => data.room && me()?.level === 'admin' ? data.room.members.filter((m) => m.deviceId !== data.deviceId).map((m) => m.deviceId) : [];
+  // Target-owned grants are authoritative; membership never grants computer access.
+  const trustedAdmins = () => (data.room?.members || []).filter((m) => m.deviceId !== data.deviceId && accessResolver?.(m.deviceId).computerAccess).map((m) => m.deviceId);
   const view = () => data.room
     ? { deviceId: data.deviceId, room: { id: data.room.id, hostId: data.room.hostId, role: me().role, members: publicMembers(), revoked: data.room.revoked,
-      trustedAdmins: trustedAdmins(), ...(accessErrors.size && { accessErrors: Object.fromEntries(accessErrors) }) } }
+      trustedAdmins: trustedAdmins() } }
     : { deviceId: data.deviceId, room: null };
-  const accessErrors = new Map();
 
-  // Makes this device's grants match the room. Ending access is immediate; creating a grant can take a moment (a developer
-  // gets a copy of the project), so creations run one at a time and look again at the room before each one.
-  let grantQueue = Promise.resolve();
-  function reconcile() {
-    if (!grants) return grantQueue;
-    const roomId = data.room?.id ?? null;
-    const others = data.room ? data.room.members.filter((m) => m.deviceId !== data.deviceId) : [];
-    grants.revokeRoom(roomId, new Set(others.map((m) => m.deviceId)));
-    for (const id of accessErrors.keys()) if (!others.some((m) => m.deviceId === id)) accessErrors.delete(id);
-    const self = me();
-    if (self?.level !== 'collaborator') return grantQueue;
-    grantQueue = grantQueue.then(async () => {
-      for (const member of others) {
-        if (data.room?.id !== roomId || !data.room.members.some((m) => m.deviceId === member.deviceId)) continue;
-        try {
-          await grants.roomGrant({ roomId, deviceId: member.deviceId, label: member.name, role: self.grantRole, folders: self.folders });
-          accessErrors.delete(member.deviceId);
-        } catch (err) { accessErrors.set(member.deviceId, err.message); }
-      }
-    });
-    return grantQueue;
-  }
-
-  function access(body) {
-    const level = body.level === 'admin' || body.level === 'collaborator' ? body.level : fail(400, 'Choose admin or collaborator.');
-    const folders = level === 'admin' ? [] : Array.isArray(body.folders) && body.folders.length && body.folders.every((f) => typeof f === 'string' && path.isAbsolute(f)) ? body.folders : fail(400, 'A collaborator needs at least one folder (absolute paths).');
-    if (folders.length > 6) fail(400, 'Choose one repository and up to five related folders.');
-    if (level === 'admin') return { level, folders };
-    const grantRole = body.grantRole === undefined ? 'viewer' : ['viewer', 'developer'].includes(body.grantRole) ? body.grantRole : fail(400, 'Choose viewer or developer.');
-    return { level, folders, grantRole };
-  }
+  const access = () => ({ level: 'external', folders: [] });
   const NO_ADDRESS = 'This device has no address that other devices can reach. Connect it to Wi-Fi (or turn on internet access) and try again.';
   function addresses(list, { host = false } = {}) {
     if (Array.isArray(list) && !list.length && !host) fail(400, NO_ADDRESS, 'no-address');
@@ -173,7 +152,8 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
 
   // Whoever keeps data of the room (task, message and chat copies) registers here and wipes it when this device is out.
   const dropHandlers = [];
-  function drop() { data.room = null; persist(); reconcile(); for (const fn of dropHandlers) fn(); changed(); }
+  const pairHandlers = [];
+  function drop() { data.room = null; persist(); for (const fn of dropHandlers) fn(); changed(); }
   // Whoever holds a connection that was opened because of the room (forward.js) looks again when the members or the host change.
   const changeHandlers = [];
   const changed = () => { for (const fn of changeHandlers) { try { fn(); } catch { /* a listener must not break the room */ } } };
@@ -183,12 +163,12 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     const name = text(body.name) || os.hostname();
     const list = body.addresses === undefined ? myAddresses(req) : body.addresses;
     data.room = { id: crypto.randomBytes(8).toString('hex'), hostId: data.deviceId, revoked: [], members: [
-      { deviceId: data.deviceId, name, addresses: addresses(list), role: 'host', joinedAt: now(), ...access({ level: 'admin' }) }] };
+      { deviceId: data.deviceId, name, publicKey: data.identity.publicKey, addresses: addresses(list), role: 'host', joinedAt: now(), ...access({ level: 'admin' }) }] };
     persist();
     return view();
   }
 
-  function invite(req) {
+  function invite(req, body = {}) {
     needHost();
     // Spent and expired codes are remembered for an hour so the joiner is told which it was.
     for (const [key, entry] of invitations) if (now() - entry.expiresAt > 60 * 60_000) invitations.delete(key);
@@ -196,7 +176,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     if (!reachable.length) reachable.push(...me().addresses.filter((a) => allowLoopback() || !loopbackIn(a)));
     if (!reachable.length) fail(409, NO_ADDRESS, 'no-address');
     const code = newCode();
-    invitations.set(hash(code), { expiresAt: now() + INVITE_MS });
+    invitations.set(hash(code), { expiresAt: now() + INVITE_MS, personal: body.connectionType === 'personal' });
     return { code: formatCode(code), expiresInSeconds: INVITE_MS / 1000, roomId: data.room.id, addresses: reachable, address: reachable[0], invite: inviteLine(reachable[0], code) };
   }
 
@@ -205,7 +185,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     if (data.room) fail(409, 'This device is already in a room. Leave it first.');
     const code = text(body.code, 200) || fail(400, 'Give the join code.');
     const hostAddresses = addresses(Array.isArray(body.host) ? body.host : [body.host], { host: true });
-    const self = { deviceId: data.deviceId, name: text(body.name) || os.hostname(), addresses: addresses(body.addresses ?? myAddresses(req)), ...access(body) };
+    const self = { deviceId: data.deviceId, name: text(body.name) || os.hostname(), publicKey: data.identity.publicKey, addresses: addresses(body.addresses ?? myAddresses(req)), ...access(body) };
     const hostSecret = secret();
     const r = await send({ addresses: hostAddresses }, 'accept', { code, hostSecret, ...self });
     if (r.status === 0) fail(502, `Could not reach the host at ${hostAddresses.join(' or ')}.`, 'unreachable');
@@ -213,11 +193,12 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     const { roomId, hostId, memberSecret, members, revoked } = r.body;
     data.room = { id: roomId, hostId, revoked, memberSecret, hostSecretHash: hash(hostSecret), members };
     persist();
-    await reconcile();
+    changed();
+
     // The host now calls this device back. A device the host cannot reach is in the room but cut off, so say so.
     const host = hostName();
     const check = await send(host, 'ping', { roomId, from: data.deviceId, secret: memberSecret, check: true });
-    return { ...view(), callback: check.body.callback ?? { ok: false, address: self.addresses[0], tried: self.addresses, error: 'The host did not answer the check.' } };
+    return { ...view(), pairing: { deviceId: hostId, personal: body.connectionType === 'personal' && r.body.personal === true }, callback: check.body.callback ?? { ok: false, address: self.addresses[0], tried: self.addresses, error: 'The host did not answer the check.' } };
   }
 
   // This device's own addresses changed, or were wrong at join. The host is told and calls back again.
@@ -254,8 +235,10 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     if (!entry) fail(403, 'That code is not right. Check it and try again.', 'wrong-code');
     if (entry.usedAt) fail(403, 'That code was already used. Ask the host for a new code.', 'used-code');
     if (entry.expiresAt <= now()) fail(403, 'That code has expired. Ask the host for a new code.', 'expired-code');
-    const info = { name: text(body.name) || fail(400, 'Give a name.'), addresses: addresses(body.addresses), ...access(body) };
+    const info = { publicKey: body.publicKey, name: text(body.name) || fail(400, 'Give a name.'), addresses: addresses(body.addresses), ...access(body) };
     const deviceId = text(body.deviceId, 64) || fail(400, 'Give a device id.');
+    if (accessResolver && (!/^[0-9a-f]{4,64}$/.test(deviceId) || typeof body.publicKey !== 'string' || body.publicKey.length > 1000)) fail(400, 'A verified device identity is required.');
+    if (accessResolver) { try { if (crypto.createPublicKey(body.publicKey).asymmetricKeyType !== 'ed25519') throw new Error(); } catch { fail(400, 'Invalid device identity.'); } }
     const hostSecret = typeof body.hostSecret === 'string' && body.hostSecret.length >= 32 ? body.hostSecret : fail(400, 'Give a secret.');
     if (data.room.members.some((m) => m.deviceId === deviceId)) fail(409, 'This device is already in the room.');
     entry.usedAt = now();
@@ -265,8 +248,10 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     data.room.members.push({ deviceId, ...info, role: 'member', joinedAt: now(), hostSecret, secretHash: hash(memberSecret) });
     persist();
     announce(deviceId);
-    reconcile();
-    return { roomId: data.room.id, hostId: data.room.hostId, memberSecret, members: publicMembers(), revoked: data.room.revoked };
+
+    changed();
+    for (const fn of pairHandlers) fn({ deviceId, personal: entry.personal === true });
+    return { personal: entry.personal === true, roomId: data.room.id, hostId: data.room.hostId, memberSecret, members: publicMembers(), revoked: data.room.revoked };
   }
 
   async function leave() {
@@ -297,7 +282,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     data.room.members = data.room.members.filter((m) => m !== target);
     data.room.revoked.push({ deviceId: target.deviceId, name: target.name, reason, at: now() });
     persist();
-    reconcile();
+
     changed();
   }
 
@@ -334,6 +319,9 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
         if (data.room.revoked.some((r) => r.deviceId === body.from)) fail(403, 'This device was removed from the room.');
         fail(403, 'Not a member of this room.');
       }
+      if (typeof body.publicKey === 'string' && body.publicKey.length < 1000 && !member.publicKey) {
+        try { if (crypto.createPublicKey(body.publicKey).asymmetricKeyType === 'ed25519') member.publicKey = body.publicKey; } catch {}
+      }
       member.lastSeen = now();
       persist();
       const callback = body.check === true ? await probe(member) : undefined;
@@ -346,16 +334,17 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
   // how a member that missed an announcement catches up. A host that says this device was removed ends its access here too.
   async function pingPeer(peer) {
     const host = isHost();
-    const r = await send(peer, 'ping', { roomId: data.room.id, from: data.deviceId, secret: host ? peer.hostSecret : data.room.memberSecret });
+    const r = await send(peer, 'ping', { roomId: data.room.id, from: data.deviceId, secret: host ? peer.hostSecret : data.room.memberSecret, publicKey: data.identity.publicKey });
     if (!host && r.status === 403 && /removed/.test(r.body.error || '')) { drop(); return r; }
     if (r.status === 200) {
       unreachable.delete(peer.deviceId);
       if (!host && Array.isArray(r.body.members) && r.body.members.some((m) => m.deviceId === data.deviceId)) {
         data.room.members = r.body.members.map(publicMember);
+        me().publicKey = data.identity.publicKey;
         data.room.revoked = Array.isArray(r.body.revoked) ? r.body.revoked : data.room.revoked;
         data.room.hostId = r.body.hostId;
         changed();
-        await reconcile();
+
       }
       const entry = data.room.members.find((m) => m.deviceId === peer.deviceId);
       if (entry) entry.lastSeen = now();
@@ -381,7 +370,8 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
   async function notify(body) {
     if (data.room && isHost()) {
       const member = asMember(body);
-      if (!member || !['leave', 'address'].includes(body.type)) fail(403, 'Not allowed.');
+      if (!member || !['leave', 'address', 'access'].includes(body.type)) fail(403, 'Not allowed.');
+      if (body.type === 'access') { member.access = body.access; persist(); announce(member.deviceId); return { ok: true }; }
       if (body.type === 'address') {
         member.addresses = addresses(body.addresses);
         persist();
@@ -397,11 +387,12 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     if (body.type === 'members') {
       if (!Array.isArray(body.members) || !body.members.some((m) => m.deviceId === data.deviceId)) fail(400, 'Bad member list.');
       data.room.members = body.members.map(publicMember);
+      me().publicKey = data.identity.publicKey;
       data.room.revoked = Array.isArray(body.revoked) ? body.revoked : [];
       data.room.hostId = body.hostId;
       persist();
       changed();
-      await reconcile();
+
       return { ok: true };
     }
     if (body.type === 'handover') {
@@ -417,7 +408,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
       data.room = { id: data.room.id, hostId: data.deviceId, revoked: body.room.revoked || [], members: list };
       persist();
       changed();
-      await reconcile();
+
       return { ok: true, hostSecret };
     }
     fail(400, 'Unknown message.');
@@ -434,20 +425,22 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     return out;
   }
 
-  // For tasks.js: who this device syncs with and with which secret (host: every member; member: the host), and who may sync with it.
-  const peers = () => data.room && { roomId: data.room.id, deviceId: data.deviceId, isHost: isHost(), members: publicMembers(),
-    list: (isHost() ? data.room.members.filter((m) => m.deviceId !== data.deviceId).map((m) => ({ ...publicMember(m), secret: m.hostSecret })) : [{ ...publicMember(hostName()), secret: data.room.memberSecret }]).filter((p) => p.secret) };
-  const authPeer = (body) => (data.room && (isHost() ? asMember(body) : fromHost(body)) ? body.from : null);
-
   // A request from another device of this room, proven by headers instead of a login. The sender is the device that holds
   // the secret; the origin is the member on whose behalf it acts. A member sending to the host acts only for itself. The host
-  // sending to a member may vouch for any member (or itself). Either way the rank is what THIS device's owner chose at join.
-  function authPeerRequest(h) {
+  // sending to a member may vouch for any member (or itself). The destination checks the originating signature and its own grants.
+  function authPeerRequest(h, request = {}) {
     const [roomId, sender, secret, from] = ['x-room-id', 'x-room-sender', 'x-room-secret', 'x-room-from'].map((k) => h[k]);
     if (![roomId, sender, secret, from].every((v) => typeof v === 'string' && v)) fail(403, 'Not a member of this room.');
     if (!data.room || roomId !== data.room.id) fail(403, 'Not a member of this room.');
     const mine = me();
-    const principal = (origin) => ({ roomId, origin: origin.deviceId, name: origin.name, level: mine.level, folders: mine.folders });
+    const principal = (origin) => {
+      if (accessResolver && h['x-connection-target'] === data.deviceId) verifyRequest(h, request, origin);
+      else if (accessResolver && (!isHost() || !/^[0-9a-f]{4,64}$/.test(h['x-connection-target'] || '') || !request.path?.startsWith(`/m/${h['x-connection-target']}/`))) fail(403, 'A signed device request is required.');
+      const access = accessResolver?.(origin.deviceId);
+      return { roomId, origin: origin.deviceId, name: origin.name,
+        level: access ? (h['x-connection-target'] === data.deviceId && access.computerAccess ? 'admin' : 'external') : mine.level,
+        folders: access ? [] : mine.folders };
+    };
     if (isHost()) {
       const member = asMember({ roomId, from: sender, secret });
       if (!member) fail(403, data.room.revoked.some((r) => r.deviceId === sender) ? 'This device was removed from the room.' : 'Not a member of this room.');
@@ -458,6 +451,27 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     const origin = data.room.members.find((m) => m.deviceId === from);
     if (!origin || origin.deviceId === data.deviceId) fail(403, 'Not a member of this room.');
     return { ...principal(origin), relay: false };
+  }
+
+  // End-to-end identity proof: the network host may relay, but cannot impersonate another computer.
+  function signRequest(targetId, method, pathname, channelKey = '') {
+    const stamp = String(now()), nonce = crypto.randomBytes(16).toString('hex');
+    const payload = JSON.stringify([data.deviceId, targetId, method, pathname, stamp, nonce, channelKey]);
+    return { ...(channelKey && { 'x-connection-channel-key': channelKey }), 'x-connection-target': targetId, 'x-connection-time': stamp, 'x-connection-nonce': nonce,
+      'x-connection-signature': crypto.sign(null, Buffer.from(payload), data.identity.privateKey).toString('base64') };
+  }
+  function verifyRequest(h, request, origin) {
+    const stamp = h['x-connection-time'], nonce = h['x-connection-nonce'], signature = h['x-connection-signature'];
+    if (Math.abs(now() - Number(stamp)) > 60_000 || !/^\d{10,16}$/.test(stamp || '') || !/^[0-9a-f]{32}$/.test(nonce || '') || typeof signature !== 'string') fail(403, 'Invalid device signature.');
+    for (const [key, at] of nonces) if (now() - at > 60_000) nonces.delete(key);
+    const key = `${origin.deviceId}:${nonce}`;
+    if (nonces.has(key)) fail(403, 'Device request was already used.');
+    const publicKey = keyResolver?.(origin.deviceId) || origin.publicKey;
+    const payload = JSON.stringify([origin.deviceId, data.deviceId, request.method, request.path, stamp, nonce, h['x-connection-channel-key'] || '']);
+    let valid = false;
+    try { valid = crypto.verify(null, Buffer.from(payload), publicKey, Buffer.from(signature, 'base64')); } catch {}
+    if (!valid) fail(403, 'Invalid device signature.');
+    nonces.set(key, now());
   }
 
   // How this device reaches `targetId`: straight, or through the host (a member holds a secret for the host only).
@@ -474,10 +488,10 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
 
   // For the machine switcher: every device, whether it answers, and the rank this device's user has there.
   async function devices(fresh) {
-    if (!data.room) return { devices: [] };
+    if (!data.room) return { deviceId: data.deviceId, devices: [{ deviceId: data.deviceId, name: os.hostname(), self: true, rank: 'owner', online: true, path: 'direct' }] };
     if (fresh) await live();
     return { deviceId: data.deviceId, devices: publicMembers().map((m) => ({ deviceId: m.deviceId, name: m.name, role: m.role, online: m.status === 'online',
-      self: m.deviceId === data.deviceId, rank: m.deviceId === data.deviceId ? 'owner' : m.level, ...(m.level === 'collaborator' && m.deviceId !== data.deviceId && { folders: m.folders }),
+      self: m.deviceId === data.deviceId, rank: m.deviceId === data.deviceId ? 'owner' : accessResolver ? (m.access?.[data.deviceId]?.computerAccess ? 'admin' : 'external') : m.level, ...(m.level === 'collaborator' && m.deviceId !== data.deviceId && { folders: m.folders }),
       path: m.deviceId === data.deviceId || isHost() || m.role === 'host' ? 'direct' : 'host' })) };
   }
 
@@ -496,7 +510,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
       const routes = {
         'GET ': async () => ({ ...(url.searchParams.get('live') ? await live() : view()), advertised: myAddresses(req), allowLoopback: allowLoopback() }),
         'GET devices': () => devices(url.searchParams.get('live')),
-        'POST create': () => create(body, req), 'POST invite': () => invite(req), 'POST join': () => join(body, req), 'POST leave': leave, 'POST address': () => setAddress(body, req),
+        'POST create': () => create(body, req), 'POST invite': () => invite(req, body), 'POST join': () => join(body, req), 'POST leave': leave, 'POST address': () => setAddress(body, req),
         'POST kick': () => kick(body), 'POST handover': () => handover(body),
         'POST ping': () => ping(body), 'POST accept': () => accept(body), 'POST notify': () => notify(body),
       };
@@ -509,8 +523,22 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), gr
     }
   }
 
-  reconcile();
+  function setLocalAccess(access) {
+    if (!data.room) return;
+    me().access = access;
+    persist();
+    changed();
+    if (isHost()) announce();
+    else send(hostName(), 'notify', { roomId: data.room.id, from: data.deviceId, secret: data.room.memberSecret, type: 'access', access }).catch(() => {});
+  }
 
-  return { handleApi, view, tick, isTrustedAdmin: (deviceId) => trustedAdmins().includes(deviceId), grantsReady: () => grantQueue, close: stopTimer, deviceId: () => data.deviceId, peers, authPeer, authPeerRequest, route, onDrop: (fn) => dropHandlers.push(fn),
+
+  return { handleApi, view, tick, members: () => data.room ? publicMembers() : [],
+    signMessage: (message) => crypto.sign(null, Buffer.from(message), data.identity.privateKey).toString('base64'),
+    verifyMessage: (id, message, signature) => { try { return typeof signature === 'string' && crypto.verify(null, Buffer.from(message), keyResolver?.(id) || data.room?.members.find((m) => m.deviceId === id)?.publicKey, Buffer.from(signature, 'base64')); } catch { return false; } },
+    create, invite, join, leave, kick, handover, devices, signRequest, legacyMembers, setLocalAccess,
+    setAccessResolver: (resolve, keys) => { accessResolver = resolve; keyResolver = keys; },
+    onPair: (fn) => pairHandlers.push(fn),
+ isTrustedAdmin: (deviceId) => trustedAdmins().includes(deviceId), close: stopTimer, deviceId: () => data.deviceId, authPeerRequest, route, onDrop: (fn) => dropHandlers.push(fn),
     onChange: (fn) => changeHandlers.push(fn), snapshot: () => data.room && { id: data.room.id, hostId: data.room.hostId, ids: data.room.members.map((m) => m.deviceId) } };
 }

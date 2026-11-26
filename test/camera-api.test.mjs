@@ -31,14 +31,7 @@ test('camera routes require login and mutation protections, and respect the host
 
 test('room forwarding retains camera policies and refuses collaborator access', async (t) => {
   const [h, a, b] = await roomOf(t, ['admin', 'admin', 'collaborator'], { env });
-  const modes = await h.api('PUT', `/modes/${a.id}`, { mode: 'read-only' });
-  assert.equal(modes.status, 200);
-  const start = await a.request('POST', `/m/${h.id}/api/camera/start`, { cookie: a.cookie, body: { camera: '0' } });
-  assert.equal(start.status, 403);
-  assert.equal(start.data.code, 'mode-denied');
-  const install = await a.request('POST', `/m/${h.id}/api/camera/install`, { cookie: a.cookie, body: {} });
-  assert.equal(install.status, 403);
-  assert.equal(install.data.code, 'mode-denied');
+  assert.equal((await h.api('PUT', `/modes/${a.id}`, { mode: 'read-only' })).status, 410, 'Room-wide modes have been retired.');
   assert.equal((await a.request('POST', `/m/${h.id}/api/camera/stop`, { cookie: a.cookie, body: { id: 'guess' } })).status, 200);
   assert.equal((await h.request('GET', `/m/${b.id}/api/camera`, { cookie: h.cookie })).status, 403);
   assert.equal((await h.request('POST', `/m/${b.id}/api/camera/start`, { cookie: h.cookie, body: { camera: '0' } })).status, 403);

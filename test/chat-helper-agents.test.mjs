@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startServer, pause } from './helpers/server.mjs';
+import { startServer, pause, until } from './helpers/server.mjs';
 
 const FAKE_CLAUDE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'helpers', 'fake-claude.mjs');
 
@@ -44,15 +44,14 @@ test('a background agent counts as running after its call returns, until the SDK
   await call('POST', `/api/chat/${id}/message`, { text: 'start a bgagent' });
   const agent = async () => (await call('GET', `/api/chat/${id}`)).data.events.find((e) => e.id === 'toolu_bg');
 
-  await pause(450);
-  let ev = await agent();
+  let ev;
+  await until(async () => { ev = await agent(); return ev?.agentStatus === 'running' && ev.steps === 3; });
   assert.equal(ev.status, 'ok', 'the call itself returned at once');
   assert.equal(ev.agentStatus, 'running', 'but the agent is still working');
   assert.equal(ev.steps, 3);
   assert.equal(ev.latest, 'Edit editing room.js');
 
-  await pause(900);
-  ev = await agent();
+  await until(async () => { ev = await agent(); return ev?.agentStatus === 'completed'; });
   assert.equal(ev.agentStatus, 'completed');
   assert.equal(ev.steps, 7);
 });

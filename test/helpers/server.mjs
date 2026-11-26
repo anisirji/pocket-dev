@@ -95,7 +95,8 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
       proc.kill('SIGTERM');
       await Promise.race([once(proc, 'exit'), pause(5000).then(() => proc.kill('SIGKILL'))]);
     }
-    fs.rmSync(root, { recursive: true, force: true });
+    // Provider subprocesses and OS file watchers may release their last file just after the server exits.
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
   await until(() => { assert.equal(proc.exitCode, null, `server exited during startup:\n${logs}`); return /Admin \(this (Mac|computer) only\)/.test(logs); });
   const base = `http://127.0.0.1:${port}`, admin = `http://127.0.0.1:${adminPort}`;

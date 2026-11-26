@@ -24,6 +24,12 @@ export async function roomOf(t, levels = ['admin', 'admin'], { env = {} } = {}) 
     const body = { code, host: a.base, name: s.name, addresses: [s.base], level, ...(level === 'collaborator' && { folders: [s.home] }) };
     assert.equal((await s.api('POST', '/join', body)).status, 200);
   }
+  // "admin" fixtures model explicitly approved personal relationships, never room-wide inheritance.
+  for (const [i, target] of servers.entries()) if (levels[i] === 'admin') {
+    for (const peer of servers.filter((s) => s !== target)) {
+      assert.equal((await target.request('PATCH', `/api/connections/${peer.id}`, { cookie: target.cookie, body: { computerAccess: true, confirmOwnership: true } })).status, 200);
+    }
+  }
   return servers;
 }
 

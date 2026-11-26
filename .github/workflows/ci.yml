@@ -35,9 +35,13 @@ jobs:
           node test/browser/check-camera-host.mjs
       - name: Check project workspace and editor
         run: node test/browser/check-workspace.mjs
+      - name: Check connected computers and provider switching
+        run: |
+          node test/browser/check-connections.mjs
+          node test/browser/check-engine-dropdown.mjs
 
   windows-updater:
-    name: Windows updater and external handoff
+    name: Windows connections, AI isolation and updater
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
@@ -50,3 +54,5 @@ jobs:
         run: npm ci
       - name: Test generated PowerShell and the Windows update handoff
         run: node --test test/windows-update.test.mjs test/windows-update-runtime.test.mjs
+      - name: Test connections, workspace permissions and Codex launching
+        run: node --test test/codex-windows-launch.test.mjs test/connections-unit.test.mjs test/remote-codex.test.mjs test/remote-handshake.test.mjs test/workspace-leases.test.mjs test/static-assets.test.mjs test/room.test.mjs test/room-invite.test.mjs

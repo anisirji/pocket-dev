@@ -248,23 +248,6 @@ export function createCollaborators({ config, auth, urls, stateDir = STATE_DIR, 
     }
     fail(404, 'Not found');
   }
-  // Access that belongs to a room member on this device. It never expires; it ends when the member leaves the room or is
-  // removed from it. It sits behind the same role switch as every grant, and it uses the same limits and folder checks.
-  // Repeating the call for the same member changes nothing.
-  async function roomGrant({ roomId, deviceId, label, role, folders }) {
-    const mine = (g) => g.room?.id === roomId && g.room.deviceId === deviceId && !g.roomEnded;
-    const existing = data.grants.find(mine);
-    if (existing) return view(existing);
-    if (data.grants.filter((g) => !g.revoked).length >= 50) fail(429, 'Revoke an unused collaborator before adding another.');
-    const id = crypto.randomBytes(8).toString('hex');
-    const parsed = await parseGrant({ role, label: String(label).replace(/[\r\n\x00]/g, ' ').trim().slice(0, 80) || 'Room member', duration: 604800, repository: folders[0],
-      extraFolders: folders.slice(1).map((path) => ({ path, mode: 'read' })) }, id);
-    if (data.grants.find(mine)) { if (parsed.workspace) await fsp.rm(parsed.workspace, { recursive: true, force: true }); return view(data.grants.find(mine)); }
-    const next = { id, ...parsed, createdAt: now(), expiresAt: null, revoked: false, room: { id: roomId, deviceId } };
-    data.grants.push(next); persist();
-    log('collaborator-created', { grantId: id, role: next.role, room: roomId });
-    return view(next);
-  }
   // Ends every room grant of a room that is not for one of the devices in `keep`. A null room ends them all.
   function revokeRoom(roomId, keep = new Set()) {
     let changed = false;
@@ -316,5 +299,5 @@ export function createCollaborators({ config, auth, urls, stateDir = STATE_DIR, 
     data.grants = data.grants.map((grant) => { stopTransfers(grant.id); return { ...grant, revoked: true }; });
     invitations.clear(); data.sessions = []; persist();
   }
-  return { guest, scope, currentAccess, ownerApi, roomGrant, revokeRoom, accept, logout, sessionCount, lockdown, close: () => clearInterval(expiryTimer) };
+  return { guest, scope, currentAccess, ownerApi, revokeRoom, accept, logout, sessionCount, lockdown, close: () => clearInterval(expiryTimer) };
 }

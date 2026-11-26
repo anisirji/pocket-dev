@@ -6,7 +6,7 @@
 (() => {
   const ID = /^[0-9a-f]{4,64}$/;
   // Paths that always belong to the device the phone is logged in on: its room, login, and its own settings and network.
-  const LOCAL_API = /^\/api\/(room|login|logout|devices|local|network|settings|invitations|collaborators)(\/|$)/;
+  const LOCAL_API = /^\/api\/(connections|room|login|logout|devices|local|network|settings|invitations|collaborators)(\/|$)/;
   // What a collaborator-rank device answers to: files and messages (and the status check the page starts with).
   const COLLABORATOR_API = /^\/api\/(files|messages|status|folders)(\/|$)/;
   const GLOBAL_KEYS = new Set(['pd.machine', 'pd.machine.devices']);
@@ -179,7 +179,7 @@
   function renderLabel() {
     const label = document.querySelector('#macStatus .ms-label');
     if (!label) return;
-    if (devices.length < 2 && !id) return;
+
     label.replaceChildren(el('i', `mc-dot${nowOnline() ? '' : ' off'}`), el('span', 'mc-name', nowName()), el('span', 'mc-caret', '▾'));
     label.classList.add('mc-switch');
     label.setAttribute('role', 'button');
@@ -206,7 +206,7 @@
       if (!res.ok) return;
       body = await res.json();
     } catch { return; }
-    devices = body.devices || [];
+    devices = (body.devices || []).filter((d) => d.self || d.rank === 'admin' || d.rank === 'owner');
     write('pd.machine.devices', JSON.stringify(devices));
     // Kicked or left: the remembered device is gone, so go back to this one.
     if (id && !me()) return select(null);
@@ -231,6 +231,9 @@
       row.onclick = () => { if (!current) { hideSheet(); select(d.self ? null : d.deviceId); } else closeSheet(); };
       return row;
     }));
+    const connect = el('button', 'mc-row', 'Connect computer');
+    connect.onclick = () => { closeSheet(); import('/connected-computers.js').then((m) => m.openConnectedComputers()); };
+    list.append(connect);
   }
   // The sheet only ever opens from a tap on the strip name or the chip, and never survives a reload or a page restore:
   // it owns one history entry, so the Android back gesture closes it, and it starts hidden every time the page shows.

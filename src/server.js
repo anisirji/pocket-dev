@@ -35,9 +35,12 @@ import { createMessages } from './rooms/messages.js';
 import { createRoom } from './rooms/room.js';
 import { createForward } from './network/forward.js';
 import { createRemotePorts } from './network/remote-ports.js';
-import { createModes } from './auth/modes.js';
-import { createTasks } from './rooms/tasks.js';
-import { createRoomSync } from './rooms/room-sync.js';
+import { createConnections } from './auth/connections.js';
+import { createRemoteProviders } from './chat/remote.js';
+import * as claudeProvider from './chat/claude.js';
+import * as codexProvider from './chat/codex.js';
+import * as antigravityProvider from './chat/antigravity.js';
+import * as copilotProvider from './chat/copilot.js';
 import { createPeerGuard } from './auth/peer-guard.js';
 import { createFolderBrowser } from './workspace/folder-browser.js';
 import { readNetwork, readToken, createSameNetwork } from './network/network.js';
@@ -120,11 +123,15 @@ const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE,
   onLockdown: () => collaborators?.lockdown(),
 });
 collaborators = createCollaborators({ config, auth, urls });
-const room = createRoom({ config, urls, grants: collaborators, intervalMs: Number(process.env.POCKET_DEV_ROOM_PING_MS) || undefined });
-const modes = createModes({ room, log: (type, f) => auth.admin.log(type, f), approvalMs: Number(process.env.POCKET_DEV_APPROVAL_MS) || undefined });
-const roomSync = createRoomSync({ room });
+collaborators.revokeRoom(null); // Retain project copies while retiring inherited room grants.
+const room = createRoom({ config, urls, intervalMs: Number(process.env.POCKET_DEV_ROOM_PING_MS) || undefined });
+const providerModules = { claude: claudeProvider, codex: codexProvider, antigravity: antigravityProvider, copilot: copilotProvider };
+const connections = createConnections({ room,
+  installed: () => Object.fromEntries(Object.entries(providerModules).map(([type, provider]) => [type, provider.isInstalled()])),
+  schemas: async (types) => Object.fromEntries(await Promise.all(types.map(async (type) => [type, await providerModules[type].settingsSchema()]))),
+});
+const remoteProviders = createRemoteProviders({ room, connections });
 const peerGuard = createPeerGuard();
-const tasks = createTasks({ room, sync: roomSync });
 
 const HOME = os.homedir();
 const RECENT_MAX = 5;
@@ -612,15 +619,13 @@ async function handleApi(req, res, url) {
     return sendJson(res, 403, { error: 'This page is older than the server. Reload Pocket Dev and try again.' });
   }
   if (MUTATING.has(req.method) && !sameOrigin(req)) return sendJson(res, 403, { error: 'Cross-origin request refused.' });
-  // A room member reaching this device never manages the room itself, whatever rank it has here.
-  if (resource === 'room' && ['approvals', 'modes', 'assigned'].includes(key)) {
-    return modes.handleApi(req, res, url, { readJson, sendJson, isOwner: !req.roomPeer && !collaborators.guest(req) && Boolean(auth.deviceFor(req)) });
+  if (resource === 'connections' || url.pathname === '/api/ai/providers') {
+    return connections.handleApi(req, res, url, { readJson, sendJson, owner: !collaborators.guest(req) && Boolean(auth.deviceFor(req)) });
   }
-  if (req.roomPeer) {
-    const refusal = await modes.gate(req, { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), onAbort: (fn) => res.once('close', () => !res.writableEnded && fn()),
-      body: /^application\/json/i.test(req.headers['content-type'] ?? '') && MUTATING.has(req.method) ? await readJson(req).catch(() => undefined) : undefined });
-    if (refusal) return sendJson(res, refusal.status, refusal.body);
+  if (resource === 'room' && ['sync', 'tasks', 'chats', 'approvals', 'modes', 'assigned'].includes(key)) {
+    return sendJson(res, 410, { error: 'Room collaboration has been retired. Use Connected computers and AI Tools.' });
   }
+  if (req.roomPeer && req.roomPeer.level !== 'admin') return sendJson(res, 403, { error: 'Computer access is not shared with this device.' });
   if (req.roomPeer && resource === 'room') return sendJson(res, 403, { error: 'Room settings are changed on the device itself.' });
   if (req.roomDevice && req.method === 'GET' && url.pathname === '/api/status') return sendJson(res, 200, { status: 'active', name: req.roomDevice.name, code: 'room' });
 
@@ -646,8 +651,6 @@ async function handleApi(req, res, url) {
   // Join codes and room secrets are the credentials for the three peer routes, so another device can use them without a login.
   if (resource === 'room' && ['ping', 'accept', 'notify'].includes(key) && req.method === 'POST') return room.handleApi(req, res, url, { readJson, sendJson, guard: peerGuard });
 
-  // Sync between room devices (tasks, messages, chats): the room secret is the credential, same reasoning as the peer routes above.
-  if (resource === 'room' && key === 'sync' && req.method === 'POST') return roomSync.handleApi(req, res, url, { readJson, sendJson, guard: peerGuard });
 
   const authReply = await auth.handleApi(req, url.pathname, () => readJson(req));
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
@@ -714,8 +717,11 @@ async function handleApi(req, res, url) {
   if (resource === 'chat') return chatApi.handleApi(req, res, url.pathname);
   if (resource === 'files') return handleFiles(req, res, url);
   if (resource === 'messages') return messages.handleApi(req, res);
-  if (resource === 'room' && key === 'chats') return chatApi.handleRoomApi(req, res, url);
-  if (resource === 'room' && key === 'tasks') return tasks.handleApi(req, res, url, { readJson, sendJson, loggedIn: true });
+  if (resource === 'room' && key === 'devices' && req.method === 'GET') {
+    const result = await room.devices(url.searchParams.get('live'));
+    result.devices = result.devices.filter((device) => device.self || connections.connected(device.deviceId));
+    return sendJson(res, 200, result);
+  }
   if (resource === 'room') return room.handleApi(req, res, url, { readJson, sendJson, loggedIn: true });
 
   switch (route) {
@@ -875,8 +881,9 @@ const PAGES = {
   '/folder-picker.js': 'folder-picker.js', '/folder-picker.css': 'folder-picker.css',
   '/messages.js': 'messages.js', '/messages.css': 'messages.css',
   '/collaborators.js': 'collaborators.js', '/collaborators.css': 'collaborators.css',
-  '/room-pages.js': 'room-pages.js', '/room-pages.css': 'room-pages.css', '/room-screen.js': 'room-screen.js', '/room-invite.js': 'room-invite.js', '/room.css': 'room.css',
-  '/modes-core.js': 'modes-core.js', '/room-modes.js': 'room-modes.js', '/room-modes.css': 'room-modes.css', '/room-approvals.js': 'room-approvals.js', '/room-approvals.css': 'room-approvals.css', '/room-banner.js': 'room-banner.js', '/room-banner.css': 'room-banner.css', '/vendor/qrcode/qrcode.js': 'vendor/qrcode/qrcode.js', '/vendor/jsqr/jsQR.js': 'vendor/jsqr/jsQR.js', '/room-scan.js': 'room-scan.js', '/terminals-off.js': 'terminals-off.js',
+  '/connected-computers.js': 'connected-computers.js', '/connected-computers.css': 'connected-computers.css',
+  '/room-invite.js': 'room-invite.js', '/room.css': 'room.css', '/room-scan.js': 'room-scan.js',
+  '/vendor/qrcode/qrcode.js': 'vendor/qrcode/qrcode.js', '/vendor/jsqr/jsQR.js': 'vendor/jsqr/jsQR.js', '/terminals-off.js': 'terminals-off.js',
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
   '/welcome.js': 'welcome.js', '/greeting-copy.js': 'greeting-copy.js', '/favicon.svg': 'favicon.svg', '/keep-caret.js': 'keep-caret.js', '/file-choice.js': 'file-choice.js', '/update-notice.js': 'update-notice.js', '/update-notice.css': 'update-notice.css',
 };
@@ -901,7 +908,7 @@ function servePage(req, res, pathname) {
   fs.createReadStream(path.join(PACKAGE_ROOT, 'public', file)).pipe(res);
 }
 
-const forward = createForward({ room, auth, collaborators, sendJson, modes, guard: peerGuard, answerMs: Number(process.env.POCKET_DEV_FORWARD_ANSWER_MS) || undefined, writeAnswerMs: Number(process.env.POCKET_DEV_FORWARD_WRITE_MS) || undefined });
+const forward = createForward({ room, auth, collaborators, sendJson, canConnect: connections.connected, guard: peerGuard, answerMs: Number(process.env.POCKET_DEV_FORWARD_ANSWER_MS) || undefined, writeAnswerMs: Number(process.env.POCKET_DEV_FORWARD_WRITE_MS) || undefined });
 
 const server = http.createServer(async (req, res) => {
   if (insecureRemote(req)) {
@@ -916,6 +923,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const refused = forward.identify(req);
   if (refused) return sendJson(res, refused.status, { error: refused.error });
+  forward.watchHttp(req, res);
   try {
     if (forward.isForward(url.pathname)) await forward.http(req, res, url);
     else if (url.pathname === '/' && url.searchParams.has('k')) {
@@ -940,12 +948,12 @@ const server = http.createServer(async (req, res) => {
 // Terminal and chat sockets share this server, so a disconnect, sleep or shutdown that closes wss.clients closes both.
 const wss = new WebSocketServer({ noServer: true });
 const cameraWss = new WebSocketServer({ noServer: true, maxPayload: 2 * 1024 * 1024 });
-const chatApi = createChatApi({ sendJson, readJson, config, wss, room, roomSync });
+const chatApi = createChatApi({ sendJson, readJson, config, wss, room, connections });
 
 const rejectUpgrade = (socket, status, text) => {
   socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 };
-const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade, room, roomSync });
+const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade });
 
 server.on('upgrade', async (req, socket, head) => {
   if (insecureRemote(req) || !hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
@@ -964,11 +972,9 @@ server.on('upgrade', async (req, socket, head) => {
       camera.attachHost(ws);
     });
   }
-  if (target.pathname === '/ws/messages') return messages.handleUpgrade(req, socket, head);
-  if (req.roomPeer && /^\/ws\/(chat\/)?[0-9a-f]+$/.test(target.pathname)) {
-    const refusal = await modes.gateSocket(req, target.pathname, (fn) => socket.once('close', fn));
-    if (refusal) return rejectUpgrade(socket, refusal.status, refusal.status === 408 ? 'Request Timeout' : 'Forbidden');
-  }
+  if (target.pathname === '/ws/messages' && (!req.roomPeer || req.roomPeer.level === 'admin')) return messages.handleUpgrade(req, socket, head);
+  if (remoteProviders.isPath(target.pathname)) return remoteProviders.handleUpgrade(req, socket, head, rejectUpgrade);
+  if (req.roomPeer && req.roomPeer.level !== 'admin') return rejectUpgrade(socket, 403, 'Forbidden');
   if (collaborators.guest(req)) return rejectUpgrade(socket, 403, 'Forbidden');
   const { pathname } = new URL(req.url, 'http://localhost');
   const match = /^\/ws\/([0-9a-f]+)$/.exec(pathname);
@@ -1010,8 +1016,7 @@ setInterval(() => {
 
 await adoptTerminals();
 startPower(config);
-roomSync.start();
-chatApi.startReplica();
+connections.announce();
 watchLanIp();
 if (internetOn()) sameNetwork.refresh();
 
@@ -1109,7 +1114,11 @@ const access = createPhoneAccess({
 });
 tunnel = createTunnel({ port: PORT, isConnected: () => access.view().connected, network, token: readToken, log: auth.admin.log });
 process.once('exit', () => { cameraSupport.dispose(); camera.dispose(); tunnel.dispose(); remotePorts.closeAll(); });
-for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { tunnel.dispose(); process.exit(0); });
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
+  tunnel.dispose(); room.close();
+  const forced = setTimeout(() => process.exit(0), 2000);
+  Promise.allSettled([remoteProviders.close(), chatApi.close()]).finally(() => { clearTimeout(forced); process.exit(0); });
+});
 // A quiet look at the npm registry, at most every six hours, so the Admin page and the phone can say a newer version exists.
 const versionCheck = createVersionCheck({ version: readInstalledVersion(), config, kind: installKind() === 'global' ? 'global' : 'other', log: (line) => console.error(line) });
 versionCheck.start();

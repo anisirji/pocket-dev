@@ -10,8 +10,7 @@ import * as claude from './claude.js';
 import * as codex from './codex.js';
 import * as antigravity from './antigravity.js';
 import * as copilot from './copilot.js';
-import { createChatReplica } from './replica.js';
-import { STATE_DIR } from '../core/paths.js';
+import { createRemoteEngine } from './remote.js';
 import { buildHandoff, wrapFirstMessage } from './handoff.js';
 
 const BUILT_IN_ENGINES = {
@@ -125,30 +124,60 @@ function parseAnswer(event, body) {
 // Mount after the auth check: every route here assumes a logged-in caller. config is { read(), update(changes) };
 // chat uses its chatIdleMinutes and chatDefaults keys. `wss` is the server's WebSocketServer, which pings its clients.
 // `engines` replaces Claude and Codex in tests.
-export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINES = BUILT_IN_ENGINES, room = null, roomSync = null }) {
+export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINES = BUILT_IN_ENGINES, room = null, connections = null }) {
   const dir = process.env.POCKET_DEV_CHAT_DIR || path.join(process.env.POCKET_DEV_STATE_DIR || path.join(HOME, '.pocket-dev'), 'chats');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const idleMs = () => Number(process.env.POCKET_DEV_CHAT_IDLE_SECONDS) * 1000 || (Number(config.read().chatIdleMinutes) || 10) * 60_000;
-  const schemaOf = (tool) => ENGINES[tool].settingsSchema();
+  const schemaOf = (tool, provider) => provider?.deviceId && provider.deviceId !== room?.deviceId() && provider.schema ? provider.schema : ENGINES[tool].settingsSchema();
+  const isRemote = (chat) => !!chat.provider?.deviceId && chat.provider.deviceId !== room?.deviceId();
+  async function resolveProvider(tool, deviceId) {
+    const split = typeof tool === 'string' ? tool.split('@') : [];
+    if (split.length === 2) { deviceId = split[1]; tool = split[0]; }
+    if (typeof tool !== 'string' || !Object.hasOwn(ENGINES, tool)) throw new BadRequest('Choose an available AI provider.');
+    if (!deviceId || deviceId === room?.deviceId()) return { tool, provider: { type: tool, deviceId: room?.deviceId() || null } };
+    if (!connections || typeof deviceId !== 'string' || !/^[0-9a-f]{4,64}$/.test(deviceId)) throw new BadRequest('Invalid AI source computer.');
+    const source = (await connections.available()).find((p) => p.deviceId === deviceId && p.type === tool);
+    if (!source) throw new BadRequest('This AI provider is offline or is no longer shared with this computer.', 403);
+    return { tool, provider: { type: tool, deviceId, name: source.name, schema: source.settings } };
+  }
   const chatDefaults = () => config.read().chatDefaults ?? {};
 
   async function rememberDefaults(chat) {
     const prev = chatDefaults();
-    config.update({ chatDefaults: { ...prev, tool: chat.tool, cwd: chat.cwd, [chat.tool]: safeDefaults(await schemaOf(chat.tool), chat.settings) } });
+    config.update({ chatDefaults: { ...prev, tool: chat.tool, cwd: chat.cwd, [chat.tool]: safeDefaults(await schemaOf(chat.tool, chat.provider), chat.settings) } });
   }
 
   const chats = new Map();
-  const replica = room && roomSync ? createChatReplica({ room, roomSync, chats, stateDir: STATE_DIR }) : null;
+  const leases = new Map();
+  const overlaps = (a, b) => a === b || a.startsWith(b + path.sep) || b.startsWith(a + path.sep);
+  function acquireWorkspace(chat) {
+    const root = fs.realpathSync(chat.cwd);
+    for (const [other, folder] of leases) if (other !== chat.id && overlaps(root, folder)) throw new BadRequest('Another AI conversation is working in this folder. Stop it first or use a separate Git worktree.', 409);
+    for (const other of chats.values()) if (other !== chat && other.engine && other.events.some((event) => event.agentStatus === 'running')) {
+      let folder; try { folder = fs.realpathSync(other.cwd); } catch { continue; }
+      if (overlaps(root, folder)) throw new BadRequest('An AI helper is still working in this folder. Wait for it to finish or use a separate Git worktree.', 409);
+    }
+    leases.set(chat.id, root);
+  }
+  const afterTurn = (chat, status) => { leases.delete(chat.id); drainQueue(chat, status); };
   for (const file of fs.readdirSync(dir).filter((f) => /^[0-9a-f]{12}\.json$/.test(f))) {
     try {
       const chat = Chat.load(path.join(dir, file));
-      chat.afterTurn = (status) => drainQueue(chat, status);
+      chat.afterTurn = (status) => afterTurn(chat, status);
       chats.set(chat.id, chat);
-      replica?.track(chat);
     } catch (err) {
       console.warn(`Skipping unreadable chat ${file}: ${err.message}`);
     }
   }
+
+  connections?.onChange(() => {
+    for (const chat of chats.values()) {
+      if (isRemote(chat) && !connections.connected(chat.provider.deviceId) && chat.engine) {
+        sleep(chat).catch(() => {});
+        if (chat.turn) chat.fail('The connection to the AI source was revoked. Choose another provider to continue.');
+      }
+    }
+  });
 
   const list = () => [...chats.values()].sort((a, b) => b.updatedAt - a.updatedAt).map((c) => c.view());
 
@@ -167,10 +196,11 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   }
 
   async function wake(chat) {
+    if (isRemote(chat) && !connections.connected(chat.provider.deviceId)) throw new BadRequest('The connection to this AI source was revoked.', 403);
     if (chat.sessionId) chat.emit({ type: 'status', text: 'Waking up…' });
     chat.waking = true;
     chat.changed();
-    const engine = ENGINES[chat.tool].create(chat);
+    const engine = isRemote(chat) ? createRemoteEngine(chat, { room }) : ENGINES[chat.tool].create(chat);
     chat.engine = engine;
     try {
       await engine.start();
@@ -183,13 +213,18 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     }
   }
 
-  function prepareInput(text, attachments) {
+  function prepareInput(text, attachments, chat) {
     const images = [];
     const files = [];
     for (const a of attachments) {
       const mediaType = IMAGE_TYPES[path.extname(a.path).toLowerCase()];
       if (mediaType && a.size <= IMAGE_MAX) images.push({ path: a.path, mediaType, data: fs.readFileSync(a.path).toString('base64') });
-      else files.push(a.path);
+      else if (chat && isRemote(chat)) {
+        if (a.size > 256 * 1024) throw new BadRequest('Shared AI text attachments must be at most 256 KB.');
+        const content = fs.readFileSync(a.path);
+        if (content.includes(0)) throw new BadRequest('This shared provider accepts images and UTF-8 text attachments.');
+        files.push(`${path.basename(a.path)}\n<attachment>\n${content.toString('utf8')}\n</attachment>`);
+      } else files.push(a.path);
     }
     const note = files.length ? `\n\nAttached files:\n${files.map((f) => `- ${f}`).join('\n')}` : '';
     return { text: `${text}${note}`.trim() || 'See the attached image.', images };
@@ -206,7 +241,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       if (!next) return;
       chat.setTitleFrom(next.text || path.basename(next.files[0].path));
       chat.startTurn();
-      runTurn(chat, prepareInput(next.text, next.files));
+      try { runTurn(chat, prepareInput(next.text, next.files, chat)); } catch (err) { chat.fail(err.message); }
     }, 0);
   }
 
@@ -228,15 +263,16 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     ? `${chat.nativeHeld} has this conversation on your computer. Send a message to continue it here before ${what}.`
     : `Stop the reply first, or wait for it to finish, before ${what}.`, 409);
 
-  async function switchEngine(chat, tool) {
+  async function switchEngine(chat, selected, deviceId) {
+    const { tool, provider } = await resolveProvider(selected, deviceId);
     if (typeof tool !== 'string' || !Object.hasOwn(ENGINES, tool)) throw new BadRequest(`tool must be one of: ${Object.keys(ENGINES).join(', ')}`);
-    if (tool === chat.tool) throw new BadRequest(`This chat already uses ${ENGINES[tool].label}`);
-    if (ENGINES[tool].installed && !ENGINES[tool].installed()) throw new BadRequest(`${ENGINES[tool].label} is not installed on this computer.`);
+    if (tool === chat.tool && provider.deviceId === (chat.provider?.deviceId ?? room?.deviceId() ?? null)) throw new BadRequest(`This chat already uses ${ENGINES[tool].label}`);
+    if ((!provider.deviceId || provider.deviceId === room?.deviceId()) && ENGINES[tool].installed && !ENGINES[tool].installed()) throw new BadRequest(`${ENGINES[tool].label} is not installed on this computer.`);
     if (busy(chat)) throw busyError('switching the provider', chat);
     // The only wait comes first. A reply can start during it, so the check is repeated right after, and from there to the end of
     // the change there is no await: a switch that loses the race fails with the engine, settings and history untouched, and
     // never stops an engine that has a reply running.
-    const settings = safeDefaults(await schemaOf(tool), chatDefaults()[tool]);
+    const settings = safeDefaults(await schemaOf(tool, provider), chatDefaults()[tool]);
     if (busy(chat)) throw busyError('switching the provider');
     const old = chat.engine;
     if (old) old.stale = true;
@@ -245,6 +281,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     chat.nativeSessionStartSeq = chat.seq;
     chat.nativeReleased = false;
     chat.tool = tool;
+    chat.provider = provider;
     chat.sessionId = null;
     chat.failed = false;
     chat.settings = settings;
@@ -273,6 +310,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
 
   async function runTurn(chat, input) {
     try {
+      acquireWorkspace(chat);
       await applyPendingModel(chat);
       if (chat.engine?.stale) await sleep(chat);
       if (!chat.engine) await wake(chat);
@@ -301,7 +339,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   // Returns how each change applies: 'now' when the live engine switched, 'next-turn' otherwise.
   async function configure(chat, changes) {
     if (!Object.keys(changes).length) return {};
-    const schema = await schemaOf(chat.tool);
+    const schema = await schemaOf(chat.tool, chat.provider);
     const label = (key, value) => {
       const setting = schema.find((s) => s.key === key);
       return `${setting.label.toLowerCase()} ${setting.choices.find((c) => c.value === value)?.label ?? value}`;
@@ -346,6 +384,11 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       const settings = await e.settingsSchema();
       return [tool, { label: e.label, ...(e.experimental && { experimental: true }), installed: e.installed?.() ?? true, help: engineHelp(tool), settings, defaults: safeDefaults(settings, remembered[tool]) }];
     })));
+    if (connections) for (const source of await connections.available()) {
+      const settings = source.settings;
+      tools[`${source.type}@${source.deviceId}`] = { label: tools[source.type]?.label || source.type, type: source.type, deviceId: source.deviceId, sourceName: source.name,
+        installed: true, settings, defaults: safeDefaults(settings, remembered[source.type]) };
+    }
     const recent = [...new Set(list().map((c) => c.cwd))].filter(isDir).slice(0, RECENT_MAX);
     return {
       home: HOME, recent, tools,
@@ -355,17 +398,19 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   }
 
   async function create(body) {
-    const { tool, cwd, settings, confirmBypass, resume, title } = body;
+    const { cwd, settings, confirmBypass, resume, title } = body;
+    const { tool, provider } = await resolveProvider(body.tool, body.providerDeviceId);
     if (!ENGINES[tool]) throw new BadRequest(`tool must be one of: ${Object.keys(ENGINES).join(', ')}`);
-    const schema = await schemaOf(tool);
+    const schema = await schemaOf(tool, provider);
     const fields = {
-      tool,
+      tool, provider, workspace: { deviceId: room?.deviceId() || null, cwd: parseCwd(cwd) },
       cwd: parseCwd(cwd),
       settings: { ...safeDefaults(schema, chatDefaults()[tool]), ...parseSettings(schema, settings, confirmBypass) },
     };
     if (resume !== undefined) {
+      if (provider.deviceId && provider.deviceId !== room?.deviceId()) throw new BadRequest('Remote provider sessions continue using this chat history. Native session imports are local only.');
       if (typeof resume?.sessionId !== 'string' || !SESSION_RE.test(resume.sessionId)) throw new BadRequest('resume.sessionId must be a session id');
-      const existing = [...chats.values()].find((c) => c.tool === tool && c.sessionId === resume.sessionId);
+      const existing = [...chats.values()].find((c) => c.tool === tool && !isRemote(c) && c.sessionId === resume.sessionId);
       if (existing) return { status: 200, chat: existing };
       fields.sessionId = resume.sessionId;
     }
@@ -377,9 +422,8 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       chat.importNativeHistory(history.messages, history.note);
       chat.emit({ type: 'status', text: `Continuing ${ENGINES[tool].label} session ${fields.sessionId.slice(0, 8)}` });
     }
-    chat.afterTurn = (status) => drainQueue(chat, status);
+    chat.afterTurn = (status) => afterTurn(chat, status);
     chats.set(chat.id, chat);
-    replica?.track(chat);
     chat.persist();
     await rememberDefaults(chat);
     return { status: 201, chat };
@@ -388,8 +432,8 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   function permissions(chat) {
     const engine = ENGINES[chat.tool];
     return {
-      chat: chat.grants.map((rule) => ({ rule, label: engine.grantLabel(rule) })),
-      project: engine.projectRules(chat.cwd),
+      chat: chat.grants.map((rule) => ({ rule, label: isRemote(chat) && rule.startsWith('remote:') ? rule.replace(/^remote:write_file:/, 'Write ').replace(/^remote:create_directory:/, 'Create folder ').replace(/^remote:run_command:/, 'Command: ') : engine.grantLabel(rule) })),
+      project: isRemote(chat) ? [] : engine.projectRules(chat.cwd),
     };
   }
 
@@ -400,6 +444,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       if (!chat.grants.includes(rule)) throw new BadRequest(`This chat has no rule ${rule}`);
       chat.removeGrant(rule);
     } else if (scope === 'project') {
+      if (isRemote(chat)) throw new BadRequest('Shared providers use permissions approved in this chat.');
       ENGINES[chat.tool].removeProjectRule(chat.cwd, file, rule);
     } else {
       throw new BadRequest("scope must be 'chat' or 'project'");
@@ -419,7 +464,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     'GET :id': async (req, chat) => [200, { ...chat.view(), events: chat.events }],
     'PATCH :id': async (req, chat) => {
       const { settings, confirmBypass } = await readJson(req);
-      const parsed = parseSettings(await schemaOf(chat.tool), settings, confirmBypass);
+      const parsed = parseSettings(await schemaOf(chat.tool, chat.provider), settings, confirmBypass);
       const changes = Object.fromEntries(Object.entries(parsed).filter(([k, v]) => chat.settings[k] !== v));
       // The Mac program keeps its own model until it finishes, and the handover resumes the conversation as it left it.
       if (chat.nativeHeld && Object.hasOwn(changes, 'model')) throw new BadRequest(`The model can change once ${chat.nativeHeld} finishes.`, 409);
@@ -445,6 +490,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       if (clientMessageId !== undefined && (typeof clientMessageId !== 'string' || !/^[0-9a-zA-Z_-]{16,80}$/.test(clientMessageId))) throw new BadRequest('Invalid clientMessageId');
       const files = parseAttachments(attachments);
       if (!text.trim() && !files.length) throw new BadRequest('Type a message or attach a file');
+      const prepared = prepareInput(text, files, chat);
       const signature = crypto.createHash('sha256').update(JSON.stringify({ text, files: files.map((f) => f.path) })).digest('hex');
       const previous = clientMessageId && chat.acceptedInputs.find((r) => r.id === clientMessageId);
       if (previous) {
@@ -462,12 +508,12 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       chat.emit({ type: 'user-text', text, attachments: files.map((f) => f.path) });
       chat.setTitleFrom(text || path.basename(files[0].path));
       chat.startTurn();
-      runTurn(chat, prepareInput(text, files));
+      runTurn(chat, prepared);
       return [202, chat.view()];
     },
     'POST :id/engine': async (req, chat) => {
-      const { tool } = await readJson(req);
-      return [200, await switchEngine(chat, tool)];
+      const { tool, providerDeviceId } = await readJson(req);
+      return [200, await switchEngine(chat, tool, providerDeviceId)];
     },
     'PATCH :id/queue': async (req, chat) => {
       const { eventId, text, expectedText } = await readJson(req);
@@ -604,7 +650,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   // Called only after the history route has checked and closed other native writers, or with `heldBy`, the name of the
   // program that still writes the conversation: the chat then shows it and queues messages until endHold().
   async function resumeSession({ tool, id, cwd, title, heldBy = null, stopHolder = null }) {
-    const existing = [...chats.values()].find((chat) => chat.tool === tool && chat.sessionId === id);
+    const existing = [...chats.values()].find((chat) => chat.tool === tool && !isRemote(chat) && chat.sessionId === id);
     if (existing && busy(existing)) throw busyError('opening this conversation', existing);
     if (existing) existing.nativeOpening = true;
     try {
@@ -649,5 +695,15 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     return true;
   }
 
-  return { handleApi, handleUpgrade, active, stop, bound, release, list, resumeSession, mirrorNative, endHold, startReplica: () => replica?.start(), handleRoomApi: (req, res, url) => replica.handleApi(req, res, url, sendJson) };
+  async function close() {
+    await Promise.all([...chats.values()].map(async (chat) => {
+      if (chat.queue.length) chat.holdQueue();
+      if (chat.turn) chat.turn.interrupted = true;
+      chat.cancelRequests();
+      await sleep(chat);
+      if (chat.turn) chat.endTurn({ status: 'interrupted' });
+    }));
+  }
+
+  return { handleApi, handleUpgrade, active, stop, bound, release, list, close, resumeSession, mirrorNative, endHold };
 }

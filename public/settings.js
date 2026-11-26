@@ -38,7 +38,7 @@
     </header>
     <div class="st-body">
       <section>
-        <button class="st-link" data-act="room"><span>Room</span><span class="st-apps-count st-room-sum"></span><span class="st-chev" aria-hidden="true">›</span></button>
+        <button class="st-link" data-act="room"><span>Connected computers</span><span class="st-apps-count st-room-sum"></span><span class="st-chev" aria-hidden="true">›</span></button>
         <p class="st-err" data-for="room"></p>
       </section>
       <section data-mount="connection" hidden></section>
@@ -118,7 +118,42 @@
   let limit = 2;
   let editingId = null;
   let timer = 0;
-  let collaborators;
+  let currentPage = 'home';
+  const body = $('.st-body');
+  const home = el('div', 'st-home-nav');
+  const computerInfo = el('div', 'st-computer-info');
+  home.append(computerInfo);
+  const originalSections = [...body.children];
+  for (const section of originalSections) {
+    const mount = section.dataset.mount;
+    section.dataset.settingsPage = mount === 'connection' ? 'connection' : mount === 'service' ? 'service' : mount === 'tools' ? 'tools'
+      : section.querySelector('.st-summary, .st-stepper, [data-form="password"], [data-act="qr"]') ? 'security'
+      : section.querySelector('[data-act="room"], [data-act="logout"]') ? 'home' : 'controls';
+    if (mount === 'collaborators') section.remove();
+  }
+  const pages = [
+    ['connection', 'Connection', 'Wi-Fi & Internet'], ['tools', 'AI Tools', 'Installed and shared providers'],
+    ['controls', 'Computer controls', 'Power, apps, health, screen & camera'],
+    ['security', 'Security & Devices', 'Password, logins & approvals'], ['service', 'Service & Updates', 'Startup, restart & updates'],
+  ];
+  home.append(el('h3', null, 'Connectivity'), originalSections[0]);
+  for (const [key, name, description] of pages) {
+    if (key === 'controls') home.append(el('h3', null, 'General'));
+    const b = el('button', 'st-link'); b.type = 'button';
+    const text = el('span'); text.append(el('span', null, name), el('small', null, description));
+    b.append(text, el('span', 'st-chev', '›')); b.onclick = () => showPage(key); home.append(b);
+  }
+  home.append(originalSections.at(-1));
+  body.prepend(home);
+  const back = el('button', 'st-back', '←'); back.type = 'button'; back.setAttribute('aria-label', 'Back to settings');
+  back.onclick = () => showPage('home'); $('.st-head').prepend(back);
+  function showPage(page) {
+    currentPage = page; sheet.dataset.page = page; home.hidden = page !== 'home'; back.hidden = page === 'home';
+    for (const section of [...body.children].filter((n) => n !== home)) section.hidden = section.dataset.settingsPage !== page;
+    $('.st-head h2').textContent = page === 'home' ? 'Settings' : pages.find(([key]) => key === page)?.[1] || 'Settings';
+    body.scrollTop = 0;
+  }
+  showPage('home');
 
   function renderDevices() {
     const { devices, currentDeviceId } = settings;
@@ -281,10 +316,10 @@
   async function refreshApps() {
     try {
       const { apps } = await api('GET', '/api/apps');
-      $('.st-apps-count').textContent = ` · ${apps.length} running`;
+      $('.st-apps-count:not(.st-room-sum)').textContent = ` · ${apps.length} running`;
       msg('err', 'apps', '');
     } catch (err) {
-      $('.st-apps-count').textContent = '';
+      $('.st-apps-count:not(.st-room-sum)').textContent = '';
       msg('err', 'apps', err.message);
     }
   }
@@ -303,13 +338,11 @@
   $('[data-act="camera"]').addEventListener('click', () => window.openCameraSheet());
 
   async function refresh() {
-    collaborators?.refresh();
     refreshApps();
     try {
       const fresh = await api('GET', '/api/settings');
       const stepperUntouched = !settings || settings.maxDevices === limit;
       settings = fresh;
-      $('.st-head h2').textContent = fresh.roleAccessEnabled ? 'Settings · Admin' : 'Settings';
       if (stepperUntouched) limit = fresh.maxDevices;
       if (editingId === null) renderDevices();
       renderLimit();
@@ -405,23 +438,24 @@
     overlays.open('settings', hide);
     settings = null;
     sheet.hidden = false;
+    showPage('home');
     sheet.querySelector('.st-body').scrollTop = 0;
     clearInterval(timer);
     timer = setInterval(refresh, REFRESH_MS);
     window.pocketDevNetwork?.mount($('[data-mount="connection"]'));
     import('/service.js').then((m) => m.renderServiceSection($('[data-mount="service"]'), api)).catch(() => {});
     import('/setup-tools.js').then((m) => m.renderToolsSection($('[data-mount="tools"]'), api)).catch(() => {});
-    import('/collaborators.js').then((m) => {
-      collaborators ||= m.mountCollaborators($('[data-mount="collaborators"]'), { api });
-      collaborators.refresh();
-    }).catch((err) => { $('[data-mount="collaborators"]').textContent = `Could not load Collaborators: ${err.message}. Restart Pocket Dev and reload.`; });
-    import('/room-screen.js').then((m) => m.roomSummary()).then((t) => { $('.st-room-sum').textContent = t; }).catch(() => {});
+    import('/connected-computers.js').then((m) => m.connectionSummary()).then((t) => { $('.st-room-sum').textContent = t; }).catch(() => {});
+    api('GET', '/api/connections').then((s) => {
+      const self = s.computers.find((m) => m.self);
+      computerInfo.replaceChildren(el('strong', null, self?.name || 'This computer'), el('p', 'st-note', 'This computer · Online'));
+    }).catch(() => {});
     mountPower();
     await refresh();
   }
 
   $('[data-act="room"]').addEventListener('click', () => {
-    import('/room-screen.js').then((m) => m.openRoom()).catch((err) => msg('err', 'room', `Could not load Room: ${err.message}. Reload this page.`));
+    import('/connected-computers.js').then((m) => m.openConnectedComputers()).catch((err) => msg('err', 'room', `Could not load connected computers: ${err.message}. Reload this page.`));
   });
   document.getElementById('settingsBtn').addEventListener('click', open);
 })();

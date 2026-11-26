@@ -249,27 +249,19 @@ Settings → **Device camera** lists the computer's cameras. Choose one and tap 
 | Shut down | Ends Pocket Dev terminals, then `osascript` tells System Events to shut down. After 45 s the phone shows a blocked screen with **Try shut down again**, **See open apps**, **Force shut down…** (`sudo shutdown -h now` in a terminal), and **Keep the Mac on**. | Force without your password. |
 | Update guard | Refuses sleep and shutdown while a macOS update installs, or when the check fails. | Guard the lid switch. |
 
-## Rooms in detail
+<a id="rooms-in-detail"></a>
 
-Install Pocket Dev on each computer. A **room** joins them so the phone can switch between them, share tasks and messages, and approve what other devices do. The room has one host. Each device keeps its own files, terminals and logins; nothing of one device's private data is shared unless its owner allows it.
+## Connected computers in detail
 
-1. On the host: Settings, **Room**, **Add a device**. It shows a short code like `ABCD-EFGH`, the host's Wi-Fi address and a QR. The code works once for 10 minutes.
-2. On the other device: Settings, **Room**, **Join a room**. Paste the invite line (address and code), type them, scan the QR with the camera, or choose a photo of the QR. Pick what the room may do on this device: **Admin** (everything) or **Collaborator** (chosen folders only).
-3. Use the **Work on** switcher (the device name in the top strip) to open another device's Files, Terminal, Git, Chat and Messages through the host.
+Connections reuse the existing Room networking transport. Membership, target-owned permissions and the AI source are separate concepts. Personal computer access requires target approval; provider sharing requires both a provider-wide sharing toggle and a grant to the recipient. Device requests carry persistent signing identities. AI sessions use an end-to-end encrypted WebSocket channel, including through the network host.
 
-What the room gives you:
+The existing computer switcher excludes AI-only peers. Chat identifies a provider by its type and device ID, preserving conversation context when sources change. Files, commands and approval decisions execute on the selected workspace computer. Personal histories and local messages are not replicated to the network. The old tasks, mirrors, assigned controllers and room-wide permission modes are retired.
 
-- **Switching.** Terminals, files, Git, Chat and Messages of any device in the room, from one login. Offline devices are marked and say why.
-- **Tasks.** A simple board with ids like `LAP-14` (To do, Doing, Done, assignee). Tasks sync between devices and catch up when a device was off.
-- **Messages and chats.** Messages to everyone and AI chats from admin-level devices are copied to the other members as read-only mirrors (Room chats). Images are fetched on demand.
-- **Modes per device.** For each other device: Read-only, Plan, Ask, Auto or Bypass. Risky actions (deleting a folder, running unknown programs, anything outside the shared folders) ask first, except in Bypass. Bypass lasts 1, 2, 3 or 4 hours or Always, shows a red banner on the device, and only the owner can turn it on. Requests wait in an **Approvals** inbox; the first answer wins.
-- **Leaving.** A member can leave at any time; being removed or leaving ends access at once and removes the room's data from that device.
-
-Limits of this version: the room is a star, so devices reach each other through the host and members only reach the host and their own device when the host is off; no automatic failover of the internet link; no direct messages across devices; modes are pattern based; copies of chats on other devices follow the owner's admin setting, not per-chat rules.
+See [configuration, exact compatibility and validation status](UNIFIED_CONNECTIONS.md).
 
 ## Collaborators, login and security
 
-**Collaborators:** **Browse folders** selects the repository and each related folder on the Mac, in both Admin and phone Settings. Paths remain editable as an optional shortcut. Admin and phone Settings include a Collaborators section for one-repository access, optional related folders, 1-hour/1-day/7-day expiry, QR invitations, native sharing, WhatsApp sharing, editing access and revocation. First enable sharing from Mac Admin, explicitly selecting your own trusted devices as Admin. Other devices need review, subsequent password logins require Mac approval, and Admin pairing stays on the Mac. Invitations work once within 10 minutes; opening a link preview never accepts one, and admission never evicts an Admin.
+**Legacy collaborators (compatibility during migration):** New connections use **Connected computers** and **AI Tools**. Existing grants and saved project copies can be reviewed and revoked from Admin. The following describes the legacy compatibility endpoints, rather than the new connection flow. **Browse folders** selects the repository and each related folder on the Mac, in both Admin and phone Settings. Paths remain editable as an optional shortcut. Admin and phone Settings include a Collaborators section for one-repository access, optional related folders, 1-hour/1-day/7-day expiry, QR invitations, native sharing, WhatsApp sharing, editing access and revocation. First enable sharing from Mac Admin, explicitly selecting your own trusted devices as Admin. Other devices need review, subsequent password logins require Mac approval, and Admin pairing stays on the Mac. Invitations work once within 10 minutes; opening a link preview never accepts one, and admission never evicts an Admin.
 
 Viewer can preview and download scoped files. Developer can change a separate project copy and explicitly writable copies of related folders; the owner's live checkout stays unchanged. Common credentials, Git metadata, dependencies and symlinks are excluded from copies. Review shared contents for project-specific secrets. Guest sessions cannot access owner chats, terminals, settings, apps, screen, power or other repositories. **Collaborator AI is currently unavailable** until an isolated execution runner and authentication are implemented and validated. The current file-sharing foundation does not complete the scoped-AI feature. See [implementation status and remaining plan](ROLE_ACCESS_PLAN.md).
 

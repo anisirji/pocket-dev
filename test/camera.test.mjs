@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { createCamera, parseCameras, cameraArgs } from '../src/machine/camera.js';
-import { classify } from '../src/auth/modes.js';
 
 const jpeg = Buffer.from([0xff, 0xd8, 1, 2, 3, 0xff, 0xd9]);
 function fixture(t, options = {}) {
@@ -112,14 +111,4 @@ test('missing FFmpeg explains setup and never spawns', async (t) => {
   const { camera, children } = fixture(t, { binary: () => null });
   await assert.rejects(camera.devices(), /Install camera support/);
   assert.equal(children.length, 0);
-});
-
-test('starting follows room modes, but stopping your own preview is always allowed', () => {
-  const action = { method: 'POST', path: '/api/camera/start' };
-  assert.equal(classify({ ...action, mode: 'read-only' }).verdict, 'deny');
-  assert.equal(classify({ ...action, mode: 'plan' }).verdict, 'propose');
-  assert.equal(classify({ ...action, mode: 'ask' }).verdict, 'ask');
-  assert.equal(classify({ ...action, mode: 'auto' }).verdict, 'ask');
-  assert.equal(classify({ ...action, mode: 'bypass' }).verdict, 'allow');
-  for (const mode of ['read-only', 'plan', 'ask', 'auto']) assert.equal(classify({ method: 'POST', path: '/api/camera/stop', mode }).verdict, 'allow');
 });

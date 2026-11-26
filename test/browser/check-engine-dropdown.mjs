@@ -31,6 +31,7 @@ try {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const [name, value] = A.cookie.split('=');
   await ctx.addCookies([{ name, value, url: s.base }]);
+  await ctx.addInitScript(() => localStorage.setItem('pd-welcome-shown', '1'));
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));

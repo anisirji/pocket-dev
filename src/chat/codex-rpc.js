@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
 import readline from 'node:readline';
 import WebSocket from 'ws';
 
@@ -46,12 +49,13 @@ class CodexRpc {
   }
 
   close(error = new Error('The Codex connection closed.'), unexpected = false) {
-    if (this.closed) return;
+    if (this.closed) return this.closing;
     this.closed = true;
     for (const { reject, timer } of this.calls.values()) { clearTimeout(timer); reject(error); }
     this.calls.clear();
-    this.disconnect();
+    this.closing = Promise.resolve(this.disconnect());
     if (unexpected) this.onGone?.(error);
+    return this.closing;
   }
 }
 
@@ -69,10 +73,26 @@ async function socketConnection(socketPath) {
   return rpc;
 }
 
-function stdioConnection(bin, env) {
+function stdioConnection(bin, env, args = []) {
   if (!bin) throw new Error('codex is not installed (not found on PATH or in ~/.local/bin).');
-  const proc = spawn(bin, ['app-server'], { env, stdio: ['pipe', 'pipe', 'pipe'] });
-  const rpc = new CodexRpc((message) => proc.stdin.write(`${JSON.stringify(message)}\n`), () => proc.kill());
+  // Node cannot spawn Windows batch files directly. Run npm's actual JavaScript entry point
+  // with Node instead, preserving argument boundaries without passing anything through a shell.
+  let executable = bin, prefix = [];
+  if (/\.(cmd|bat)$/i.test(bin)) {
+    const entry = path.join(path.dirname(bin), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+    if (!fs.existsSync(entry)) throw new Error('Cannot locate the Codex npm launcher. Reinstall Codex or set POCKET_DEV_CODEX to its native executable.');
+    executable = process.execPath; prefix = [entry];
+    if (process.platform === 'win32') {
+      const target = process.arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc';
+      const roots = [path.dirname(path.dirname(entry))];
+      try { roots.unshift(path.dirname(createRequire(entry).resolve(`@openai/codex-win32-${process.arch}/package.json`))); } catch {}
+      const native = roots.flatMap((root) => ['bin', 'codex'].map((dir) => path.join(root, 'vendor', target, dir, 'codex.exe'))).find((file) => fs.existsSync(file));
+      if (native) { executable = native; prefix = []; }
+    }
+  }
+  const proc = spawn(executable, [...prefix, 'app-server', ...args], { env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const exited = new Promise((resolve) => proc.once('close', resolve));
+  const rpc = new CodexRpc((message) => proc.stdin.write(`${JSON.stringify(message)}\n`), () => { proc.kill(); return exited; });
   let stderr = '';
   proc.stderr.on('data', (data) => { stderr = (stderr + data).slice(-2000); });
   readline.createInterface({ input: proc.stdout }).on('line', (line) => rpc.receive(line));
@@ -83,7 +103,7 @@ function stdioConnection(bin, env) {
   return rpc;
 }
 
-export async function connectCodexRpc({ bin, env, socketPath }) {
+export async function connectCodexRpc({ bin, env, socketPath, args = [], experimental = false }) {
   let rpc;
   if (socketPath) {
     try { rpc = await socketConnection(socketPath); }
@@ -93,11 +113,11 @@ export async function connectCodexRpc({ bin, env, socketPath }) {
       if (!['ENOENT', 'ECONNREFUSED'].includes(err.code)) throw err;
     }
   }
-  rpc ??= stdioConnection(bin, env);
+  rpc ??= stdioConnection(bin, env, args);
   try {
     await rpc.call('initialize', {
       clientInfo: { name: 'pocket-dev', title: 'Pocket Dev', version: '1.0.0' },
-      capabilities: { experimentalApi: false, requestAttestation: false },
+      capabilities: { experimentalApi: experimental, requestAttestation: false },
     }, 15_000);
     rpc.write({ method: 'initialized' });
     return rpc;

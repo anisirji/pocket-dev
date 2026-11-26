@@ -176,11 +176,9 @@ A WhatsApp-style chat between your computers, your phones and the people you inv
 
 Open apps lists what is running with memory and CPU and can quit or force quit. The health panel and the strip at the top show battery, temperature, CPU, memory and disk, with alerts when something is off. Power can keep the computer awake (`off`, `plugged`, `always`), put it to sleep or shut it down. **Screen view** shows a read-only picture of the main display. **Device camera** previews a connected camera with Start/Stop and Snapshot controls. Prepare camera permission once in Admin → This computer → Remote camera before leaving the computer. Later Start camera requests automatically open or reuse the computer camera tab, with continuous video and an automatic image fallback; no extra camera installation is needed. See [Camera setup](CAMERA.md).
 
-### Collaborators and the Admin page
+### Connected computers and the Admin page
 
-<table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/24-collaborators.png" width="240" alt="Collaborators sharing one project"><br><sub>One-project access with expiry</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/25-admin.png" width="240" alt="The Admin page on the computer"><br><sub>Admin page (computer only)</sub></td></tr></table>
-
-Share one project with someone for 1 hour, 1 day or 7 days through a QR invitation: a Viewer previews and downloads, a Developer edits a separate copy, and neither can reach your terminals, chats or other folders. The Admin page runs on `http://localhost:7778` and only a process on the computer can open it: devices, security log, internet access, service, lockdown.
+**Settings → Connected computers** manages personal computers and AI-only connections. **AI Tools** controls sharing for installed providers; each computer’s details controls individual recipients. The Admin page on `http://localhost:7778` continues to manage login devices, the security log, internet access, service and lockdown. Existing collaborator project copies remain available there for review and revocation during migration.
 
 ### Update Pocket Dev
 
@@ -195,45 +193,17 @@ Every six hours (a failed look-up is retried after one hour, and the Admin page 
 
 Turn all of it off with `pocket-dev config set updateCheck false` or `POCKET_DEV_NO_UPDATE_CHECK=1`; `updateNotify false` turns off only the desktop notification.
 
-## Rooms: several computers, one phone
+<a id="rooms-several-computers-one-phone"></a>
 
-Install Pocket Dev on each computer. A **room** joins them so the phone can switch between them, share tasks and messages, and approve what other devices do. The room has one host. Each device keeps its own files, terminals and logins, and nothing private is shared unless its owner allows it.
+## Connected computers
 
-<p align="center"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/diagrams/room-star.png" width="860" alt="The host in the middle, members around it, a secret for every pair, control going from host to member only"></p>
+Open **Settings → Connected computers → Connect computer**, choose whether it is yours, and exchange the connection code. Personal computer access requires approval on the target computer. Other people’s computers receive AI-only access by default.
 
-**1. Host a room.** On the computer that will be the host: **Settings, Room**, start a room.
+The existing **Work on** switcher lists authorized personal computers. Shared AI sources appear in the existing Chat provider selector, with their source computer’s name. Turn sharing on in **AI Tools**, then authorize each recipient in its computer details. Sharing works in either direction; it never shares personal conversations or grants general file or terminal access.
 
-<table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/13-room-start.png" width="240" alt="Starting a room on the host"><br><sub>Start a room</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/14-room-add-device.png" width="240" alt="Add a device: code and QR"><br><sub>Add a device shows a code and QR</sub></td></tr></table>
+The source runs the AI session; the workspace computer executes its authorized operations and shows approval cards. The existing Room transport remains underneath. Task boards, Room chats, message replication, assigned controllers and room-wide modes have been retired. Existing local data and project copies are preserved.
 
-**2. Add a device.** On the host choose **Add a device**. It shows a short code such as `ABCD-EFGH`, the host's Wi-Fi address and a QR. The code works once, for 10 minutes.
-
-**3. Join.** On the other computer: **Settings, Room, Join a room**. Join any of three ways: paste the invite line or type the address and code, **scan the QR with the camera**, or **choose a photo of the QR**. Then pick what the room may do on this device: **Admin** (everything) or **Collaborator** (chosen folders only).
-
-<p align="center"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/diagrams/join-flow.png" width="860" alt="The new device sends the code, the host accepts and returns a secret, the host calls back, both are online"></p>
-
-<table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/15-room-join.png" width="240" alt="Joining by code, scan or photo"><br><sub>Join by code, camera or photo</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/16-room-members.png" width="240" alt="The member list with online status"><br><sub>Members and who is online</sub></td></tr></table>
-
-**4. Switch.** Tap the **Work on** switcher (the device name in the top strip) to open another device's Files, Terminal, Git, Chat and Messages through the host. Offline devices are marked and say why.
-
-<p align="center"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/diagrams/switch-flow.png" width="860" alt="The phone talks to the front device, which passes requests through the host to the target; checks happen at each hop"></p>
-
-<table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/17-switcher.png" width="240" alt="The Work on switcher"><br><sub>Work on another device</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/18-remote-files.png" width="240" alt="Files of another computer"><br><sub>Files of a remote computer</sub></td></tr></table>
-
-**5. Tasks, messages and chats.** A simple board with ids like `LAP-14` (To do, Doing, Done, assignee) syncs between devices and catches up after a device was off. Messages to everyone and AI chats from admin-level devices are copied to the others as read-only mirrors (Room chats).
-
-<table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/19-tasks.png" width="240" alt="The shared task board"><br><sub>Shared tasks</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/20-room-chats.png" width="240" alt="Chats mirrored from other devices"><br><sub>Room chats</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/21-approvals.png" width="240" alt="The approvals inbox"><br><sub>Approvals inbox</sub></td></tr></table>
-
-**6. Modes per device.** For each other device you choose Read-only, Plan, Ask, Auto or Bypass. The device's own owner sets it, and risky actions (deleting a folder, running unknown programs, anything outside the shared folders) ask first, except in Bypass. Bypass lasts 1, 2, 3 or 4 hours or Always, shows a red banner on the device, and only that device's owner can turn it on.
-
-<p align="center"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/diagrams/modes.png" width="860" alt="Five modes from Read-only to Bypass as a ladder of increasing access"></p>
-
-<table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/22-permissions.png" width="240" alt="Choosing a mode per device"><br><sub>Per-device modes</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/23-bypass-banner.png" width="240" alt="The red Bypass banner"><br><sub>Bypass banner</sub></td></tr></table>
-
-**7. Approve.** Requests that need a yes wait in the **Approvals** inbox on the device concerned. The first answer wins.
-
-**8. Leave.** A member can leave at any time. Being removed or leaving ends access at once and removes the room's data from that device.
-
-What the room does not do yet: it is a star, so devices reach each other through the host, and when the host is off the members cannot reach each other. There is no automatic failover and no room over the internet. Messages are not direct between members. Modes are pattern based. Copies of chats follow the owner's admin setting, not per-chat rules. See [the details](REFERENCE.md#rooms-in-detail).
+Shared Claude and compatible Codex versions use the source’s existing login. Antigravity and Copilot remain available locally while their remote adapters are pending. Remote commands require a supported OS sandbox; the existing host dependency remains. See [setup, compatibility, migration and verification](UNIFIED_CONNECTIONS.md).
 
 ## Use it away from home
 

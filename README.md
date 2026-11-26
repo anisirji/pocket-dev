@@ -27,14 +27,23 @@
 - **Messages** between your devices, with photos, videos and documents.
 - **Open apps, health and power:** see open apps, battery, CPU and temperature, and sleep or shut down.
 - **Device camera:** view your computer's camera from Settings, with camera selection, Start/Stop controls and downloadable snapshots. Uses a camera tab in the computer's browser on Windows, macOS and Linux, with no extra camera software. [Camera setup](docs/CAMERA.md).
-- **Several computers, one phone** (rooms), with per-device permissions.
-- **Share one project** with someone for 1 hour, 1 day or 7 days through a QR invitation.
+- **Connected computers:** manage your personal computers and AI-only connections in one place, with explicit access permissions.
+- **Shared Claude and Codex:** use an authorized computer’s existing AI sign-in while files, commands and approvals stay on your workspace computer. Choose its source in the existing provider selector. [Compatibility and setup](docs/UNIFIED_CONNECTIONS.md).
 - **Internet access** through a Cloudflare Tunnel: optional, off by default.
 - **Admin page** with a Dock, Start menu or app menu tile, and **self-update** (`pocket-dev update` or the Admin **Update** button).
 - **Private by design:** runs on your own computer as your user, logs in with a password or a one-time QR code, needs no cloud account and nothing installed on the phone.
 - **Set up with AI:** [copyable prompts](https://www.theani.me/work/pocket-dev/prompts) for your coding assistant, an [agent setup guide](docs/AI_SETUP.md) and a reusable agent skill.
 
-## What's new in 2.3
+## What's new in 2.4
+
+- **Connected computers:** pair your own computers or make an AI-only connection from Settings. Computer access and each shared provider have separate permissions.
+- **Shared Claude and Codex:** choose an authorized source in the existing Chat selector. The source uses its existing sign-in; workspace files and approvals stay on the selected workspace computer.
+- **Simpler Settings:** connection, AI, security and device controls are grouped into categories. Old Room task boards and chat mirrors are retired; saved conversations and project copies remain on disk.
+- **Windows Codex startup:** npm-installed Codex starts through its actual executable, avoiding the Windows batch-launch error.
+
+Details and platform limits: [2.4 release notes](docs/RELEASE_2.4.md) · [Connection and sharing guide](docs/UNIFIED_CONNECTIONS.md).
+
+## Earlier changes in 2.3
 
 - **A project workspace:** open **More → Workspace → Open folder** for a file explorer, syntax-highlighted editor tabs and project terminals in one layout. Codex and Claude have dedicated terminal controls; Chats opens your existing conversations.
 - **Edit and save:** create files and folders, upload files, search filenames, and save UTF-8 text up to 1 MB. Save keeps your draft if an agent or another app changed the file on the computer.

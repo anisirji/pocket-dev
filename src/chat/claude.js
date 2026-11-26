@@ -171,7 +171,7 @@ function inbox() {
   };
 }
 
-export function createClaudeEngine(chat) {
+export function createClaudeEngine(chat, restricted = null) {
   const input = inbox();
   let q = null;
   let stopping = false;
@@ -396,13 +396,14 @@ export function createClaudeEngine(chat) {
           effort: effort === 'default' ? undefined : effort,
           permissionMode: mode,
           allowDangerouslySkipPermissions: bypass,
-          resume: chat.sessionId ?? undefined,
+          resume: restricted ? undefined : chat.sessionId ?? undefined,
           allowedTools: chat.grants,
           includePartialMessages: true,
           pathToClaudeCodeExecutable: CLAUDE_BIN,
           env: engineEnv(),
           settings: ENGINE_SETTINGS,
           canUseTool,
+          ...(restricted || {}),
           stderr: (d) => { stderrTail = (stderrTail + d).slice(-2000); },
         },
       });
@@ -430,7 +431,7 @@ export function createClaudeEngine(chat) {
         if (key === 'model') {
           await q.setModel(value === 'default' ? undefined : value);
           applied.model = 'now';
-        } else if (key === 'mode' && (value === 'bypassPermissions') === engine.bypass) {
+        } else if (!restricted && key === 'mode' && (value === 'bypassPermissions') === engine.bypass) {
           await q.setPermissionMode(value);
           applied.mode = 'now';
         } else {

@@ -1,0 +1,34 @@
+.cc .rs-body { width: min(100%, 720px); margin: 0 auto; box-sizing: border-box; }
+.cc > .st-err { padding: 0 16px; }
+.cc-summary { margin: 0; color: var(--muted); }
+.cc-filters { display: flex; gap: 6px; }
+.cc-filters button { flex: 1; }
+.cc-filters [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.cc-list { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.cc-list > p { padding: 0 14px 14px; }
+.cc-computer { display: flex; align-items: center; width: 100%; min-height: 76px; padding: 14px; gap: 8px; text-align: left; border-radius: 0; border-bottom: 1px solid var(--line); }
+.cc-computer:last-child { border-bottom: 0; }
+.cc-computer:hover { background: var(--panel-2); }
+.cc-computer-text { flex: 1; min-width: 0; overflow-wrap: anywhere; display: grid; gap: 4px; }
+.cc-computer small, .cc-choice small { color: var(--muted); font-size: 13px; }
+.cc-title { font-size: 20px; margin: 4px 0; }
+.cc-label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 0; }
+.cc-field { display: flex; gap: 12px; align-items: center; justify-content: space-between; min-height: 48px; overflow-wrap: anywhere; }
+.cc-field:has(input:not([type="checkbox"])) { display: grid; gap: 6px; }
+.cc-field input[type="checkbox"], .cc-choice input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+.cc-choices { display: grid; gap: 10px; }
+.cc-choice { display: flex; align-items: center; gap: 12px; padding: 16px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); cursor: pointer; }
+.cc-choice:has(:checked) { border-color: var(--accent); }
+.cc-choice span { display: grid; gap: 5px; }
+.cc-invitation { display: grid; gap: 10px; }
+.cc-invitation:empty { display: none; }
+.cc :disabled { opacity: .5; cursor: not-allowed; }
+.cc button:focus-visible, .cc input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.st-home-nav { display: grid; gap: 8px; padding-top: 20px; }
+.st-home-nav h3 { margin: 16px 0 4px; }
+.st-home-nav .st-link { justify-content: space-between; padding: 10px 12px; }
+.st-home-nav .st-link span:first-child { display: grid; gap: 4px; }
+.st-home-nav small { font-size: 12px; font-weight: 400; color: var(--muted); }
+.st-back { min-width: 44px; min-height: 44px; font-size: 20px; }
+.st-computer-info { padding: 20px 0 4px; }
+.st-computer-info strong { font-size: 18px; }

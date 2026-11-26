@@ -52,7 +52,7 @@ const server = http.createServer(async (req, res) => {
     [`/api/history/codex/${historyItem.id}`]: { ...historyItem, messages: [{ role: 'user', text: 'A previous message' }] },
     '/api/chat/fixture-chat': chat,
     '/api/settings': { devices: [], maxDevices: 2 },
-    '/api/collaborators': { enabled: true, ai: { available: false, reason: 'Collaborator AI needs an isolated runner.' }, collaborators: [], repositories: [] },
+    '/api/connections': { deviceId: 'fixture', computers: [{ deviceId: 'fixture', name: 'This computer', self: true, online: true, connectionType: 'personal', sharing: [], receiving: [] }], providers: {}, shared: [] },
     '/api/performance': { sampledAt: Date.now(), cpu: { usedPercent: 14, cores: 8 }, memory: { freePercent: 40 }, disk: { freeGB: 85.2, totalGB: 256 }, eventLoopDelayMs: 15, status: 'normal', level: 'ok', alerts: [] },
     '/api/power': { awake: 'off', temperature: {}, shutdown: {}, lidClosed: false, lidSleepDisabled: false },
     '/api/power/vitals': { battery: 59, onAC: true, temperature: { batteryC: 30.7 }, limits: { batteryPercent: 20, temperatureC: 45 }, alerts: [] },
@@ -153,8 +153,7 @@ try {
     await inViewport('#keyNav .key:last-child');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}x${height}: horizontal overflow`);
   }
-  // The top bar with every optional button showing: the Room button (a room member) and an unread Messages count.
-  await page.evaluate(() => { document.getElementById('roomTasksBtn').hidden = false; });
+  // The top bar with an unread Messages count.
   for (const ws of wss.clients) if (ws.messages) ws.send(JSON.stringify({ t: 'message', message: { ...messagesHello.messages[0], seq: 3, text: 'New', files: [] } }));
   await page.waitForFunction(() => document.querySelector('#viewSwitch .mx-badge:not([hidden])'));
   assert.notEqual(await page.locator('#viewSwitch .mx-badge').evaluate((b) => getComputedStyle(b).backgroundColor), 'rgba(0, 0, 0, 0)', 'the unread count has its green background');
@@ -215,35 +214,25 @@ try {
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
   await settle();
   await inViewport('.st-sheet');
-  const collaborators = page.locator('[data-mount="collaborators"]');
-  await collaborators.getByRole('button', { name: 'Invite someone', exact: true }).click();
-  await collaborators.getByLabel('Name', { exact: true }).fill('Website developer');
-  const repoField = collaborators.locator('.fp-field').filter({ has: page.getByLabel('Repository', { exact: true }) });
-  await repoField.getByRole('button', { name: 'Browse folders', exact: true }).click();
-  await repoField.getByRole('button', { name: 'Open folder website-project', exact: true }).click();
-  await repoField.getByRole('button', { name: 'Select this folder', exact: true }).click();
-  assert.equal(await collaborators.getByLabel('Repository', { exact: true }).inputValue(), '/tmp/website-project');
-  await collaborators.getByLabel('Role', { exact: true }).selectOption('developer');
-  assert.equal(await collaborators.getByLabel('AI access', { exact: true }).isDisabled(), true);
-  await collaborators.getByRole('button', { name: 'Add related folder', exact: true }).click();
-  const relatedField = collaborators.locator('.fp-field').filter({ has: page.getByLabel('Related folder', { exact: true }) });
-  await relatedField.getByRole('button', { name: 'Browse folders', exact: true }).click();
-  await relatedField.getByRole('button', { name: 'Open folder Downloads', exact: true }).click();
-  await relatedField.getByRole('button', { name: 'Open folder project-assets', exact: true }).click();
-  await relatedField.getByRole('button', { name: 'Select this folder', exact: true }).click();
-  assert.equal(await collaborators.getByLabel('Related folder', { exact: true }).inputValue(), '/tmp/Downloads/project-assets');
-  assert.equal(await collaborators.getByLabel('Related folder access', { exact: true }).inputValue(), 'read');
+  await page.getByRole('button', { name: /Connected computers/ }).click();
+  await page.getByRole('button', { name: 'Connect computer', exact: true }).click();
+  await page.getByRole('radio', { name: /Someone else/ }).check();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByLabel('Connection code', { exact: true }).fill('1234-5678');
+  await page.getByLabel('Computer address', { exact: true }).fill('http://192.168.1.20:7777');
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
     await page.evaluate(() => setTestViewport({}));
-    await collaborators.getByRole('button', { name: 'Create collaborator', exact: true }).scrollIntoViewIfNeeded();
-    await inViewport('[data-mount="collaborators"] .co-form button[type="submit"]');
+    await page.getByRole('button', { name: 'Connect', exact: true }).scrollIntoViewIfNeeded();
+    await inViewport('.cc .rs-body .st-primary');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   }
   await page.setViewportSize({ width: 393, height: 852 });
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
-  await collaborators.getByRole('button', { name: 'Cancel', exact: true }).scrollIntoViewIfNeeded();
-  await collaborators.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /Security & Devices/ }).click();
+  assert.ok(await page.locator('.st-form').isVisible());
+  await page.getByRole('button', { name: 'Back to settings' }).click();
   const logout = page.locator('[data-act="logout"]');
   await logout.scrollIntoViewIfNeeded();
   await inViewport('[data-act="logout"]');

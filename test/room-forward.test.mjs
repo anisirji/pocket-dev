@@ -67,15 +67,14 @@ test('an upload streams to the target', async (t) => {
 test('a member reaches another member through the host, and the target ranks it by its own choice', async (t) => {
   const { h, a, b, repo } = await trio(t);
   const mine = await listing(a, b, repo);
-  assert.equal(mine.status, 200, JSON.stringify(mine.data));
-  assert.ok(JSON.stringify(mine.data).includes('a.txt'));
+  assert.equal(mine.status, 403, 'External membership does not share project files.');
   assert.equal((await listing(a, b, path.join(b.home, 'Desktop', 'other'))).status, 403, 'a folder B did not share');
   assert.equal((await a.to(b, 'GET', '/api/performance')).status, 403, 'a collaborator level device allows files and messages only');
   assert.equal((await a.to(b, 'GET', '/api/sessions')).status, 403);
   assert.equal((await a.to(b, 'POST', '/api/sessions', { cwd: b.home })).status, 403, 'no terminal on B');
   assert.equal((await a.to(b, 'GET', '/api/collaborators')).status, 403, 'owner-only route');
   assert.equal((await h.to(b, 'GET', '/api/performance')).status, 403, 'the host gets the same limits on B');
-  assert.equal((await h.to(b, 'GET', '/api/status')).data.role, 'viewer');
+  assert.equal((await h.to(b, 'GET', '/api/status')).status, 403);
   assert.equal(fs.existsSync(path.join(b.home, 'Desktop', 'proj', 'x')), false);
   const write = await a.to(b, 'POST', '/api/files/mkdir', { path: path.join(repo, 'x') });
   assert.equal(write.status >= 400, true, 'a viewer grant cannot write');
@@ -98,7 +97,7 @@ test('the device list shows ranks, and a stopped device is offline', async (t) =
   const by = Object.fromEntries(fromA.devices.map((d) => [d.deviceId, d]));
   assert.equal(by[a.id].rank, 'owner');
   assert.equal(by[h.id].rank, 'admin');
-  assert.equal(by[b.id].rank, 'collaborator');
+  assert.equal(by[b.id].rank, 'external');
   assert.equal(by[a.id].self, true);
   assert.equal(by[b.id].path, 'host');
   assert.equal(by[h.id].path, 'direct');
@@ -120,7 +119,8 @@ test('a kicked member is refused at once, directly and through the host', async 
   // What A would still hold if the kick note never reached it: its secret for the host.
   const held = JSON.parse(fs.readFileSync(path.join(a.stateDir, 'room.json'), 'utf8')).room;
   const asA = (endpoint, from = a.id) => h.request('GET', endpoint, { headers: { 'x-room-id': held.id, 'x-room-sender': a.id, 'x-room-from': from, 'x-room-secret': held.memberSecret } });
-  assert.equal((await asA('/api/sessions')).status, 200, 'the secret works while A is a member');
+  assert.equal((await asA('/api/sessions')).status, 403, 'A room secret also needs a device signature.');
+  assert.equal((await a.to(h, 'GET', '/api/sessions')).status, 200);
   assert.equal((await asA('/api/sessions', b.id)).status, 403, 'a member cannot name another member as the origin');
   assert.equal((await h.api('POST', '/kick', { deviceId: a.id })).status, 200);
   const refused = await asA('/api/sessions');

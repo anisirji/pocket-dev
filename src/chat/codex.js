@@ -49,6 +49,7 @@ export async function settingsSchema() {
   ];
 }
 
+export const codexBinary = () => CODEX_BIN;
 export const isInstalled = () => Boolean(CODEX_BIN) && (!path.isAbsolute(CODEX_BIN) || fs.existsSync(CODEX_BIN));
 export const grantLabel = (grant) => (grant === 'files' ? 'All file changes' : grant.replace(/^command:/, 'Command: '));
 

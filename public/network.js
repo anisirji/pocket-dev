@@ -200,8 +200,8 @@
 
   function renderSection() {
     if (!section) return;
-    section.hidden = !enabled();
-    if (!enabled()) return void section.replaceChildren();
+    section.hidden = section.dataset.settingsPage ? document.querySelector('.st-sheet')?.dataset.page !== 'connection' : !enabled();
+    if (!enabled()) return void section.replaceChildren(...(section.dataset.settingsPage ? [h('h3', null, 'Connection'), h('p', 'nw-summary', 'Internet access is off. Manage Wi-Fi and internet access from Admin on this computer.')] : []));
     const remote = info.route === 'remote';
     const off = h('button', 'st-btn st-danger nw-off', 'Turn off internet access');
     off.type = 'button';

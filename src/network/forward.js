@@ -14,19 +14,19 @@ const CACHE_MS = 20_000;
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const HOP = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'proxy-connection']);
 // Never passed on: this device's login, how the browser reached this device, and any room credential a client tried to smuggle in.
-const LOCAL = /^(cookie|host|origin|referer|x-forwarded-.*|cf-.*|x-real-ip|forwarded|x-room-.*)$/;
+const LOCAL = /^(cookie|host|origin|referer|x-forwarded-.*|cf-.*|x-real-ip|forwarded|x-room-.*|x-connection-.*)$/;
 const PATH = /^\/m\/([0-9a-f]{4,64})(\/.*)?$/;
 
 // Working on another device through the room. The phone logs in on one device (the front); `/m/<deviceId>/<path>` on the
 // front is passed to that device. The room is a star, so a member reaches another member through the host (one hop) and
 // the host reaches everyone directly. The target decides what the originating member may do (room.authPeerRequest).
-export function createForward({ room, auth, collaborators, sendJson, modes, guard, answerMs = ANSWER_MS, writeAnswerMs = WRITE_ANSWER_MS, idleMs = IDLE_MS }) {
+export function createForward({ room, auth, collaborators, sendJson, canConnect = () => true, guard, answerMs = ANSWER_MS, writeAnswerMs = WRITE_ANSWER_MS, idleMs = IDLE_MS }) {
   const good = new Map(); // deviceId -> { url, at }: the address that answered last
 
   // Sockets that exist because of the room: the pipes this device passes on, and sockets a member opened to this device.
   // When the room, its host, or either end's membership changes they are closed, not just refused next time.
   const held = new Set();
-  const stale = (e) => { const s = room.snapshot?.(); return !s || s.id !== e.roomId || s.hostId !== e.hostId || !s.ids.includes(e.origin) || Boolean(e.target && !s.ids.includes(e.target)); };
+  const stale = (e) => { const s = room.snapshot?.(); return !s || s.id !== e.roomId || s.hostId !== e.hostId || !s.ids.includes(e.origin) || Boolean(e.target && !s.ids.includes(e.target)) || Boolean(e.authorized && !e.authorized()); };
   function sweep() { for (const e of [...held]) if (stale(e)) { held.delete(e); e.close(); } }
   room.onChange?.(sweep);
   function hold(entry) {
@@ -39,7 +39,7 @@ export function createForward({ room, auth, collaborators, sendJson, modes, guar
   // Called for an upgrade that arrived with a room credential, before it is handled.
   function watch(req, socket) {
     if (!req.roomPeer) return;
-    const release = hold({ origin: req.roomPeer.origin, close: () => socket.destroy() });
+    const release = hold({ origin: req.roomPeer.origin, ...(req.roomPeer.level === 'admin' && { authorized: () => room.isTrustedAdmin(req.roomPeer.origin) }), close: () => socket.destroy() });
     socket.once('close', release);
   }
 
@@ -50,11 +50,17 @@ export function createForward({ room, auth, collaborators, sendJson, modes, guar
     const sender = req.headers['x-room-sender'];
     const locked = guard?.refuse(req, sender);
     if (locked) return locked;
-    try { req.roomPeer = room.authPeerRequest(req.headers); } catch (err) { guard?.fail(req, sender); return { status: err.status || 403, error: err.message }; }
+    try { req.roomPeer = room.authPeerRequest(req.headers, { method: req.method, path: req.url }); } catch (err) { guard?.fail(req, sender); return { status: err.status || 403, error: err.message }; }
     // Bypass is full access: a member in Bypass is ranked as an admin device here, whatever level its owner chose at join.
-    if (modes?.isBypass(req.roomPeer.origin)) req.roomPeer.level = 'admin';
+
     if (req.roomPeer.level === 'admin') req.roomDevice = { id: `room-${req.roomPeer.origin}`, name: req.roomPeer.name, status: 'active', role: 'admin', via: 'room', tokenHashes: [] };
     return null;
+  }
+
+  function watchHttp(req, res) {
+    if (req.roomPeer?.level !== 'admin') return;
+    const release = hold({ origin: req.roomPeer.origin, authorized: () => room.isTrustedAdmin(req.roomPeer.origin), close: () => res.destroy() });
+    res.once('finish', release); res.once('close', release);
   }
 
   const probe = (url) => new Promise((resolve) => {
@@ -95,6 +101,7 @@ export function createForward({ room, auth, collaborators, sendJson, modes, guar
 
   function prepare(req, targetId, rest) {
     const p = plan(req, targetId, rest);
+    if (!p.error && !req.roomPeer && targetId !== room.deviceId() && room.snapshot?.()?.ids.includes(targetId) && !canConnect(targetId)) return { status: 403, error: 'This computer was disconnected. Reconnect it in Connected computers.' };
     if (p.error) return p;
     let r;
     try { r = room.route(targetId); } catch (err) { return { status: err.status || 400, error: err.message }; }
@@ -111,6 +118,8 @@ export function createForward({ room, auth, collaborators, sendJson, modes, guar
     }
     if (req.headers.origin) out.origin = url.origin;
     out.host = url.host;
+    if (req.roomPeer) { for (const [k, v] of Object.entries(req.headers)) if (k.startsWith('x-connection-')) out[k] = v; }
+    else Object.assign(out, room.signRequest?.(p.route.deviceId, req.method, rest + new URL(req.url, 'http://localhost').search) || {});
     Object.assign(out, { 'x-pocket-dev': '1', 'x-room-id': p.route.roomId, 'x-room-sender': p.route.sender, 'x-room-secret': p.route.secret, 'x-room-from': p.origin });
     return out;
   }
@@ -185,5 +194,5 @@ export function createForward({ room, auth, collaborators, sendJson, modes, guar
     }, () => reject(socket, 502, 'Bad Gateway'));
   }
 
-  return { identify, http: http_, upgrade, watch, isForward: (pathname) => pathname.startsWith('/m/') };
+  return { identify, http: http_, upgrade, watch, watchHttp, isForward: (pathname) => pathname.startsWith('/m/') };
 }

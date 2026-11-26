@@ -71,7 +71,7 @@ export async function renderToolsSection(container, api = window.api) {
     style.id = 'sx-style';
     document.head.append(style);
   }
-  const title = h('h3', null, 'Tools on this computer');
+  const title = h('h3', null, 'Installed on this computer');
   const err = h('p', 'st-err');
   const list = h('ul', 'sx-list');
   const hint = h('p', 'st-note', 'To fix everything in one go, run this in a terminal on this computer: pocket-dev setup');
@@ -79,6 +79,26 @@ export async function renderToolsSection(container, api = window.api) {
   try {
     const { tools } = await api('GET', '/api/setup/status');
     list.replaceChildren(...tools.map(row));
+    const state = await api('GET', '/api/connections');
+    for (const [type, provider] of Object.entries(state.providers).filter(([, p]) => p.installed)) {
+      const label = h('label', 'st-check');
+      const toggle = h('input'); toggle.type = 'checkbox'; toggle.checked = provider.enabled; toggle.disabled = !provider.supported;
+      const name = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' }[type];
+      label.append(toggle, document.createTextNode(`Share ${name}`));
+      toggle.onchange = async () => {
+        const enabled = toggle.checked; toggle.disabled = true; err.textContent = '';
+        try { await api('PATCH', `/api/connections/providers/${type}`, { enabled }); }
+        catch (e) { toggle.checked = !enabled; err.textContent = e.message; }
+        finally { toggle.disabled = false; }
+      };
+      container.append(label);
+      if (!provider.supported) container.append(h('p', 'st-note', `${name} sharing is not available yet. Local chats continue to work.`));
+    }
+    const manage = h('button', 'st-btn', 'Choose authorized computers');
+    manage.type = 'button'; manage.onclick = () => import('/connected-computers.js').then((m) => m.openConnectedComputers());
+    container.append(manage, h('p', 'st-note', 'Only authorized computers can use your shared providers.'), h('h3', null, 'Available from connected computers'));
+    for (const provider of state.shared) container.append(h('p', 'st-note', `${provider.type[0].toUpperCase()}${provider.type.slice(1)} · ${provider.name} · Available`));
+    if (!state.shared.length) container.append(h('p', 'st-note', 'Connected computers will appear here when they share an AI provider with you.'));
   } catch (e) {
     err.textContent = `Could not check the tools: ${e.message}`;
   }

@@ -19,14 +19,15 @@ async function copy(text) {
   if (!copied) throw new Error('Copy failed. Select and copy the invitation link.');
 }
 
-export function mountCollaborators(container, { api, local = false, devices = () => [] }) {
+export function mountCollaborators(container, { api, local = false, legacy = false, devices = () => [] }) {
   container.classList.add('co');
-  const heading = el('h3', '', 'Collaborators');
-  const note = el('p', 'co-note', 'Give someone access to one project and the related folders you choose.');
+  const heading = el('h3', '', legacy ? 'Legacy project access' : 'Collaborators');
+  const note = el('p', 'co-note', legacy ? 'Saved project copies remain available for review. Manage computer connections and AI sharing in Pocket Dev Settings.' : 'Give someone access to one project and the related folders you choose.');
   const enable = el('div'), actions = el('div', 'co-actions'), form = el('form', 'co-form'), list = el('ul', 'co-list');
   const error = el('p', 'co-error'), result = el('div', 'co-result');
   error.setAttribute('role', 'alert'); result.hidden = true; form.hidden = true;
   const add = button('Invite someone', () => edit(null), 'co-primary'); add.disabled = true; actions.append(add);
+  if (legacy) { enable.hidden = true; actions.hidden = true; }
   container.replaceChildren(heading, note, enable, actions, form, result, list, error);
   let state = null, busy = false, invitation = null, inviteTimer, trustKey = '';
   async function act(run) {
@@ -39,7 +40,7 @@ export function mountCollaborators(container, { api, local = false, devices = ()
   function clearInvitation() { invitation = null; clearTimeout(inviteTimer); result.replaceChildren(); result.hidden = true; }
   function renderEnable() {
     enable.replaceChildren();
-    if (state.enabled) return;
+    if (state.enabled || legacy) return;
     enable.append(el('p', 'co-note', local ? 'Select only your own trusted devices to keep as Admin. Other devices will need review on this device. New password logins will require approval there.' : 'On the device itself, open Admin → Collaborators, review your trusted devices, and enable role-based sharing.'));
     if (!local) return;
     const checked = new Set();
@@ -66,7 +67,7 @@ export function mountCollaborators(container, { api, local = false, devices = ()
     return row;
   }
   function edit(grant) {
-    if (busy) return;
+    if (busy || legacy) return;
     clearInvitation(); form.hidden = false; form.replaceChildren();
     const label = el('input'); label.required = true; label.maxLength = 80; label.value = grant?.label || ''; label.placeholder = 'Name or device label';
     const role = select([['viewer', 'Viewer, view and download'], ['developer', 'Developer, edit a project copy']]); role.value = grant?.role || 'viewer';
@@ -134,7 +135,8 @@ export function mountCollaborators(container, { api, local = false, devices = ()
       head.append(el('h4', '', grant.label), el('span', 'co-role', `${grant.role === 'developer' ? 'Developer' : 'Viewer'} · ${grant.status}`));
       const detail = el('p', 'co-note', `${grant.repository.given}${grant.extraFolders.length ? ` · ${grant.extraFolders.length} related folder${grant.extraFolders.length === 1 ? '' : 's'}` : ''} · ${grant.expiresAt ? `Expires ${new Date(grant.expiresAt).toLocaleString()}` : 'Not yet accepted'}`);
       const controls = el('div', 'co-actions');
-      controls.append(button('Edit access', () => edit(grant)), button('New invitation', () => act(() => showInvite(grant))), button('Revoke', () => act(async () => { await api('DELETE', `/api/collaborators/${grant.id}`); clearInvitation(); }), 'co-danger'));
+      if (!legacy) controls.append(button('Edit access', () => edit(grant)), button('New invitation', () => act(() => showInvite(grant))), button('Revoke', () => act(async () => { await api('DELETE', `/api/collaborators/${grant.id}`); clearInvitation(); }), 'co-danger'));
+      if (legacy) controls.append(button('Revoke', () => act(async () => { await api('DELETE', `/api/collaborators/${grant.id}`); }), 'co-danger'));
       if (grant.workspace) controls.append(button('Review project copy', () => {
         if (window.openFiles) window.openFiles(`${grant.workspace}/project`);
         else { copy(`${grant.workspace}/project`).then(() => { error.textContent = 'Project-copy path copied. Open it in Files or Finder on this device.'; }, (err) => { error.textContent = err.message; }); }
@@ -146,6 +148,7 @@ export function mountCollaborators(container, { api, local = false, devices = ()
   async function refresh() {
     try {
       state = await api('GET', '/api/collaborators');
+      if (legacy) container.hidden = !state.collaborators.length;
       add.disabled = !state.enabled;
       // Preserve a partly completed trust review during periodic refreshes.
       const nextTrustKey = JSON.stringify(devices().map((d) => [d.id, d.status]));

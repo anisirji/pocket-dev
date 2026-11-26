@@ -32,7 +32,7 @@ test('create makes a host room, stored 0600, and the device keeps its id', async
   assert.equal(room.deviceId, empty.deviceId);
   assert.equal(room.room.role, 'host');
   assert.equal(room.room.hostId, room.deviceId);
-  assert.equal((fs.statSync(a.file()).mode & 0o777), 0o600);
+  if (process.platform !== 'win32') assert.equal((fs.statSync(a.file()).mode & 0o777), 0o600);
   assert.equal((await a.api('POST', '/create', {})).status, 409, 'one device, one room');
 });
 
@@ -50,7 +50,7 @@ test('invite, join: the code works once, the member gets the room and the host l
   const host = (await a.api('GET', '')).data.room;
   assert.equal(host.members.length, 2);
   const member = host.members.find((m) => m.role === 'member');
-  assert.deepEqual([member.name, member.level, member.folders, member.addresses], ['Desktop', 'collaborator', ['/srv/shared'], [b.base]]);
+  assert.deepEqual([member.name, member.level, member.folders, member.addresses], ['Desktop', 'external', [], [b.base]]);
   assert.equal(r.data.room.id, host.id);
   assert.equal(JSON.stringify(host).includes('Secret'), false, 'the view carries no secrets');
   const third = await startServer(t);
@@ -60,11 +60,11 @@ test('invite, join: the code works once, the member gets the room and the host l
   assert.equal((await b.api('POST', '/join', { code: 'x', host: a.base, level: 'admin', addresses: [b.base] })).status, 409, 'already in a room');
 });
 
-test('a join needs a valid level, folders for a collaborator, and a live code', async (t) => {
+test('joining needs a live code and no mandatory folder sharing', async (t) => {
   const { a, b } = await pair(t);
   await created(a);
   const { data: { code } } = await a.api('POST', '/invite');
-  assert.equal((await b.api('POST', '/join', { code, host: a.base, addresses: [b.base], level: 'collaborator', folders: [] })).status, 400);
+  assert.equal((await b.api('POST', '/join', { code: 'wrong', host: a.base, addresses: [b.base], level: 'collaborator', folders: [] })).status, 403);
   assert.equal((await b.api('POST', '/join', { code: 'wrong', host: a.base, addresses: [b.base], level: 'admin' })).status, 403);
   assert.equal((await b.api('POST', '/join', { code, host: a.base, addresses: [b.base], level: 'admin' })).status, 200, 'a refused attempt did not use the code');
 });
