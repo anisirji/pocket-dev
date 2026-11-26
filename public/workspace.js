@@ -241,6 +241,8 @@ async function saveFile(file) {
     const saved = await api('PUT', '/api/files/text?' + new URLSearchParams({ path: file.path }), content, { 'if-match': file.revision });
     if (!valid()) return;
     file.revision = saved.revision; file.saved = content; file.conflict = null; file.queued = null; renderConflict(); persist();
+    // "Saved" also marks a recovery checkpoint, so an immediate browser reload restores this file and tab.
+    await flushSnapshot(); if (!valid()) return;
     status(`Saved ${file.name}`); error('');
   } catch (failure) { if (failure.status === 409) await validateFile(file, 0); else if (!failure.status) { file.queued = { content, revision: file.revision }; connection(false); persist(); } error(failure.message); status(failure.status === 409 ? 'Save conflict · edits preserved' : 'Save failed · edits preserved'); }
   finally { file.saving = false; if (valid()) { renderTabs(); persist(); } }
