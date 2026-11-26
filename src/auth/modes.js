@@ -15,7 +15,7 @@ const fail = (status, message, extra) => { throw Object.assign(new Error(message
 const within = (p, dir) => { const r = path.relative(dir, p); return r === '' || (!r.startsWith('..') && !path.isAbsolute(r)); };
 
 // Routes that change the machine or who can reach it, whatever the folder.
-const SYSTEM = /^\/api\/(power|apps|forwards|admin|devices|collaborators|handoff|connection|network|settings|local)(\/|$)/;
+const SYSTEM = /^\/api\/(power|apps|camera|forwards|admin|devices|collaborators|handoff|connection|network|settings|local)(\/|$)/;
 // What a collaborator-level device lets a member use at all (see server.js, the guest branch). Anything else is refused there
 // whatever the mode, so it is not worth an approval.
 const GUEST_ROUTES = /^\/api\/(files\/(places|list|download|zip|search|upload|mkdir|rename|trash)|messages(\/.*)?|status|current-access|logout)$/;
@@ -37,6 +37,8 @@ const targetOf = (b) => {
 //   verdict: allow | ask | propose | deny      risks: why it counts as risky (empty when it does not)
 export function classify({ method, path: pathname, query = {}, body, mode, folders = [], statSync = fs.statSync, home = os.homedir() }) {
   const m = String(method).toUpperCase();
+  // Releasing your own camera lease is always safe, including after a mode change.
+  if (m === 'POST' && pathname === '/api/camera/stop') return { verdict: 'allow', risks: [], read: true };
   if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS' || READ_POST.test(pathname)) return { verdict: 'allow', risks: [], read: true };
   if (mode === 'bypass') return { verdict: 'allow', risks: [] };
   if (mode === 'read-only') return { verdict: 'deny', risks: [], why: 'This device only lets you look (read-only).' };

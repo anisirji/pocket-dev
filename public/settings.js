@@ -68,6 +68,9 @@
         <button class="st-link" data-act="screen"><span>Device screen</span><span class="st-chev" aria-hidden="true">›</span></button>
       </section>
       <section>
+        <button class="st-link" data-act="camera"><span>Device camera</span><span class="st-chev" aria-hidden="true">›</span></button>
+      </section>
+      <section>
         <h3>Device limit</h3>
         <div class="st-row">
           <div class="st-stepper">
@@ -297,6 +300,7 @@
   $('[data-act="apps"]').addEventListener('click', () => window.openAppsSheet());
   $('[data-act="health"]').addEventListener('click', () => window.openHealthSheet());
   $('[data-act="screen"]').addEventListener('click', () => window.openScreenSheet());
+  $('[data-act="camera"]').addEventListener('click', () => window.openCameraSheet());
 
   async function refresh() {
     collaborators?.refresh();

@@ -168,7 +168,7 @@ A WhatsApp-style chat between your computers, your phones and the people you inv
 
 <table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/11-health.png" width="240" alt="Health panel with battery and CPU"><br><sub>Health and alerts</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/12-power.png" width="240" alt="Power screen with keep awake and sleep"><br><sub>Power</sub></td></tr></table>
 
-Open apps lists what is running with memory and CPU and can quit or force quit. The health panel and the strip at the top show battery, temperature, CPU, memory and disk, with alerts when something is off. Power can keep the computer awake (`off`, `plugged`, `always`), put it to sleep or shut it down. **Screen view** shows a read-only picture of the main display.
+Open apps lists what is running with memory and CPU and can quit or force quit. The health panel and the strip at the top show battery, temperature, CPU, memory and disk, with alerts when something is off. Power can keep the computer awake (`off`, `plugged`, `always`), put it to sleep or shut it down. **Screen view** shows a read-only picture of the main display. **Device camera** previews a connected camera with Start/Stop and Snapshot controls. Global installation prepares camera support automatically. If setup could not finish, **Install camera support** retries from the phone. See [Camera setup](CAMERA.md).
 
 ### Collaborators and the Admin page
 
@@ -280,7 +280,7 @@ Full table (cookies, CSRF, approval, block, lockdown, security log): [docs/REFER
 
 ## Configuration
 
-`config.json` lives in `~/.pocket-dev/` (or `POCKET_DEV_STATE_DIR`, or exactly at `POCKET_DEV_CONFIG`; on Windows `%USERPROFILE%\.pocket-dev`). Edit it by hand or with `pocket-dev config`. `config set` accepts `port`, `adminPort`, `awake`, `requireApproval`, `approveFromDevices`, `maxDevices`, `chatIdleMinutes`, `batteryAlertPercent`, `temperatureAlertC`, `screenView`, `allowedHosts` (comma separated), `messagesReserveGB` and `greeting`. `port` and `adminPort` apply after a restart; the rest apply right away. Change the password on the Admin page (`pocket-dev admin`). Pocket Dev rereads the file at use, so you can edit it while the server runs.
+`config.json` lives in `~/.pocket-dev/` (or `POCKET_DEV_STATE_DIR`, or exactly at `POCKET_DEV_CONFIG`; on Windows `%USERPROFILE%\.pocket-dev`). Edit it by hand or with `pocket-dev config`. `config set` accepts `port`, `adminPort`, `awake`, `requireApproval`, `approveFromDevices`, `maxDevices`, `chatIdleMinutes`, `batteryAlertPercent`, `temperatureAlertC`, `screenView`, `cameraView`, `allowedHosts` (comma separated), `messagesReserveGB` and `greeting`. `port` and `adminPort` apply after a restart; the rest apply right away. Change the password on the Admin page (`pocket-dev admin`). Pocket Dev rereads the file at use, so you can edit it while the server runs.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -302,6 +302,7 @@ Full table (cookies, CSRF, approval, block, lockdown, security log): [docs/REFER
 | `temperatureAlertC` | `40` | Alert when the battery temperature reaches this many °C, 30 to 70. |
 | `messagesReserveGB` | `5` | While less than this is free, Messages files over 50 MB wait. 0 to 1000. |
 | `screenView` | `true` | Whether a logged-in phone may see the computer's screen. `false` refuses with 403. |
+| `cameraView` | `true` | Whether a logged-in phone may start the computer's camera or install its optional helper. `false` ends capture and refuses access. |
 | `requireApproval` | `false` | New devices wait for approval on the computer. |
 | `approveFromDevices` | `false` | A logged-in owner phone may approve or deny waiting logins. Only the computer turns it on. |
 | `fileRoots` | home folder | Folders Files may show. |

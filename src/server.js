@@ -24,6 +24,8 @@ import { createFilesApi } from './workspace/files.js';
 import { platform } from './core/platform.js';
 import { createCollaborators } from './auth/collaborators.js';
 import { captureScreen } from './machine/screen.js';
+import { createCamera } from './machine/camera.js';
+import { createCameraSupport } from './setup/camera-support.js';
 import { collectHealth } from './machine/health.js';
 import { getPty, terminalsError } from './core/pty-loader.js';
 import { collectPerformance } from './machine/performance.js';
@@ -45,6 +47,8 @@ const BODY_MAX = 64_000;
 const UPLOAD_MAX = 25 * 1024 * 1024;
 
 const config = openConfig(resolveConfigPath());
+const cameraSupport = createCameraSupport();
+const camera = createCamera({ enabled: () => config.read().cameraView !== false, binary: cameraSupport.binary });
 const PORT = Number(process.env.PORT) || config.read().port || 7777;
 const network = () => readNetwork(config);
 const internetOn = () => network().internet.kind !== 'off';
@@ -641,6 +645,34 @@ async function handleApi(req, res, url) {
     return handlePowerApi(req, res, url.pathname.split('/')[4], { readJson, sendJson, wss, sessions });
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  if (resource === 'camera') {
+    const owner = auth.deviceFor(req).id;
+    try {
+      if (['/api/camera', '/api/camera/support', '/api/camera/install', '/api/camera/start', '/api/camera/frame'].includes(url.pathname) && config.read().cameraView === false) return sendJson(res, 403, { error: 'Camera access is turned off. On this computer, run: pocket-dev config set cameraView true' });
+      if (req.method === 'GET' && url.pathname === '/api/camera/support') return sendJson(res, 200, await cameraSupport.status());
+      if (req.method === 'POST' && url.pathname === '/api/camera/install') {
+        await readJson(req);
+        return sendJson(res, 200, cameraSupport.startInstall());
+      }
+      if ((req.method === 'GET' && url.pathname === '/api/camera') || (req.method === 'POST' && url.pathname === '/api/camera/start')) await cameraSupport.status();
+      if (req.method === 'GET' && url.pathname === '/api/camera') return sendJson(res, 200, { cameras: await camera.devices() });
+      if (req.method === 'POST' && url.pathname === '/api/camera/start') {
+        const body = await readJson(req);
+        return sendJson(res, 200, await camera.start(owner, body.camera));
+      }
+      if (req.method === 'POST' && url.pathname === '/api/camera/stop') {
+        const body = await readJson(req);
+        camera.stop(owner, body.id);
+        return sendJson(res, 200, { stopped: true });
+      }
+      if (req.method === 'GET' && url.pathname === '/api/camera/frame') {
+        const jpeg = await camera.frame(owner, url.searchParams.get('id'));
+        res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': jpeg.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        return res.end(jpeg);
+      }
+      return sendJson(res, 404, { error: 'Not found' });
+    } catch (err) { return sendJson(res, err.status || 503, { error: err.message }); }
+  }
   if (req.method === 'GET' && url.pathname === '/api/folders/browse') return sendJson(res, 200, await browseFolders(url));
   if (req.method === 'POST' && url.pathname === '/api/folders/create') return sendJson(res, 200, await browseFolders.create(await readJson(req)));
   // Switching between addresses exists only once internet access is on; before that these routes are not there.
@@ -814,7 +846,7 @@ const PAGES = {
   '/git.js': 'git.js', '/graph.js': 'graph.js', '/git.css': 'git.css',
   '/history.js': 'history.js', '/history.css': 'history.css', '/term-agents.js': 'term-agents.js',
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
-  '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js', '/setup-tools.js': 'setup-tools.js',
+  '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/camera.js': 'camera.js', '/camera.css': 'camera.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js', '/setup-tools.js': 'setup-tools.js',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
   '/connection.js': 'connection.js', '/machine.js': 'machine.js', '/machine.css': 'machine.css', '/network.js': 'network.js',
   '/folder-picker.js': 'folder-picker.js', '/folder-picker.css': 'folder-picker.css',
@@ -1026,7 +1058,7 @@ const access = createPhoneAccess({
   forwards: { ports: () => [...forwards.keys()], open: openForward, close: closeForward },
 });
 tunnel = createTunnel({ port: PORT, isConnected: () => access.view().connected, network, token: readToken, log: auth.admin.log });
-process.once('exit', () => { tunnel.dispose(); remotePorts.closeAll(); });
+process.once('exit', () => { cameraSupport.dispose(); camera.dispose(); tunnel.dispose(); remotePorts.closeAll(); });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { tunnel.dispose(); process.exit(0); });
 // A quiet look at the npm registry, at most every six hours, so the Admin page and the phone can say a newer version exists.
 const versionCheck = createVersionCheck({ version: readInstalledVersion(), config, kind: installKind() === 'global' ? 'global' : 'other', log: (line) => console.error(line) });

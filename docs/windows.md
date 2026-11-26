@@ -30,7 +30,9 @@ pocket-dev doctor
 
 `pocket-dev doctor` is the check. It prints a tick or a cross for Node, npm's global folder on PATH, the `pocket-dev` command, terminals, the tools and port 7777, and the exact next command for each cross. It exits 0 when everything required works.
 
-Installing also adds **Pocket Dev Admin** shortcuts, with the Pocket Dev logo, to your Desktop and Start menu. Windows does not let a program pin itself to the taskbar, so the last click is yours: right-click the shortcut and choose **Pin to taskbar**. This is the one change the install makes without asking. Undo: `pocket-dev admin unpin` (and unpin it from the taskbar yourself). Skip: `$env:POCKET_DEV_NO_PIN=1` before installing, or `npm install -g --ignore-scripts`; `pocket-dev setup` still offers it. This part is written and covered by tests, but it has not been run on a real Windows PC yet.
+Installing also adds **Pocket Dev Admin** shortcuts, with the Pocket Dev logo, to your Desktop and Start menu. Windows does not let a program pin itself to the taskbar, so the last click is yours: right-click the shortcut and choose **Pin to taskbar**. Undo: `pocket-dev admin unpin` (and unpin it from the taskbar yourself). Skip: `$env:POCKET_DEV_NO_PIN=1` before installing, or `npm install -g --ignore-scripts`; `pocket-dev setup` still offers it. This part is written and covered by tests, but it has not been run on a real Windows PC yet.
+
+Installation also prepares camera support automatically: it reuses a working FFmpeg or downloads a verified private helper. It needs no extra commands or administrator access. If the download fails, Pocket Dev still installs; retry from **Settings → Device camera → Install camera support**. Skip automatic camera setup with `POCKET_DEV_NO_CAMERA_INSTALL=1` or `--ignore-scripts`. Camera permission is requested only when you start a preview. [Camera details](CAMERA.md).
 
 ## 3. Start
 

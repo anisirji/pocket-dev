@@ -30,6 +30,7 @@ export const KEYS = {
   batteryAlertPercent: { parse: integer(5, 90), restart: false, help: 'Alert the phone when the battery is at or below this percent and not charging (default 20)' },
   temperatureAlertC: { parse: integer(30, 70), restart: false, help: 'Alert the phone when the battery temperature reaches this many \u00b0C (default 40)' },
   screenView: { parse: boolean, restart: false, help: 'Let a logged-in phone see this computer\u2019s screen: true or false (default true)' },
+  cameraView: { parse: boolean, restart: false, help: 'Let a logged-in phone start this computer\u2019s camera: true or false (default true)' },
   allowedHosts: { parse: hostList, restart: false, help: 'Extra Host names to accept, comma separated (a tunnel domain)' },
   greeting: { parse: oneOf('personal', 'plain'), restart: false, help: 'The note at the end of setup: personal (default) or plain (no name, system or time of day)' },
   updateCheck: { parse: boolean, restart: false, help: 'Look up new Pocket Dev versions on the npm registry every few hours and say so when one exists: true or false (default true)' },

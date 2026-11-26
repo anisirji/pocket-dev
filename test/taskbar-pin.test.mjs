@@ -415,7 +415,7 @@ test('postinstall: never throws, whatever fails', () => {
 });
 
 test('scripts/postinstall.js exits 0 and prints nothing unless it is a global install', () => {
-  const env = { ...process.env, POCKET_DEV_NO_PIN: '1', HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'pd-post-')) };
+  const env = { ...process.env, POCKET_DEV_NO_PIN: '1', POCKET_DEV_NO_CAMERA_INSTALL: '1', HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'pd-post-')) };
   delete env.npm_config_global;
   for (const extra of [{}, { npm_config_global: 'true' }, { npm_config_global: 'true', CI: 'true' }]) {
     const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'postinstall.js')], { env: { ...env, ...extra }, encoding: 'utf8' });

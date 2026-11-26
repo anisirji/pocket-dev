@@ -25,6 +25,7 @@
 - **Git:** see changes, commit and push.
 - **Messages** between your devices, with photos, videos and documents.
 - **Open apps, health and power:** see open apps, battery, CPU and temperature, and sleep or shut down.
+- **Device camera:** view your computer's camera from Settings, with camera selection, Start/Stop controls and downloadable snapshots. New installs prepare camera support automatically; an **Install camera support** button is available if setup needs a retry. [Camera setup](docs/CAMERA.md).
 - **Several computers, one phone** (rooms), with per-device permissions.
 - **Share one project** with someone for 1 hour, 1 day or 7 days through a QR invitation.
 - **Internet access** through a Cloudflare Tunnel: optional, off by default.
@@ -32,7 +33,15 @@
 - **Private by design:** runs on your own computer as your user, logs in with a password or a one-time QR code, needs no cloud account and nothing installed on the phone.
 - **Set up with AI:** [copyable prompts](https://www.theani.me/work/pocket-dev/prompts) for your coding assistant, an [agent setup guide](docs/AI_SETUP.md) and a reusable agent skill.
 
-## What's new in 2.1
+## What's new in 2.2
+
+- **See your computer's camera from your phone.** Open **Settings → Device camera**, choose a camera and tap **Start camera**. **Snapshot** saves a JPEG to your viewing device.
+- **Camera support is set up during installation.** Global installs and upgrades reuse an existing FFmpeg or download a verified private helper. If setup cannot finish, Pocket Dev still installs and the camera view offers a retry button.
+- Previews require login, follow room permissions, and stop when you close or leave the view. Nothing is recorded automatically.
+
+Details: [2.2 release notes](docs/RELEASE_2.2.md) · [Camera setup](docs/CAMERA.md).
+
+## Earlier changes in 2.1
 
 - **New in 2.1.2:** a **copy icon** under every chat message, the **time** on every message, **documents** (PDF and text) that open from Messages and Files, and a tidier code layout.
 - **One Chats list, newest first.** Your Pocket Dev chats and recent computer conversations are mixed by when each was last active, so the conversation you are having on your computer right now sits at the top. The list refreshes by itself while open.
@@ -54,7 +63,8 @@
 > - Your computer may ask about the **firewall**. Allow it on **Private networks**.
 > - A different npm package called `pocket-dev` can take over the command. If you see `unknown command 'start'` or `EEXIST`, run `npm uninstall -g pocket-dev`, then install again.
 > - The first `pocket-dev start` opens a short guided setup. It asks before every change. Run it again any time with `pocket-dev setup`.
-> - **The install itself makes one change without asking:** `npm install -g` adds a **Pocket Dev Admin** shortcut with the Pocket Dev logo: a Dock tile on macOS, Desktop and Start menu shortcuts on Windows, an applications menu entry on Linux. Undo it with `pocket-dev admin unpin`. Skip it with `POCKET_DEV_NO_PIN=1` or `npm install -g --ignore-scripts`. `npx` and CI never add it.
+> - **Camera support is prepared automatically:** `npm install -g` reuses an existing FFmpeg or downloads a verified private helper. If the download fails, Pocket Dev still installs and you can retry from **Settings → Device camera**. Skip automatic camera setup with `POCKET_DEV_NO_CAMERA_INSTALL=1`.
+> - **The install also adds an Admin shortcut:** `npm install -g` adds a **Pocket Dev Admin** shortcut with the Pocket Dev logo: a Dock tile on macOS, Desktop and Start menu shortcuts on Windows, an applications menu entry on Linux. Undo it with `pocket-dev admin unpin`. Skip it with `POCKET_DEV_NO_PIN=1` or `npm install -g --ignore-scripts`. `npx` and CI never add it.
 >
 > Step by step for your system: [Windows](https://github.com/anisirji/pocket-dev/blob/main/docs/windows.md), [macOS](https://github.com/anisirji/pocket-dev/blob/main/docs/macos.md), [Linux](https://github.com/anisirji/pocket-dev/blob/main/docs/linux.md).
 
@@ -75,7 +85,7 @@ pocket-dev start
 
 **Updating.** The guided setup starts by checking for a newer version and asks `Update now? [Y/n]` (Enter means yes), so a new install is current from the first minute. Later, `pocket-dev update` does the same, and `pocket-dev update --check` only says whether one exists. When a newer version is on npm, the phone shows an update icon beside the Settings gear and a notice every time you open Pocket Dev, and the Admin page shows an **Update** button that installs it on the computer and restarts the background service. The computer also gets a desktop notification while an update is waiting (`pocket-dev config set updateNotify false` turns that off). Installing stays on the computer: the phone only tells you.
 
-**Privacy.** The only thing Pocket Dev looks up online by itself is the newest version number: one plain request to the npm registry, at most every six hours, with nothing about you or your computer in it. Turn it off with `pocket-dev config set updateCheck false` or `POCKET_DEV_NO_UPDATE_CHECK=1`. Everything else stays on your computer, as before.
+**Privacy.** Installation downloads the camera helper when it is missing; you can skip this with `POCKET_DEV_NO_CAMERA_INSTALL=1`. After installation, the automatic online lookup is the newest version number: one plain request to the npm registry, at most every six hours, with nothing about you or your computer in it. Turn it off with `pocket-dev config set updateCheck false` or `POCKET_DEV_NO_UPDATE_CHECK=1`. Everything else stays on your computer, as before.
 4. If your computer asks, allow Pocket Dev through the firewall.
 
 The Admin page is one click away from the Dock, Start menu or applications menu (see the note above). `pocket-dev admin pin --status` shows where it is. A new login code any time: `pocket-dev qr`. The guide again: `pocket-dev setup`. Scripts and CI never get a question: without a terminal, `pocket-dev start` prints the status and the command, then starts. `--no-setup` (or `POCKET_DEV_NO_SETUP=1`) skips the guide.

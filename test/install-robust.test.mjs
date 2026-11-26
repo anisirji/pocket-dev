@@ -32,7 +32,7 @@ test('node-pty is optional, so a failed build or download cannot fail an install
   for (const hook of ['preinstall', 'install', 'prepare', 'prepack', 'prepublish']) {
     assert.equal(pkg.scripts[hook], undefined, `${hook} runs during npm install and can fail it (a Git install runs it in a folder that may be gone)`);
   }
-  // The one hook allowed is the Admin shortcut. It cannot fail an install: the script swallows every error and exits 0, and
+  // The postinstall hook adds the Admin shortcut and optional camera helper. It cannot fail an install: it exits 0, and
   // `|| exit 0` covers the script not being there at all. test/taskbar-pin.test.mjs runs it both ways.
   assert.equal(pkg.scripts.postinstall, 'node scripts/postinstall.js || exit 0');
   const lock = JSON.parse(fs.readFileSync(path.join(REPO, 'package-lock.json'), 'utf8'));
@@ -44,5 +44,5 @@ test('node-pty is optional, so a failed build or download cannot fail an install
 test('the package ships the files the installed app needs', () => {
   const r = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: REPO, encoding: 'utf8' });
   const files = JSON.parse(r.stdout)[0].files.map((f) => f.path);
-  for (const needed of ['bin/pocket-dev.js', 'bin/cli.js', 'server.js', 'src/server.js', 'src/setup/doctor.js', 'src/core/pty-loader.js', 'public/terminals-off.js', 'docs/SETUP.md']) assert.ok(files.includes(needed), needed);
+  for (const needed of ['bin/pocket-dev.js', 'bin/cli.js', 'server.js', 'src/server.js', 'src/setup/doctor.js', 'src/setup/camera-support.js', 'scripts/postinstall.js', 'src/core/pty-loader.js', 'public/terminals-off.js', 'docs/SETUP.md']) assert.ok(files.includes(needed), needed);
 });
