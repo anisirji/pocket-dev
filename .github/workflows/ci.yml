@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run complete test suite
-        run: npm test
+        run: node --test --test-concurrency=2 test/*.test.mjs
       - name: Install browser check dependencies
         run: |
           npm install --no-save --package-lock=false playwright

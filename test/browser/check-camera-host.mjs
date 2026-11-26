@@ -75,6 +75,9 @@ try {
     const report = [...(await peer.getStats()).values()].find((entry) => entry.type === 'inbound-rtp' && entry.kind === 'video');
     return { frames: report?.framesDecoded || 0, at: performance.now() };
   });
+  // Negotiation can finish before the decoder starts, especially on hosted runners.
+  // Measure sustained playback after actual frames arrive, without counting startup delay.
+  await until(async () => (await decoded()).frames >= 5, 15000);
   const before = await decoded();
   await phone.waitForTimeout(3000);
   const after = await decoded();

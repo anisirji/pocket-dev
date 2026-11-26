@@ -129,5 +129,12 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
   const current = () => local('GET', '/api/state').then((r) => r.data);
   const tunnelStatus = (status) => until(async () => (await current()).network.tunnel.status === status);
   const recorded = (name) => fs.readFileSync(path.join(record, name), 'utf8');
+  // Startup output alone is not an HTTP readiness check. Wait for the public status route
+  // before tests open their first connection, including on slower hosted runners.
+  await until(async () => {
+    assert.equal(proc.exitCode, null, `server exited before accepting requests:\n${logs}`);
+    try { const response = await request('GET', '/api/status'); return response.status === 200 && response.data.status === 'none'; }
+    catch { return false; }
+  });
   return { root, home, stateDir: state, port, adminPort, base, admin, proc, logs: () => logs, request, local, login, status: current, tunnelStatus, recorded, record, config, lanIp };
 }
