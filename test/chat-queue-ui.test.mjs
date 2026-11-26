@@ -32,6 +32,7 @@ function fixture(t) {
   const elements = new Map();
   const stored = new Map(), savedDrafts = new Map();
   const runtime = {
+    queueWorkspaceSnapshot() {},
     convo: { id: chat.id, chat: chat.view(), online: true, events: chat.events, files: [] },
     ui: { queue, input: el('textarea'), send: el('button'), attach: el('button') }, queueKey: '', removingQueued: new Set(), queueEdits: new Map(), TOOLS: { codex: 'Codex', claude: 'Claude' },
     q: (selector) => { if (!elements.has(selector)) elements.set(selector, el('div')); return elements.get(selector); },

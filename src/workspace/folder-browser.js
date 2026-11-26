@@ -31,11 +31,23 @@ export function createFolderBrowser({ home = os.homedir(), config = { read: () =
     }
     return result;
   }
+  async function recentFolders() {
+    const saved = config.read().recentFolders;
+    const paths = Array.isArray(saved) ? saved.filter((value) => typeof value === 'string').slice(0, 10) : [];
+    const seen = new Set();
+    const folders = await Promise.all(paths.map(async (given) => {
+      try {
+        const real = await fs.realpath(path.resolve(home, expand(given)));
+        return (await fs.stat(real)).isDirectory() ? { name: path.basename(real) || real, path: real } : null;
+      } catch { return null; }
+    }));
+    return folders.filter((entry) => entry && !seen.has(entry.path) && seen.add(entry.path));
+  }
   async function create({ parent, name, kind } = {}) {
     if (typeof name !== 'string' || typeof parent !== 'string' || parent.includes('\0')) throw error(400, 'Enter a name.');
     name = name.trim();
     if (!name) throw error(400, 'Enter a name.');
-    if (name === '.' || name === '..' || /[/\0]/.test(name) || Buffer.byteLength(name) > 255) throw error(400, 'Use a name without slashes.');
+    if (name === '.' || name === '..' || /[/\\\0]/.test(name) || Buffer.byteLength(name) > 255) throw error(400, 'Use a name without slashes.');
     if (kind !== 'folder' && kind !== 'file') throw error(400, 'Choose folder or file.');
     try {
       const dir = await fs.realpath(path.resolve(home, expand(parent)));
@@ -83,7 +95,7 @@ export function createFolderBrowser({ home = os.homedir(), config = { read: () =
         breadcrumbs.push({ name, path: current });
       }
       return { path: dir, parent: path.dirname(dir) === dir ? null : path.dirname(dir), breadcrumbs,
-        shortcuts: await shortcuts(), entries: entries.slice(0, LIMIT).map(({ name, path }) => ({ name, path })), truncated: entries.length > LIMIT };
+        shortcuts: await shortcuts(), recent: await recentFolders(), entries: entries.slice(0, LIMIT).map(({ name, path }) => ({ name, path })), truncated: entries.length > LIMIT };
     } catch (err) {
       if (err.status) throw err;
       if (err.code === 'ENOENT') throw error(404, 'This folder no longer exists. Choose another location.');

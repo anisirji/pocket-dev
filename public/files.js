@@ -288,10 +288,24 @@
   }
 
   const readOnly = () => !!(state.dir?.readOnly || state.places?.readOnly || (state.places?.scoped && state.error));
+  let folderBrowser;
+  function chooseFolder() {
+    if (!window.PocketDevFolderPicker || state.places?.scoped) return;
+    if (!folderBrowser) {
+      folderBrowser = window.PocketDevFolderPicker.create({ api, title: 'Open folder', selectLabel: 'Open folder', overlays: () => overlays,
+        onSelect: async (path) => {
+          await api('GET', '/api/files/list?' + qs({ path }));
+          folderBrowser.close(); return navigate(path);
+        } });
+      document.body.append(folderBrowser.element);
+    }
+    return folderBrowser.open(state.dir?.path || '');
+  }
   function moreItems() {
     const dir = state.dir?.path;
     const pinned = state.places?.pinned.some((p) => p.path === dir);
     const items = [
+      ...(!state.places?.scoped && window.PocketDevFolderPicker ? [{ label: 'Open folder', icon: 'folder', run: chooseFolder }] : []),
       ...(!readOnly() ? [{ label: 'New folder', icon: 'newfolder', run: newFolder }] : []),
       { label: 'Select', icon: 'select', run: () => enterSelect(null) },
       { label: 'Show hidden files', icon: 'eye', checked: state.showHidden, run: () => { state.showHidden = !state.showHidden; store.set('hidden', state.showHidden ? '1' : '0'); refresh(); } },

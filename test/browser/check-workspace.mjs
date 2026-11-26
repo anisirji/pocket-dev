@@ -72,12 +72,12 @@ try {
   await frame.locator('.term.active').filter({ hasText: 'WORKSPACE_TERMINAL_OK' }).waitFor();
   const projectSessions = (await server.request('GET', '/api/sessions', { cookie })).data.filter((session) => session.cwd === fs.realpathSync(project));
   assert.ok(projectSessions.length > 0, 'workspace terminals start in the selected project');
-  await page.getByRole('button', { name: 'Codex', exact: true }).click();
+  await page.locator('#terminalOptions').click(); await page.getByRole('button', { name: 'Codex terminal', exact: true }).click();
   await frame.locator('.term.active').filter({ hasText: 'codex fixture ready' }).waitFor();
-  await page.getByRole('button', { name: 'Claude', exact: true }).click();
+  await page.locator('#terminalOptions').click(); await page.getByRole('button', { name: 'Claude terminal', exact: true }).click();
   await frame.locator('.term.active').filter({ hasText: 'claude fixture ready' }).waitFor();
   const count = (await server.request('GET', '/api/sessions', { cookie })).data.length;
-  await page.getByRole('button', { name: 'Codex', exact: true }).click();
+  await page.locator('#terminalOptions').click(); await page.getByRole('button', { name: 'Codex terminal', exact: true }).click();
   await frame.locator('.term.active').filter({ hasText: 'codex fixture ready' }).waitFor();
   assert.equal((await server.request('GET', '/api/sessions', { cookie })).data.length, count, 'AI tabs reuse their running project sessions');
   await page.getByRole('button', { name: 'File README.md', exact: true }).click();
@@ -86,7 +86,7 @@ try {
   await page.getByRole('button', { name: 'Files', exact: true }).click();
   await page.getByRole('button', { name: 'File notes.txt', exact: true }).click();
   await content.click(); await page.keyboard.insertText('Mobile draft');
-  await page.getByRole('button', { name: 'Terminal & AI', exact: true }).click();
+  await page.locator('.ws-mobile').getByRole('button', { name: 'Terminal', exact: true }).click();
   await page.getByRole('button', { name: 'Editor', exact: true }).click();
   assert.match(await content.textContent(), /Mobile draft/);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -97,7 +97,7 @@ try {
   await page.reload();
   await page.getByRole('button', { name: 'Open notes.txt', exact: true }).waitFor();
   assert.match(await content.textContent(), /Mobile draft/);
-  await page.getByRole('button', { name: 'Terminal & AI', exact: true }).click();
+  await page.locator('.ws-mobile').getByRole('button', { name: 'Terminal', exact: true }).click();
   await page.getByRole('button', { name: 'Expand terminal panel', exact: true }).click();
   await page.getByRole('button', { name: 'Editor', exact: true }).click();
   await content.waitFor({ state: 'visible' });

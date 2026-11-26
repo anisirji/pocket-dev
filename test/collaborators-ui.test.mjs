@@ -103,7 +103,7 @@ for (const local of [false, true]) {
       const browse = field.querySelectorAll('button').find((b) => b.textContent === 'Browse folders');
       await browse.onclick();
       await field.querySelectorAll('button').find((b) => b.attrs['aria-label'] === `Open folder ${name}`).onclick();
-      await field.querySelectorAll('button').find((b) => b.textContent === 'Select this folder').onclick();
+      await field.querySelectorAll('button').find((b) => ['Select repository', 'Select folder'].includes(b.textContent)).onclick();
     };
     await choose(fields()[0], 'website');
     f.find('Add related folder').onclick();

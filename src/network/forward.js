@@ -132,6 +132,11 @@ export function createForward({ room, auth, collaborators, sendJson, canConnect 
     if (!targetId) return sendJson(res, 404, { error: 'Not found' });
     const p = prepare(req, targetId, rest);
     if (p.error) return sendJson(res, p.status, { error: p.error });
+    // An SSE workspace feed is long-lived just like a socket; revoking the front-door login must close it too.
+    if (p.device && rest === '/api/files/watch') {
+      const check = setInterval(() => { if (!auth.isActiveDevice(p.device.id)) res.destroy(); }, 2000);
+      check.unref?.(); res.once('close', () => clearInterval(check));
+    }
     const base = await reach(p.route);
     if (!base) { const u = unreachable(p); return sendJson(res, u.status, { error: u.error, deviceId: u.deviceId }); }
     const lib = base.protocol === 'https:' ? https : http;

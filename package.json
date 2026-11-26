@@ -1,6 +1,6 @@
 {
   "name": "@anisirji/pocket-dev",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
   "author": {
     "name": "anisirji",
@@ -80,6 +80,7 @@
     "docs/RELEASE_2.2.md",
     "docs/RELEASE_2.3.md",
     "docs/RELEASE_2.4.md",
+    "docs/RELEASE_2.5.md",
     "docs/screenshots",
     "docs/diagrams",
     "docs/SETUP.md",

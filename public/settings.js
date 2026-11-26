@@ -284,7 +284,7 @@
     if (!confirm(question)) return;
     try {
       await api('DELETE', `/api/devices/${d.id}`);
-      if (isCurrent) return location.replace('/login.html');
+      if (isCurrent) { await window.clearPocketWorkspaceData?.(); return location.replace('/login.html'); }
       await refresh();
     } catch (err) {
       msg('err', 'devices', err.message);

@@ -659,6 +659,10 @@ async function handleApi(req, res, url) {
     return handlePowerApi(req, res, url.pathname.split('/')[4], { readJson, sendJson, wss, sessions });
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  if (req.method === 'GET' && url.pathname === '/api/local/workspace') {
+    if (req.roomPeer) return sendJson(res, 403, { error: 'Workspace login identity is local to this device.' });
+    return sendJson(res, 200, { owner: auth.deviceFor(req).id, deviceId: room.deviceId() });
+  }
   if (resource === 'camera') {
     const owner = auth.deviceFor(req).id;
     try {
@@ -757,6 +761,13 @@ async function handleApi(req, res, url) {
       if (!session) return sendJson(res, 404, { error: 'No such session' });
       destroySession(session);
       return sendJson(res, 204);
+    }
+    case 'PATCH sessions/:key': {
+      const session = sessions.get(key), { title } = await readJson(req);
+      if (!session) return sendJson(res, 404, { error: 'No such session' });
+      if (typeof title !== 'string' || !title.trim() || title.length > 100 || /[\x00-\x1f\x7f]/.test(title)) return sendJson(res, 400, { error: 'Use a terminal name of 1 to 100 characters.' });
+      session.title = title.trim();
+      return sendJson(res, 200, sessionView(session));
     }
     case 'GET folders':
       return sendJson(res, 200, listFolders());
@@ -863,7 +874,10 @@ const handleHistory = createHistoryApi({
   },
 });
 const handleApps = createAppsApi({ sendJson, readJson });
-const handleFiles = createFilesApi({ sendJson, readJson, config, sendToMessages: (req, file, name) => messages.adopt(req, file, name) });
+const handleFiles = createFilesApi({ sendJson, readJson, config, sendToMessages: (req, file, name) => messages.adopt(req, file, name),
+  workspaceIdentity: (req) => ({ owner: auth.deviceFor(req)?.id, deviceId: room.deviceId() }),
+  workspaceActive: (req) => Boolean(auth.deviceFor(req)) && !collaborators.guest(req) && (!req.roomPeer || connections.connected(req.roomPeer.origin)),
+});
 
 const PAGES = {
   '/': 'index.html', '/index.html': 'index.html', '/login.html': 'login.html',
@@ -876,6 +890,8 @@ const PAGES = {
   '/camera-host.html': 'camera-host.html', '/camera-host.js': 'camera-host.js', '/camera-host.css': 'camera-host.css',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
   '/workspace.html': 'workspace.html', '/workspace.js': 'workspace.js', '/workspace.css': 'workspace.css',
+  '/workspace-core.js': 'workspace-core.js',
+  '/workspace-cleanup.js': 'workspace-cleanup.js',
   '/vendor/workspace-editor.js': 'vendor/workspace-editor.js',
   '/connection.js': 'connection.js', '/machine.js': 'machine.js', '/machine.css': 'machine.css', '/network.js': 'network.js',
   '/folder-picker.js': 'folder-picker.js', '/folder-picker.css': 'folder-picker.css',
@@ -887,7 +903,7 @@ const PAGES = {
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
   '/welcome.js': 'welcome.js', '/greeting-copy.js': 'greeting-copy.js', '/favicon.svg': 'favicon.svg', '/keep-caret.js': 'keep-caret.js', '/file-choice.js': 'file-choice.js', '/update-notice.js': 'update-notice.js', '/update-notice.css': 'update-notice.css',
 };
-const PUBLIC_PAGES = new Set(['login.html', 'invite.html', 'invite.js', 'guest.css', 'favicon.svg']);
+const PUBLIC_PAGES = new Set(['login.html', 'invite.html', 'invite.js', 'guest.css', 'favicon.svg', 'workspace-cleanup.js']);
 const CAMERA_HOST_PAGES = new Set(['camera-host.html', 'camera-host.js', 'camera-host.css']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
 
@@ -903,7 +919,7 @@ function servePage(req, res, pathname) {
     return res.end();
   }
   res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff',
-    'x-frame-options': file === 'index.html' && new URL(req.url, 'http://localhost').searchParams.get('workspacePanel') === '1' ? 'SAMEORIGIN' : 'DENY',
+    'x-frame-options': file === 'index.html' && ['1', 'chat'].includes(new URL(req.url, 'http://localhost').searchParams.get('workspacePanel')) ? 'SAMEORIGIN' : 'DENY',
     ...(CAMERA_HOST_PAGES.has(file) && { 'permissions-policy': 'camera=(self), microphone=()' }) });
   fs.createReadStream(path.join(PACKAGE_ROOT, 'public', file)).pipe(res);
 }

@@ -4,12 +4,22 @@
   if (typeof window.PocketDevConnection !== 'function' || typeof window.PocketDevDrafts !== 'function') {
     const message = window.pocketDev.clientUpdateMessage;
     window.pocketDevChat = {
+    setWorkspace(value) {
+      const changed = workspace?.rootPath !== value.rootPath; workspace = value;
+      if (changed) { list = []; computer = []; listKey = ''; optionsPromise = null; replace([{ layer: 'list' }, ...(value.activeChatId ? [{ layer: 'convo', id: value.activeChatId }] : [])]); }
+    },
+    addContext(path) {
+      const text = `Please consider this workspace path: ${path}`;
+      ui.input.value = [ui.input.value, text].filter(Boolean).join('\n'); saveDraft(); renderComposer(); ui.input.focus();
+    },
       open() { window.pocketDev.showClientError(message); },
       async startFromSession() { throw new Error(message); },
     };
     return;
   }
   const TOOLS = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' };
+  let workspace = null, presentationVisible = true, snapshotTimer;
+  const inWorkspace = (chat) => !workspace?.rootPath || chat.cwd === workspace.rootPath;
   const WAITING = ['waiting for you', 'wait'];
   const STATUS = {
     running: ['running', 'run'],
@@ -393,7 +403,9 @@
   const sameLayer = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
   const sharedOverlays = window.pocketDev?.overlays;
-  const nav = sharedOverlays ? overlayNav(sharedOverlays) : historyNav();
+  // Embedded AI navigation belongs to its panel. Child-frame history must not consume the parent folder dialog's Back entry.
+  const embeddedWorkspace = typeof parent !== 'undefined' && parent !== window && new URLSearchParams(location.search).get('workspacePanel') === 'chat';
+  const nav = embeddedWorkspace ? { push: apply, replace: apply, pop: (n) => apply(stack.slice(0, -n)) } : sharedOverlays ? overlayNav(sharedOverlays) : historyNav();
   const push = (...layers) => nav.push([...stack, ...layers]);
   const replace = (next) => nav.replace(next);
   const pop = (n) => n > 0 && n <= stack.length && nav.pop(n);
@@ -449,16 +461,16 @@
       },
     };
   }
-  const SAVED = 'pd.chat.stack';
+  const savedKey = () => workspace?.rootPath ? `pd.chat.stack.workspace:${workspace.rootPath}` : 'pd.chat.stack';
   function saveStack(next) {
     try {
-      if (next.length) sessionStorage.setItem(SAVED, JSON.stringify(next));
-      else sessionStorage.removeItem(SAVED);
+      if (next.length) sessionStorage.setItem(savedKey(), JSON.stringify(next));
+      else sessionStorage.removeItem(savedKey());
     } catch {}
   }
   function savedStack() {
     try {
-      const s = JSON.parse(sessionStorage.getItem(SAVED));
+      const s = JSON.parse(sessionStorage.getItem(savedKey()));
       return Array.isArray(s) ? s : null;
     } catch {
       return null;
@@ -491,6 +503,7 @@
     }
     if (next.length && !id) refreshList();
     if (sharedOverlays) saveStack(next);
+    if (workspace && parent !== window) parent.postMessage({ type: 'pd-workspace-chat', root: workspace.rootPath, id }, location.origin);
     if (top() !== prev[prev.length - 1]?.layer) closeKeyboard();
     if (!next.length) {
       hideToast();
@@ -553,7 +566,7 @@
       // Replacing rows under a finger swallows the tap, so only rebuild when something visible changed.
       const key = JSON.stringify([items.chats, computer, computerMore, computerError]) + Math.floor(Date.now() / 60000);
       if (key === listKey && ui.rows.querySelector('.chat-row')) return;
-      list = items.chats;
+      list = items.chats.filter(inWorkspace);
       listKey = key;
       renderList();
     } catch (err) {
@@ -664,8 +677,8 @@
       if (seq !== listSeq || !Array.isArray(items.chats) || !Array.isArray(items.computer) || query !== ui.search.value.trim()) return;
       const key = JSON.stringify([items.chats, items.computer, items.hasMore, computerError]) + Math.floor(Date.now() / 60000);
       if (key === listKey && ui.rows.querySelector('.chat-row')) return;
-      list = items.chats;
-      computer = items.computer;
+      list = items.chats.filter(inWorkspace);
+      computer = items.computer.filter(inWorkspace);
       computerMore = items.hasMore;
       listKey = key;
       renderList();
@@ -677,7 +690,7 @@
 
   ui.refresh.onclick = () => { computerError = ''; refreshList(); };
   ui.search.oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { computerError = ''; refreshList(); }, 250); };
-  ui.close.onclick = closeAll;
+  ui.close.onclick = () => workspace?.rootPath ? parent.postMessage({ type: 'pd-workspace-collapse-chat' }, location.origin) : closeAll();
   q('.chat-git').hidden = !window.pocketDev?.openGit;
   q('.chat-git').onclick = () => convo.chat && window.pocketDev.openGit(convo.chat.cwd);
   ui.newBtn.onclick = () => push({ layer: 'new' });
@@ -773,6 +786,7 @@
       return;
     }
     ensureDraft(opts);
+    if (workspace?.rootPath) draft.cwd = workspace.rootPath;
     const groups = await loadFolders(opts);
     if (!hasLayer(stack, 'new')) return;
     draft.cwd ||= groups[0]?.rows[0]?.path || opts.home || '';
@@ -841,7 +855,8 @@
     renderFolders();
     const body = el('div', 'chat-sheet-body');
     const folderField = window.PocketDevFolderPicker?.field(path, { api, label: 'Folder', onSelect: () => { draft.cwd = path.value; renderFolders(); } }) ?? field('Folder', path);
-    body.append(seg, segNote, chips, folderField, folders);
+    if (workspace?.rootPath) body.append(seg, segNote, chips, el('p', 'chat-folder-path', workspace.rootPath));
+    else body.append(seg, segNote, chips, folderField, folders);
     const foot = el('div', 'chat-sheet-foot');
     foot.append(start);
     sheet.replaceChildren(sheetHead('New chat'), body, foot);
@@ -1091,6 +1106,7 @@
     return queueEdits.get(id);
   }
   function saveDraft(id = convo.id, text = ui.input.value, files = convo.files) {
+    queueWorkspaceSnapshot();
     if (!id) return;
     const edit = queueEdits.get(id);
     if (edit) { edit.text = text; persistQueueEdit(id); return; }
@@ -1112,6 +1128,11 @@
     seed = null;
     resetLog();
     ui.input.value = draft.text;
+    if (workspace?.cachedChat?.id === id) {
+      convo.chat ||= workspace.cachedChat.chat;
+      if (!draft.text && workspace.cachedChat.draft) ui.input.value = workspace.cachedChat.draft;
+      for (const event of workspace.cachedChat.events || []) upsert(event);
+    }
     queueKey = '';
     ui.queue.hidden = true;
     ui.queue.replaceChildren();
@@ -1186,7 +1207,7 @@
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) saveDraft();
-    else if (listVisible()) refreshList();
+    else { if (listVisible()) refreshList(); schedule(); }
   });
   window.addEventListener('pagehide', () => saveDraft());
 
@@ -1234,7 +1255,12 @@
     convo.dirty.add(id);
     schedule();
   }
+  function queueWorkspaceSnapshot() {
+    if (workspace && !snapshotTimer) snapshotTimer = setTimeout(() => { snapshotTimer = null; parent.postMessage({ type: 'pd-workspace-chat-update', root: workspace.rootPath }, location.origin); }, 500);
+  }
   function schedule() {
+    queueWorkspaceSnapshot();
+    if (!presentationVisible || document.hidden) return;
     convo.frame ||= requestAnimationFrame(flush);
   }
 
@@ -2348,6 +2374,16 @@
   });
 
   window.pocketDevChat = {
+    snapshot: () => convo.id ? { root: workspace?.rootPath, id: convo.id, chat: convo.chat, events: convo.events.slice(-300), draft: ui.input.value } : null,
+    setVisible(visible) { presentationVisible = visible; if (visible) schedule(); },
+    setWorkspace(value) {
+      const changed = workspace?.rootPath !== value.rootPath; workspace = value;
+      if (changed) { nav.replace?.([]); list = []; computer = []; listKey = ''; optionsPromise = null; if (value.activeChatId) showChat({ id: value.activeChatId }); else { if (stack.length) replace([{ layer: 'list' }]); else push({ layer: 'list' }); } }
+    },
+    addContext(path) {
+      const text = `Please consider this workspace path: ${path}`;
+      ui.input.value = [ui.input.value, text].filter(Boolean).join('\n'); saveDraft(); renderComposer(); ui.input.focus();
+    },
     open(chatId) {
       if (chatId) return showChat({ id: chatId });
       if (!stack.length) push({ layer: 'list' });

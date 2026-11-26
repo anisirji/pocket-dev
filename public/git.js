@@ -673,8 +673,8 @@ const noteEl = el('div');
 const pickWrap = el('div', { class: 'g-pick', hidden: true });
 const picker = window.PocketDevFolderPicker.create({
   api,
-  title: 'Open a git repository',
-  selectLabel: 'Open this folder',
+  title: 'Select repository',
+  selectLabel: 'Select repository',
   onSelect: (folder) => openFolder(folder),
   onClose: () => {
     pickWrap.hidden = true;
@@ -688,7 +688,7 @@ function showPicker() {
   pickWrap.hidden = false;
   screensEl.hidden = true;
   window.pocketDev?.overlays.open('git-folder', () => { if (!pickWrap.hidden) picker.close(); });
-  picker.open('');
+  picker.open(state.repo || '');
 }
 
 // The server turns any folder inside a repository into its top level and remembers it for the dropdown.

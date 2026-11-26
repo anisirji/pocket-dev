@@ -197,18 +197,17 @@ try {
   await page.evaluate(() => setTestViewport({}));
   await page.locator('#cmd').evaluate((node) => node.blur());
   await page.locator('#new').click();
-  await page.locator('#sheetAction').getByRole('button', { name: 'Browse folders', exact: true }).click();
-  await page.locator('#sheetBody').getByRole('button', { name: 'Open folder website-project', exact: true }).click();
-  await page.waitForFunction(() => document.querySelector('#sheetBody .fp-selected')?.textContent === '/tmp/website-project');
-  assert.equal(await page.locator('#sheetBody').getByRole('button', { name: 'Open terminal here', exact: true }).isEnabled(), true);
+  const terminalPicker = page.getByRole('dialog', { name: 'Open terminal', exact: true });
+  await terminalPicker.getByRole('button', { name: 'Open folder website-project', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('dialog[open] .fp-crumbs [aria-current]')?.title === '/tmp/website-project');
+  assert.equal(await terminalPicker.getByRole('button', { name: 'Open terminal here', exact: true }).isEnabled(), true);
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
-    await page.locator('#sheetBody').getByRole('button', { name: 'Open terminal here', exact: true }).scrollIntoViewIfNeeded();
-    await inViewport('#sheetBody .fp-footer .fp-primary');
+    await settle();
+    await inViewport('dialog[open] .fp-footer .fp-primary', { aboveStatus: true });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   }
-  await page.locator('#sheetBody').getByRole('button', { name: 'Cancel', exact: true }).click();
-  await page.locator('#sheetClose').click();
+  await terminalPicker.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.setViewportSize({ width: 393, height: 852 });
   await page.locator('#settingsBtn').click();
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
@@ -276,9 +275,9 @@ try {
   await page.waitForSelector('.chat-start');
   const chatFolder = page.locator('.chat .fp-field').filter({ has: page.getByLabel('Folder', { exact: true }) });
   await chatFolder.getByRole('button', { name: 'Browse folders', exact: true }).click();
-  await chatFolder.locator('.fp-locations').getByRole('button', { name: 'Home', exact: true }).click();
+  await chatFolder.getByLabel('Location', { exact: true }).selectOption('/tmp');
   await chatFolder.getByRole('button', { name: 'Open folder website-project', exact: true }).click();
-  await chatFolder.getByRole('button', { name: 'Select this folder', exact: true }).click();
+  await chatFolder.getByRole('button', { name: 'Select folder', exact: true }).click();
   assert.equal(await chatFolder.getByLabel('Folder', { exact: true }).inputValue(), '/tmp/website-project');
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
   await settle();

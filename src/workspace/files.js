@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { platform } from '../core/platform.js';
 import { fromConnector } from '../network/transport.js';
 import { pipeline } from 'node:stream/promises';
+import { watchWorkspace } from './watch.js';
 
 const GB = 1024 ** 3;
 const LIST_MAX = 2000;
@@ -131,8 +132,9 @@ const DEFAULT_UPLOAD_MAX = 2 * GB;
 const DEFAULT_ZIP_MAX = 4 * GB;
 
 // config is { read(), update(changes) }: read() re-reads config.json, so settings are taken once per request.
-export function createFilesApi({ sendJson, readJson, config, sendToMessages = null }) {
+export function createFilesApi({ sendJson, readJson, config, sendToMessages = null, workspaceIdentity = () => ({ owner: 'local' }), workspaceActive = () => true }) {
   const editorLocks = new Map();
+  const streams = new Map();
   const home = fs.realpathSync(os.homedir());
   let settingsKey = null;
   let settings;
@@ -205,7 +207,7 @@ export function createFilesApi({ sendJson, readJson, config, sendToMessages = nu
     if (scope?.blocked(full)) return null;
     let st;
     try { st = await fsp.lstat(full); } catch { return null; }
-    const base = { name, path: full, mtime: Math.round(st.mtimeMs) };
+    const base = { name, path: full, mtime: Math.round(st.mtimeMs), fileId: `${st.dev}:${st.ino}` };
     if (st.isDirectory()) return { ...base, type: 'dir', size: 0, mime: null };
     if (st.isFile()) return { ...base, type: 'file', size: st.size, mime: mimeOf(name) };
     if (!st.isSymbolicLink()) return null;
@@ -436,12 +438,38 @@ export function createFilesApi({ sendJson, readJson, config, sendToMessages = nu
       if (bytes.length > EDIT_MAX) fail(413, 'The editor supports text files up to 1 MB.');
       const content = bytes.toString('utf8');
       if (bytes.includes(0) || !Buffer.from(content, 'utf8').equals(bytes)) fail(415, 'This file is not UTF-8 text. Open it in Files to preview or download.');
-      return { path: file, name: path.basename(file), content, revision: revision(bytes), mode: stat.mode };
+      return { path: file, name: path.basename(file), content, revision: revision(bytes), mode: stat.mode, fileId: `${stat.dev}:${stat.ino}` };
     } finally { await handle.close(); }
   }
   async function readText({ q }) {
     const { mode, ...file } = await editorFile(q.get('path'));
     return file;
+  }
+  async function workspace({ req, q }) {
+    if (scope) fail(403, 'Workspace access requires an owner session.');
+    return { ...workspaceIdentity(req), root: await resolveDir(q.get('path')), permissions: { files: true, write: true, terminal: true, ai: true } };
+  }
+  async function watch({ req, res, q }) {
+    if (scope) fail(403, 'Workspace access requires an owner session.');
+    const root = await resolveDir(q.get('path')), owner = workspaceIdentity(req).owner;
+    const own = streams.get(owner) || new Set();
+    if (own.size >= 4) fail(429, 'Too many workspace connections. Close another workspace tab.');
+    const slot = {}; own.add(slot); streams.set(owner, own);
+    const release = () => { own.delete(slot); if (!own.size && streams.get(owner) === own) streams.delete(owner); };
+    try {
+      const validate = async (given) => {
+        if (typeof given !== 'string' || given.includes('\0')) fail(400, 'Choose a valid directory.');
+        if (!within(path.resolve(given), root)) fail(403, 'That path is outside this workspace.');
+        const real = await fsp.realpath(given);
+        if (real !== given || !within(real, root) || !loadSettings().roots.some((r) => within(real, r.real)) || !(await fsp.stat(real)).isDirectory()) fail(403, 'Workspace access ended.');
+        return real;
+      };
+      const wanted = [...new Set([root, ...q.getAll('dir')])];
+      if (wanted.length > 96) fail(400, 'Too many open directories.');
+      const directories = await Promise.all(wanted.map((dir) => validate(dir)));
+      if (res.destroyed) { release(); return; }
+      watchWorkspace({ req, res, root, directories, validate, active: () => workspaceActive(req), onClose: release });
+    } catch (failure) { release(); throw failure; }
   }
   async function saveText({ req, q }) {
     const file = await resolve(q.get('path'));
@@ -576,6 +604,8 @@ export function createFilesApi({ sendJson, readJson, config, sendToMessages = nu
     'GET zip': { run: zip },
     'GET search': { run: search },
     'GET text': { run: readText },
+    'GET workspace': { run: workspace },
+    'GET watch': { run: watch },
     'PUT text': { run: saveText, body: 'raw' },
     'POST file': { run: createText, body: 'json' },
     'PUT pin': { run: pin, body: 'json' },

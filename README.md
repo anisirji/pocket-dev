@@ -34,7 +34,16 @@
 - **Private by design:** runs on your own computer as your user, logs in with a password or a one-time QR code, needs no cloud account and nothing installed on the phone.
 - **Set up with AI:** [copyable prompts](https://www.theani.me/work/pocket-dev/prompts) for your coding assistant, an [agent setup guide](docs/AI_SETUP.md) and a reusable agent skill.
 
-## What's new in 2.4
+## What's new in 2.5
+
+- **Persistent Workspace:** activity bar, file explorer, editor, right-side AI conversations and bottom terminals share one project directory. Panels collapse and resize independently.
+- **Recover your work:** restore editor drafts, cursor positions, tabs, layout, chats and terminal sessions. Cache-first loading and incremental file notifications keep the workspace responsive; revision checks preserve conflicting edits.
+- **One folder picker:** compact navigation, recent projects per computer, a spacious desktop dialog and a full-screen phone view.
+- **Dark by default:** light and system themes remain available from Workspace settings.
+
+Details, cache behavior and validation scope: [2.5 release notes](docs/RELEASE_2.5.md) · [Workspace guide](docs/GUIDE.md#project-workspace).
+
+## Earlier changes in 2.4
 
 - **Connected computers:** pair your own computers or make an AI-only connection from Settings. Computer access and each shared provider have separate permissions.
 - **Shared Claude and Codex:** choose an authorized source in the existing Chat selector. The source uses its existing sign-in; workspace files and approvals stay on the selected workspace computer.

@@ -113,3 +113,14 @@ test('create makes a folder or an empty file, and refuses bad names and duplicat
   }
   assert.ok(!fs.existsSync(path.join(root, 'x')));
 });
+
+test('recent projects belong to each browser computer and omit missing paths, files and duplicate links', async (t) => {
+  const a = fixture(t), b = fixture(t);
+  const first = path.join(a.home, 'project 2'), second = path.join(a.home, 'project 10');
+  const browseA = createFolderBrowser({ home: a.home, config: { read: () => ({ recentFolders: [first, path.join(a.home, 'project link'), path.join(a.home, 'gone'), path.join(a.home, 'notes.txt'), null, second] }) } });
+  const browseB = createFolderBrowser({ home: b.home, config: { read: () => ({ recentFolders: [path.join(b.home, 'Desktop')] }) } });
+  const url = new URL('http://fixture/api/folders/browse');
+  assert.deepEqual((await browseA(url)).recent.map((entry) => entry.path), [fs.realpathSync(first), fs.realpathSync(second)]);
+  assert.deepEqual((await browseB(url)).recent.map((entry) => entry.path), [fs.realpathSync(path.join(b.home, 'Desktop'))]);
+  await assert.rejects(browseA.create({ parent: a.home, name: '..\\escape', kind: 'folder' }), (err) => err.status === 400);
+});

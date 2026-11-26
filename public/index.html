@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>Pocket Dev</title>
 <script src="/machine.js"></script>
-<script>if (parent !== window && new URLSearchParams(location.search).get('workspacePanel') === '1') document.documentElement.classList.add('workspace-panel');</script>
+<script>if (parent !== window && new URLSearchParams(location.search).has('workspacePanel')) document.documentElement.classList.add('workspace-panel'); if (parent !== window && new URLSearchParams(location.search).get('workspacePanel') === 'chat') document.documentElement.classList.add('workspace-chat');</script>
 <link rel="stylesheet" href="/machine.css">
 <link rel="stylesheet" href="/folder-picker.css">
 <script src="/folder-picker.js"></script>
@@ -44,6 +44,7 @@
 <script src="/files.js" defer></script>
 <style>
   :root {
+    color-scheme: dark;
     --bg: #0b0e14; --panel: #131823; --panel-2: #1b2130; --line: #252d3c;
     --text: #d7dce5; --muted: #7d8799; --accent: #6aa9ff; --danger: #ff7b72;
     --mono: ui-monospace, "SF Mono", Menlo, "Roboto Mono", "Droid Sans Mono", monospace;
@@ -179,9 +180,15 @@
   #textPre { flex: 1; min-height: 0; margin: 0; padding: 8px 10px 16px; overflow: auto; overscroll-behavior: contain; font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
   .key.icon { min-width: 44px; padding: 0; font-family: inherit; font-size: 17px; }
   .workspace-panel #app > header, .workspace-panel #macStatus { display: none !important; }
+  .workspace-chat #app { visibility: hidden; }
+  .workspace-panel[data-theme=light] .chat { --chat-user: oklch(.91 .025 255); --chat-user-line: oklch(.8 .045 255); --chat-warn: oklch(.44 .1 70); --chat-warn-bg: oklch(.94 .035 80); --chat-add: oklch(.4 .11 150); --chat-add-bg: oklch(.94 .025 150); --chat-del: oklch(.48 .15 25); --chat-del-bg: oklch(.95 .025 25); }
+  .workspace-panel[data-theme=light] .chat :is(pre,code) { background: var(--panel-2); color: var(--text); }
+  .workspace-panel[data-theme=light] .chat :is(.chat-time-user,.chat-user-file) { color: var(--muted); }
+  .workspace-panel[data-theme=light] :is(.chat-primary,.chat-latest) { color: var(--bg); }
   .workspace-panel { --status-h: 0px !important; }
   .workspace-panel body :is(#app, .chat, .fx-root, .hist) { top: 0 !important; height: 100dvh !important; }
 </style>
+<script src="/workspace-cleanup.js" defer></script>
 </head>
 <body>
 <div id="app">
@@ -252,6 +259,9 @@ const h = (tag, cls, text) => {
   return node;
 };
 
+const workspacePanel = parent !== window && new URLSearchParams(location.search).has('workspacePanel');
+let panelWorkspace = null;
+const panelViews = () => [...views.values()].filter((v) => !workspacePanel || !panelWorkspace || v.cwd === panelWorkspace.rootPath || panelWorkspace.terminalSessionIds?.includes(v.id));
 const store = {
   get(key) { try { return localStorage.getItem(key); } catch { return null; } },
   set(key, value) { try { localStorage.setItem(key, value); } catch {} },
@@ -406,7 +416,7 @@ async function closeSession(view) {
   try { await api('DELETE', `/api/sessions/${view.id}`); } catch {}
   const wasActive = view.id === activeId;
   dropView(view);
-  if (!views.size) return newSession();
+  if (!views.size) return workspacePanel ? undefined : newSession();
   if (wasActive) activate(views.keys().next().value);
   else renderTabs();
 }
@@ -417,6 +427,7 @@ function activate(id) {
     try { $('cmd').value = sessionStorage.getItem(`pd.terminal.draft.${id}`) || ''; } catch { $('cmd').value = ''; }
   }
   activeId = id;
+  if (workspacePanel && panelWorkspace?.rootPath) parent.postMessage({ type: 'pd-workspace-terminal', root: panelWorkspace.rootPath, id }, location.origin);
   store.set('pd.active', id);
   for (const v of views.values()) v.el.classList.toggle('active', v.id === id);
   renderTabs();
@@ -438,11 +449,12 @@ $('cmd').addEventListener('input', saveCommandDraft);
 window.addEventListener('pagehide', saveCommandDraft);
 
 function renderTabs() {
-  $('tabs').replaceChildren(...[...views.values()].map((v) => {
+  $('tabs').replaceChildren(...panelViews().map((v) => {
     const exited = v.exitCode !== null;
     const tab = h('div', `tab${v.id === activeId ? ' active' : ''}${exited ? ' exited' : ''}`);
     const label = h('button', 'tab-label', exited ? `${v.title} [process exited ${v.exitCode}]` : v.title);
     label.onclick = () => activate(v.id);
+    label.ondblclick = async () => { const title = prompt('Terminal name', v.title); if (title) { await api('PATCH', `/api/sessions/${v.id}`, { title }); v.title = title; renderTabs(); } };
     const close = h('button', 'tab-x', '✕');
     close.setAttribute('aria-label', `Close ${v.title}`);
     close.onclick = () => closeSession(v);
@@ -471,7 +483,7 @@ async function openTabsSheet() {
 function renderTabsSheet() {
   const home = folders?.home;
   const tilde = (p) => (home && p === home ? '~' : home && p?.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p ?? '');
-  const list = [...views.values()];
+  const list = panelViews();
   const running = list.filter((v) => v.exitCode === null).length;
   const rows = list.map((v) => {
     const exited = v.exitCode !== null;
@@ -760,11 +772,14 @@ const otherPath = sheetForm('Other path, e.g. ~/app', 'Open', (value) => openFol
 
 let browsingFolders = false;
 const terminalFolderBrowser = window.PocketDevFolderPicker?.create({
-  api, title: 'Choose a folder for the terminal', selectLabel: 'Open terminal here',
-  onSelect: openFolder, onCancel: () => { browsingFolders = false; renderFolders(); },
+  api, title: 'Open terminal', selectLabel: 'Open terminal here',
+  onSelect: async (path) => { if (await openFolder(path) === false) throw new Error(folderNote); },
 });
+if (terminalFolderBrowser) document.body.append(terminalFolderBrowser.element);
 
 async function openFolders() {
+  if (workspacePanel && panelWorkspace?.rootPath) return window.pocketDev.openTerminalAt(panelWorkspace.rootPath);
+  if (terminalFolderBrowser) return terminalFolderBrowser.open('', $('new'));
   browsingFolders = false; terminalFolderBrowser?.close();
   folderNote = '';
   showLayer('folders');
@@ -1257,6 +1272,9 @@ window.pocketDev = {
     activate((views.get(s.id) ?? makeView(s)).id);
   },
   // Files' "Open terminal here".
+  setWorkspace(value) { panelWorkspace = value; renderTabs(); },
+  updateTheme() { const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d'); const color = (key) => { ctx.clearRect(0,0,1,1); ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue(key); ctx.fillRect(0,0,1,1); return '#' + [...ctx.getImageData(0,0,1,1).data].slice(0,3).map((n) => n.toString(16).padStart(2,'0')).join(''); }; Object.assign(THEME, { background: color('--bg'), foreground: color('--text'), cursor: color('--accent'), selectionBackground: color('--selection') }); for (const view of views.values()) view.term.options.theme = { ...THEME }; },
+  async renameActive() { const view = active(), title = view && prompt('Terminal name', view.title); if (title) { await api('PATCH', `/api/sessions/${view.id}`, { title }); view.title = title; renderTabs(); } },
   async openTerminalAt(dir) {
     window.pocketDev.openSession(await api('POST', '/api/sessions', { cwd: dir }));
   },
@@ -1277,8 +1295,9 @@ window.pocketDev = {
     refreshForwards().catch(() => {});
     return;
   }
+  if (workspacePanel) return;
   await syncSessions();
-  if (!views.size) await newSession();
+  if (!views.size && !workspacePanel) await newSession();
   activate(views.has(stored) ? stored : activeId);
   refreshForwards().catch(() => {});
 })().catch((err) => showClientError(`Could not open terminals: ${err.message}`));

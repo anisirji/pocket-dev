@@ -274,13 +274,13 @@
   }
 
   function build() {
-    const anchor = document.getElementById('viewSwitch');
+    const anchor = document.getElementById('viewSwitch') || document.getElementById('workspaceDevice');
     if (!anchor) return;
     chip = el('button', 'mc-chip');
     chip.type = 'button';
     chip.id = 'machineChip';
     chip.hidden = true;
-    chip.onclick = openSheet;
+    chip.onclick = openSheet; PocketMachine.openSwitcher = openSheet;
     anchor.after(chip);
 
     sheet = el('div', 'mc-sheet');

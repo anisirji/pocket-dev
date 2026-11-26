@@ -1,0 +1,100 @@
+// Browser persistence, incremental sync, conflicts, isolated projects, offline edits and real session recovery.
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { startServer, until, pause } from '../helpers/server.mjs';
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const cleanup = []; let browser, page;
+try {
+  const s = await startServer({ after: (fn) => cleanup.unshift(fn) }, { env: { POCKET_DEV_CLAUDE: new URL('../helpers/fake-claude.mjs', import.meta.url).pathname } });
+  const home = fs.realpathSync(s.home), a = path.join(home, 'Project A'), b = path.join(home, 'Project B');
+  for (const root of [a, b]) { fs.mkdirSync(root); fs.mkdirSync(path.join(root, 'src')); fs.writeFileSync(path.join(root, 'index.js'), 'const version = 1;\n'); fs.writeFileSync(path.join(root, 'src', 'child.js'), 'export default 1;\n'); }
+  const { cookie } = await s.login();
+  const call = async (method, url, body) => (await s.request(method, url, { cookie, body })).data;
+  browser = await chromium.launch({ ...(process.env.CHROME_PATH && { executablePath: process.env.CHROME_PATH }) });
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 960 } });
+  const equals = cookie.indexOf('='); await ctx.addCookies([{ name: cookie.slice(0, equals), value: cookie.slice(equals + 1), url: s.base }]);
+  await ctx.addInitScript(() => localStorage.setItem('pd-welcome-shown', '1'));
+  page = await ctx.newPage(); const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+  await ctx.clearCookies(); await page.goto(s.base + '/login.html'); await page.waitForFunction(() => typeof window.clearPocketWorkspaceData === 'function'); await page.evaluate(() => window.clearPocketWorkspaceData()); await ctx.addCookies([{ name: cookie.slice(0, equals), value: cookie.slice(equals + 1), url: s.base }]);
+  await page.goto(s.base + '/workspace.html');
+  assert.equal(await page.locator('#workspaceTheme').inputValue(), 'dark');
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark', 'a fresh browser defaults to dark mode');
+  const choose = async (name) => { await page.locator('#openFolder').click(); const d = page.getByRole('dialog', { name: 'Open folder', exact: true }); await d.getByLabel('Location', { exact: true }).selectOption(home); await d.getByRole('button', { name: 'Open folder ' + name, exact: true }).click(); await d.getByRole('button', { name: 'Open folder', exact: true }).click(); await page.waitForFunction((name) => document.querySelector('#projectName').textContent === name, name); };
+  await choose('Project A');
+  await page.getByRole('button', { name: 'File index.js', exact: true }).click();
+  const content = page.locator('#editorMount .cm-content'); await content.filter({ hasText: 'version = 1' }).waitFor();
+  await page.waitForFunction(() => document.querySelector('#connectionStatus').textContent === 'Connected');
+  await page.waitForFunction(() => document.querySelector('#toolsFrame').contentWindow?.pocketDev?.activeSession());
+  const initialSessions = await call('GET', '/api/sessions'); assert.equal(initialSessions.filter((session) => session.cwd === a).length, 1);
+  for (const name of ['Toggle explorer','Toggle terminal','Toggle AI chat']) { const button = page.getByRole('button', { name, exact: true }); await button.click(); await button.click(); }
+  assert.equal((await call('GET', '/api/sessions')).length, initialSessions.length);
+  await page.locator('#layoutPreset').evaluate((el) => { el.value = 'editor'; el.dispatchEvent(new Event('change')); }); await page.locator('#layoutPreset').evaluate((el) => { el.value = 'default'; el.dispatchEvent(new Event('change')); });
+  await page.getByRole('separator', { name: 'Resize AI panel' }).focus(); await page.keyboard.press('ArrowLeft');
+  const aiWidth = await page.locator('.ws-ai').evaluate((el) => el.clientWidth);
+  await content.click(); await page.keyboard.press('ControlOrMeta+End');
+  fs.writeFileSync(path.join(a, 'index.js'), 'const version = 2;\n');
+  await content.filter({ hasText: 'version = 2' }).waitFor();
+  await content.click(); await page.keyboard.press('ControlOrMeta+End'); await page.keyboard.insertText('// local draft\n');
+  fs.writeFileSync(path.join(a, 'index.js'), 'const version = 3;\n');
+  await page.locator('#fileConflict').waitFor({ state: 'visible' }); assert.match(await content.textContent(), /local draft/);
+  await page.getByRole('button', { name: 'Compare', exact: true }).click();
+  assert.match(await page.locator('#remoteVersion').inputValue(), /version = 3/); assert.match(await page.locator('#localVersion').inputValue(), /local draft/); await page.locator('#closeCompare').click();
+  await pause(400); await page.reload(); await content.filter({ hasText: 'local draft' }).waitFor();
+  assert.ok(Math.abs((await page.locator('.ws-ai').evaluate((el) => el.clientWidth)) - aiWidth) < 2);
+  await page.locator('#fileConflict').waitFor({ state: 'visible' });
+  page.on('dialog', (d) => d.accept()); await page.locator('#acceptRemote').click(); await content.filter({ hasText: 'version = 3' }).waitFor();
+  await page.getByRole('button', { name: 'Folder src', exact: true }).click();
+  await page.getByRole('button', { name: 'File child.js', exact: true }).waitFor();
+  const indexNode = await page.getByRole('button', { name: 'File index.js', exact: true }).evaluate((node) => { node.dataset.stable = 'yes'; return true; }); assert.ok(indexNode);
+  fs.writeFileSync(path.join(a, 'src', 'created.js'), 'created'); await page.getByRole('button', { name: 'File created.js', exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'File index.js', exact: true }).getAttribute('data-stable'), 'yes');
+  await page.getByRole('button', { name: 'Actions for src', exact: true }).click(); await page.getByRole('button', { name: 'Open terminal here', exact: true }).click();
+  await until(async () => (await call('GET', '/api/sessions')).some((session) => session.cwd === path.join(a, 'src')));
+  await page.locator('#newChat').click();
+  await until(async () => (await call('GET', '/api/chat')).some((chat) => chat.cwd === a));
+  const chats = await call('GET', '/api/chat'); const first = chats.find((chat) => chat.cwd === a); assert.ok(first);
+  const chatFrame = page.frameLocator('#chatFrame'); await chatFrame.locator('.chat-input').fill('background'); await chatFrame.locator('.chat-send').click();
+  await page.getByRole('button', { name: 'Toggle AI chat', exact: true }).click(); await pause(2200); await page.getByRole('button', { name: 'Toggle AI chat', exact: true }).click();
+  await chatFrame.getByText('and now I am done', { exact: true }).waitFor();
+  await chatFrame.locator('.chat-input').fill('unfinished prompt');
+  await pause(400); await choose('Project B'); await page.getByRole('button', { name: 'File index.js', exact: true }).click();
+  await content.filter({ hasText: 'version = 1' }).waitFor();
+  assert.doesNotMatch(await content.textContent(), /version = 3|local draft/);
+  await choose('Project A'); await content.filter({ hasText: 'version = 3' }).waitFor();
+  await chatFrame.locator('.chat-input').filter({ visible: true }).waitFor(); assert.equal(await chatFrame.locator('.chat-input').inputValue(), 'unfinished prompt');
+  const sessionCount = (await call('GET', '/api/sessions')).length;
+  await ctx.setOffline(true); await content.click(); await page.keyboard.press('ControlOrMeta+End'); await page.keyboard.insertText('// offline edit\n'); await page.locator('#saveFile').click();
+  assert.match(await content.textContent(), /offline edit/); assert.doesNotMatch(fs.readFileSync(path.join(a, 'index.js'), 'utf8'), /offline edit/);
+  await ctx.setOffline(false); await until(() => fs.readFileSync(path.join(a, 'index.js'), 'utf8').includes('offline edit'));
+  await page.reload(); await content.filter({ hasText: 'offline edit' }).waitFor();
+  assert.equal((await call('GET', '/api/sessions')).length, sessionCount);
+  await pause(500);
+  let validating = 0, finished = 0, release; const gate = new Promise((resolve) => { release = resolve; }), slow = async (route) => { validating++; await gate; finished++; await route.continue().catch(() => {}); };
+  await page.route('**/api/files/text?*', slow); await page.reload({ waitUntil: 'domcontentloaded' }); await content.filter({ hasText: 'offline edit' }).waitFor();
+  await until(() => validating > 0); assert.equal(finished, 0, 'cached editor renders before delayed text validation'); release(); await page.unroute('**/api/files/text?*', slow);
+  await until(() => finished > 0);
+  const disconnected = (route) => route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'Workspace computer unavailable' }) });
+  await page.route('**/api/files/**', disconnected); await page.reload({ waitUntil: 'domcontentloaded' }); await content.filter({ hasText: 'offline edit' }).waitFor();
+  await page.getByRole('status').filter({ hasText: 'Disconnected' }).waitFor(); await page.unroute('**/api/files/**', disconnected); await page.evaluate(() => dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => document.querySelector('#connectionStatus').textContent === 'Connected');
+  await chatFrame.getByText('and now I am done', { exact: true }).waitFor(); await page.waitForFunction(() => document.querySelector('#aiProvider').options.length > 1); await page.screenshot({ path: '/tmp/pocket-dev-workspace-redesign-desktop.png' });
+  for (const size of [{ width: 390, height: 844 }, { width: 320, height: 568 }, { width: 844, height: 390 }, { width: 768, height: 1024 }]) {
+    await page.setViewportSize(size);
+    for (const panel of (size.width <= 760 ? ['files','editor','ai','tools'] : ['editor'])) { if (size.width <= 760) await page.locator(`.ws-mobile [data-mobile="${panel}"]`).click(); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false); }
+  }
+  await page.setViewportSize({ width: 390, height: 844 }); await page.locator('.ws-mobile [data-mobile="editor"]').click(); await page.screenshot({ path: '/tmp/pocket-dev-workspace-redesign-mobile.png' });
+  await page.setViewportSize({ width: 1440, height: 960 }); await page.locator('#workspaceSettings').click(); await page.locator('#workspaceTheme').selectOption('dark'); await page.locator('#workspaceMenu').evaluate((el) => el.hidePopover()); const darkTerminal = await page.frameLocator('#toolsFrame').locator('.term.active .xterm-viewport').evaluate((el) => getComputedStyle(el).backgroundColor); assert.ok(!darkTerminal.includes('248'), 'terminal theme updates with the workspace'); await page.screenshot({ path: '/tmp/pocket-dev-workspace-redesign-dark.png' }); await page.locator('#workspaceSettings').click(); await page.locator('#workspaceTheme').selectOption('light'); await page.locator('#workspaceMenu').evaluate((el) => el.hidePopover()); await page.screenshot({ path: '/tmp/pocket-dev-workspace-redesign-light.png' });
+  const large = path.join(a, 'large'); fs.mkdirSync(large); for (let i = 0; i < 2100; i++) fs.writeFileSync(path.join(large, `file-${String(i).padStart(4, '0')}.js`), 'const n = 1;');
+  await page.getByRole('button', { name: 'Folder large', exact: true }).click(); await page.getByRole('button', { name: 'File file-0000.js', exact: true }).waitFor();
+  assert.ok(await page.locator('#fileTree .ws-tree-line').count() < 100, 'large trees render only a bounded window');
+  await page.getByRole('button', { name: 'Folder large', exact: true }).click();
+  fs.renameSync(path.join(a, 'index.js'), path.join(a, 'renamed.js')); await page.getByRole('button', { name: 'Open renamed.js', exact: true }).waitFor();
+  fs.unlinkSync(path.join(a, 'renamed.js')); await page.locator('#fileConflict').waitFor({ state: 'visible' }); assert.match(await content.textContent(), /offline edit/);
+  await page.evaluate(() => window.clearPocketWorkspaceData());
+  await page.waitForFunction(() => document.querySelector('#editorEmpty').hidden === false);
+  const cached = await page.evaluate(() => new Promise((resolve) => { const r = indexedDB.open('pocket-dev-workspaces'); r.onsuccess = () => { const q = r.result.transaction('workspaces').objectStore('workspaces').count(); q.onsuccess = () => resolve(q.result); }; })); assert.equal(cached, 0);
+  assert.deepEqual(errors, []);
+  console.log('PASS: workspace context, independent panels, real persistent terminals, incremental file events, safe conflicts, drafts and layout across reload, project isolation, chat streaming/drafts across collapse, offline queued save and responsive light/dark UI.');
+} catch (e) { if (page) { await page.screenshot({ path: '/tmp/pocket-dev-workspace-redesign-failure.png' }).catch(() => {}); console.error(await page.locator('#workspaceError').textContent().catch(() => '')); console.error(await page.evaluate(async () => ({ context: window.PocketWorkspace?.context.value, currentChat: document.querySelector('#chatFrame').contentWindow?.pocketDevChat?.current(), saved: await new Promise((resolve) => { const r = indexedDB.open('pocket-dev-workspaces'); r.onsuccess = () => { const q = r.result.transaction('workspaces').objectStore('workspaces').getAll(); q.onsuccess = () => resolve(q.result.map((v) => ({ root: v.data.root, chat: v.data.chat }))); }; }) })).catch(() => 'debug unavailable'));  } throw e; }
+finally { await browser?.close(); for (const fn of cleanup) await fn(); }

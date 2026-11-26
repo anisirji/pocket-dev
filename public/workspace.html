@@ -7,28 +7,34 @@
   <title>Workspace · Pocket Dev</title>
   <link rel="icon" href="/favicon.svg">
   <script src="/machine.js"></script>
+  <link rel="stylesheet" href="/machine.css">
   <link rel="stylesheet" href="/folder-picker.css">
   <script src="/folder-picker.js" defer></script>
   <link rel="stylesheet" href="/workspace.css">
   <script src="/workspace.js" type="module"></script>
+<script src="/workspace-cleanup.js" defer></script>
 </head>
 <body>
   <header class="ws-titlebar">
     <a class="ws-brand" href="/" title="Back to Pocket Dev"><img src="/favicon.svg" alt="" width="22" height="22"><span>Pocket Dev <b>Workspace</b></span></a>
     <button id="openFolder" class="ws-folder" type="button"><span aria-hidden="true">▱</span><span id="projectName">Open folder</span><span class="ws-chevron" aria-hidden="true">⌄</span></button>
+    <button id="workspaceDevice" class="ws-device" aria-label="Change workspace computer">This device</button>
+    <select id="workspaceSwitcher" aria-label="Switch workspace"><option value="">Recent workspaces</option></select>
+    <div class="ws-layout-controls"><button data-toggle="explorer" title="Toggle explorer" aria-label="Toggle explorer">▥</button><button data-toggle="terminal" title="Toggle terminal" aria-label="Toggle terminal">▤</button><button data-toggle="ai" title="Toggle AI chat" aria-label="Toggle AI chat">◫</button><button id="workspaceSettings" popovertarget="workspaceMenu" aria-label="Workspace settings">⋯</button></div>
     <button id="exitWorkspace" type="button" class="ws-button">Exit workspace</button>
   </header>
+  <div id="workspaceMenu" popover class="ws-menu"><label>Layout<select id="layoutPreset"><option value="default">Default workspace</option><option value="editor">Editor only</option><option value="ai">AI focus</option><option value="terminal">Terminal focus</option></select></label><label>Theme<select id="workspaceTheme"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></label><label><input type="checkbox" id="autoSave"> Auto-save after editing</label><button id="clearWorkspaceCache">Clear saved workspace data</button></div>
   <nav class="ws-mobile" aria-label="Workspace panels">
-    <button data-mobile="files" type="button">Files</button><button data-mobile="editor" type="button" aria-pressed="true">Editor</button><button data-mobile="tools" type="button">Terminal & AI</button>
+    <button data-mobile="files" type="button">Files</button><button data-mobile="editor" type="button" aria-pressed="true">Editor</button><button data-mobile="ai" type="button">AI</button><button data-mobile="tools" type="button">Terminal</button>
   </nav>
   <main id="workspace" data-mobile="editor">
+    <nav class="ws-activity" aria-label="Workspace tools"><button data-toggle="explorer" title="Explorer" aria-label="Explorer">▥</button><button id="activitySearch" title="Search project" aria-label="Search project">⌕</button><button id="activityGit" title="Source control" aria-label="Source control">⑂</button><button data-toggle="terminal" title="Terminal" aria-label="Terminal">›_</button><button data-toggle="ai" title="AI chat" aria-label="AI chat">◫</button><button id="activitySettings" title="Workspace settings" aria-label="Open workspace settings">⚙</button></nav>
     <aside class="ws-explorer" aria-label="Project explorer">
       <div class="ws-section-head"><h2>Explorer</h2><div><button id="newFile" type="button" title="New file" aria-label="New file">＋</button><button id="newFolder" type="button" title="New folder" aria-label="New folder">▱＋</button><button id="refreshFiles" type="button" title="Refresh files" aria-label="Refresh files">↻</button></div></div>
-      <div id="folderPicker" hidden></div>
       <form id="newEntryForm" class="ws-new-entry" hidden><label id="newEntryLabel" for="newEntryName">New file name</label><div><input id="newEntryName" autocomplete="off" required><button class="ws-button" type="submit">Create</button><button id="cancelNewEntry" class="ws-button" type="button" aria-label="Cancel creation">✕</button></div></form>
       <div class="ws-explorer-toolbar"><button id="uploadFiles" type="button">↑ Upload</button><label><input id="showHidden" type="checkbox"> Hidden</label><input id="uploadPicker" type="file" multiple hidden></div>
       <input id="fileFilter" class="ws-file-filter" type="search" placeholder="Find a file…" aria-label="Find a project file" maxlength="200" autocomplete="off">
-      <div id="fileTree" class="ws-file-tree"><p class="ws-hint">Open a folder to explore your project.</p></div>
+      <div id="fileTree" class="ws-file-tree" role="tree" aria-label="Project files"><p class="ws-hint">Open a folder to explore your project.</p></div>
       <p class="ws-explorer-foot" id="projectPath">Files stay on your computer.</p>
     </aside>
     <div id="explorerResize" class="ws-resizer ws-resizer-v" role="separator" aria-label="Resize explorer" aria-orientation="vertical" tabindex="0"></div>
@@ -37,17 +43,23 @@
         <div class="ws-editor-bar"><div id="editorTabs" class="ws-tabs" role="tablist" aria-label="Open files"></div><button id="saveFile" class="ws-button ws-save" type="button" disabled>Save</button><button id="reloadFile" class="ws-button" type="button" disabled title="Reload from computer">↻<span class="ws-sr"> Reload file</span></button></div>
         <div id="fileBreadcrumb" class="ws-breadcrumb" hidden></div>
         <div id="editorEmpty" class="ws-empty"><span class="ws-empty-mark" aria-hidden="true">&lt;/&gt;</span><h1>Your project, together.</h1><p>Open a folder. Edit files, run commands, and work with Codex or Claude.</p><button id="emptyOpenFolder" class="ws-primary" type="button">Open folder</button><span class="ws-shortcut">⌘ / Ctrl + S to save · ⌘ / Ctrl + P to open a file</span></div>
-        <div id="editorMount" hidden></div>
+        <div id="fileConflict" class="ws-conflict" hidden role="status"><span></span><button id="compareFile">Compare</button><button id="acceptRemote">Use remote version</button><button id="saveCopy">Save local copy</button></div><div id="editorMount" hidden></div>
         <div id="mediaPreview" hidden></div>
       </section>
       <div id="toolsResize" class="ws-resizer ws-resizer-h" role="separator" aria-label="Resize terminal panel" aria-orientation="horizontal" tabindex="0"></div>
       <section class="ws-tools" aria-label="Terminal and coding assistants">
-        <div class="ws-tools-bar"><div class="ws-tool-tabs" role="group" aria-label="Tools"><button data-tool="terminal" type="button" aria-pressed="true">Terminal</button><button data-tool="codex" type="button">Codex</button><button data-tool="claude" type="button">Claude</button><button data-tool="chats" type="button">Chats</button></div><button id="newTerminal" type="button" class="ws-button" title="New terminal in project folder">＋<span class="ws-sr"> New project terminal</span></button><button id="maximizeTools" type="button" class="ws-button" aria-label="Expand terminal panel" title="Expand terminal panel">⤢</button></div>
+        <div class="ws-tools-bar"><div class="ws-tool-tabs" role="group" aria-label="Tools"><button data-tool="terminal" type="button" aria-pressed="true">Terminal</button></div><button id="terminalOptions" popovertarget="terminalMenu" class="ws-button" aria-label="Terminal options">⋯</button><button id="newTerminal" type="button" class="ws-button" title="New terminal in project folder">＋<span class="ws-sr"> New project terminal</span></button><button id="maximizeTools" type="button" class="ws-button" aria-label="Expand terminal panel" title="Expand terminal panel">⤢</button></div>
         <iframe id="toolsFrame" src="/?workspacePanel=1" title="Project terminal and coding assistants" allow="clipboard-read; clipboard-write"></iframe>
       </section>
     </section>
+    <div id="aiResize" class="ws-resizer ws-resizer-v" role="separator" aria-label="Resize AI panel" aria-orientation="vertical" tabindex="0"></div>
+    <aside class="ws-ai" aria-label="AI chat"><div class="ws-tools-bar"><h2>AI chat</h2><select id="aiProvider" aria-label="AI provider"><option value="">Choose provider</option></select><button id="newChat" class="ws-button" aria-label="New project chat" title="New project chat">＋</button><button data-toggle="ai" aria-label="Collapse AI chat">×</button></div><iframe id="chatFrame" title="Project AI conversations" allow="clipboard-read; clipboard-write"></iframe></aside>
   </main>
-  <footer class="ws-status"><span id="workspaceStatus" role="status" aria-live="polite">Ready</span><span id="cursorPosition"></span><span id="fileLanguage">UTF-8</span></footer>
+  <div id="terminalMenu" popover class="ws-menu"><button id="renameTerminal">Rename terminal</button><button data-tool="codex">Codex terminal</button><button data-tool="claude">Claude terminal</button></div>
+  <div id="fileMenu" popover class="ws-menu" aria-label="File actions"></div>
+  <dialog id="compareDialog" aria-label="Compare file versions"><header><h2>File changed on the computer</h2><button id="closeCompare" aria-label="Close comparison">×</button></header><div class="ws-compare"><section><h3>Your changes</h3><textarea id="localVersion" aria-label="Local version" readonly></textarea></section><section><h3>Remote version</h3><textarea id="remoteVersion" aria-label="Remote version" readonly></textarea></section></div><p>Your draft stays in the editor. Copy or merge the changes there before saving.</p></dialog>
+  <div id="folderPicker" class="ws-picker-host" hidden></div>
+  <footer class="ws-status"><span id="workspaceStatus" role="status" aria-live="polite">Ready</span><span id="gitBranch"></span><span id="connectionStatus" role="status">Connecting…</span><span id="cursorPosition"></span><span id="fileLanguage">UTF-8</span></footer>
   <div id="workspaceError" class="ws-error" role="alert" hidden><span></span><button type="button" aria-label="Dismiss error">✕</button></div>
 </body>
 </html>

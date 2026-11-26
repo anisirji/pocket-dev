@@ -21,7 +21,7 @@ function language(path) {
   if (/\.(md|markdown)$/i.test(path)) return markdown();
   return [];
 }
-export function createEditor({ parent, onChange, onSave, onCursor }) {
+export function createEditor({ parent, onChange, onSave, onCursor, onView }) {
   const theme = EditorView.theme({
     '&': { height: '100%', backgroundColor: 'var(--bg)', color: 'var(--text)', fontSize: '13px' },
     '.cm-scroller': { fontFamily: 'var(--mono)', lineHeight: '1.65', overflow: 'auto' },
@@ -48,6 +48,7 @@ export function createEditor({ parent, onChange, onSave, onCursor }) {
       basicSetup, theme, highlight, language(path), EditorState.lineSeparator.of(content.includes('\r\n') ? '\r\n' : '\n'),
       EditorView.contentAttributes.of({ 'aria-label': 'File editor', spellcheck: 'false', autocapitalize: 'off' }),
       EditorView.updateListener.of((update) => {
+        if (update.selectionSet || update.viewportChanged) onView?.();
         if (update.docChanged) onChange(update.state.sliceDoc());
         if (update.selectionSet || update.docChanged) {
           const pos = update.state.selection.main.head, line = update.state.doc.lineAt(pos);
@@ -57,8 +58,21 @@ export function createEditor({ parent, onChange, onSave, onCursor }) {
     ] });
   }
   const view = new EditorView({ parent, state: state() });
+  view.scrollDOM.addEventListener('scroll', () => onView?.(), { passive: true });
   return {
-    open(file) { view.setState(file.state || state(file.content, file.path)); view.requestMeasure(); },
+    open(file) {
+      view.setState(file.state || state(file.content, file.path));
+      const saved = file.view;
+      if (saved?.selection) view.dispatch({ selection: { anchor: Math.min(saved.selection.anchor, view.state.doc.length), head: Math.min(saved.selection.head, view.state.doc.length) } });
+      view.requestMeasure();
+      requestAnimationFrame(() => { view.scrollDOM.scrollTop = saved?.top || 0; view.scrollDOM.scrollLeft = saved?.left || 0; });
+    },
+    snapshot: () => ({ selection: { anchor: view.state.selection.main.anchor, head: view.state.selection.main.head }, top: view.scrollDOM.scrollTop, left: view.scrollDOM.scrollLeft }),
+    replace(content) {
+      const selection = view.state.selection.main, top = view.scrollDOM.scrollTop, left = view.scrollDOM.scrollLeft;
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: content }, selection: { anchor: Math.min(selection.anchor, content.length), head: Math.min(selection.head, content.length) } });
+      view.scrollDOM.scrollTop = top; view.scrollDOM.scrollLeft = left;
+    },
     state: () => view.state,
     text: () => view.state.sliceDoc(),
     focus: () => view.focus(),

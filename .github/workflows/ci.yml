@@ -47,7 +47,11 @@ jobs:
           node test/browser/check-camera.mjs
           node test/browser/check-camera-host.mjs
       - name: Check project workspace and editor
-        run: node test/browser/check-workspace.mjs
+        run: |
+          node test/browser/check-workspace.mjs
+          node test/browser/check-workspace-persistence.mjs
+      - name: Check shared folder dialogs and computer routing
+        run: node test/browser/check-folder-picker.mjs
       - name: Check connected computers and provider switching
         run: |
           node test/browser/check-connections.mjs
@@ -69,3 +73,5 @@ jobs:
         run: node --test test/windows-update.test.mjs test/windows-update-runtime.test.mjs
       - name: Test connections, workspace permissions and Codex launching
         run: node --test test/codex-windows-launch.test.mjs test/connections-unit.test.mjs test/remote-codex.test.mjs test/remote-handshake.test.mjs test/workspace-leases.test.mjs test/static-assets.test.mjs test/room.test.mjs test/room-invite.test.mjs
+      - name: Test workspace state, folder picker and native filesystem notifications
+        run: node --test test/workspace-core.test.mjs test/folder-picker-ui.test.mjs test/workspace-watch-native.test.mjs
