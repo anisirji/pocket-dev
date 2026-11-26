@@ -25,6 +25,7 @@ import { platform } from './core/platform.js';
 import { createCollaborators } from './auth/collaborators.js';
 import { captureScreen } from './machine/screen.js';
 import { createCamera } from './machine/camera.js';
+import { createBrowserCamera, localCameraHost } from './machine/browser-camera.js';
 import { createCameraSupport } from './setup/camera-support.js';
 import { collectHealth } from './machine/health.js';
 import { getPty, terminalsError } from './core/pty-loader.js';
@@ -48,8 +49,18 @@ const UPLOAD_MAX = 25 * 1024 * 1024;
 
 const config = openConfig(resolveConfigPath());
 const cameraSupport = createCameraSupport();
-const camera = createCamera({ enabled: () => config.read().cameraView !== false, binary: cameraSupport.binary });
 const PORT = Number(process.env.PORT) || config.read().port || 7777;
+const browserCapture = config.read().cameraBackend !== 'ffmpeg';
+const camera = browserCapture
+  ? createBrowserCamera({ origin: () => `http://127.0.0.1:${PORT}`, openUrl: (url) => {
+    if (process.env.POCKET_DEV_CAMERA_HOST_RECORD) { fs.writeFileSync(process.env.POCKET_DEV_CAMERA_HOST_RECORD, url, { mode: 0o600 }); return true; }
+    if (process.env.NODE_TEST_CONTEXT) return false;
+    return platform.openUrl(url);
+  }, enabled: () => config.read().cameraView !== false,
+    verifiedAt: () => config.read().cameraSetup?.origin === `http://127.0.0.1:${PORT}` ? config.read().cameraSetup?.verifiedAt : 0,
+    onVerified: (verifiedAt) => config.update({ cameraSetup: { verifiedAt, origin: `http://127.0.0.1:${PORT}` } }),
+    iceServers: () => Array.isArray(config.read().cameraIceServers) ? config.read().cameraIceServers : [{ urls: 'stun:stun.cloudflare.com:3478' }] })
+  : createCamera({ enabled: () => config.read().cameraView !== false, binary: cameraSupport.binary });
 const network = () => readNetwork(config);
 const internetOn = () => network().internet.kind !== 'off';
 // Wi-Fi access is read once: the listener's bind address only changes with a restart.
@@ -649,12 +660,15 @@ async function handleApi(req, res, url) {
     const owner = auth.deviceFor(req).id;
     try {
       if (['/api/camera', '/api/camera/support', '/api/camera/install', '/api/camera/start', '/api/camera/frame'].includes(url.pathname) && config.read().cameraView === false) return sendJson(res, 403, { error: 'Camera access is turned off. On this computer, run: pocket-dev config set cameraView true' });
-      if (req.method === 'GET' && url.pathname === '/api/camera/support') return sendJson(res, 200, await cameraSupport.status());
+      if (req.method === 'GET' && url.pathname === '/api/camera/support') return sendJson(res, 200, browserCapture
+        ? { state: 'ready', available: true, canInstall: false, captureMethod: 'browser', setup: camera.setupStatus(), message: 'Uses the computer browser. No camera helper installation is needed.' }
+        : await cameraSupport.status());
       if (req.method === 'POST' && url.pathname === '/api/camera/install') {
         await readJson(req);
+        if (browserCapture) return sendJson(res, 200, { state: 'ready', available: true, canInstall: false, captureMethod: 'browser' });
         return sendJson(res, 200, cameraSupport.startInstall());
       }
-      if ((req.method === 'GET' && url.pathname === '/api/camera') || (req.method === 'POST' && url.pathname === '/api/camera/start')) await cameraSupport.status();
+      if (!browserCapture && ((req.method === 'GET' && url.pathname === '/api/camera') || (req.method === 'POST' && url.pathname === '/api/camera/start'))) await cameraSupport.status();
       if (req.method === 'GET' && url.pathname === '/api/camera') return sendJson(res, 200, { cameras: await camera.devices() });
       if (req.method === 'POST' && url.pathname === '/api/camera/start') {
         const body = await readJson(req);
@@ -666,7 +680,13 @@ async function handleApi(req, res, url) {
         return sendJson(res, 200, { stopped: true });
       }
       if (req.method === 'GET' && url.pathname === '/api/camera/frame') {
-        const jpeg = await camera.frame(owner, url.searchParams.get('id'));
+        const cancelled = new AbortController();
+        const abort = () => { if (!res.writableEnded) cancelled.abort(); };
+        res.once('close', abort);
+        let jpeg;
+        try { jpeg = await camera.frame(owner, url.searchParams.get('id'), { signal: cancelled.signal }); }
+        finally { res.removeListener('close', abort); }
+        if (res.destroyed) return;
         res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': jpeg.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
         return res.end(jpeg);
       }
@@ -847,6 +867,7 @@ const PAGES = {
   '/history.js': 'history.js', '/history.css': 'history.css', '/term-agents.js': 'term-agents.js',
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
   '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/camera.js': 'camera.js', '/camera.css': 'camera.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js', '/setup-tools.js': 'setup-tools.js',
+  '/camera-host.html': 'camera-host.html', '/camera-host.js': 'camera-host.js', '/camera-host.css': 'camera-host.css',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
   '/connection.js': 'connection.js', '/machine.js': 'machine.js', '/machine.css': 'machine.css', '/network.js': 'network.js',
   '/folder-picker.js': 'folder-picker.js', '/folder-picker.css': 'folder-picker.css',
@@ -858,19 +879,22 @@ const PAGES = {
   '/welcome.js': 'welcome.js', '/greeting-copy.js': 'greeting-copy.js', '/favicon.svg': 'favicon.svg', '/keep-caret.js': 'keep-caret.js', '/file-choice.js': 'file-choice.js', '/update-notice.js': 'update-notice.js', '/update-notice.css': 'update-notice.css',
 };
 const PUBLIC_PAGES = new Set(['login.html', 'invite.html', 'invite.js', 'guest.css', 'favicon.svg']);
+const CAMERA_HOST_PAGES = new Set(['camera-host.html', 'camera-host.js', 'camera-host.css']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
 
 function servePage(req, res, pathname) {
   const guest = collaborators.guest(req);
   const file = guest && pathname === '/' ? 'guest.html' : PAGES[pathname];
   if (!file || req.method !== 'GET') return sendJson(res, 404, { error: 'Not found' });
-  if (guest && !new Set(['guest.html', 'guest.js', 'guest.css', 'files.js', 'file-choice.js', 'files.css', 'invite.html', 'invite.js', 'connection.js', 'messages.js', 'messages.css', 'favicon.svg']).has(file)) return sendJson(res, 403, { error: 'Your role does not allow this page.' });
-  if (!guest && !PUBLIC_PAGES.has(file) && !auth.deviceFor(req)) {
+  if (CAMERA_HOST_PAGES.has(file) && (!browserCapture || !localCameraHost(req))) return sendJson(res, 403, { error: 'The camera helper only opens on this computer.' });
+  if (guest && !CAMERA_HOST_PAGES.has(file) && !new Set(['guest.html', 'guest.js', 'guest.css', 'files.js', 'file-choice.js', 'files.css', 'invite.html', 'invite.js', 'connection.js', 'messages.js', 'messages.css', 'favicon.svg']).has(file)) return sendJson(res, 403, { error: 'Your role does not allow this page.' });
+  if (!guest && !PUBLIC_PAGES.has(file) && !CAMERA_HOST_PAGES.has(file) && !auth.deviceFor(req)) {
     if (!file.endsWith('.html')) return sendJson(res, 401, { error: 'Not logged in' });
     res.writeHead(302, { location: '/login.html' });
     return res.end();
   }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY' });
+  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY',
+    ...(CAMERA_HOST_PAGES.has(file) && { 'permissions-policy': 'camera=(self), microphone=()' }) });
   fs.createReadStream(path.join(PACKAGE_ROOT, 'public', file)).pipe(res);
 }
 
@@ -912,6 +936,7 @@ const server = http.createServer(async (req, res) => {
 
 // Terminal and chat sockets share this server, so a disconnect, sleep or shutdown that closes wss.clients closes both.
 const wss = new WebSocketServer({ noServer: true });
+const cameraWss = new WebSocketServer({ noServer: true, maxPayload: 2 * 1024 * 1024 });
 const chatApi = createChatApi({ sendJson, readJson, config, wss, room, roomSync });
 
 const rejectUpgrade = (socket, status, text) => {
@@ -926,6 +951,16 @@ server.on('upgrade', async (req, socket, head) => {
   const target = new URL(req.url, 'http://localhost');
   forward.watch(req, socket);
   if (forward.isForward(target.pathname)) return forward.upgrade(req, socket, head, target, rejectUpgrade);
+  if (target.pathname === '/ws/camera-host') {
+    if (!browserCapture || !sameOrigin(req) || !camera.acceptsHost(req, target.searchParams.get('token'))) return rejectUpgrade(socket, 403, 'Forbidden');
+    return cameraWss.handleUpgrade(req, socket, head, (ws) => {
+      ws.isAlive = true;
+      ws.on('pong', () => { ws.isAlive = true; });
+      wss.clients.add(ws);
+      ws.on('close', () => wss.clients.delete(ws));
+      camera.attachHost(ws);
+    });
+  }
   if (target.pathname === '/ws/messages') return messages.handleUpgrade(req, socket, head);
   if (req.roomPeer && /^\/ws\/(chat\/)?[0-9a-f]+$/.test(target.pathname)) {
     const refusal = await modes.gateSocket(req, target.pathname, (fn) => socket.once('close', fn));
@@ -938,6 +973,18 @@ server.on('upgrade', async (req, socket, head) => {
   if (!device) return rejectUpgrade(socket, 401, 'Unauthorized');
   // SameSite=Strict should already block cross-site upgrades; the Origin check is the backstop.
   if (!sameOrigin(req)) return rejectUpgrade(socket, 403, 'Forbidden');
+  if (pathname === '/ws/camera-view') {
+    const id = target.searchParams.get('id');
+    if (!browserCapture || !camera.acceptsViewer(device.id, id)) return rejectUpgrade(socket, 403, 'Forbidden');
+    return cameraWss.handleUpgrade(req, socket, head, (ws) => {
+      ws.isAlive = true;
+      ws.on('pong', () => { ws.isAlive = true; });
+      wss.clients.add(ws);
+      ws.on('close', () => wss.clients.delete(ws));
+      auth.trackSocket(device, ws);
+      camera.attachViewer(device.id, id, ws);
+    });
+  }
   const chatMatch = /^\/ws\/chat\/([0-9a-f]{12})$/.exec(pathname);
   if (chatMatch) return chatApi.handleUpgrade(req, socket, head, chatMatch[1], (ws) => auth.trackSocket(device, ws));
   if (match && !ptyStatus.available) return rejectUpgrade(socket, 503, 'Terminals Not Available');
@@ -1076,7 +1123,7 @@ versionCheck.start();
   remind();
   setInterval(remind, 30 * 60_000).unref();
 }
-const admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, sections: adminSections, update: versionCheck, updateMeta: { version: readInstalledVersion(), kind: process.env.POCKET_DEV_INSTALL_KIND || installKind() } }).catch((err) => {
+const admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, camera: browserCapture ? camera : null, sections: adminSections, update: versionCheck, updateMeta: { version: readInstalledVersion(), kind: process.env.POCKET_DEV_INSTALL_KIND || installKind() } }).catch((err) => {
   console.error(err.message);
   process.exit(1);
 });

@@ -919,6 +919,7 @@ async function refresh(force = false) {
     renderLive();
     renderService();
     permissionsOnState(state);
+    if (typeof cameraOnState === 'function') cameraOnState(state);
   } catch {
     $('offline').hidden = false;
     $('restartBtn').disabled = true;

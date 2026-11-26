@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Pocket Dev camera</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/camera-host.css">
+  <script src="/camera-host.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><h1>Pocket Dev camera</h1><span id="state" role="status">Connecting…</span></header>
+    <p id="message">Allow camera access once on this computer. Afterwards, start previews and snapshots remotely from your logged-in Pocket Dev phone.</p>
+    <video id="preview" autoplay muted playsinline aria-label="This computer's camera preview"></video>
+    <p id="error" role="alert" hidden></p>
+    <div class="actions"><button id="stop" type="button" disabled>Stop camera</button></div>
+    <p class="note">Pocket Dev opens this tab automatically for remote requests. Closing it stops the current feed; Start camera on the phone can reopen it. Video only; nothing is recorded automatically.</p>
+  </main>
+</body>
+</html>

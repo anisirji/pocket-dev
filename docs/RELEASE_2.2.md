@@ -1,4 +1,18 @@
-# Pocket Dev 2.2.0
+# Pocket Dev 2.2.1
+
+Fixes camera access from background services and replaces the slow image-polling feed with continuous browser video.
+
+- **Browser camera capture:** Windows, macOS and Linux use the computer browser's camera permission. The default installation needs no FFmpeg helper. The legacy FFmpeg backend remains available with `cameraBackend: "ffmpeg"`.
+- **Faster live feed:** WebRTC targets 24 FPS, with an automatic pushed-image fallback targeting 15 FPS when direct video cannot connect. Slow connections skip stale frames. A real Mac camera measured 23.9 FPS through Pocket Dev's internet address during validation; results vary by device and network.
+- **Remote start after one-time setup:** Admin → This computer → Remote camera → Prepare remote camera verifies browser permission and stops capture. Subsequent phone requests open or reuse the computer camera tab automatically.
+- **Snapshots and controls:** JPEG snapshots work during either stream mode. Stop, Close, leaving the phone page, session expiry and computer-side Stop release the viewer or camera as appropriate. The camera header and Close button stay clear of the phone status strip.
+- **Access checks:** Viewer streams remain authenticated and owned by the device that starts them. The computer source requires direct loopback access and a private token. Browser and operating-system camera permissions and privacy indicators remain in effect.
+
+Validation covers the full automated test suite, actual-browser video and fallback frame rates, snapshots, reconnects, session lifetimes, permission failures and source authentication. Physical Windows and Linux camera validation is still pending.
+
+[Camera setup](CAMERA.md) · [Setup guide](SETUP.md)
+
+## Pocket Dev 2.2.0
 
 Control your computer's camera from the phone browser, with automatic camera helper setup during global installation.
 

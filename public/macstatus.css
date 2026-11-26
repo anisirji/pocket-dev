@@ -17,7 +17,7 @@
 .ms-btn { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid currentColor; background: transparent; color: inherit; font-size: 12.5px; font-weight: 600; }
 .ms-btn:active { opacity: .7; }
 /* Every screen shares the visible viewport, including Safari's keyboard pan. */
-body :is(#app, .fx-root, .chat, .hist, .st-sheet, .apps-sheet, .screen-sheet, .health-sheet, .pw-screen) {
+body :is(#app, .fx-root, .chat, .hist, .st-sheet, .apps-sheet, .screen-sheet, .camera-sheet, .health-sheet, .pw-screen) {
   top: calc(var(--viewport-top, 0px) + var(--status-h));
   bottom: auto;
   height: max(0px, calc(var(--viewport-h, 100dvh) - var(--status-h)));

@@ -11,6 +11,8 @@
 .camera-preview { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--panel); }
 .camera-image { width: 100%; height: 100%; object-fit: contain; }
 .camera-image[hidden] { display: none; }
+.camera-video { width: 100%; height: 100%; object-fit: contain; }
+.camera-video[hidden] { display: none; }
 .camera-status, .camera-note, .camera-error { margin: 0; padding: 10px 12px; font-size: 13px; line-height: 1.5; }
 .camera-status, .camera-note { color: var(--muted); }
 .camera-error { color: var(--danger); }

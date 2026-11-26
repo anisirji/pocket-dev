@@ -146,8 +146,8 @@ export function createCameraSupport({ stateDir = STATE_DIR, os = process.platfor
   return { status, binary, startInstall, ensureInstalled, dispose() { disposed = true; aborter?.abort(); } };
 }
 
-// Global npm installs prepare the optional helper up front. Local installs, npx and CI stay quiet;
-// download failure must never stop Pocket Dev itself from being installed.
+// The default browser capture needs no helper. Global installs prepare FFmpeg only for an
+// explicitly selected legacy backend. Download failure never fails Pocket Dev's own install.
 export async function postinstallCamera(env = process.env, { createSupport = createCameraSupport, stateDir = STATE_DIR,
   readFile = (file) => fs.readFileSync(file, 'utf8'), log = (line) => console.log(line) } = {}) {
   if (env.npm_config_global !== 'true' || env.CI || env.POCKET_DEV_NO_CAMERA_INSTALL === '1') return;
@@ -155,8 +155,14 @@ export async function postinstallCamera(env = process.env, { createSupport = cre
   try {
     const dir = env.POCKET_DEV_STATE_DIR || stateDir;
     const configFile = env.POCKET_DEV_CONFIG || path.join(dir, 'config.json');
-    try { if (JSON.parse(readFile(configFile)).cameraView === false) return; }
+    let settings = {};
+    try { settings = JSON.parse(readFile(configFile)); }
     catch (err) { if (err.code !== 'ENOENT') throw err; }
+    if (settings.cameraView === false) return;
+    if (settings.cameraBackend !== 'ffmpeg') {
+      log('Pocket Dev: camera uses the computer browser. No camera helper installation needed.');
+      return;
+    }
     support = createSupport({ stateDir: dir });
     const before = await support.status();
     if (before.available) { log('Pocket Dev: existing camera support is ready.'); return; }

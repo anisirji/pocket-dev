@@ -28,6 +28,7 @@ const FILES = {
   '/admin-nav.js': ['admin-nav.js', 'text/javascript; charset=utf-8'],
   '/admin-heartbeat.js': ['admin-heartbeat.js', 'text/javascript; charset=utf-8'],
   '/admin-permissions.js': ['admin-permissions.js', 'text/javascript; charset=utf-8'],
+  '/admin-camera.js': ['admin-camera.js', 'text/javascript; charset=utf-8'],
   '/admin-update.js': ['admin-update.js', 'text/javascript; charset=utf-8'],
   '/admin-update.css': ['admin-update.css', 'text/css; charset=utf-8'],
   '/collaborators.js': ['collaborators.js', 'text/javascript; charset=utf-8'],
@@ -114,7 +115,7 @@ function failedLogins(entries) {
 // `urls()` returns the phone listener's current { lan, local, remote } base URLs.
 const setupStatus = cachedStatus(createContext());
 
-export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections, update = null, updateMeta = null }) {
+export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections, camera = null, update = null, updateMeta = null }) {
   const browseFolders = createFolderBrowser({ config });
   const port = Number(process.env.POCKET_DEV_ADMIN_PORT) || config.read().adminPort || mainPort + 1;
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
@@ -167,6 +168,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
       network: networkState(),
       service: await serviceView(),
       permissionsSetup: config.read().permissionsSetup ?? null,
+      camera: camera?.setupStatus() ?? null,
       sections: await sectionViews(),
     };
   }
@@ -303,6 +305,11 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   }
 
   const route = router({
+    'POST /api/camera/prepare': () => {
+      if (!camera) return reply(409, { error: 'Remote camera preparation requires the browser capture backend.' });
+      try { return ok(camera.prepare()); }
+      catch (err) { return reply(err.status || 400, { error: err.message }); }
+    },
     'GET /api/permissions': async () => ok({ items: await checkPermissions(), setup: config.read().permissionsSetup ?? null }),
     'POST /api/permissions/setup': ({ body }) => {
       if (!SETUP_STATUSES.has(body.status)) return reply(400, { error: 'status must be done or skipped.' });

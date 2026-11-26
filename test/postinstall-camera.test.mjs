@@ -14,11 +14,11 @@ function fixture(options = {}) {
     async ensureInstalled() { calls.push('install'); return { available: true }; },
     dispose() { calls.push('dispose'); }, ...options,
   };
-  return { calls, lines, support, deps: { stateDir: '/fixture-state', readFile: () => '{}', log: (line) => lines.push(line),
+  return { calls, lines, support, deps: { stateDir: '/fixture-state', readFile: () => '{"cameraBackend":"ffmpeg"}', log: (line) => lines.push(line),
     createSupport: (opts) => { calls.push(opts); return support; } } };
 }
 
-test('global installs automatically prepare camera support and wait for completion', async () => {
+test('global installs with the legacy FFmpeg backend prepare support and wait for completion', async () => {
   let finish;
   const f = fixture({ ensureInstalled: () => new Promise((resolve) => { finish = resolve; }) });
   let done = false;
@@ -54,20 +54,29 @@ test('an explicitly disabled camera skips automatic setup and custom state/confi
   f.deps.readFile = (file) => { assert.equal(file, '/custom/config.json'); return '{"cameraView":false}'; };
   await postinstallCamera({ ...globalInstall, POCKET_DEV_CONFIG: '/custom/config.json' }, f.deps);
   assert.deepEqual(f.calls, []);
-  f.deps.readFile = (file) => { assert.equal(file, '/custom/state/config.json'); return '{}'; };
+  f.deps.readFile = (file) => { assert.equal(file, '/custom/state/config.json'); return '{"cameraBackend":"ffmpeg"}'; };
   await postinstallCamera({ ...globalInstall, POCKET_DEV_STATE_DIR: '/custom/state' }, f.deps);
   assert.deepEqual(f.calls[0], { stateDir: '/custom/state' });
 });
 
-test('a new user without a config gets automatic setup; unreadable config does not trigger downloads', async () => {
+test('new users need no helper install for browser capture; unreadable config does not trigger downloads', async () => {
   const f = fixture();
   f.deps.readFile = () => { throw Object.assign(new Error('not found'), { code: 'ENOENT' }); };
   await postinstallCamera(globalInstall, f.deps);
-  assert.ok(f.calls.includes('install'));
+  assert.deepEqual(f.calls, []);
+  assert.match(f.lines.join('\n'), /computer browser/);
   const bad = fixture();
   bad.deps.readFile = () => '{bad JSON';
   await assert.doesNotReject(postinstallCamera(globalInstall, bad.deps));
   assert.deepEqual(bad.calls, []);
+});
+
+test('the default browser backend never checks or downloads FFmpeg during installation', async () => {
+  const f = fixture();
+  f.deps.readFile = () => '{}';
+  await postinstallCamera(globalInstall, f.deps);
+  assert.deepEqual(f.calls, []);
+  assert.match(f.lines.join('\n'), /No camera helper installation needed/);
 });
 
 test('offline, failed and unsupported setup leave Pocket Dev usable with the install-button fallback', async () => {

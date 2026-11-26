@@ -15,6 +15,7 @@
 <script src="/admin-nav.js"></script>
 <script src="/admin-client.js" defer></script>
 <script src="/admin-permissions.js" defer></script>
+<script src="/admin-camera.js" defer></script>
 <script src="/admin-update.js" defer></script>
 </head>
 <body>
@@ -260,6 +261,15 @@
         </div>
         <p class="err" id="settingsErr"></p>
       </section>
+
+    <section id="camera" class="panel" aria-labelledby="cameraTitle">
+      <div class="panel-head"><h2 id="cameraTitle">Remote camera</h2><span id="cameraState" role="status">Checking…</span></div>
+      <p class="desc">Prepare camera access once on this computer. Afterwards, Start camera on your phone opens it remotely without someone at the computer.</p>
+      <p class="note">Choose a persistent camera permission in the browser when available. Keep this computer awake, signed in and connected. Browser or operating-system permission changes may require setup again.</p>
+      <button type="button" class="btn" id="cameraPrepare">Prepare remote camera</button>
+      <p class="note" id="cameraDetail" role="status"></p>
+      <p class="err" id="cameraErr" role="alert"></p>
+    </section>
 
     <section id="live" class="panel">
       <div class="panel-head"><h2>Live</h2></div>

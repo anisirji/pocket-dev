@@ -29,3 +29,7 @@ jobs:
           npx playwright install chromium
       - name: Check phone, tablet and desktop layouts
         run: node test/browser/check-responsive.mjs
+      - name: Check camera viewer and computer browser capture
+        run: |
+          node test/browser/check-camera.mjs
+          node test/browser/check-camera-host.mjs

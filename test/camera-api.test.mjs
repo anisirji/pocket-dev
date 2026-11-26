@@ -11,6 +11,9 @@ test('camera routes require login and mutation protections, and respect the host
     assert.equal((await s.request(method, `/api/camera${endpoint}`, { body })).status, 401);
   }
   const { cookie } = await s.login();
+  assert.equal((await s.request('POST', '/api/camera/prepare', { cookie, body: {} })).status, 404, 'one-time preparation belongs to the local Admin page');
+  assert.equal((await s.request('POST', '/api/camera/prepare', { adminRequest: true, body: {}, csrf: false })).status, 403);
+  assert.equal((await s.request('POST', '/api/camera/prepare', { adminRequest: true, body: {}, headers: { origin: 'https://elsewhere.example' } })).status, 403);
   assert.equal((await s.request('POST', '/api/camera/start', { cookie, body: { camera: '0' }, csrf: false })).status, 403);
   assert.equal((await s.request('POST', '/api/camera/start', { cookie, body: { camera: '0' }, headers: { origin: 'https://elsewhere.example' } })).status, 403);
   assert.equal((await s.request('POST', '/api/camera/install', { cookie, body: {}, csrf: false })).status, 403);

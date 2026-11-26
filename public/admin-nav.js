@@ -8,7 +8,7 @@
     { id: 'internet', label: 'Internet', sections: ['internet', 'quickLink'] },
     { id: 'messages', label: 'Messages', sections: ['messages'] },
     { id: 'security', label: 'Security', sections: ['guessing', 'password', 'log', 'lockdown'] },
-    { id: 'computer', label: 'This computer', sections: ['settings', 'live', 'permissions', 'service'] },
+    { id: 'computer', label: 'This computer', sections: ['settings', 'camera', 'live', 'permissions', 'service'] },
   ];
   const DEFAULT_GROUP = 'overview';
   const GROUP_IDS = GROUPS.map((g) => g.id);
