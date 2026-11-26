@@ -134,6 +134,12 @@ Each tab is a login shell in a real pty (zsh or your `$SHELL` on macOS and Linux
 
 Browse the folders you allow (your home folder by default), upload several files with progress, four at a time (no size limit on the Wi-Fi, 2 GB each over the internet; never overwriting) (on a phone, **Upload** and the paperclips in Chat, the terminal and Messages first ask **Take photo** (camera), **Photos and videos** or **Files**, so Android opens its document browser instead of only your pictures; the paperclips in Chat and the terminal take files up to 25 MB), download or zip, rename, search by name, and move to the Trash or Recycle Bin. Previews cover images, video, audio, PDF and text, in a sandbox. Every path is checked again after symlinks resolve.
 
+### Project workspace
+
+Open **More → Workspace** for an editor layout around Pocket Dev's existing tools. **Open folder** selects a project on the computer and opens a terminal in that folder. Browse the Explorer, open files in tabs, create files or folders, upload files, and save text with **Save** or **Ctrl/Cmd+S**. **Ctrl/Cmd+P** focuses file search. The local editor provides line numbers, syntax highlighting, undo and search; it supports UTF-8 text files up to 1 MB. Images and PDFs open as previews where supported.
+
+**Terminal**, **Codex** and **Claude** select project terminal sessions. Selecting an assistant starts its installed command when there is no existing workspace session for it. **Chats** opens the existing Pocket Dev chat interface. Sessions keep running when you switch panels or exit Workspace. Drag the dividers, or focus a divider and use the arrow keys, to resize the desktop layout. On phones, **Files**, **Editor** and **Terminal & AI** switch panels while retaining editor state. Folder selection, open files and layout are restored on reload; unsaved edits prompt before leaving. If a file changes on the computer, Save refuses to overwrite it and keeps your edits so you can copy them or reload the current file.
+
 ### Git
 
 <table><tr><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/05-git-changes.png" width="240" alt="Git changes tab"><br><sub>Changes, commit and push</sub></td><td align="center" valign="top"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/screenshots/06-git-history.png" width="240" alt="Git history graph"><br><sub>History graph</sub></td></tr></table>

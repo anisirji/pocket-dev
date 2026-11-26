@@ -17,6 +17,7 @@ const SEARCH_SKIP = new Set(['node_modules', '.git']);
 const ZIP_WALK_BUDGET_MS = 10_000;
 const ZIP_MAX_ENTRIES = 200_000;
 const UPLOAD_PREFIX = '.pocket-dev-upload-';
+const EDIT_MAX = 1024 * 1024;
 const QUICK = ['Desktop', 'Downloads', 'Documents'];
 
 const TEXT_EXTS = 'txt md markdown log csv tsv ini cfg conf toml yaml yml env sh bash zsh fish py rb go rs java kt kts swift c h cc cpp hpp m mm cs php pl lua r sql ts tsx jsx mjs cjs vue svelte scss sass less gitignore dockerfile makefile lock diff patch';
@@ -66,7 +67,7 @@ const ERRNO = {
 function checkName(name) {
   if (typeof name !== 'string' || !name.trim()) fail(400, 'Enter a name.');
   if (name === '.' || name === '..') fail(400, 'A name cannot be "." or "..".');
-  if (name.includes('/')) fail(400, 'A name cannot contain "/".');
+  if (name.includes('/') || name.includes('\\')) fail(400, 'A name cannot contain path separators.');
   if (/[\x00-\x1f\x7f]/.test(name)) fail(400, 'A name cannot contain control characters.');
   if (Buffer.byteLength(name) > 255) fail(400, 'A name can be at most 255 bytes.');
   return name;
@@ -131,6 +132,7 @@ const DEFAULT_ZIP_MAX = 4 * GB;
 
 // config is { read(), update(changes) }: read() re-reads config.json, so settings are taken once per request.
 export function createFilesApi({ sendJson, readJson, config, sendToMessages = null }) {
+  const editorLocks = new Map();
   const home = fs.realpathSync(os.homedir());
   let settingsKey = null;
   let settings;
@@ -422,6 +424,66 @@ export function createFilesApi({ sendJson, readJson, config, sendToMessages = nu
     return { path: dir, name: body.name };
   }
 
+  const revision = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+  async function editorFile(given) {
+    const file = await resolve(given);
+    const handle = await fsp.open(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+    try {
+      const stat = await handle.stat();
+      if (!stat.isFile()) fail(400, 'Choose a text file.');
+      if (stat.size > EDIT_MAX) fail(413, 'The editor supports text files up to 1 MB. Download larger files from Files.');
+      const bytes = await handle.readFile();
+      if (bytes.length > EDIT_MAX) fail(413, 'The editor supports text files up to 1 MB.');
+      const content = bytes.toString('utf8');
+      if (bytes.includes(0) || !Buffer.from(content, 'utf8').equals(bytes)) fail(415, 'This file is not UTF-8 text. Open it in Files to preview or download.');
+      return { path: file, name: path.basename(file), content, revision: revision(bytes), mode: stat.mode };
+    } finally { await handle.close(); }
+  }
+  async function readText({ q }) {
+    const { mode, ...file } = await editorFile(q.get('path'));
+    return file;
+  }
+  async function saveText({ req, q }) {
+    const file = await resolve(q.get('path'));
+    requireWrite(file);
+    const expected = req.headers['if-match'];
+    if (typeof expected !== 'string' || !/^[a-f0-9]{64}$/.test(expected)) fail(428, 'Reload the file before saving.');
+    if (Number(req.headers['content-length']) > EDIT_MAX) { req.resume(); fail(413, 'The editor supports text files up to 1 MB.'); }
+    const bytes = await new Promise((accept, reject) => {
+      const chunks = []; let size = 0, tooLarge = false;
+      req.on('data', (chunk) => { size += chunk.length; if (size > EDIT_MAX) { tooLarge = true; chunks.length = 0; } else if (!tooLarge) chunks.push(chunk); });
+      req.on('end', () => tooLarge ? reject(new FileError(413, 'The editor supports text files up to 1 MB.')) : accept(Buffer.concat(chunks)));
+      req.on('error', reject);
+      req.on('aborted', () => reject(new FileError(400, 'Save interrupted.')));
+    });
+    if (bytes.includes(0) || !Buffer.from(bytes.toString('utf8'), 'utf8').equals(bytes)) fail(415, 'Save requires UTF-8 text.');
+    const previous = editorLocks.get(file) || Promise.resolve();
+    const task = previous.catch(() => {}).then(async () => {
+      const current = await editorFile(file);
+      if (current.revision !== expected) fail(409, 'This file changed on the computer. Your edits are kept here. Reload the file or copy your changes before trying again.');
+      requireWrite(file);
+      const tmp = path.join(path.dirname(file), UPLOAD_PREFIX + crypto.randomBytes(8).toString('hex'));
+      try {
+        await fsp.writeFile(tmp, bytes, { flag: 'wx', mode: current.mode & 0o777 });
+        await fsp.chmod(tmp, current.mode & 0o777);
+        requireWrite(file);
+        if (await resolve(q.get('path')) !== file || (await editorFile(file)).revision !== expected) fail(409, 'This file changed on the computer. Your edits are kept here.');
+        await fsp.rename(tmp, file);
+      } finally { await fsp.rm(tmp, { force: true }); }
+      return { path: file, revision: revision(bytes) };
+    });
+    editorLocks.set(file, task);
+    try { return await task; }
+    finally { if (editorLocks.get(file) === task) editorLocks.delete(file); }
+  }
+  async function createText({ body, res }) {
+    const file = path.join(await resolveDir(body.dir), checkName(body.name));
+    requireWrite(file);
+    await fsp.writeFile(file, '', { flag: 'wx' });
+    res.statusCode = 201;
+    return { path: file, name: body.name, content: '', revision: revision(Buffer.alloc(0)) };
+  }
+
   async function rename({ body }) {
     const { full, stat } = await resolveEntry(body.path);
     requireWrite(full);
@@ -513,6 +575,9 @@ export function createFilesApi({ sendJson, readJson, config, sendToMessages = nu
     'HEAD download': { run: download },
     'GET zip': { run: zip },
     'GET search': { run: search },
+    'GET text': { run: readText },
+    'PUT text': { run: saveText, body: 'raw' },
+    'POST file': { run: createText, body: 'json' },
     'PUT pin': { run: pin, body: 'json' },
     'POST vscode': { run: vscode, body: 'json' },
     'POST mkdir': { run: mkdir, body: 'json' },

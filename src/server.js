@@ -869,6 +869,8 @@ const PAGES = {
   '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/camera.js': 'camera.js', '/camera.css': 'camera.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js', '/setup-tools.js': 'setup-tools.js',
   '/camera-host.html': 'camera-host.html', '/camera-host.js': 'camera-host.js', '/camera-host.css': 'camera-host.css',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
+  '/workspace.html': 'workspace.html', '/workspace.js': 'workspace.js', '/workspace.css': 'workspace.css',
+  '/vendor/workspace-editor.js': 'vendor/workspace-editor.js',
   '/connection.js': 'connection.js', '/machine.js': 'machine.js', '/machine.css': 'machine.css', '/network.js': 'network.js',
   '/folder-picker.js': 'folder-picker.js', '/folder-picker.css': 'folder-picker.css',
   '/messages.js': 'messages.js', '/messages.css': 'messages.css',
@@ -893,7 +895,8 @@ function servePage(req, res, pathname) {
     res.writeHead(302, { location: '/login.html' });
     return res.end();
   }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY',
+  res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff',
+    'x-frame-options': file === 'index.html' && new URL(req.url, 'http://localhost').searchParams.get('workspacePanel') === '1' ? 'SAMEORIGIN' : 'DENY',
     ...(CAMERA_HOST_PAGES.has(file) && { 'permissions-policy': 'camera=(self), microphone=()' }) });
   fs.createReadStream(path.join(PACKAGE_ROOT, 'public', file)).pipe(res);
 }

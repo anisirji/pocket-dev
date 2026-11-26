@@ -32,6 +32,7 @@ test('the script stops everything running from the package folder before npm run
 test('a copy started in a terminal is started again in a new window; with no task nothing is ended or run', () => {
   const s = windowsUpdateScript({ ...BASE, startHere: true });
   assert.doesNotMatch(s, /schtasks/);
+  assert.doesNotMatch(s, /service-run\.ps1/, 'a standalone or test install does not stop an unrelated service runner');
   assert.match(s, /Start-Process -FilePath 'C:\\Program Files\\nodejs\\node\.exe' -ArgumentList @\('C:\\Users\\O''Neil\\AppData\\Roaming\\npm\\node_modules\\@anisirji\\pocket-dev\\bin\\pocket-dev\.js', 'start', '--no-open'\)/);
 });
 

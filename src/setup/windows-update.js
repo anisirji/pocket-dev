@@ -44,7 +44,7 @@ $keep = @(${[0, ...keep].map(Number).join(', ')})
 $deadline = (Get-Date).AddSeconds(30)
 do {
   $left = @(Get-CimInstance Win32_Process | Where-Object {
-    $_.ProcessId -ne $PID -and $keep -notcontains $_.ProcessId -and (("$($_.CommandLine)".ToLower().Contains($needle)) -or ("$($_.ExecutablePath)".ToLower().StartsWith($needle)) -or ("$($_.CommandLine)".ToLower().Contains('\\pocket-dev\\service-run.ps1')))
+    $_.ProcessId -ne $PID -and $keep -notcontains $_.ProcessId -and (("$($_.CommandLine)".ToLower().Contains($needle)) -or ("$($_.ExecutablePath)".ToLower().StartsWith($needle))${task ? ` -or ("$($_.CommandLine)".ToLower().Contains('\\pocket-dev\\service-run.ps1'))` : ''})
   })
   foreach ($p in $left) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
   if ($left.Count -eq 0) { break }

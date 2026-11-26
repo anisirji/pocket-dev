@@ -22,6 +22,7 @@
 - **Continue between computer and phone.** Open a computer conversation to read along live; send a message to continue it on the phone. **Continue on computer** takes it back.
 - **Copy any chat message** with the icon under it, and see **when each message was sent**.
 - **Files:** browse, upload (with **Take photo** on phones), download and zip. PDFs and text files open from Files and Messages.
+- **Project workspace:** More → Workspace brings the file explorer, syntax-highlighted editor tabs, project terminals, Codex and Claude into one resizable layout. [Workspace guide](docs/GUIDE.md#project-workspace).
 - **Git:** see changes, commit and push.
 - **Messages** between your devices, with photos, videos and documents.
 - **Open apps, health and power:** see open apps, battery, CPU and temperature, and sleep or shut down.
@@ -33,7 +34,16 @@
 - **Private by design:** runs on your own computer as your user, logs in with a password or a one-time QR code, needs no cloud account and nothing installed on the phone.
 - **Set up with AI:** [copyable prompts](https://www.theani.me/work/pocket-dev/prompts) for your coding assistant, an [agent setup guide](docs/AI_SETUP.md) and a reusable agent skill.
 
-## What's new in 2.2
+## What's new in 2.3
+
+- **A project workspace:** open **More → Workspace → Open folder** for a file explorer, syntax-highlighted editor tabs and project terminals in one layout. Codex and Claude have dedicated terminal controls; Chats opens your existing conversations.
+- **Edit and save:** create files and folders, upload files, search filenames, and save UTF-8 text up to 1 MB. Save keeps your draft if an agent or another app changed the file on the computer.
+- **Desktop and mobile:** resize panels on desktop; switch between Files, Editor and Terminal & AI on phones. Open files and layout restore after reload.
+- **Windows updater coverage:** native PowerShell tests verify external handoff, retries and exit codes. Standalone updates leave unrelated service runners alone.
+
+Details: [2.3 release notes](docs/RELEASE_2.3.md) · [Workspace guide](docs/GUIDE.md#project-workspace).
+
+## Earlier changes in 2.2
 
 - **2.2.1 fixes camera startup and slow feeds:** continuous browser video replaces image polling, with an automatic pushed-image fallback for restrictive networks.
 - **See your computer's camera from your phone.** Open **Settings → Device camera**, choose a camera and tap **Start camera**. **Snapshot** saves a JPEG to your viewing device.

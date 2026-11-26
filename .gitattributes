@@ -14,3 +14,5 @@
 *.woff2 binary
 *.ico binary
 public/vendor/** -text
+# The generated editor contains literal tabs in language completion templates.
+public/vendor/workspace-editor.js -whitespace

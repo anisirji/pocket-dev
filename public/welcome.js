@@ -88,7 +88,7 @@ function show() {
 }
 
 try {
-  if (!localStorage.getItem(SHOWN)) {
+  if (!document.documentElement?.classList?.contains('workspace-panel') && !localStorage.getItem(SHOWN)) {
     localStorage.setItem(SHOWN, '1');
     show();
   }

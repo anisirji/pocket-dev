@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#0b0e14">
+  <title>Workspace · Pocket Dev</title>
+  <link rel="icon" href="/favicon.svg">
+  <script src="/machine.js"></script>
+  <link rel="stylesheet" href="/folder-picker.css">
+  <script src="/folder-picker.js" defer></script>
+  <link rel="stylesheet" href="/workspace.css">
+  <script src="/workspace.js" type="module"></script>
+</head>
+<body>
+  <header class="ws-titlebar">
+    <a class="ws-brand" href="/" title="Back to Pocket Dev"><img src="/favicon.svg" alt="" width="22" height="22"><span>Pocket Dev <b>Workspace</b></span></a>
+    <button id="openFolder" class="ws-folder" type="button"><span aria-hidden="true">▱</span><span id="projectName">Open folder</span><span class="ws-chevron" aria-hidden="true">⌄</span></button>
+    <button id="exitWorkspace" type="button" class="ws-button">Exit workspace</button>
+  </header>
+  <nav class="ws-mobile" aria-label="Workspace panels">
+    <button data-mobile="files" type="button">Files</button><button data-mobile="editor" type="button" aria-pressed="true">Editor</button><button data-mobile="tools" type="button">Terminal & AI</button>
+  </nav>
+  <main id="workspace" data-mobile="editor">
+    <aside class="ws-explorer" aria-label="Project explorer">
+      <div class="ws-section-head"><h2>Explorer</h2><div><button id="newFile" type="button" title="New file" aria-label="New file">＋</button><button id="newFolder" type="button" title="New folder" aria-label="New folder">▱＋</button><button id="refreshFiles" type="button" title="Refresh files" aria-label="Refresh files">↻</button></div></div>
+      <div id="folderPicker" hidden></div>
+      <form id="newEntryForm" class="ws-new-entry" hidden><label id="newEntryLabel" for="newEntryName">New file name</label><div><input id="newEntryName" autocomplete="off" required><button class="ws-button" type="submit">Create</button><button id="cancelNewEntry" class="ws-button" type="button" aria-label="Cancel creation">✕</button></div></form>
+      <div class="ws-explorer-toolbar"><button id="uploadFiles" type="button">↑ Upload</button><label><input id="showHidden" type="checkbox"> Hidden</label><input id="uploadPicker" type="file" multiple hidden></div>
+      <input id="fileFilter" class="ws-file-filter" type="search" placeholder="Find a file…" aria-label="Find a project file" maxlength="200" autocomplete="off">
+      <div id="fileTree" class="ws-file-tree"><p class="ws-hint">Open a folder to explore your project.</p></div>
+      <p class="ws-explorer-foot" id="projectPath">Files stay on your computer.</p>
+    </aside>
+    <div id="explorerResize" class="ws-resizer ws-resizer-v" role="separator" aria-label="Resize explorer" aria-orientation="vertical" tabindex="0"></div>
+    <section class="ws-center" aria-label="Editor and terminal">
+      <section class="ws-editor" aria-label="Editor">
+        <div class="ws-editor-bar"><div id="editorTabs" class="ws-tabs" role="tablist" aria-label="Open files"></div><button id="saveFile" class="ws-button ws-save" type="button" disabled>Save</button><button id="reloadFile" class="ws-button" type="button" disabled title="Reload from computer">↻<span class="ws-sr"> Reload file</span></button></div>
+        <div id="fileBreadcrumb" class="ws-breadcrumb" hidden></div>
+        <div id="editorEmpty" class="ws-empty"><span class="ws-empty-mark" aria-hidden="true">&lt;/&gt;</span><h1>Your project, together.</h1><p>Open a folder. Edit files, run commands, and work with Codex or Claude.</p><button id="emptyOpenFolder" class="ws-primary" type="button">Open folder</button><span class="ws-shortcut">⌘ / Ctrl + S to save · ⌘ / Ctrl + P to open a file</span></div>
+        <div id="editorMount" hidden></div>
+        <div id="mediaPreview" hidden></div>
+      </section>
+      <div id="toolsResize" class="ws-resizer ws-resizer-h" role="separator" aria-label="Resize terminal panel" aria-orientation="horizontal" tabindex="0"></div>
+      <section class="ws-tools" aria-label="Terminal and coding assistants">
+        <div class="ws-tools-bar"><div class="ws-tool-tabs" role="group" aria-label="Tools"><button data-tool="terminal" type="button" aria-pressed="true">Terminal</button><button data-tool="codex" type="button">Codex</button><button data-tool="claude" type="button">Claude</button><button data-tool="chats" type="button">Chats</button></div><button id="newTerminal" type="button" class="ws-button" title="New terminal in project folder">＋<span class="ws-sr"> New project terminal</span></button><button id="maximizeTools" type="button" class="ws-button" aria-label="Expand terminal panel" title="Expand terminal panel">⤢</button></div>
+        <iframe id="toolsFrame" src="/?workspacePanel=1" title="Project terminal and coding assistants" allow="clipboard-read; clipboard-write"></iframe>
+      </section>
+    </section>
+  </main>
+  <footer class="ws-status"><span id="workspaceStatus" role="status" aria-live="polite">Ready</span><span id="cursorPosition"></span><span id="fileLanguage">UTF-8</span></footer>
+  <div id="workspaceError" class="ws-error" role="alert" hidden><span></span><button type="button" aria-label="Dismiss error">✕</button></div>
+</body>
+</html>

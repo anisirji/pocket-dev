@@ -1,6 +1,6 @@
 {
   "name": "@anisirji/pocket-dev",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
   "author": {
     "name": "anisirji",
@@ -43,7 +43,8 @@
     "awake": "node scripts/power/awake.js",
     "lid": "scripts/power/lid.sh",
     "sleep": "scripts/power/sleep.sh",
-    "shutdown": "scripts/power/shutdown.sh"
+    "shutdown": "scripts/power/shutdown.sh",
+    "build:editor": "node scripts/build-editor.js"
   },
   "type": "module",
   "dependencies": {
@@ -75,6 +76,7 @@
     "docs/REFERENCE.md",
     "docs/CAMERA.md",
     "docs/RELEASE_2.2.md",
+    "docs/RELEASE_2.3.md",
     "docs/screenshots",
     "docs/diagrams",
     "docs/SETUP.md",
@@ -99,5 +101,15 @@
       "name": "Rohit Kumar Das",
       "url": "https://www.linkedin.com/in/rohit-kumar-das-583b28223"
     }
-  ]
+  ],
+  "devDependencies": {
+    "@codemirror/lang-css": "6.3.1",
+    "@codemirror/lang-html": "6.4.12",
+    "@codemirror/lang-javascript": "6.2.5",
+    "@codemirror/lang-json": "6.0.2",
+    "@codemirror/lang-markdown": "6.5.2",
+    "@codemirror/lang-python": "6.2.1",
+    "codemirror": "6.0.2",
+    "esbuild": "0.27.7"
+  }
 }

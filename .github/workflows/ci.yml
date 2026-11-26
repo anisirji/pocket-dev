@@ -33,3 +33,20 @@ jobs:
         run: |
           node test/browser/check-camera.mjs
           node test/browser/check-camera-host.mjs
+      - name: Check project workspace and editor
+        run: node test/browser/check-workspace.mjs
+
+  windows-updater:
+    name: Windows updater and external handoff
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Test generated PowerShell and the Windows update handoff
+        run: node --test test/windows-update.test.mjs test/windows-update-runtime.test.mjs

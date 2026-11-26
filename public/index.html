@@ -7,6 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>Pocket Dev</title>
 <script src="/machine.js"></script>
+<script>if (parent !== window && new URLSearchParams(location.search).get('workspacePanel') === '1') document.documentElement.classList.add('workspace-panel');</script>
 <link rel="stylesheet" href="/machine.css">
 <link rel="stylesheet" href="/folder-picker.css">
 <script src="/folder-picker.js"></script>
@@ -182,6 +183,9 @@
   #textTitle.error { color: #f0c674; }
   #textPre { flex: 1; min-height: 0; margin: 0; padding: 8px 10px 16px; overflow: auto; overscroll-behavior: contain; font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
   .key.icon { min-width: 44px; padding: 0; font-family: inherit; font-size: 17px; }
+  .workspace-panel #app > header, .workspace-panel #macStatus { display: none !important; }
+  .workspace-panel { --status-h: 0px !important; }
+  .workspace-panel body :is(#app, .chat, .fx-root, .hist) { top: 0 !important; height: 100dvh !important; }
 </style>
 </head>
 <body>
@@ -194,6 +198,7 @@
     <button id="portsBtn" class="icon-btn glyph" aria-label="Ports" title="Ports"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/></svg><span id="portsCount"></span></button>
     <button id="moreBtn" class="icon-btn glyph" popovertarget="moreMenu" aria-label="More" title="More"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
     <div id="moreMenu" popover>
+      <button id="workspaceBtn" type="button"><span aria-hidden="true">⌘</span>Workspace</button>
       <button id="appsBtn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>Apps</button>
       <button id="macBtn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Continue on Mac</button>
     </div>
@@ -296,6 +301,7 @@ function showClientError(message) {
   $('clientError').hidden = false;
 }
 $('clientReload').addEventListener('click', () => location.reload());
+$('workspaceBtn').addEventListener('click', () => { location.href = '/workspace.html'; });
 
 function requireTerminalClient() {
   if (typeof window.PocketDevConnection !== 'function') throw new Error(CLIENT_UPDATE_MESSAGE);
