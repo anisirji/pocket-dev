@@ -176,9 +176,18 @@ test('provider revocation stops a pending workspace approval and prevents the wr
   const source = await startServer(t, { reuse: { root: a.root, port: a.port, adminPort: a.adminPort }, env: { POCKET_DEV_CLAUDE: remoteFake, POCKET_DEV_ROOM_PING_MS: '200' } });
   source.cookie = (await source.login()).cookie; source.id = a.id; source.call = (m, u, body) => source.request(m, u, { cookie: source.cookie, body });
   await share(source, b);
-  const id = (await b.call('POST', '/api/chat', { tool: `claude@${a.id}`, cwd: b.home })).data.id;
-  await b.call('POST', `/api/chat/${id}/message`, { text: 'write-workspace' });
-  await until(async () => (await b.call('GET', `/api/chat/${id}`)).data.pending, 15000);
+  // The consumer may still have an offline observation from the source's restart.
+  await until(async () => (await b.call('GET', '/api/chat/options')).data.tools[`claude@${a.id}`]);
+  const created = await b.call('POST', '/api/chat', { tool: `claude@${a.id}`, cwd: b.home });
+  assert.equal(created.status, 201, JSON.stringify(created.data));
+  const id = created.data.id;
+  const sent = await b.call('POST', `/api/chat/${id}/message`, { text: 'write-workspace' });
+  assert.equal(sent.status, 202, JSON.stringify(sent.data));
+  await until(async () => {
+    const current = (await b.call('GET', `/api/chat/${id}`)).data;
+    assert.notEqual(current.status, 'error', JSON.stringify(current.events.filter((e) => e.type === 'error')));
+    return current.pending;
+  }, 15000);
   await source.call('PATCH', '/api/connections/providers/claude', { enabled: false });
   await until(async () => (await b.call('GET', `/api/chat/${id}`)).data.status === 'error');
   const chat = (await b.call('GET', `/api/chat/${id}`)).data;

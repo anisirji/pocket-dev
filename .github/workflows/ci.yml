@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   macos:
-    name: macOS tests and responsive UI
+    name: macOS complete test suite
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
@@ -23,6 +23,19 @@ jobs:
         run: npm ci
       - name: Run complete test suite
         run: node --test --test-concurrency=2 test/*.test.mjs
+
+  macos-browser:
+    name: macOS responsive UI and browser flows
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
       - name: Install browser check dependencies
         run: |
           npm install --no-save --package-lock=false playwright
