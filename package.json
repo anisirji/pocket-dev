@@ -1,7 +1,7 @@
 {
   "name": "@anisirji/pocket-dev",
   "version": "3.0.0",
-  "description": "Control your computer from your phone's browser: terminals, Claude Code and Codex chats, Git, files, open apps, and power.",
+  "description": "Self-hosted AI coding chats, authorized AI sharing, and a connected development workspace for your phone and computer.",
   "author": {
     "name": "anisirji",
     "url": "https://theani.me"
@@ -93,7 +93,12 @@
     "docs/macos.md",
     "docs/linux.md",
     "docs/install-guide",
-    "LICENSE"
+    "LICENSE",
+    "docs/FEATURES.md",
+    "docs/START_HERE.md",
+    "docs/FEATURE_STANDARD.md",
+    "docs/feature-catalog.json",
+    "docs/media/v3"
   ],
   "os": [
     "darwin",

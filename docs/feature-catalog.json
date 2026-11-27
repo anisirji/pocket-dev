@@ -1,0 +1,226 @@
+{
+  "product": "Pocket Dev",
+  "targetVersion": "3.0.0",
+  "releaseStatus": "unpublished; manual validation pending",
+  "tagline": "Your computer. In your pocket.",
+  "summary": "Continue AI conversations across devices, connect your team's authorized AI capabilities and develop projects from one browser-based workspace.",
+  "package": "@anisirji/pocket-dev",
+  "requirements": "Node.js 22+; awake, connected, authorized computer",
+  "website": "https://www.theani.me/work/pocket-dev",
+  "repository": "https://github.com/anisirji/pocket-dev",
+  "npm": "https://www.npmjs.com/package/@anisirji/pocket-dev",
+  "youtube": "https://www.youtube.com/@afk_pocket_dev",
+  "instagram": "https://www.instagram.com/afk_pocket_dev",
+  "features": [
+    {
+      "id": "ai-chat",
+      "name": "AI Chat",
+      "headline": "Start on your computer. Continue on your phone.",
+      "description": "Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals.",
+      "guide": "docs/GUIDE.md#chat-with-claude-code-codex-antigravity-and-copilot",
+      "details": [
+        "Phone ↔ computer handoff",
+        "Provider/model switching, attachments and approvals",
+        "Optional personal Codex browser tools; local Antigravity and Copilot experimental"
+      ],
+      "group": "Core",
+      "visual": "docs/media/v3/ai-chat.svg",
+      "alt": "Illustrative workflow: Computer chat → Continue → Phone chat",
+      "video": null,
+      "diagram": [
+        "Computer chat",
+        "Continue",
+        "Phone chat"
+      ]
+    },
+    {
+      "id": "ai-sharing",
+      "name": "AI & Resource Sharing",
+      "headline": "One team. More AI capabilities.",
+      "description": "Connect authorized computers and choose a compatible shared AI source while keeping your project on its workspace computer.",
+      "guide": "docs/UNIFIED_CONNECTIONS.md",
+      "details": [
+        "Bidirectional provider grants",
+        "Separate workspace and AI source",
+        "Shared-session isolation; provider terms apply"
+      ],
+      "group": "Core",
+      "visual": "docs/media/v3/ai-sharing.svg",
+      "alt": "Illustrative workflow: Workspace PC → Authorized link → AI source",
+      "video": null,
+      "diagram": [
+        "Workspace PC",
+        "Authorized link",
+        "AI source"
+      ]
+    },
+    {
+      "id": "workspace",
+      "name": "Workspace",
+      "headline": "Your project. One place.",
+      "description": "Use a VS Code-inspired editor, files, chat, terminal and Git in one workspace.",
+      "guide": "docs/GUIDE.md#project-workspace",
+      "details": [
+        "Live file changes, diffs and Git Graph",
+        "Persistent tabs, drafts and conflict-safe saves",
+        "Resizable panels and mobile layouts"
+      ],
+      "group": "Core",
+      "visual": "docs/media/v3/workspace.svg",
+      "alt": "Illustrative workflow: Files → Editor → AI chat",
+      "video": null,
+      "diagram": [
+        "Files",
+        "Editor",
+        "AI chat"
+      ]
+    },
+    {
+      "id": "notifications",
+      "name": "Smart Notifications",
+      "headline": "Know when your AI needs you.",
+      "description": "Get a short sound and temporary alert when a task completes, fails or needs attention — no notification inbox.",
+      "guide": "docs/FEATURES.md#smart-notifications",
+      "details": [
+        "Confirmed task status in Chats",
+        "Deduplicated alerts, optional sounds",
+        "Opt-in browser push where supported"
+      ],
+      "group": "Supporting",
+      "visual": "docs/media/v3/notifications.svg",
+      "alt": "Illustrative workflow: AI task → Completed → One alert",
+      "video": null,
+      "diagram": [
+        "AI task",
+        "Completed",
+        "One alert"
+      ]
+    },
+    {
+      "id": "screen",
+      "name": "Remote Screen & Control",
+      "headline": "See it. Interact when needed.",
+      "description": "View an authorized computer's screen and choose displays or quality where supported; optional Mac input needs local approval.",
+      "guide": "docs/FEATURES.md#remote-screen--control",
+      "details": [
+        "Screen viewing, pause and snapshots",
+        "Display selection subject to platform validation",
+        "Mac control with native permissions and host Stop"
+      ],
+      "group": "Supporting",
+      "visual": "docs/media/v3/screen.svg",
+      "alt": "Illustrative workflow: View screen → Approve control → Mac input",
+      "video": null,
+      "diagram": [
+        "View screen",
+        "Approve control",
+        "Mac input"
+      ]
+    },
+    {
+      "id": "camera-audio",
+      "name": "Camera & Audio",
+      "headline": "See, listen and speak.",
+      "description": "View the host camera, listen to its microphone and use push to talk through its speakers with authorization.",
+      "guide": "docs/CAMERA.md",
+      "details": [
+        "Independent camera and audio controls",
+        "Two-way audio and push to talk",
+        "No automatic recording; audible playback still to be verified"
+      ],
+      "group": "Supporting",
+      "visual": "docs/media/v3/camera-audio.svg",
+      "alt": "Illustrative workflow: Camera → Listen → Push to talk",
+      "video": null,
+      "diagram": [
+        "Camera",
+        "Listen",
+        "Push to talk"
+      ]
+    },
+    {
+      "id": "developer-tools",
+      "name": "Developer Tools",
+      "headline": "Everything close at hand.",
+      "description": "Use terminals, files, Git, development ports and device-to-device messages.",
+      "guide": "docs/GUIDE.md",
+      "details": [
+        "Terminal sessions and shortcuts",
+        "File transfers, previews and ZIP",
+        "Git graph, branches and pull requests"
+      ],
+      "group": "Supporting",
+      "visual": "docs/media/v3/developer-tools.svg",
+      "alt": "Illustrative workflow: Terminal → Files → Git",
+      "video": null,
+      "diagram": [
+        "Terminal",
+        "Files",
+        "Git"
+      ]
+    },
+    {
+      "id": "computer-management",
+      "name": "Computer Management",
+      "headline": "Know how your computer is doing.",
+      "description": "See available health information, manage running apps and use supported power controls.",
+      "guide": "docs/GUIDE.md#open-apps-health-and-power",
+      "details": [
+        "CPU, memory, battery and available sensors",
+        "Connected computer availability",
+        "Start at login, keep awake and power controls"
+      ],
+      "group": "Supporting",
+      "visual": "docs/media/v3/computer-management.svg",
+      "alt": "Illustrative workflow: Health → Apps → Power",
+      "video": null,
+      "diagram": [
+        "Health",
+        "Apps",
+        "Power"
+      ]
+    },
+    {
+      "id": "connectivity",
+      "name": "Connected & Self-hosted",
+      "headline": "Your computers. Your control.",
+      "description": "Connect locally or enable optional remote access; authorize devices with QR codes and manage permissions.",
+      "guide": "docs/UNIFIED_CONNECTIONS.md",
+      "details": [
+        "Local and Remote QR selector",
+        "Optional Cloudflare tunnel",
+        "Separate device and provider permissions"
+      ],
+      "group": "Supporting",
+      "visual": "docs/media/v3/connectivity.svg",
+      "alt": "Illustrative workflow: Local Wi-Fi → QR login → Remote option",
+      "video": null,
+      "diagram": [
+        "Local Wi-Fi",
+        "QR login",
+        "Remote option"
+      ]
+    },
+    {
+      "id": "setup",
+      "name": "Simple Setup & Help",
+      "headline": "Get running without the guesswork.",
+      "description": "Install with npm, configure through guided Admin setup and use contextual instructions and diagnostics.",
+      "guide": "docs/SETUP.md",
+      "details": [
+        "Node.js 22+ and capability checks",
+        "Predefined setup actions with approval",
+        "Notification preferences, updates and recovery"
+      ],
+      "group": "Supporting",
+      "visual": "docs/media/v3/setup.svg",
+      "alt": "Illustrative workflow: Install → Configure → Connect",
+      "video": null,
+      "diagram": [
+        "Install",
+        "Configure",
+        "Connect"
+      ]
+    }
+  ]
+}
