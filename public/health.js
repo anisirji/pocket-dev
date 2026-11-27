@@ -118,7 +118,8 @@
       const res = await fetch('/api/health', { cache: 'no-store' });
       if (res.status === 401) return location.replace('/login.html');
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || `HTTP ${res.status}`);
-      render(await res.json());
+      const data = await res.json();
+      if (state.open) render(data);
     } catch (err) {
       ui.note.textContent = say(`Could not read the Mac: ${err.message}`);
     } finally {
@@ -140,7 +141,7 @@
     ui.scroll.replaceChildren(el('p', 'health-note', 'Reading the Mac…'));
     ui.note.textContent = '';
     state.open = true;
-    overlays.open('health', closeSheet);
+    if (!window.pocketDevSettings?.presentPanel(ui.root, 'health', closeSheet)) overlays.open('health', closeSheet);
     load();
     state.timer = setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
   };

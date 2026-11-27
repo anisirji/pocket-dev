@@ -202,6 +202,20 @@ test('landing on the internet address right after linking goes back to Wi-Fi wit
   assert.equal(stranded.replaced.length, 0, 'the return happens at most once');
 });
 
+test('a secure camera handoff stays on HTTPS and does not offer a return to the insecure Wi-Fi address', async () => {
+  const f = fixture({ responses: { '/api/connection': connection({ sameNetwork: true }) }, protocol: 'https:', search: '?linked=1', hash: '#camera' });
+  await settle(); assert.deepEqual(f.replaced, []);
+  await f.net.check(); assert.notEqual(f.banner.dataset.kind, 'local');
+});
+
+test('the microphone secure action preserves the selected computer and requires an HTTPS destination', async () => {
+  const f = fixture({ responses: { '/api/connection': connection({ route: 'local', sameNetwork: null }) }, storage: new Map([['pd.machine', '41231418761633a4']]) });
+  f.runtime.window.api = async () => ({ url: 'https://pocket.example.com/?h=one-use' });
+  await f.net.openSecureCamera(); assert.deepEqual(f.assigned, ['https://pocket.example.com/?h=one-use#camera=41231418761633a4']);
+  const unavailable = fixture({ responses: { '/api/connection': { status: 404 } } });
+  await assert.rejects(unavailable.net.openSecureCamera(), /needs HTTPS/); assert.deepEqual(unavailable.assigned, []);
+});
+
 test('a new Quick link address is announced as new on Wi-Fi', async () => {
   const storage = new Map([['pd.net.remoteUrl', 'https://old-words.trycloudflare.com']]);
   const f = fixture({ storage, responses: { '/api/connection': connection({ route: 'local', sameNetwork: null, networkKey: null, linked: false, internet: 'quick', remoteUrl: 'https://new-words.trycloudflare.com' }) } });

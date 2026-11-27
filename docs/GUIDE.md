@@ -33,7 +33,7 @@ You need a computer (Mac, Windows 11 or Linux) and a phone on the same Wi-Fi. Yo
 
 Want to try it first without installing? `npx -y @anisirji/pocket-dev start` runs it once and leaves nothing behind (it is slower to start).
 
-> **Guided setup on the first start.** The first `pocket-dev start` on a computer opens the guided setup before the server starts (`pocket-dev setup` runs it again any time). It checks Node, Git, Claude Code, Codex, the GitHub CLI and Cloudflare's `cloudflared`, shows the exact command before it installs anything, and offers each tool's own login (`claude auth login`, `codex login`, `gh auth login`). Claude Code, Codex and the GitHub CLI are accounts, so their install and login default to no. Then it sets your password and the phone access, and the **Always on** step shows one list of recommended changes (start at login, Keep awake) and asks once. It ends with the address, a one-time QR code and a short note from the author, Ani (`--quiet` hides it). Without a terminal (a script, CI) the start prints the status table and the command, and goes on; `pocket-dev start --no-setup` or `POCKET_DEV_NO_SETUP=1` skips the guide. `pocket-dev setup --check` only shows the status; `--dry-run` shows the plan. Details: [docs/SETUP.md](SETUP.md). The same checklist is in Settings, under **Tools on this computer**.
+> **Guided setup on the first start.** On a Mac desktop, the first interactive `pocket-dev start` opens the existing local Admin setup dialog. Check tools, explicitly install the ones you need, connect a phone and review permissions. Pausing saves the step; **Admin → This computer → Run setup** resumes it. Sign-ins use each tool’s own command. `pocket-dev setup` retains the full terminal guide, including Always on options; SSH and `--no-open` keep that flow. Without a terminal or in CI, startup only reports status. `--no-setup` or `POCKET_DEV_NO_SETUP=1` skips first-run setup, and `pocket-dev setup --check` stays read-only. See [setup details](SETUP.md).
 
 ### Beginner guide
 
@@ -186,6 +186,14 @@ Open apps lists what is running with memory and CPU and can quit or force quit. 
 
 ### Connected computers and the Admin page
 
+Settings uses six categories: **Connected computers**, **Connection**, **AI Tools**, **Computer controls**, **Security & Devices**, and **Service & Updates**. Desktop keeps the sidebar visible inside a spacious dialog; phones use full-screen pages with a common Back button. Browser Back and Android Back return one level and restore the previous scroll position. Pages refresh while visible; leaving camera or screen stops their previews. The workspace status strip pauses while Settings is open and resumes when it closes. Dark remains the default theme.
+
+Refreshing keeps the current Settings category and detail, Files folder and preview, Messages conversation, and mobile workspace panel. Settings also restores its scroll position. Repeated refreshes preserve the Back sequence; closed pages stay closed. A detail that no longer exists falls back to its list. Password fields, confirmation dialogs and generated connection codes are not restored.
+
+**AI Tools → provider** groups installation, setup commands, sharing and authorized computers. Setup and sharing describe the computer the phone is logged into; computer controls operate on the selected workspace computer. Unsupported provider sharing and platform-specific controls stay disabled or carry their actual capability message. Password, logged-in devices, approval controls, login QR and device limit stay together in **Security & Devices**.
+
+**Connection QR codes** use the same Local/Remote selector in Admin, setup and Settings. Local is selected first for devices on the same Wi-Fi. Enabling Internet access adds a Remote tab; it keeps the local URL and QR available. With Internet access disabled, only Local is shown. Scan, copy or open the selected link. Local codes update when the computer's network address changes. A remote failure does not disable local access; an explicitly disabled Wi-Fi listener stays disabled. A share QR opens the address and still requires the normal login. A login QR grants one login, expires at the displayed time and is cleared when Settings closes.
+
 **Settings → Connected computers** manages personal computers and AI-only connections. **AI Tools** controls sharing for installed providers; each computer’s details controls individual recipients. The Admin page on `http://localhost:7778` continues to manage login devices, the security log, internet access, service and lockdown. Existing collaborator project copies remain available there for review and revocation during migration.
 
 ### Update Pocket Dev
@@ -205,7 +213,9 @@ Turn all of it off with `pocket-dev config set updateCheck false` or `POCKET_DEV
 
 ## Connected computers
 
-Open **Settings → Connected computers → Connect computer**, choose whether it is yours, and exchange the connection code. Personal computer access requires approval on the target computer. Other people’s computers receive AI-only access by default.
+The count includes the computer you are already using. With just this computer, Settings shows **1 computer · Online**, and its row is marked **This computer · Online**. Additional computers contribute to the total and their online/offline status. Phones remain listed separately as login devices.
+
+Open **Settings → Connected computers → Connect another computer**, choose whether it is yours, and exchange the connection code. Personal computer access requires approval on the target computer. Other people’s computers receive AI-only access by default.
 
 The existing **Work on** switcher lists authorized personal computers. Shared AI sources appear in the existing Chat provider selector, with their source computer’s name. Turn sharing on in **AI Tools**, then authorize each recipient in its computer details. Sharing works in either direction; it never shares personal conversations or grants general file or terminal access.
 
@@ -301,7 +311,7 @@ Environment variables: `PORT`, `POCKET_DEV_CONFIG`, `POCKET_DEV_PASSWORD` (overr
 
 ### Permissions it needs
 
-Pocket Dev runs as your user, never as root, and never runs `sudo` itself.
+Pocket Dev runs as your user. Privileged Mac power actions use the native macOS administrator prompt after an in-app confirmation; the server does not collect or store your administrator password.
 
 | Permission | Needed for |
 | --- | --- |
@@ -311,7 +321,7 @@ Pocket Dev runs as your user, never as root, and never runs `sudo` itself.
 | macOS Screen Recording | Screen view (without it the picture shows only the wallpaper). |
 | macOS Full Disk Access (maybe) | Files, for protected folders. |
 | Your `claude`, `codex`, and `gh` logins | Chat, terminals, Git. |
-| Your computer password, typed by you in a terminal | Lid closed, sleep with Lid closed on, force shutdown (macOS). |
+| macOS administrator approval in the native system prompt | Lid-closed sleep changes, sleep while lid sleep is disabled, and force shutdown. Confirm inside Pocket Dev first; these controls keep you on the current page. |
 
 The Admin page has a **Permissions** panel that shows each of these. Details: [docs/REFERENCE.md](REFERENCE.md#permissions-it-needs).
 
@@ -380,6 +390,22 @@ The server code is in `src/`, one folder per area: `core` (config, paths, platfo
 The suite starts disposable phone and Admin listeners, uses fixture folders, stubbed power commands and a stand-in for `cloudflared`, and exercises authentication, Host/Origin/CSRF checks, terminals, chat persistence, Files, devices, lockdown, the tunnel kinds, rooms and modes. It makes no model calls, opens no real tunnel, and does not install a service or quit user apps.
 
 Before publishing, run `npm test`, `node test/browser/check-responsive.mjs` and `npm pack --dry-run`. The README's screenshot links point at the `main` branch, so no per-version rewrite is needed. The release notes for the version are in `docs/RELEASE_<major>.<minor>.md`.
+
+## Device screen
+
+Device screen offers bounded image quality, supported Mac display selection and snapshot downloads. Optional Mac input requires Python 3, Screen Recording and Accessibility permission, plus one computer-wide approval in local Admin. That approval covers every authorized remote connection and survives service restarts. Admin can be closed afterwards. Each connection still needs an explicit Control request and fresh, scoped session credentials; inputs never replay after reconnecting. Admin → This computer → Permissions has switches for screen viewing, screen control, camera and microphone/audio. Turning one off stops affected active sessions and rejects new remote access. **Stop and revoke** clears the global control approval, including when the previous session has already ended. Turning off screen viewing also revokes input approval.
+
+Prepare camera and microphone permission once in the existing Remote camera panel. Their browser permissions apply to the computer's localhost origin, rather than each phone login. Select persistent browser permission when offered. Pocket Dev does not add per-device prompts; the browser or OS can still ask again after its permissions are revoked or expire. Camera and microphone/audio switches are independent, and disabling either terminates affected WebRTC streams as well as relay access. Reenabling a feature does not revive old session credentials.
+
+## Task alerts
+
+Chats show confirmed task states: Working, Awaiting approval, Awaiting input, Completed or Interrupted. Task completion and input requests can show a short alert while Pocket is open. The same event is deduplicated across tabs, and reconnecting does not replay old alerts. Messages use the same alerts and retain their recipient permissions.
+
+On Mac, Terminal → Shortcuts offers **Notify when finished · run in a new terminal**, off by default. Choose it before running a build or test shortcut. The command runs once in a separate supported Mac shell, and its confirmed exit produces one alert for the initiating login. Tapping opens that terminal and its output. Ordinary terminal activity stays quiet. A monitored terminal ends with its command; its exit code remains available in Terminals. Reconnecting never reruns the command. Monitoring is not restored after a Pocket Dev server restart; existing persistent terminal output remains available.
+
+Open **Settings → Service & Updates → Notifications** to choose alerts, optional sounds, desktop update reminders, in-app update reminders and automatic update checks. Checking for updates is independent of reminding you about them. The local Admin page exposes the same preferences.
+
+**Browser notifications** are a separate opt-in for the current browser and login. They require a supported browser in a secure context, normally HTTPS. On iPhone, open Pocket from a Home Screen installation. Pocket sends encrypted notifications through the browser vendor's push service, without a Pocket cloud account. The computer must remain awake, running and reachable; expired, offline or revoked sessions drop alerts rather than storing notification history. Wi-Fi HTTP pages keep live in-app alerts. Browser push across physical phones has not yet been validated.
 
 ## Follow
 

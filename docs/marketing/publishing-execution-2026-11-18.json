@@ -1,0 +1,430 @@
+{
+  "date": "2026-11-18",
+  "timezone": "Asia/Kolkata",
+  "request": "Every finished video should be scheduled or published on each platform",
+  "status": "awaiting_personal_instagram_verification",
+  "actions": [
+    {
+      "platform": "youtube",
+      "id": "afk-3am-ending1",
+      "status": "scheduled",
+      "at": "2026-11-25T20:00:00+05:30",
+      "url": "https://www.youtube.com/shorts/jxVfc36IEJs",
+      "confirmation": "Native YouTube Studio visibility saved as Scheduled for 2026-11-25 at 8:00 PM, (GMT+05:30) Kolkata. Saved state verified with disabled Save button. Current user explicitly requested every finished video scheduled or published. Both alternate endings are labelled as separate fictional outcomes, not audience-selected results.",
+      "verified_at": "2026-11-18T18:03:27.866Z"
+    },
+    {
+      "platform": "youtube",
+      "id": "afk-3am-ending2",
+      "status": "scheduled",
+      "at": "2026-11-26T20:00:00+05:30",
+      "url": "https://www.youtube.com/shorts/-aL0Wtx7l78",
+      "confirmation": "Native YouTube Studio visibility saved as Scheduled for 2026-11-26 at 8:00 PM, (GMT+05:30) Kolkata. Saved state verified with disabled Save button. Current user explicitly requested every finished video scheduled or published. Both alternate endings are labelled as separate fictional outcomes, not audience-selected results.",
+      "verified_at": "2026-11-18T18:03:27.871Z"
+    },
+    {
+      "platform": "facebook",
+      "id": "hero",
+      "at": "2026-11-19T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool List confirms Pending, 2026-11-19T20:00:00+05:30 (Asia/Kolkata), matching video caption and network icons.",
+      "verified_at": "2026-11-18T18:13:10.517506+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "chhath-part1",
+      "at": "2026-11-21T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-11-21T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:14:39.304262+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "chhath-part2",
+      "at": "2026-11-23T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-11-23T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:14:51.150289+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "product-demo",
+      "at": "2026-11-25T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-11-25T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:15:04.113674+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "afk-wedding",
+      "at": "2026-11-29T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-11-29T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:15:31.058290+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "afk-3am-question",
+      "at": "2026-12-01T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-01T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:15:43.850563+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "afk-3am-ending1",
+      "at": "2026-12-03T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-03T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:15:56.858703+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "afk-3am-ending2",
+      "at": "2026-12-05T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-05T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:16:09.536142+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "afk-train-part1",
+      "at": "2026-12-07T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-07T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:16:43.842959+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "afk-train-part2",
+      "at": "2026-12-09T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-09T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:16:57.173481+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "afk-waiting-room",
+      "at": "2026-12-11T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-11T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:17:10.059926+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "afk-hackathon",
+      "at": "2026-12-13T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-13T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:17:23.830181+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "afk-dinner",
+      "at": "2026-12-15T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-15T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:17:47.052575+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "afk-village",
+      "at": "2026-12-17T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-17T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:18:00.559527+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "afk-setup",
+      "at": "2026-12-19T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-19T20:00:00+05:30 in Asia/Kolkata with matching Facebook network icons and caption.",
+      "verified_at": "2026-11-18T18:18:13.671795+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "tutorial-macos-quick",
+      "at": "2026-12-21T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-21T20:00:00+05:30 in Asia/Kolkata with matching Facebook and Instagram network icons and caption.",
+      "verified_at": "2026-11-18T18:19:59.626406+00:00"
+    },
+    {
+      "platform": "instagram",
+      "id": "tutorial-macos-quick",
+      "at": "2026-12-21T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2026-12-21T20:00:00+05:30 in Asia/Kolkata with matching Facebook and Instagram network icons and caption.",
+      "verified_at": "2026-11-18T18:19:59.626406+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "product-demo-wide",
+      "at": "2027-01-01T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool List confirms Pending, 2027-01-01T20:00:00+05:30 (Asia/Kolkata), matching video caption and network icons.",
+      "verified_at": "2026-11-18T18:21:25.020124+00:00"
+    },
+    {
+      "platform": "instagram",
+      "id": "product-demo-wide",
+      "at": "2027-01-01T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool List confirms Pending, 2027-01-01T20:00:00+05:30 (Asia/Kolkata), matching video caption and network icons.",
+      "verified_at": "2026-11-18T18:21:25.020124+00:00"
+    },
+    {
+      "platform": "facebook",
+      "id": "teaser-wide",
+      "at": "2027-01-03T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2027-01-03T20:00:00+05:30 in Asia/Kolkata with matching Facebook and Instagram network icons and caption.",
+      "verified_at": "2026-11-18T18:21:39.951455+00:00"
+    },
+    {
+      "platform": "instagram",
+      "id": "teaser-wide",
+      "at": "2027-01-03T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2027-01-03T20:00:00+05:30 in Asia/Kolkata with matching Facebook and Instagram network icons and caption.",
+      "verified_at": "2026-11-18T18:21:39.951455+00:00"
+    },
+    {
+      "platform": "instagram",
+      "id": "afk-3am-ending1",
+      "at": "2027-01-05T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2027-01-05T20:00:00+05:30 in Asia/Kolkata with matching instagram network icons and caption.",
+      "verified_at": "2026-11-18T18:22:56.917095+00:00"
+    },
+    {
+      "platform": "instagram",
+      "id": "afk-3am-ending2",
+      "at": "2027-01-07T20:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "Metricool",
+      "confirmation": "Metricool reports Post successfully created; List verifies Pending for 2027-01-07T20:00:00+05:30 in Asia/Kolkata with matching instagram network icons and caption.",
+      "verified_at": "2026-11-18T18:23:12.342005+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "chhath-part1",
+      "at": "2026-11-19T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled. Scheduled (7) list confirms Thu, Nov 19, 2026 at 11:00 AM with matching Chhath Part 1 caption and video thumbnail. Original upload verified at 97.813 seconds and 1080×1920; browser timezone Asia/Calcutta (IST).",
+      "verified_at": "2026-11-18T18:30:41.433Z"
+    },
+    {
+      "platform": "linkedin",
+      "id": "chhath-part2",
+      "at": "2026-11-21T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-11-21T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 99.413 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:38:05.813786+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "product-demo",
+      "at": "2026-11-24T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-11-24T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 32.466 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:39:30.150741+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "afk-wedding",
+      "at": "2026-11-27T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-11-27T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 32.0 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:40:09.534238+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "afk-3am-question",
+      "at": "2026-11-29T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-11-29T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 30.442 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:40:42.287659+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "afk-3am-ending1",
+      "at": "2026-12-01T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-01T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 30.4 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:42:49.456410+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "afk-3am-ending2",
+      "at": "2026-12-04T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-04T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 30.613 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:43:27.222018+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "afk-train-part1",
+      "at": "2026-12-06T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-06T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 30.272 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:43:58.560112+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "afk-train-part2",
+      "at": "2026-12-08T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-08T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 30.336 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:44:36.488004+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "afk-waiting-room",
+      "at": "2026-12-11T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-11T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 33.386 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:45:53.974953+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "afk-hackathon",
+      "at": "2026-12-13T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-13T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 34.453 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:46:30.898910+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "afk-dinner",
+      "at": "2026-12-15T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-15T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 32.085 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:47:06.222438+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "afk-village",
+      "at": "2026-12-17T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-17T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 39.786 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:48:08.458207+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "afk-setup",
+      "at": "2026-12-19T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-19T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 40.768 seconds, 1080×1920. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:49:25.270243+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "tutorial-macos-quick",
+      "at": "2026-12-21T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-21T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 100.736 seconds, 1920×1080. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:50:11.132568+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "product-demo-wide",
+      "at": "2026-12-23T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-23T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 58.666 seconds, 1920×1080. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:50:47.306359+00:00"
+    },
+    {
+      "platform": "linkedin",
+      "id": "teaser-wide",
+      "at": "2026-12-25T11:00:00+05:30",
+      "status": "scheduled",
+      "scheduler": "LinkedIn native",
+      "confirmation": "LinkedIn reports Post scheduled after full video upload and processing. Composer verified 2026-12-25T11:00:00+05:30 in browser timezone Asia/Calcutta (IST), matching caption, original video 11.4 seconds, 1920×1080. Existing scheduled posts were preserved.",
+      "verified_at": "2026-11-18T18:51:15.856843+00:00"
+    }
+  ],
+  "access": {
+    "browser": "Signed-in native Google Chrome via AppleScript; separate headless browser session remains logged out",
+    "instagram_personal": "Switch to hap.pyani triggered WhatsApp two-step verification; awaiting completion",
+    "facebook": "Pocket Dev Page 1449010154961929 connected to Metricool; schedules verified in List",
+    "linkedin": "Fully reconciled native Scheduled (23): 17 new video additions and all six original posts. Live hero permalink rechecked.",
+    "metricool": "Signed in as brand afk_pocket_dev; 29 existing rows for Oct–Dec, 20 on first page"
+  },
+  "last_verified": "2026-11-18T19:04:39.069Z",
+  "completed_accounts": {
+    "youtube": 18,
+    "facebook": 18,
+    "instagram_afk_pocket_dev": 18,
+    "linkedin_rohit": 18
+  },
+  "remaining": {
+    "account": "hap.pyani",
+    "videos": [
+      "product-demo-wide",
+      "teaser-wide",
+      "afk-3am-ending1",
+      "afk-3am-ending2"
+    ],
+    "count": 4,
+    "reason": "Instagram account switch is awaiting WhatsApp two-step verification; no code has been entered in the connected Chrome verification screen.",
+    "prepared_queue": "personal-instagram/video-completion-queue.json"
+  },
+  "verification": {
+    "metricool_rows": 49,
+    "metricool_facebook_pending": 18,
+    "metricool_instagram_pending": 14,
+    "metricool_instagram_published": 2,
+    "metricool_youtube_pending": 10,
+    "metricool_youtube_historical_published": 8,
+    "youtube_native_alternate_schedules": 2,
+    "linkedin_native_scheduled_posts": 23,
+    "linkedin_new_videos": 17,
+    "linkedin_existing_posts_preserved": 6,
+    "linkedin_duplicates": 0
+  },
+  "reddit": {
+    "status": "removed_by_reddit_filters",
+    "verified": "2026-11-19",
+    "url": "https://www.reddit.com/r/SideProject/comments/1xz54bl/i_built_pocket_dev_to_check_coding_work_from_my/"
+  }
+}

@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { startServer, until } from '../helpers/server.mjs';
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const cleanups = [], t = { after: (fn) => cleanups.push(fn) };
+let browser;
+try {
+  const server = await startServer(t, { env: { SHELL: '/bin/zsh' } }), login = await server.login();
+  const command = 'printf browser >> monitored.txt; sleep 0.5';
+  await server.request('PUT', '/api/shortcuts', { cookie: login.cookie, body: [command] });
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } }), [name, value] = login.cookie.split('=');
+  await context.addCookies([{ name, value, url: server.base }]); await context.addInitScript(() => localStorage.setItem('pd-welcome-shown', '1'));
+  const page = await context.newPage(), errors = []; page.on('pageerror', (error) => errors.push(String(error)));
+  await page.goto(server.base); await page.locator('#viewSwitch [data-view="terminal"]').click();
+  await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
+  const monitor = page.getByLabel('Notify when finished · run in a new terminal', { exact: true });
+  assert.equal(await monitor.isChecked(), false); await monitor.check();
+  await page.getByRole('button', { name: command, exact: true }).click();
+  const alert = page.locator('.pd-alert'); await alert.getByText('Monitored command completed', { exact: true }).waitFor();
+  const sessions = (await server.request('GET', '/api/sessions', { cookie: login.cookie })).data, monitored = sessions.find((session) => session.monitored);
+  assert.ok(monitored); assert.equal(monitored.exitCode, 0);
+  await alert.locator('.pd-alert-message').click();
+  assert.equal(await page.evaluate(() => window.pocketDev.activeSession()), monitored.id);
+  await page.reload(); await until(async () => await page.evaluate(() => window.pocketDev?.activeSession() != null));
+  assert.equal(await page.locator('.pd-alert:visible').count(), 0, 'reloading never replays command completion');
+  assert.equal(fs.readFileSync(path.join(server.home, 'monitored.txt'), 'utf8'), 'browser');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  assert.deepEqual(errors, []); console.log('PASS opt-in monitored Mac shortcut, confirmed command completion, terminal deep link and no reload replay');
+  await context.close();
+} finally { await browser?.close(); for (const cleanup of cleanups.reverse()) await cleanup(); }

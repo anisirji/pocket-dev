@@ -24,11 +24,3 @@
 .cc-invitation:empty { display: none; }
 .cc :disabled { opacity: .5; cursor: not-allowed; }
 .cc button:focus-visible, .cc input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.st-home-nav { display: grid; gap: 8px; padding-top: 20px; }
-.st-home-nav h3 { margin: 16px 0 4px; }
-.st-home-nav .st-link { justify-content: space-between; padding: 10px 12px; }
-.st-home-nav .st-link span:first-child { display: grid; gap: 4px; }
-.st-home-nav small { font-size: 12px; font-weight: 400; color: var(--muted); }
-.st-back { min-width: 44px; min-height: 44px; font-size: 20px; }
-.st-computer-info { padding: 20px 0 4px; }
-.st-computer-info strong { font-size: 18px; }

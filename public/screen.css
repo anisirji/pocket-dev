@@ -13,3 +13,15 @@
 .screen-error[hidden] { display: none; }
 .screen-note { flex: none; margin: 0; padding: 6px 10px 10px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); background: var(--panel); }
 .screen-note:empty { display: none; }
+.screen-select { min-height: 44px; max-width: min(190px, 100%); background: var(--panel, #131823); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 0 10px; }
+.screen-bar { flex-wrap: wrap; }
+.screen-bar button { min-height: 44px; }
+.screen-options { max-width: calc(100vw - 24px); background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 9px; padding: 12px; }
+.screen-options label { display: flex; align-items: center; justify-content: space-between; min-height: 44px; gap: 20px; font-size: 13px; }
+.screen-options label[hidden] { display: none; }
+.screen-control-note { margin: 0; padding: 8px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.screen-control-input { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.screen-control-note[hidden], .screen-control-input[hidden] { display: none; }
+.screen-control-input input { flex: 1; min-width: 100px; width: 50%; padding: 8px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+.screen-control-input button { min-height: 44px; padding: 0 12px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.screen-img.controlling { touch-action: none; cursor: crosshair; }

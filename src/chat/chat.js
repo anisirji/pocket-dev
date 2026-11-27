@@ -7,14 +7,14 @@ const TITLE_MAX = 80;
 const PERSIST_DELAY_MS = 1000;
 export const QUEUE_MAX = 20;
 
-const PERSISTED = ['id', 'tool', 'provider', 'workspace', 'cwd', 'settings', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt', 'acceptedInputs', 'handoffSeq', 'handoffFrom', 'handoffDigest', 'sessionRefs', 'nativeReleased', 'nativeHeld', 'nativeSessionStartSeq'];
+const PERSISTED = ['id', 'tool', 'provider', 'workspace', 'cwd', 'settings', 'sessionId', 'title', 'createdAt', 'updatedAt', 'grants', 'seq', 'events', 'failed', 'turnStartedAt', 'acceptedInputs', 'handoffSeq', 'handoffFrom', 'handoffDigest', 'sessionRefs', 'nativeReleased', 'nativeHeld', 'nativeSessionStartSeq', 'browserToolsUsed'];
 
 // One conversation. Status is derived from three independent facts (engine awake, turn running, open requests)
 // so it can never disagree with them.
 export class Chat {
   constructor(data, file) {
     Object.assign(this, {
-      title: 'New chat', sessionId: null, grants: [], seq: 0, events: [], failed: false, turnStartedAt: null, acceptedInputs: [], handoffSeq: null, handoffFrom: null, handoffDigest: null, sessionRefs: [], nativeReleased: false, nativeHeld: null, nativeSessionStartSeq: 0,
+      title: 'New chat', sessionId: null, grants: [], seq: 0, events: [], failed: false, turnStartedAt: null, acceptedInputs: [], handoffSeq: null, handoffFrom: null, handoffDigest: null, sessionRefs: [], nativeReleased: false, nativeHeld: null, nativeSessionStartSeq: 0, browserToolsUsed: false,
       createdAt: Date.now(), updatedAt: Date.now(),
     }, data);
     this.file = file;
@@ -74,13 +74,23 @@ export class Chat {
     return 'idle';
   }
 
+  get activity() {
+    if (this.requests.size) return this.requests.values().next().value.event.type === 'question' ? 'awaiting-input' : 'awaiting-approval';
+    if (this.turn || this.events.some((event) => event.agentStatus === 'running') || (this.nativeHeld && this.heldActivity)) return 'working';
+    if (this.failed) return 'interrupted';
+    const last = this.events.findLast((event) => event.type === 'result' || event.type === 'error');
+    if (last?.type === 'result' && last.status === 'done') return 'completed';
+    if (last || this.closed) return 'interrupted';
+    return 'ready';
+  }
+
   view() {
     const { id, tool, title, cwd, settings, sessionId, createdAt, updatedAt, waking } = this;
     const pendingId = this.requests.keys().next().value ?? null;
     return {
       id, tool, title, cwd, settings, sessionId, createdAt, updatedAt, waking, provider: this.provider, workspace: this.workspace,
       sessionRefs: this.sessionRefs, nativeReleased: this.nativeReleased, held: this.nativeHeld, heldActivity: this.heldActivity,
-      queued: this.queue.length, status: this.status, runningSince: this.turn?.startedAt ?? null, pending: pendingId !== null, pendingId,
+      queued: this.queue.length, status: this.status, activity: this.activity, runningSince: this.turn?.startedAt ?? null, pending: pendingId !== null, pendingId,
       capabilities: { queueEdit: true },
     };
   }
@@ -99,6 +109,7 @@ export class Chat {
   changed() {
     this.touch();
     this.broadcast({ t: 'chat', chat: this.view() });
+    this.activityListener?.(this, { type: 'meta' });
     this.persist();
   }
 
@@ -119,6 +130,7 @@ export class Chat {
     this.broadcast({ t: 'event', event: ev });
     this.touch();
     this.listener?.event(ev.id);
+    this.activityListener?.(this, ev);
     return ev;
   }
 
@@ -129,6 +141,7 @@ export class Chat {
     this.broadcast({ t: 'event', event: ev });
     this.touch();
     this.listener?.event(id);
+    if (Object.hasOwn(patch, 'agentStatus')) this.activityListener?.(this, { type: 'meta' });
     return ev;
   }
 

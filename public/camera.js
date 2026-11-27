@@ -8,6 +8,49 @@
   };
   let ui, open = false, session = null, generation = 0, timer, supportTimer, controller, imageUrl, latestFrame, previousFocus, browserCapture = false, cameraPrepared = false, refreshedCameras = false;
   let viewer, peer, heartbeat, videoTimeout, rtcTimeout, rtcReady = false, candidates = [], pendingImage, drawing = false;
+  let media = { video: true, listen: false, talk: false }, rtcConnected = false, rtcIceServers = [], microphone, micPending = false, talking = false, talkRun = 0;
+  let mediaPermissions = { camera: true, microphone: true };
+  const canTalk = () => mediaPermissions.microphone && window.isSecureContext && !!navigator.mediaDevices?.getUserMedia && !!window.RTCPeerConnection && !!window.RTCRtpSender?.prototype.replaceTrack;
+  const chosenMedia = () => ({ video: !browserCapture || ui.cameraOn.checked, listen: browserCapture && ui.listen.checked, talk: browserCapture && canTalk() });
+  function talkStatus(message) {
+    if (!ui) return;
+    ui.talkHint.textContent = message || (!mediaPermissions.microphone ? 'Microphone & audio are disabled in Admin.'
+      : !window.isSecureContext ? 'Your phone microphone needs a secure HTTPS connection.'
+      : !canTalk() ? 'This browser does not support microphone sharing.'
+      : !rtcConnected ? 'Start the camera or audio connection to speak.' : 'Hold to speak. Release to mute.');
+    ui.secure.hidden = !browserCapture || !mediaPermissions.microphone || window.isSecureContext;
+  }
+  function releaseTalk() {
+    talking = false; talkRun++;
+    for (const track of microphone?.getTracks() || []) { track.enabled = false; track.stop(); }
+    microphone = null;
+    const sender = peer?.getTransceivers?.().find((item) => item.receiver.track.kind === 'audio')?.sender;
+    sender?.replaceTrack(null).catch(() => {});
+    if (ui) { ui.talk.setAttribute('aria-pressed', 'false'); ui.talk.textContent = 'Hold to speak'; }
+    talkStatus();
+  }
+  async function pressTalk(event) {
+    if (!session || !rtcConnected || !canTalk() || micPending || (event?.button != null && event.button !== 0)) return;
+    event?.preventDefault(); talking = true; const request = ++talkRun, run = generation, connection = peer;
+    ui.talk.setAttribute('aria-pressed', 'true'); ui.talk.textContent = 'Allow microphone…'; micPending = true;
+    try {
+      const acquired = await navigator.mediaDevices.getUserMedia({ video: false, audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      for (const track of acquired.getAudioTracks()) track.enabled = false;
+      if (!talking || request !== talkRun || run !== generation || peer !== connection || !rtcConnected || viewer?.readyState !== WebSocket.OPEN) {
+        acquired.getTracks().forEach((track) => track.stop());
+        if (run === generation && open && peer === connection && rtcConnected) talkStatus('Microphone allowed. Hold to speak again.');
+        return;
+      }
+      microphone = acquired;
+      for (const track of acquired.getAudioTracks()) track.onended = () => { if (microphone === acquired) { releaseTalk(); error('The microphone stopped or its permission was revoked.'); } };
+      const sender = connection.getTransceivers().find((item) => item.receiver.track.kind === 'audio')?.sender;
+      if (!sender) throw new Error('Push to talk is not supported by this connection.');
+      await sender.replaceTrack(acquired.getAudioTracks()[0]);
+      if (!talking || request !== talkRun || run !== generation) return releaseTalk();
+      acquired.getAudioTracks()[0].enabled = true; ui.talk.textContent = 'Speaking · release to mute'; talkStatus('Speaking to the computer. Release to mute.');
+    } catch (failure) { releaseTalk(); error(failure.name === 'NotAllowedError' ? 'Microphone access was not allowed. Change this browser’s microphone permission to use push to talk.' : failure.message); }
+    finally { micPending = false; }
+  }
 
   async function request(path, body, extra = {}) {
     const res = await fetch(`/api/camera${path}`, {
@@ -36,6 +79,7 @@
   function stop(message = 'Camera stopped.') {
     const focusStart = ui && [ui.stop, ui.snapshot].includes(document.activeElement);
     generation++;
+    releaseTalk(); rtcConnected = false; talkStatus();
     clearTimeout(timer);
     clearInterval(heartbeat); clearTimeout(videoTimeout); clearTimeout(rtcTimeout);
     const oldViewer = viewer, oldPeer = peer;
@@ -47,9 +91,12 @@
     session = null;
     if (!ui) return;
     clearImage();
-    ui.select.disabled = !ui.select.options.length;
-    ui.start.disabled = !ui.select.options.length;
-    ui.start.textContent = 'Start camera';
+    ui.remoteAudio.pause(); ui.remoteAudio.srcObject = null; ui.audioPlay.hidden = true; ui.talk.disabled = true;
+    const selected = chosenMedia();
+    ui.select.disabled = !selected.video || !ui.select.options.length;
+    ui.start.disabled = selected.video ? !ui.select.options.length : !selected.listen && !selected.talk;
+    ui.preview.hidden = !selected.video;
+    ui.start.textContent = browserCapture && !ui.cameraOn.checked ? 'Start audio' : 'Start camera';
     ui.stop.disabled = true;
     ui.status.textContent = message;
     if (focusStart && open && !ui.start.disabled) ui.start.focus();
@@ -90,6 +137,9 @@
   function streamMessage(message) { if (viewer?.readyState === WebSocket.OPEN) viewer.send(JSON.stringify(message)); }
   function relay(run) {
     if (run !== generation) return;
+    releaseTalk(); rtcConnected = false; ui.talk.disabled = true; ui.remoteAudio.pause(); ui.remoteAudio.srcObject = null;
+    if (media.listen) { ui.listen.checked = false; media.listen = false; error('Audio needs a direct WebRTC connection. The camera can continue using image previews.'); }
+    if (!media.video) { stop(); error('The direct audio connection failed. Reconnect and start the audio session again.'); return; }
     clearTimeout(rtcTimeout);
     rtcReady = false;
     const previous = peer; peer = null; previous?.close();
@@ -111,16 +161,28 @@
     if (!window.RTCPeerConnection) return relay(run);
     try {
       const connection = new RTCPeerConnection({ iceServers });
+      rtcIceServers = iceServers;
       peer = connection; candidates = [];
       connection.onicecandidate = ({ candidate }) => { if (run === generation && candidate) streamMessage({ type: 'signal', candidate: candidate.toJSON() }); };
       connection.ontrack = ({ track, streams }) => {
         if (run !== generation) return;
+        if (track.kind === 'audio') {
+          if (!media.listen) return;
+          ui.remoteAudio.srcObject = streams[0] || new MediaStream([track]);
+          ui.remoteAudio.play().catch(() => { if (run === generation && peer === connection && media.listen) ui.audioPlay.hidden = false; }); return;
+        }
+        if (!media.video) return;
         ui.video.srcObject = streams[0] || new MediaStream([track]);
         ui.video.onloadeddata = () => readyVideo(run);
         ui.video.play().then(() => readyVideo(run)).catch(() => relay(run));
       };
       connection.onconnectionstatechange = () => {
-        if (peer === connection && ['failed', 'disconnected'].includes(connection.connectionState)) relay(run);
+        if (peer === connection && connection.connectionState === 'connected') {
+          rtcConnected = true; ui.talk.disabled = !media.talk;
+          talkStatus();
+          if (!media.video) { clearTimeout(videoTimeout); clearTimeout(rtcTimeout); ui.root.dataset.streamTransport = 'rtc'; ui.status.textContent = 'Audio connection ready · Camera off'; streamMessage({ type: 'rtc-ready' }); }
+        }
+        if (peer === connection && ['failed', 'disconnected', 'closed'].includes(connection.connectionState)) relay(run);
       };
     } catch { relay(run); }
   }
@@ -131,6 +193,7 @@
       if (message.description) {
         clearTimeout(rtcTimeout); rtcTimeout = setTimeout(() => relay(run), 8000);
         await connection.setRemoteDescription(message.description);
+        for (const transceiver of connection.getTransceivers?.() || []) if (transceiver.receiver.track.kind === 'audio') transceiver.direction = media.talk ? 'sendrecv' : 'recvonly';
         for (const candidate of candidates.splice(0)) await connection.addIceCandidate(candidate);
         await connection.setLocalDescription(await connection.createAnswer());
         if (run === generation && peer === connection) streamMessage({ type: 'signal', description: connection.localDescription.toJSON() });
@@ -163,7 +226,9 @@
       }
       let message; try { message = JSON.parse(event.data); } catch { return; }
       if (message.type === 'hello') makePeer(message.iceServers || [], run);
+      if (message.type === 'media-reset') { releaseTalk(); rtcConnected = rtcReady = false; ui.talk.disabled = true; peer?.close(); ui.remoteAudio.pause(); ui.remoteAudio.srcObject = null; makePeer(rtcIceServers, run); }
       if (message.type === 'signal') signal(message, run);
+      if (message.type === 'media-warning') error(message.message);
       if (message.type === 'error') { stop(); error(message.message); }
     };
     socket.onerror = () => {
@@ -224,6 +289,8 @@
     if (!open || document.hidden) return;
     stop(browserCapture ? (cameraPrepared ? 'Starting the computer camera remotely…' : 'Opening the computer camera. Initial browser permission is required once on the computer.') : 'Starting camera. Check the computer for a permission prompt.');
     refreshedCameras = false;
+    media = chosenMedia();
+    ui.preview.hidden = !media.video;
     error('');
     const run = generation;
     controller = new AbortController();
@@ -232,10 +299,10 @@
     ui.start.textContent = 'Starting…';
     ui.stop.focus();
     try {
-      const data = await (await request('/start', { camera: ui.select.value }, { signal: controller.signal })).json();
+      const data = await (await request('/start', { camera: ui.select.value, ...(browserCapture && { media }) }, { signal: controller.signal })).json();
       if (run !== generation) { release(data.id); return; }
       session = data.id;
-      ui.start.textContent = 'Camera on';
+      ui.start.textContent = media.video ? 'Camera on' : 'Audio on';
       if (browserCapture && data.streaming) stream(run); else frame(run);
     } catch (err) {
       if (run !== generation) return;
@@ -261,10 +328,19 @@
       const data = await (await request('/support')).json();
       if (run !== generation || !open) return;
       browserCapture = data.captureMethod === 'browser';
+      mediaPermissions = { camera: true, microphone: true, ...data.permissions };
+      ui.cameraOn.disabled = !mediaPermissions.camera;
+      if (!mediaPermissions.camera) ui.cameraOn.checked = false;
+      if (!mediaPermissions.microphone) ui.listen.checked = false;
+      ui.audioControls.hidden = !browserCapture;
+      ui.listen.disabled = !browserCapture || !mediaPermissions.microphone || !window.RTCPeerConnection;
+      ui.talk.title = canTalk() ? 'Microphone access is requested only when you press and hold.' : 'Phone microphone access requires HTTPS or another supported secure context.';
+      talkStatus();
       cameraPrepared = data.setup?.state === 'verified';
       ui.note.textContent = browserCapture
         ? (cameraPrepared ? 'Camera verified. Start and Snapshot work remotely; the computer camera tab opens automatically.' : 'One-time setup: on the computer, open Admin → This computer → Remote camera → Prepare remote camera. Afterwards, control it from this phone.')
         : 'Video only. Snapshot saves the current image to your device. Closing this view or leaving the page stops this preview.';
+      if (browserCapture) ui.note.textContent += !mediaPermissions.microphone ? ' Microphone and audio are disabled in Admin.' : canTalk() ? ' Microphone permission is saved by the browser when allowed. Hold to speak uses your microphone only while pressed. Nothing is recorded.' : ' Phone microphone access needs HTTPS or another supported secure context; camera viewing and listening can still work here.';
       paintSupport(data);
       if (data.state === 'installing') { supportTimer = setTimeout(() => loadSupport(run), 1000); return; }
       if (!data.available) return;
@@ -320,6 +396,27 @@
     snapshotBtn.onclick = snapshot;
     snapshotBtn.disabled = true;
     controls.append(select, startBtn, stopBtn, snapshotBtn);
+    const audioControls = el('div', 'camera-audio-controls'); audioControls.hidden = true;
+    const cameraOn = el('input'); cameraOn.type = 'checkbox'; cameraOn.checked = true;
+    const listen = el('input'); listen.type = 'checkbox'; listen.checked = false;
+    const cameraLabel = el('label', '', 'Camera'), listenLabel = el('label', '', 'Listen'); cameraLabel.prepend(cameraOn); listenLabel.prepend(listen);
+    const talk = el('button', 'camera-btn', 'Hold to speak'); talk.type = 'button'; talk.disabled = true; talk.setAttribute('aria-pressed', 'false');
+    const talkHint = el('p', 'camera-talk-hint'); talkHint.id = 'camera-talk-status'; talkHint.setAttribute('role', 'status'); talk.setAttribute('aria-describedby', talkHint.id);
+    const secure = el('button', 'camera-btn', 'Use secure connection'); secure.type = 'button'; secure.hidden = true;
+    secure.onclick = async () => {
+      secure.disabled = true; error('');
+      try { await window.pocketDevNetwork.openSecureCamera(); }
+      catch (failure) { error(failure.message); secure.disabled = false; }
+    };
+    talk.onpointerdown = (event) => { if (!talk.disabled) { talk.setPointerCapture(event.pointerId); pressTalk(event); } }; talk.onpointercancel = releaseTalk; talk.onlostpointercapture = releaseTalk;
+    talk.oncontextmenu = (event) => event.preventDefault();
+    talk.onkeydown = (event) => { if ([' ', 'Enter'].includes(event.key) && !event.repeat) pressTalk(event); }; talk.onkeyup = releaseTalk;
+    const remoteAudio = el('audio'); remoteAudio.autoplay = true;
+    const audioPlay = el('button', 'camera-btn', 'Play computer audio'); audioPlay.type = 'button'; audioPlay.hidden = true;
+    audioPlay.onclick = () => remoteAudio.play().then(() => { audioPlay.hidden = true; }).catch(() => error('The browser could not play computer audio. Check its site audio permission.'));
+    const changedMedia = () => { const active = Boolean(session); if (active) start(); else { startBtn.textContent = cameraOn.checked ? 'Start camera' : 'Start audio'; select.disabled = !cameraOn.checked; startBtn.disabled = !cameraOn.checked && !listen.checked && !canTalk(); } };
+    cameraOn.onchange = listen.onchange = changedMedia;
+    audioControls.append(cameraLabel, listenLabel, talk, secure, audioPlay, remoteAudio, talkHint);
     const setup = el('div', 'camera-setup');
     setup.hidden = true;
     const setupMessage = el('p');
@@ -342,23 +439,24 @@
     video.setAttribute('aria-label', 'Live video from the computer camera');
     preview.append(image, video);
     const note = el('p', 'camera-note');
-    root.append(bar, setup, controls, status, err, preview, note);
+    root.append(bar, setup, controls, audioControls, status, err, preview, note);
     root.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') { event.preventDefault(); overlays.close('camera'); }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); overlays.close('camera'); }
       if (event.key !== 'Tab') return;
-      const buttons = [...root.querySelectorAll('button, select')].filter((n) => !n.disabled && n.getClientRects().length);
+      const buttons = [...root.querySelectorAll('button, select, input')].filter((n) => !n.disabled && n.getClientRects().length);
       const first = buttons[0], last = buttons.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
     document.body.append(root);
-    return { root, select, start: startBtn, stop: stopBtn, snapshot: snapshotBtn, status, error: err, image, video, close, setup, setupMessage, install, progress, note };
+    return { root, select, start: startBtn, stop: stopBtn, snapshot: snapshotBtn, status, error: err, preview, image, video, close, setup, setupMessage, install, progress, note, audioControls, cameraOn, listen, talk, talkHint, secure, remoteAudio, audioPlay };
   }
   window.openCameraSheet = async () => {
     if (open) return;
     previousFocus = document.activeElement;
     previousFocus?.blur();
     ui ??= build();
+    ui.cameraOn.checked = true; ui.listen.checked = false;
     ui.root.hidden = false;
     open = true;
     ui.select.replaceChildren();
@@ -366,13 +464,16 @@
     stop('Looking for cameras on the computer…');
     error('');
     const run = generation;
-    overlays.open('camera', () => {
+    const closeSheet = () => {
       clearTimeout(supportTimer);
       open = false; stop(); ui.root.hidden = true; previousFocus?.focus();
-    });
-    ui.close.focus();
+    };
+    if (!window.pocketDevSettings?.presentPanel(ui.root, 'camera', closeSheet)) {
+      overlays.open('camera', closeSheet); ui.close.focus();
+    }
     await loadSupport(run);
   };
   document.addEventListener('visibilitychange', () => { if (document.hidden && open && !ui.stop.disabled) stop('Preview paused. Tap Start camera to resume.'); });
+  window.addEventListener('pointerup', releaseTalk); window.addEventListener('pointercancel', releaseTalk); window.addEventListener('blur', releaseTalk);
   window.addEventListener('pagehide', () => { if (open) stop(); });
 })();

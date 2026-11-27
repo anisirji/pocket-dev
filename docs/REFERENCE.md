@@ -230,13 +230,13 @@ An amber or red banner appears under the strip, and the phone vibrates once, whe
 
 ## Screen view
 
-Settings → **Mac screen** shows a picture of the Mac's main display: **Refresh** takes a new one, **Auto** refreshes every 3 s, **Zoom** enlarges it to scroll around. It is read-only (no clicks or typing reach the Mac) and needs a logged-in phone. Each picture is a JPEG at most 1,600 px on its longest side, sent and then deleted; nothing is kept on disk. On a Mac it is taken with `screencapture` and shrunk with `sips`. On Windows, PowerShell takes it with .NET (System.Drawing, at the display's real resolution) and shrinks it the same way; Windows allows this only from the signed-in, unlocked desktop. On Linux it uses grim, scrot, maim, gnome-screenshot or ImageMagick, and ImageMagick to shrink. Turn it off with `pocket-dev config set screenView false`.
+Settings → **Device screen** previews a supported display, with image quality options, Snapshot and Zoom. Optional Mac input needs Accessibility, Screen Recording and one computer-wide approval in local Admin. All authorized connections share that approval; every control connection still uses fresh scoped credentials. Closing Admin does not revoke it. Admin → This computer → Permissions can disable screen viewing or control globally; **Stop and revoke** clears control approval. Disabling viewing also invalidates captures still in progress. Each preview is sent and removed from temporary disk storage. On Mac it uses `screencapture` and `sips`; Windows uses .NET from the signed-in, unlocked desktop; Linux uses its supported screenshot and image tools. CLI users may also disable viewing with `pocket-dev config set screenView false`.
 
 It needs **Screen Recording** for the program that runs Pocket Dev. Without it the picture shows only the wallpaper. The Admin page's Permissions panel shows whether it is allowed and opens the right System Settings page. The check looks for titled windows from other apps, because macOS hides those titles until Screen Recording is allowed; with no other window open it reports Unknown.
 
 ## Device camera
 
-Settings → **Device camera** lists the computer's cameras. Choose one and tap **Start camera** for a video-only preview; **Snapshot** downloads the current image as a JPEG to your viewing device. **Stop**, **Close**, back, or hiding the page ends your preview. Prepare camera permission once in Admin → This computer → Remote camera before leaving the computer. Later Start camera requests automatically open or reuse the localhost camera tab. Continuous video uses WebRTC, with a pushed-image fallback when direct video is unavailable. No extra camera software is required. The optional legacy FFmpeg backend retains its helper installer. Preview images are kept in memory; snapshots are saved only when you download them. Camera sessions require login, belong to the device that starts them, and expire after 15 seconds without viewer keepalives. Room permission modes apply to starting capture; project collaborators cannot use it. Disable access with `pocket-dev config set cameraView false`. See [Camera setup](CAMERA.md) for platform details.
+Settings → **Device camera** lists the computer's cameras. Choose one and tap **Start camera** for a video-only preview; **Snapshot** downloads a JPEG. **Stop**, **Close**, back, or hiding the page ends your preview. Prepare camera and microphone permission once in Admin → This computer → Remote camera. Permissions belong to the computer's localhost capture origin, covering all authorized connections. Later starts reuse or reopen that helper. Continuous video uses WebRTC, with an authenticated pushed-image fallback; the legacy FFmpeg backend remains video-only. No media is recorded automatically. Sessions require active login or granted computer access, have connection-scoped credentials, and expire without keepalives. Project collaborators cannot use them. Admin → Permissions has independent Camera and Microphone & audio switches that terminate affected active WebRTC streams and block new starts. Browser/OS consent may need renewal if revoked or expired. See [Camera setup](CAMERA.md).
 
 ## Power
 
@@ -244,9 +244,9 @@ Settings → **Device camera** lists the computer's cameras. Choose one and tap 
 | --- | --- | --- |
 | Keep Mac awake | `off`, `plugged` (default, `caffeinate -s`), or `always` (`caffeinate -i -s`). caffeinate runs with `-w <server pid>`, so it ends with the server. | Change system settings. Keep the display on. |
 | Battery badge | `pmset -g batt` every 60 s. Red at 20% or less on battery. | |
-| Lid closed | `sudo pmset -a disablesleep 1` or `0`, run by `npm run lid` in a new terminal where you type your password. Refused while the lid is closed. | Store or send your password anywhere. Turn itself off. |
-| Sleep | `pmset sleepnow` after 2 s. With Lid closed on, `npm run sleep` turns lid sleep back on first (password). | Wake the Mac. |
-| Shut down | Ends Pocket Dev terminals, then `osascript` tells System Events to shut down. After 45 s the phone shows a blocked screen with **Try shut down again**, **See open apps**, **Force shut down…** (`sudo shutdown -h now` in a terminal), and **Keep the Mac on**. | Force without your password. |
+| Lid closed | Both directions ask for confirmation in Pocket Dev, then macOS authorizes the fixed `pmset -a disablesleep 1` or `0` command in its native administrator prompt. Refused while the lid is closed, with another check after approval. | Collect or store your administrator password. Open a terminal. Turn itself off. |
+| Sleep | `pmset sleepnow` after 2 s. With Lid closed on, native administrator approval first restores lid sleep. The confirmation remains in Pocket Dev. | Wake the Mac. |
+| Shut down | Ends Pocket Dev terminals, then `osascript` tells System Events to shut down. After 45 s the phone shows a blocked screen with **Try shut down again**, **See open apps**, **Force shut down…**, and **Keep the Mac on**. Force shutdown asks for confirmation, then native administrator approval on Mac; Windows uses its native forced-shutdown command. Canceling approval preserves running terminals. | Open a terminal or collect your administrator password. Skip the OS authorization policy. |
 | Update guard | Refuses sleep and shutdown while a macOS update installs, or when the check fails. | Guard the lid switch. |
 
 <a id="rooms-in-detail"></a>
@@ -297,7 +297,7 @@ Viewer can preview and download scoped files. Developer can change a separate pr
 | `pocket-dev qr`, `admin`, `connect`, `disconnect`, `awake` | The same as the `npm run` commands below. |
 | `pocket-dev message [text] [--to NAME] [--file PATH]` | Send to Messages as the Mac. Text comes from the argument or piped stdin. |
 
-`config set` accepts `port`, `adminPort`, `awake`, `requireApproval`, `approveFromDevices`, `maxDevices`, `chatIdleMinutes`, `batteryAlertPercent`, `temperatureAlertC`, `screenView`, `cameraView`, `cameraBackend`, and `allowedHosts` (comma separated), and `messagesReserveGB`. Run `pocket-dev help` for the ranges. `port`, `adminPort` and `cameraBackend` apply after a restart (`pocket-dev service restart`); the rest apply right away. Change the password on the Admin page (`pocket-dev admin`).
+`config set` accepts `port`, `adminPort`, `awake`, `requireApproval`, `approveFromDevices`, `maxDevices`, `chatIdleMinutes`, `batteryAlertPercent`, `temperatureAlertC`, `screenView`, `screenControl`, `cameraView`, `microphoneView`, `cameraBackend`, and `allowedHosts` (comma separated), and `messagesReserveGB`. Run `pocket-dev help` for the ranges. `port`, `adminPort` and `cameraBackend` apply after a restart (`pocket-dev service restart`); the rest apply right away. Global screen-control approval is managed separately in local Admin. Change the password on the Admin page (`pocket-dev admin`).
 
 The config file is `~/.pocket-dev/config.json` (mode 0600). A `config.json` left in the package folder by an older version moves there on the first run, and the old file stays as `config.json.migrated`.
 
@@ -367,7 +367,7 @@ Pocket Dev runs as your user, never as root, and never runs `sudo` itself.
 | Accessibility | Window names in Open apps. |
 | Full Disk Access (maybe) | Files, for TCC-protected folders. |
 | Your `claude`, `codex`, and `gh` logins | Chat, terminals, Git. |
-| Your Mac password, typed by you in a terminal | Lid closed, sleep with Lid closed on, force shutdown. |
+| Native macOS administrator approval, after confirming in Pocket Dev | Lid sleep changes, sleep with Lid closed on, force shutdown. Passwords stay in the system prompt. |
 
 The Admin page has a **Permissions** panel that shows each of these as Allowed, Not allowed, Waiting for you, or Not needed, plus whether `claude`, `codex`, and `gh` are ready. The first time you open the Admin page, a setup walks through the missing ones one at a time and every step can be skipped. **Run setup** repeats it, and **Check again** re-checks (it also re-checks when you return to the tab from System Settings). Control System Events is the only one macOS can prompt for; for the others the button opens the right System Settings page. Checking Control System Events can make macOS show its pop-up on the Mac. The panel is on the Admin page only, never on the phone listener.
 

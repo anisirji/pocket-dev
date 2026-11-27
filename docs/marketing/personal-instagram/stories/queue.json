@@ -1,0 +1,215 @@
+{
+  "account": "hap.pyani",
+  "entries": [
+    {
+      "id": "story-hero",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/01-hero.png",
+      "intended_publish_at": "2026-11-18T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-product-demo",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/02-product-demo.png",
+      "intended_publish_at": "2026-11-19T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-chhath-part1",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/03-chhath-part1.png",
+      "intended_publish_at": "2026-11-20T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-chhath-part2",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/04-chhath-part2.png",
+      "intended_publish_at": "2026-11-21T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-afk-wedding",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/05-afk-wedding.png",
+      "intended_publish_at": "2026-11-22T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-afk-3am-question",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/06-afk-3am-question.png",
+      "intended_publish_at": "2026-11-23T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-afk-train-part1",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/07-afk-train-part1.png",
+      "intended_publish_at": "2026-11-24T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-afk-train-part2",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/08-afk-train-part2.png",
+      "intended_publish_at": "2026-11-25T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-afk-waiting-room",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/09-afk-waiting-room.png",
+      "intended_publish_at": "2026-11-26T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-afk-hackathon",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/10-afk-hackathon.png",
+      "intended_publish_at": "2026-11-27T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-afk-dinner",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/11-afk-dinner.png",
+      "intended_publish_at": "2026-11-28T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-afk-village",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/12-afk-village.png",
+      "intended_publish_at": "2026-11-29T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-afk-setup",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/13-afk-setup.png",
+      "intended_publish_at": "2026-11-30T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    },
+    {
+      "id": "story-tutorial-macos-quick",
+      "account": "hap.pyani",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/14-tutorial-macos-quick.png",
+      "intended_publish_at": "2026-12-01T20:15:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "desired_link_sticker": "https://www.theani.me/work/pocket-dev",
+      "requested_mentions": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "status": "prepared_not_published",
+      "note": "Story image prepared; schedule only after a supported publisher confirms the account and time. Collaboration coauthor invitations do not apply to Stories."
+    }
+  ]
+}

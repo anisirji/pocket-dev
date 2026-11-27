@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><title>Pocket Dev · Content calendar</title>
+<link rel="icon" href="../../../assets/brand/pocket-dev.svg" type="image/svg+xml">
+<link rel="stylesheet" href="calendar.css">
+</head>
+<body>
+<a href="#main" class="skip">Skip to calendar</a>
+<aside class="sidebar">
+ <a class="brand" href="#" id="home"><img src="../../../assets/brand/pocket-dev.svg" width="34" height="34" alt=""><span>Pocket Dev<small>Publishing desk</small></span></a>
+ <p class="nav-label">WORKSPACE</p>
+ <button class="nav active" id="calendar-nav"><span>▦</span> Content calendar</button>
+ <button class="nav" id="attention-nav"><span>◇</span> Needs attention <b id="attention-count"></b></button>
+ <button class="nav" id="published-nav"><span>✓</span> Published library</button>
+ <button class="nav" id="outreach-nav"><span>↗</span> Questions &amp; replies <b id="outreach-count"></b></button>
+ <p class="nav-label channel-label">CHANNELS</p><div id="platforms"></div>
+ <div class="sidebar-bottom"><a href="https://app.metricool.com/planner/calendar?blogId=8167569&amp;userId=6427289" target="_blank" rel="noopener">Open Metricool ↗</a><a id="audit-link" target="_blank">Publishing audit ↗</a><p>Local workspace · India time<br><span id="sidebar-date"></span></p></div>
+</aside>
+<main id="main">
+ <header><div class="eyebrow">POCKET DEV / CONTENT</div><div class="heading-row"><div><h1>Content calendar</h1><p class="subtitle">Your videos, posts and publishing dates in one place.</p></div><div class="top-actions"><button id="export" class="quiet">Export dates .ics</button><button id="refresh" class="primary">↻ Reload page</button></div></div>
+ <div class="snapshot"><span class="dot"></span><span>Saved publishing plan · last platform check <strong>19 Nov 2026</strong></span><span id="generated"></span></div>
+ </header>
+ <div id="publishing-section">
+ <section class="overview" aria-label="Publishing coverage"><span class="overview-label">18 finished videos</span><div id="coverage"></div></section>
+ <section class="notice" id="attention-notice"><div><strong>Personal Instagram needs verification</strong><span>4 videos are drafts. Prepared Stories are also unscheduled. Reddit needs moderator review.</span></div><button id="show-attention">Review items →</button></section>
+ <section class="toolbar" aria-label="Calendar controls"><div class="month-controls"><button id="prev" aria-label="Previous month">‹</button><h2 id="month-label"></h2><button id="next" aria-label="Next month">›</button><button id="today">Today</button><button id="jump-next" class="quiet">Next post</button></div><div class="view-toggle" role="group" aria-label="View"><button id="month-view" aria-pressed="true">Month</button><button id="agenda-view" aria-pressed="false">Agenda</button></div></section>
+ <section class="filters" aria-label="Filter content"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search videos, captions or accounts" aria-label="Search videos, captions or accounts"></label><label><span class="sr-only">Status</span><select id="status"><option value="all">All statuses</option><option value="scheduled">Scheduled</option><option value="published">Published</option><option value="draft">Draft / proposed</option><option value="blocked">Filtered / removed</option><option value="attention">Needs attention</option></select></label><label><span class="sr-only">Content type</span><select id="kind"><option value="all">All content</option><option value="video">Videos</option><option value="story">Stories</option><option value="image">Images / carousels</option><option value="text">Text / launch</option><option value="reply">Replies</option></select></label><button id="clear" class="quiet">Reset filters</button></section>
+ <div class="results-line"><span id="result-count" role="status" aria-live="polite"></span><span>All times IST · UTC+05:30</span></div>
+ <div class="workspace"><section class="calendar-pane" aria-label="Publishing calendar"><div id="calendar"></div><div id="undated"></div></section><aside class="detail" id="detail" aria-label="Post details"></aside></div>
+ </div>
+ <section id="outreach-section" hidden aria-label="Questions and replies">
+  <div class="outreach-heading"><p>Question links, people, replies and outcomes saved as we work.</p><button id="outreach-export" class="quiet">Download log</button></div>
+  <div id="outreach-summary" class="outreach-summary" aria-label="Outreach totals"></div>
+  <div class="outreach-controls">
+   <label class="search"><span aria-hidden="true">⌕</span><input id="outreach-search" type="search" placeholder="Search questions, people or problems" aria-label="Search saved questions"></label>
+   <label><span class="sr-only">Question platform</span><select id="outreach-platform"><option value="all">All platforms</option><option value="x">X / Twitter</option><option value="reddit">Reddit</option></select></label>
+   <label><span class="sr-only">Question status</span><select id="outreach-status"><option value="all">All outcomes</option><option value="review">Needs review</option><option value="replied">Live reply</option><option value="removed">Removed</option><option value="not_fit">Not a fit</option></select></label>
+  </div>
+  <p id="outreach-result" class="results-line" role="status" aria-live="polite"></p>
+  <div class="outreach-layout"><div id="outreach-list" aria-label="Saved questions"></div><aside id="outreach-detail" class="detail" aria-label="Question and reply details"></aside></div>
+  <details class="outreach-style"><summary>Saved reply style</summary><p>Keep replies short, casual and specific. Say that you built Pocket Dev; do not pose as an independent reviewer or promise an unverified fix.</p><p class="caption" id="outreach-example"></p><p>This example is for future suitable questions. A removed comment is not queued for reposting.</p></details>
+ </section>
+ <footer><p>Schedules are recorded confirmations. A passed date does not prove publication. Use the publisher to check the outcome.</p><p>This is a local snapshot of the saved queues. It does not sync with social platforms or publish posts.</p><details><summary>Other launch plans</summary><p>X / @anisirji now has a published hospital story + demo and its own video queue. The second signed-in X account is suspended and has no confirmed schedules. Show HN remains a possible future launch, written and submitted by Ani.</p><a id="plan-link" target="_blank">Read the audience and posting plan ↗</a></details></footer>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script id="calendar-data" type="application/json">__CALENDAR_DATA__</script>
+<script src="calendar.js"></script>
+</body></html>

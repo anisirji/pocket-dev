@@ -3,6 +3,7 @@
   async function clear(broadcast = true) {
     if (broadcast) channel?.postMessage('clear');
     window.dispatchEvent(new Event('pd-workspace-clear'));
+    try { for (const key of Object.keys(sessionStorage)) if (/^(m\.[0-9a-f]+:)?pd\.navigation:/.test(key)) delete sessionStorage[key]; } catch {}
     if (!window.indexedDB) return;
     await new Promise((resolve) => {
       const request = indexedDB.open('pocket-dev-workspaces', 1);

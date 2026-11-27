@@ -1,0 +1,30 @@
+Claude for Open Source application - final text
+Prepared: November 23, 2026
+Status: Submitted; on-page confirmation verified November 23, 2026, 12:59 PM IST
+
+firstname
+Aniket
+
+lastname
+Singh
+
+email
+anisirji@gmail.com
+
+oss_form__tell_us_about_the_project
+I maintain Pocket Dev (@anisirji/pocket-dev), an ISC-licensed, self-hosted developer tool for accessing a computer's terminals, Claude Code and Codex conversations, Git, and files from a phone browser. It supports macOS, Windows, and Linux, without a separate phone app or cloud account.
+
+Ecosystem contribution: Pocket Dev helps developers continue work away from their desks. It supports computer-to-phone conversation continuity, responding to approval requests, and accessing multiple computers. The public repository includes installation instructions and troubleshooting documentation so other developers can use and extend the tool.
+
+Adoption evidence: the npm package recorded 1,963 downloads from October 24 through November 22, 2026. This is a package-download count, not a count of unique users. Everyone at my company uses Pocket Dev very often, providing regular practical feedback for maintenance.
+
+Pocket Dev is an early-stage project. I am applying for discretionary Ecosystem Impact consideration based on its practical contribution to mobile developer workflows and open-source tooling. I am not claiming that this download count meets the program's numerical download threshold.
+
+oss_form__how_will_you_use_the_subscription_for_your_project
+I would use Claude in my own work as Pocket Dev's maintainer to investigate session-continuity bugs, improve approval and permission handling, make installation and updates more reliable across macOS, Windows, and Linux, review security-sensitive changes, and expand regression coverage and troubleshooting documentation. These improvements would be published in the open-source project for its users.
+
+message__oss
+Maintainer: https://github.com/anisirji | Repository: https://github.com/anisirji/pocket-dev | ISC license: https://github.com/anisirji/pocket-dev/blob/main/LICENSE | npm package: https://www.npmjs.com/package/@anisirji/pocket-dev | Download evidence (Oct 24-Nov 22, 2026): https://api.npmjs.org/downloads/point/2026-10-24:2026-11-22/%40anisirji%2Fpocket-dev
+
+SUBMISSION CONFIRMATION
+Thank you for applying to the Claude for Open Source program. If approved, you'll get a link to activate Claude Max on your account for the subscription period.

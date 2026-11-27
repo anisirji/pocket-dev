@@ -24,8 +24,8 @@ html[data-machine="remote"] .mc-chip { border-color: var(--accent); }
 .mc-banner { position: fixed; left: 8px; right: 8px; top: calc(8px + var(--status-h, 0px) + var(--viewport-top, 0px)); z-index: 3100; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #3a2323; border: 1px solid var(--danger); }
 .mc-banner-text { flex: 1; min-width: 0; }
 .mc-banner .primary { flex: none; min-height: 44px; padding: 0 12px; border-radius: 8px; }
-/* Settings and Ports describe the device the phone is logged in on, so they stay with it. */
-html[data-machine="remote"] :is(#settingsBtn, #portsBtn) { display: none; }
+/* Settings remains available for computer selection and directional grants. Ports stays local. */
+html[data-machine="remote"] #portsBtn { display: none; }
 html[data-machine="remote"][data-rank="collaborator"] :is(#resumeBtn, #viewSwitch [data-view="terminal"], #viewSwitch [data-view="git"], #viewSwitch [data-view="chat"], #appsBtn, #tabbar, #terms, #inputBar, #keys) { display: none; }
 /* Room is then the only item left behind More, so More goes too when there is no room. */
 html[data-machine="remote"][data-rank="collaborator"] header:not(:has(#roomTasksBtn:not([hidden]))) #moreBtn { display: none; }

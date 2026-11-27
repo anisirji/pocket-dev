@@ -74,7 +74,7 @@ try {
   host = await hostContext.newPage();
   await host.goto(firstHostUrl);
   await phone.waitForFunction(() => document.querySelector('.camera-status').textContent.includes('Live'));
-  await host.waitForFunction(() => document.getElementById('state').textContent === 'Camera on');
+  await host.waitForFunction(() => document.getElementById('state').textContent.startsWith('Camera on'));
   await phone.waitForFunction(() => document.querySelector('.camera-sheet').dataset.streamTransport === 'rtc', null, { timeout: 12000 });
   const decoded = () => phone.evaluate(async () => {
     const peer = window.__cameraPeers.at(-1);
@@ -107,7 +107,7 @@ try {
   assert.equal(snapshot[0], 255); assert.equal(snapshot[1], 216);
   assert.ok(snapshot.length > 1000, 'a real JPEG travelled from the PC browser to the phone download');
   await phone.waitForTimeout(31_000);
-  assert.equal(await host.locator('#state').textContent(), 'Camera on', 'the PC capture survives the server heartbeat');
+  assert.match(await host.locator('#state').textContent(), /^Camera on/, 'the computer capture survives the server heartbeat');
   assert.equal(await phone.locator('.camera-error').isHidden(), true);
   assert.match(await phone.locator('.camera-status').textContent(), /Live/);
   assert.equal(await phone.evaluate(() => window.__cameraFramePolls), 0, 'streaming never waits on individual HTTP image requests');
@@ -136,7 +136,7 @@ try {
   await startPhone();
   await phone.waitForFunction(() => document.querySelector('.camera-status').textContent.includes('Live'));
   assert.equal(fs.readFileSync(record, 'utf8'), firstHostUrl, 'restarting reuses the existing browser tab');
-  await host.getByRole('button', { name: 'Stop camera', exact: true }).click();
+  await host.getByRole('button', { name: 'Stop camera & audio', exact: true }).click();
   await phone.waitForFunction(() => !document.querySelector('.camera-controls .start').disabled && document.querySelector('.camera-image').hidden);
   await startPhone();
   await phone.waitForFunction(() => document.querySelector('.camera-status').textContent.includes('Live'));

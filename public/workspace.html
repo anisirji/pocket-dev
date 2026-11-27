@@ -7,6 +7,13 @@
   <title>Workspace · Pocket Dev</title>
   <link rel="icon" href="/favicon.svg">
   <script src="/machine.js"></script>
+<script src="/connection.js"></script>
+<script src="/chat-activity.js"></script>
+<link rel="stylesheet" href="/feature-guides.css">
+<script src="/feature-guides.js" defer></script>
+<link rel="stylesheet" href="/notifications.css">
+  <script src="/notification-store.js" defer></script>
+  <script src="/notifications.js" defer></script>
   <link rel="stylesheet" href="/machine.css">
   <link rel="stylesheet" href="/folder-picker.css">
   <script src="/folder-picker.js" defer></script>
@@ -40,7 +47,7 @@
     <div id="explorerResize" class="ws-resizer ws-resizer-v" role="separator" aria-label="Resize explorer" aria-orientation="vertical" tabindex="0"></div>
     <section class="ws-center" aria-label="Editor and terminal">
       <section class="ws-editor" aria-label="Editor">
-        <div class="ws-editor-bar"><div id="editorTabs" class="ws-tabs" role="tablist" aria-label="Open files"></div><button id="saveFile" class="ws-button ws-save" type="button" disabled>Save</button><button id="reloadFile" class="ws-button" type="button" disabled title="Reload from computer">↻<span class="ws-sr"> Reload file</span></button></div>
+        <div class="ws-editor-bar"><div id="editorTabs" class="ws-tabs" role="tablist" aria-label="Open files"></div><button id="viewFileChanges" class="ws-button" type="button" hidden title="Compare saved file changes in Git">Changes</button><button id="saveFile" class="ws-button ws-save" type="button" disabled>Save</button><button id="reloadFile" class="ws-button" type="button" disabled title="Reload from computer">↻<span class="ws-sr"> Reload file</span></button></div>
         <div id="fileBreadcrumb" class="ws-breadcrumb" hidden></div>
         <div id="editorEmpty" class="ws-empty"><span class="ws-empty-mark" aria-hidden="true">&lt;/&gt;</span><h1>Your project, together.</h1><p>Open a folder. Edit files, run commands, and work with Codex or Claude.</p><button id="emptyOpenFolder" class="ws-primary" type="button">Open folder</button><span class="ws-shortcut">⌘ / Ctrl + S to save · ⌘ / Ctrl + P to open a file</span></div>
         <div id="fileConflict" class="ws-conflict" hidden role="status"><span></span><button id="compareFile">Compare</button><button id="acceptRemote">Use remote version</button><button id="saveCopy">Save local copy</button></div><div id="editorMount" hidden></div>

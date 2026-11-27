@@ -38,6 +38,34 @@ ConvertTo-Json -InputObject @($out) -Compress`;
 
 const ZIP_PATHS = ['/usr/bin/zip', '/bin/zip'];
 
+// bsdtar on Windows cannot reliably decode UTF-8 filenames supplied on stdin.
+// The built-in .NET writer consumes the same validated, non-recursive file list.
+const WIN_UNICODE_ZIP = `$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+Add-Type -AssemblyName System.IO.Compression
+$pdReader = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [Text.Encoding]::UTF8)
+$pdOutput = [Console]::OpenStandardOutput()
+$pdFile = [IO.File]::Open($env:POCKET_DEV_ZIP_OUT, [IO.FileMode]::CreateNew, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+$pdArchive = New-Object System.IO.Compression.ZipArchive($pdFile, [System.IO.Compression.ZipArchiveMode]::Create, $true, [Text.Encoding]::UTF8)
+try {
+  while ($null -ne ($pdName = $pdReader.ReadLine())) {
+    if ($pdName.Length -eq 0) { continue }
+    $pdPath = [IO.Path]::GetFullPath($pdName)
+    $pdEntryName = $pdName.Replace('\\', '/')
+    if (([IO.File]::GetAttributes($pdPath) -band [IO.FileAttributes]::Directory) -ne 0) {
+      $null = $pdArchive.CreateEntry($pdEntryName.TrimEnd('/') + '/')
+    } else {
+      $pdEntry = $pdArchive.CreateEntry($pdEntryName, [IO.Compression.CompressionLevel]::Fastest)
+      $pdInput = [IO.File]::OpenRead($pdPath)
+      try { $pdDestination = $pdEntry.Open(); try { $pdInput.CopyTo($pdDestination) } finally { $pdDestination.Dispose() } }
+      finally { $pdInput.Dispose() }
+    }
+  }
+  $pdArchive.Dispose()
+  $pdFile.Position = 0
+  $pdFile.CopyTo($pdOutput)
+} finally { $pdArchive.Dispose(); $pdFile.Dispose(); $pdReader.Dispose(); $pdOutput.Dispose() }`;
+
 export const NO_WINDOWS_ZIP = 'Zipping a folder needs tar.exe, which comes with Windows 10 and 11 in the System32 folder but was not found.';
 
 function collect(cmd, args, opts = {}) {
@@ -51,8 +79,8 @@ function collect(cmd, args, opts = {}) {
   });
 }
 
-function launch(cmd, args) {
-  spawn(cmd, args, { stdio: 'ignore', detached: true }).unref();
+function launch(cmd, args, options = {}) {
+  spawn(cmd, args, { stdio: 'ignore', detached: true, ...options }).unref();
 }
 
 // "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1)\t82%; charging; 0:45 remaining present: true"
@@ -193,9 +221,28 @@ export function createPlatform({
 
   const openCommand = () => (mac ? ['open', (u) => [u]] : win ? ['cmd', (u) => ['/c', 'start', '""', u]] : ['xdg-open', (u) => [u]]);
 
-  // Opens a URL in the system's default browser. Returns false when this system has no way to.
-  function openUrl(url) {
+  // Background is a request to the desktop/browser, not a way to suppress permissions.
+  // Browsers may still select a new tab according to their own preferences.
+  function openUrl(url, { background = false } = {}) {
     if (!capabilities().openUrl.available) return false;
+    if (background) {
+      if (mac) start('open', ['-g', url]);
+      else if (win) {
+        // SW_SHOWNOACTIVATE keeps the existing foreground window. Pass the URL as
+        // data, never as PowerShell or cmd source (it can contain shell metacharacters).
+        const script = `$ErrorActionPreference = 'Stop'
+Add-Type -Namespace PocketDev -Name BrowserShell -MemberDefinition '[System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern System.IntPtr ShellExecuteW(System.IntPtr hwnd, string operation, string file, string parameters, string directory, int show);'
+$result = [PocketDev.BrowserShell]::ShellExecuteW([IntPtr]::Zero, 'open', $env:POCKET_DEV_OPEN_URL, $null, $null, 4)
+if ($result.ToInt64() -le 32) { exit 1 }`;
+        start('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-STA', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { windowsHide: true, env: { ...env, POCKET_DEV_OPEN_URL: url } });
+      } else {
+        // Do not forward a user-activation token inherited by the background service.
+        const launchEnv = { ...env, DESKTOP_STARTUP_ID: 'pocket-dev-camera_TIME0' };
+        delete launchEnv.XDG_ACTIVATION_TOKEN;
+        start('xdg-open', [url], { env: launchEnv });
+      }
+      return true;
+    }
     const [cmd, args] = openCommand();
     start(cmd, args(url));
     return true;
@@ -209,8 +256,13 @@ export function createPlatform({
   }
 
   // { available: true, cmd, args } or { available: false, reason }. Mac always has /usr/bin/zip.
-  function zipCommand() {
+  function zipCommand({ unicode = false } = {}) {
     if (win) {
+      if (unicode && !env.POCKET_DEV_TAR) {
+        const ps = path.win32.join(env.SystemRoot || env.windir || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+        return exists(ps) ? { available: true, cmd: ps, temporaryOutput: true, args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(WIN_UNICODE_ZIP, 'utf16le').toString('base64')] }
+          : { available: false, reason: 'Zipping Unicode filenames needs Windows PowerShell.' };
+      }
       // Only Windows's own bsdtar writes zip. A tar earlier on PATH (Git for Windows ships GNU tar) cannot, so the path is
       // fixed. -n because the caller lists every entry itself; -T - reads the names from stdin, like zip -@.
       const tar = env.POCKET_DEV_TAR || path.win32.join(env.SystemRoot || env.windir || 'C:\\Windows', 'System32', 'tar.exe');
@@ -371,6 +423,49 @@ Wait-Process -Id ${Number(pid)}`;
     if (mac) return void await sh(tool('PMSET', '/usr/bin/pmset'), ['sleepnow']);
     if (win) return void await sh('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0']);
     return void await sh('systemctl', ['suspend']);
+  }
+
+  // Only fixed power operations reach the native administrator prompt. Passwords never enter Pocket Dev.
+  const shellQuote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
+  async function macPowerAuthorization(action) {
+    const pmset = shellQuote(tool('PMSET', '/usr/bin/pmset'));
+    const ioreg = shellQuote(tool('IOREG', '/usr/sbin/ioreg'));
+    const lidGuard = `lidState=$(${ioreg} -r -k AppleClamshellState -d 4) || exit 1; if /usr/bin/printf '%s' "$lidState" | /usr/bin/grep -q '"AppleClamshellState" = Yes'; then /bin/echo 'Open the laptop lid before changing lid sleep.' >&2; exit 1; fi`;
+    // The bracket avoids matching this osascript/sh command line's own copy of the updater pattern.
+    const updateGuard = `assertions=$(${pmset} -g assertions) || exit 1; if /usr/bin/printf '%s' "$assertions" | /usr/bin/grep -Eq 'pid [0-9]+\\((softwareupdated|UpdateBrainService|osinstallersetupd|system_installd|SoftwareUpdateNotificationManager)\\):.*Prevent(UserIdle)?SystemSleep' || /usr/bin/pgrep -f '[s]oftwareupdate .*(-i|--install)' >/dev/null; then /bin/echo 'A macOS update is being installed. Try again after it finishes.' >&2; exit 1; fi`;
+    const commands = {
+      'lid-on': `${lidGuard}; ${pmset} -a disablesleep 1`,
+      'lid-off': `${lidGuard}; ${pmset} -a disablesleep 0`,
+      'prepare-sleep': `${updateGuard}; ${pmset} -a disablesleep 0`,
+      'force-shutdown': `${updateGuard}; /sbin/shutdown -h now`,
+    };
+    if (!mac || !Object.hasOwn(commands, action)) throw new Error('Unsupported administrator power action.');
+    try {
+      await sh(tool('OSASCRIPT', '/usr/bin/osascript'), ['-e', `do shell script ${JSON.stringify(commands[action])} with administrator privileges`], { timeout: 120_000 });
+    } catch (error) {
+      const cancelled = /-128|user cancel/i.test(`${error.stderr || ''} ${error.message}`);
+      throw Object.assign(new Error(cancelled ? 'Administrator approval was canceled. Nothing was changed.' : error.killed
+        ? 'Administrator approval timed out. Try again when you can approve the prompt on the Mac.'
+        : `The power action could not be authorized: ${error.stderr?.trim() || error.message}`), { status: cancelled ? 409 : 503, cancelled });
+    }
+  }
+
+  async function setLidSleepDisabled(disabled) {
+    need('lidSleep');
+    if (typeof disabled !== 'boolean') throw new Error('Lid sleep must be on or off.');
+    if ((await lid()).closed) throw Object.assign(new Error('Open the laptop lid before changing lid sleep.'), { status: 409 });
+    await macPowerAuthorization(disabled ? 'lid-on' : 'lid-off');
+  }
+
+  async function prepareSleep() {
+    if (mac && (await lid()).sleepDisabled) await macPowerAuthorization('prepare-sleep');
+  }
+
+  async function forceShutDown() {
+    need('forceShutDown');
+    if (mac) await macPowerAuthorization('force-shutdown');
+    else if (win) await sh('shutdown.exe', ['/s', '/f', '/t', '0']);
+    else await sh('systemctl', ['poweroff', '--force']);
   }
 
   const AUTOMATION_HELP = 'macOS needs permission: on the Mac, allow node to control System Events (System Settings → Privacy & Security → Automation).';
@@ -666,11 +761,12 @@ $src.Dispose()`;
 
   // Takes a picture of the main screen into folder `dir` and resolves the file's path (a .jpg, or a .png from tools that
   // cannot write JPEG). Rejects with stderr when the capture fails.
-  async function screenshot(dir) {
+  async function screenshot(dir, { display } = {}) {
     need('screenshot');
     if (mac) {
       const file = path.join(dir, 'raw.jpg');
-      await sh(tool('SCREENCAPTURE', '/usr/sbin/screencapture'), ['-x', '-m', '-t', 'jpg', file], { timeout: 15_000 });
+      if (display != null && (!Number.isInteger(display) || display < 1 || display > 16)) throw new Error('Choose an available display.');
+      await sh(tool('SCREENCAPTURE', '/usr/sbin/screencapture'), ['-x', ...(display == null ? ['-m'] : ['-D', String(display)]), '-t', 'jpg', file], { timeout: 15_000 });
       return file;
     }
     if (win) {
@@ -852,6 +948,7 @@ $src.Dispose()`;
       keepAwake: mac || win || onPath('systemd-inhibit') ? yes : missing('systemd-inhibit', 'Keeping this computer awake', 'part of systemd'),
       sleepNow: mac || win || onPath('systemctl') ? yes : missing('systemctl', 'Putting this computer to sleep', 'part of systemd'),
       shutDown: mac || win || onPath('systemctl') ? yes : missing('systemctl', 'Shutting this computer down', 'part of systemd'),
+      forceShutDown: mac || win || onPath('systemctl') ? yes : missing('systemctl', 'Forcing this computer to shut down', 'part of systemd'),
       temperature: win ? no('Windows gives no battery or processor temperature without extra software.') : mac ? yes : { available: true, partial: 'battery only' },
       batteryCondition: win ? no('Windows does not report battery wear without a battery report.') : yes,
       lid: win ? no('Windows does not say whether the lid is closed.') : yes,
@@ -882,7 +979,7 @@ $src.Dispose()`;
 
   return {
     platform, osName, host, trash, openUrl, defaultShell, zipCommand, capabilities, unsupported,
-    battery, temperatures, batteryCondition, lid, sleepHolds, updateInProgress, keepAwakeCommand, sleepNow, shutDown, openAppNames,
+    battery, temperatures, batteryCondition, lid, sleepHolds, updateInProgress, keepAwakeCommand, sleepNow, prepareSleep, setLidSleepDisabled, shutDown, forceShutDown, openAppNames,
     cpuMemory, memoryFreePercent,
     listApps, installedApps, launchApp, openInVSCode, quitApp, appWindows, processTable, systemApps, macScript, windowPermission, probeWindowAccess,
     screenshot, resizeImage,

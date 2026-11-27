@@ -1,0 +1,87 @@
+{
+  "note": "User requested scheduling posts about the latest changes. Source checked 18 November 2026: npm remains 2.0.0; newer app changes are development updates. Four text posts, after the existing two scheduled posts.",
+  "posts": [
+    {
+      "id": "linkedin-update-unified-chats",
+      "date": "2026-11-30",
+      "topic": "Computer conversations in one Chats list",
+      "source_commits": [
+        "bffdb67",
+        "f63cbbf"
+      ],
+      "release_status": "Development update; not an npm release announcement",
+      "body": "A recent Pocket Dev improvement we’ve been working on: finding the conversation you started on your computer, right from your phone.\n\nIn the development version, Chats brings recent computer conversations into the same screen as your Pocket Dev chats. Search by title, project or provider, then open the conversation you want to continue.\n\nThe first page also refreshes quietly while the list is open, so starting a new conversation on your computer doesn’t always mean reaching for Refresh on your phone.\n\nThe goal is simple: fewer steps between “I need to check that” and seeing your work.\n\nThis is a development update, not a release announcement. Your computer still needs to stay on and awake; access away from the same Wi-Fi needs optional remote setup.\n\nProject: https://www.theani.me/work/pocket-dev\nSource: https://github.com/anisirji/pocket-dev\n\nWhat usually slows you down when moving between your computer and phone?\n\n#PocketDev #BuildInPublic #OpenSource",
+      "status": "scheduled",
+      "account": "ROHIT KUMAR DAS",
+      "scheduled_for": "2026-11-30T11:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "media": null,
+      "attempted_at": "2026-11-18T10:30:00.068635+00:00",
+      "verified_at": "2026-11-18T10:31:03.070228+00:00",
+      "verification": "Scheduled (3) list contains the complete unified Chats update for Monday, November 30, 2026 at 11:00 AM IST.",
+      "previous_body_before_we_edit": "A recent Pocket Dev improvement Ani and I have been working on: finding the conversation you started on your computer, right from your phone.\n\nIn the development version, Chats brings recent computer conversations into the same screen as your Pocket Dev chats. Search by title, project or provider, then open the conversation you want to continue.\n\nThe first page also refreshes quietly while the list is open, so starting a new conversation on your computer doesn’t always mean reaching for Refresh on your phone.\n\nThe goal is simple: fewer steps between “I need to check that” and seeing your work.\n\nThis is a development update, not a release announcement. Your computer still needs to stay on and awake; access away from the same Wi-Fi needs optional remote setup.\n\nProject: https://www.theani.me/work/pocket-dev\nSource: https://github.com/anisirji/pocket-dev\n\nWhat usually slows you down when moving between your computer and phone?\n\n#PocketDev #BuildInPublic #OpenSource",
+      "revision_pending": false,
+      "voice_revision_verified_at": "2026-11-18T10:34:55.549606+00:00"
+    },
+    {
+      "id": "linkedin-update-handover",
+      "date": "2026-12-03",
+      "topic": "Following a busy conversation before handing it over",
+      "source_commits": [
+        "ac63e1f",
+        "262e793",
+        "1995583",
+        "0fac88a"
+      ],
+      "release_status": "Development work; real cross-platform handover validation remains incomplete",
+      "body": "What should happen when you open a coding conversation on your phone while the computer is still answering?\n\nThat’s one of the handover details we’ve been improving in Pocket Dev.\n\nThe development flow lets the phone follow the reply and current step while the computer’s program still owns the conversation. New messages wait in a queue. Once the program is idle, Pocket Dev can hand the conversation over so you can continue from the phone.\n\nWe’re also working through Windows-specific process handling and the cases where another program still holds the conversation.\n\nThis remains development work. Real-world handover checks across the supported apps and platforms are still needed.\n\nThe aim: keep the context when you step away from your desk, without interrupting work just to look at it.\n\nProject: https://www.theani.me/work/pocket-dev\nSource: https://github.com/anisirji/pocket-dev\n\nWould you mostly watch a running task from your phone, or send the next instruction?\n\n#PocketDev #DeveloperTools #BuildInPublic",
+      "status": "scheduled",
+      "account": "ROHIT KUMAR DAS",
+      "scheduled_for": "2026-12-03T11:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "media": null,
+      "attempted_at": "2026-11-18T10:35:12.374836+00:00",
+      "verified_at": "2026-11-18T10:35:17.994148+00:00",
+      "verification": "Saved LinkedIn schedule list contains the correct post and Thu, Dec 3, 2026 at 11:00 AM in Asia/Calcutta (IST, UTC+05:30)."
+    },
+    {
+      "id": "linkedin-update-mobile-attachments",
+      "date": "2026-12-07",
+      "topic": "Separate camera, gallery and document choices",
+      "source_commits": [
+        "17e4cd5",
+        "3092115"
+      ],
+      "release_status": "Development update; real-phone validation remains incomplete",
+      "body": "A small mobile detail we’re improving in Pocket Dev: choosing how to attach something.\n\n“Take a photo,” “pick something from my gallery,” and “choose a document” are three different intentions. A single file picker doesn’t always make those choices clear.\n\nWe’ve separated them in the development version:\n\n• Take photo — ask for the camera directly.\n• Photos and videos — use the media picker.\n• Files — choose documents.\n\nThese choices apply to the chat and terminal attachment controls and the Files screen. The desktop browser keeps its normal picker.\n\nThis is a development update. Real-phone checks are still needed, especially for how different Android browsers open their pickers.\n\nSmall interactions like this matter when your phone is the only screen in your hand.\n\nProject: https://www.theani.me/work/pocket-dev\nSource: https://github.com/anisirji/pocket-dev\n\nWhat do you most often need to send to a coding assistant from your phone?\n\n#PocketDev #MobileUX #OpenSource",
+      "status": "scheduled",
+      "account": "ROHIT KUMAR DAS",
+      "scheduled_for": "2026-12-07T11:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "media": null,
+      "attempted_at": "2026-11-18T10:35:46.037223+00:00",
+      "verified_at": "2026-11-18T10:35:53.819869+00:00",
+      "verification": "Saved LinkedIn schedule list contains the correct post and Mon, Dec 7, 2026 at 11:00 AM in Asia/Calcutta (IST, UTC+05:30)."
+    },
+    {
+      "id": "linkedin-update-setup-sharing",
+      "date": "2026-12-10",
+      "topic": "Shorter setup pages and a gentle sharing invitation",
+      "source_commits": [
+        "c8e8c9e (portfolio)",
+        "4b8379b (portfolio)",
+        "666ddb5 (portfolio)"
+      ],
+      "release_status": "Published website features; checked live on 18 November 2026",
+      "body": "We shortened Pocket Dev’s setup pages and added an easier way to pass it along.\n\nThe essentials are visible first. Longer reference material and full prompts expand when you need them. The setup guide also includes the existing macOS installation video.\n\nThere’s a copyable setup prompt for your AI assistant, plus a Share button on the product, setup and prompts pages. On browsers that support sharing it opens the share sheet; otherwise it copies the message for you.\n\nWe want the first steps to feel easier, whether you follow the guide yourself or ask your AI to help.\n\nAnd there’s a gentle invitation at the end: if Pocket Dev makes your day a little freer, share it with three people you’d love to see escape the PC cage too. No pressure. ❤️\n\nThese website changes are live:\nhttps://www.theani.me/work/pocket-dev\n\nAI setup prompts:\nhttps://www.theani.me/work/pocket-dev/prompts\n\nSource: https://github.com/anisirji/pocket-dev\n\n#PocketDev #OpenSource #DeveloperTools",
+      "status": "scheduled",
+      "account": "ROHIT KUMAR DAS",
+      "scheduled_for": "2026-12-10T11:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "media": null,
+      "attempted_at": "2026-11-18T10:36:28.638521+00:00",
+      "verified_at": "2026-11-18T10:36:35.690777+00:00",
+      "verification": "Saved LinkedIn schedule list contains the correct post and Thu, Dec 10, 2026 at 11:00 AM in Asia/Calcutta (IST, UTC+05:30)."
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "updated_at": "2026-11-26T17:45:02.257384+05:30",
+  "source": {
+    "path": "/Users/ani/Desktop/pocket-dev-video/reels/setup-reel-v6.mp4",
+    "sha256": "8712bd5ebdd8d5d4be3ded24cd4cdb7af86d5ff33c67869f7e64ade356863e1c",
+    "duration_seconds": 33,
+    "width": 1080,
+    "height": 1920
+  },
+  "instagram_music": {
+    "path": "/Users/ani/Desktop/pocket-dev-video/reels/setup-reel-v6-instagram-music.mp4",
+    "music_source": "/Users/ani/Desktop/pocket-dev-video/studio/public/audio/music/hero-v2.wav",
+    "description": "Existing project instrumental mixed at 9% gain under original audio; original video stream preserved; music fades in and out."
+  },
+  "instagram": {
+    "url": "https://www.instagram.com/afk_pocket_dev/reel/DgNDp7ZPHhx/",
+    "status": "published",
+    "accounts": [
+      "afk_pocket_dev",
+      "hap.pyani"
+    ],
+    "verification": "Native success confirmation; matching reel verified on both profile grids; published reel displays afk_pocket_dev and hap.pyani as coauthors.",
+    "collaborator_invites": [
+      "_.ro_.hit",
+      "hap.pyani"
+    ],
+    "rohit_caption_mention": "@_.ro_.hit",
+    "rohit_acceptance": "not_verified"
+  },
+  "instagram_stories": {
+    "afk_pocket_dev": {
+      "status": "published",
+      "url": "https://www.instagram.com/stories/afk_pocket_dev/",
+      "verification": "Native Story viewer showed account afk_pocket_dev and a playing video with duration 33.086708 seconds."
+    },
+    "hap.pyani": {
+      "status": "awaiting_user_action",
+      "reason": "Personal account is accessible after owner completed WhatsApp verification, but Instagram web exposes Post, Live video and Ad; no Story composer. Meta Business Suite only exposes afk_pocket_dev for this project. Requested owner share the published reel to their personal Story in the Instagram app."
+    }
+  },
+  "facebook": {
+    "status": "published",
+    "url": "https://www.facebook.com/reel/2084161125451337/",
+    "account": "Pocket Dev",
+    "source": "/Users/ani/Desktop/pocket-dev-video/reels/setup-reel-v6.mp4",
+    "verification": "Native composer reported publication success; matching Pocket Dev author and caption verified on published reel.",
+    "boost_enabled": false,
+    "story_sharing": "Existing native Share to story option was present at publication; separate Story publication not independently verified."
+  },
+  "youtube": {
+    "status": "published",
+    "url": "https://youtube.com/shorts/uKQw7cPbEgQ",
+    "account": "Pocket Dev by Ani",
+    "verification": "Native Studio publication confirmation on previous turn; checks complete, no issues found."
+  }
+}

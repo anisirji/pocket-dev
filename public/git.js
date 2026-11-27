@@ -741,7 +741,11 @@ repoSelect.onchange = () => {
 };
 
 window.pocketDevGit = {
-  openFolder: (folder) => openFolder(folder).catch(async (err) => {
+  openFolder: (folder, change) => openFolder(folder).then(() => {
+    if (change && ['unstaged', 'staged', 'untracked'].includes(change.source) && typeof change.path === 'string') {
+      selectTab('changes'); push('diff', { title: change.path, ...change });
+    }
+  }).catch(async (err) => {
     await start();
     noteEl.replaceChildren(notice('error', err.message));
   }),

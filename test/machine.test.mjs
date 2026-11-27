@@ -20,7 +20,7 @@ test('API and socket paths go through /m/<device> on a remote device', () => {
 test('nothing changes on this device, or for pages, other hosts, forwarded paths and this device\'s own routes', () => {
   assert.equal(rewriteUrl(null, '/api/files/list', BASE), '/api/files/list');
   for (const url of ['/login.html', '/files.js', '/vendor/xterm/xterm.js', `/m/${ID}/api/status`, 'https://other.example/api/x', '//other.example/api/x',
-    '/api/room/devices', '/api/login', '/api/logout', '/api/devices/3', '/api/settings', '/api/network', '/api/local/power', 'mailto:a@b.c']) {
+    '/api/room/devices', '/api/login', '/api/logout', '/api/devices/3', '/api/settings', '/api/network', '/api/connection', '/api/handoff', '/api/local/power', 'mailto:a@b.c']) {
     assert.equal(rewriteUrl(ID, url, BASE), url, url);
   }
   assert.equal(rewriteUrl(ID, '/api/roomy', BASE), `/m/${ID}/api/roomy`, 'only the room prefix itself stays local');
@@ -71,4 +71,11 @@ test('status wording is generic for a device without a name, and keeps macOS-onl
   assert.equal(sayFor(null, 'Type your Mac password in the new terminal.'), 'Type the password for this device in the new terminal.');
   assert.equal(sayFor(null, 'MacBook'), 'MacBook');
   assert.equal(sayFor('Home', 'Mac may sleep'), 'Home may sleep');
+});
+
+// Settings pairs installation status with grants on the phone's front-door computer.
+test('AI setup stays with connection grants when a different workspace computer is selected', () => {
+  assert.equal(rewriteUrl(ID, '/api/setup/status', BASE), '/api/setup/status');
+  assert.equal(rewriteUrl(ID, '/api/connections', BASE), '/api/connections');
+  assert.equal(rewriteUrl(ID, '/api/power', BASE), `/m/${ID}/api/power`);
 });

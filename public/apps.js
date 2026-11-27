@@ -213,8 +213,9 @@
     const force = el('button', 'apps-force', state.busy === 'force-quit' ? 'Force quitting…' : 'Force quit');
     quit.disabled = force.disabled = Boolean(state.busy);
     quit.onclick = () => act('quit');
-    force.onclick = () => {
-      if (confirm(`Force quit ${app.name}? Unsaved work in ${app.name} is lost.`)) act('force-quit');
+    force.onclick = async () => {
+      const question = `Force quit ${app.name}? Unsaved work in ${app.name} is lost.`;
+      if (await (window.pocketDevSettings?.confirm(question, 'Force quit') ?? Promise.resolve(confirm(question)))) act('force-quit');
     };
     ui.actions.replaceChildren(quit, force);
   }
@@ -286,10 +287,11 @@
   // The list and the detail are two levels of the shared overlay stack, so back leaves the detail first.
   function openDetail(app) {
     state.notice = null;
-    overlays.open('apps-detail', () => {
+    const backToList = () => {
       if (state.notice?.kind !== 'ok') state.notice = null;
       show('list');
-    });
+    };
+    if (!window.pocketDevSettings?.pushView('apps-detail', app.name, backToList, undefined, { pid: app.pid, name: app.name, bundleId: app.bundleId })) overlays.open('apps-detail', backToList);
     show('detail', app);
   }
 
@@ -302,11 +304,16 @@
   window.openAppsSheet = () => {
     if (state.view !== 'closed') return;
     document.activeElement?.blur();
-    overlays.open('apps', closeSheet);
     show('list');
-    loadList();
+    if (!window.pocketDevSettings?.presentPanel(ui.root, 'apps', closeSheet)) overlays.open('apps', closeSheet);
+    const ready = loadList();
+    window.pocketDevSettings?.registerRoute('apps-detail', (saved) => {
+      const app = state.apps.find((item) => item.pid === saved?.pid && item.name === saved.name && item.bundleId === saved.bundleId);
+      if (app) openDetail(app);
+    });
     state.timer = setInterval(() => {
       if (!document.hidden && !state.busy) loadList();
     }, REFRESH_MS);
+    return ready;
   };
 })();

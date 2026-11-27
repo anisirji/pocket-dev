@@ -69,6 +69,18 @@ Use the person's current project folder. In Pocket Dev, open **Chats** and tap a
 
 For a terminal task, open that project folder in a Pocket Dev terminal. Closing the phone's browser does not end the shell. Terminals do not survive a computer restart. Before stopping or restarting a service, account for running chats and terminal work.
 
+### Browser automation in personal Codex chats
+
+Personal Codex chats continue to use the installed Codex sign-in, project context and configured MCP servers. Pocket Dev also offers optional browser automation through Microsoft's Playwright MCP integration. Install Pocket Dev with optional npm dependencies enabled and install Chrome, Edge or Chromium on the computer running Codex.
+
+Open a personal Codex chat, select its **Browser** setting, then choose **Separate browser** and confirm. Ask Codex to open or test a website. The browser runs on that computer in a separate temporary profile; existing browser tabs, cookies and saved logins are not copied. Sign in within that separate browser if your task requires it. Browser actions can submit forms and change websites, so give the agent the same instructions about approvals that you would in a local session.
+
+Browser access starts off in each new chat. Stop the current task before changing the Browser setting. Turning it off closes the owned browser, and Pocket Dev verifies that those tools are unavailable before continuing the chat. Changing the setting does not resend a prompt. Existing global Codex MCP configuration is preserved. Screenshots returned as MCP image content use the existing private chat image viewer.
+
+If **Separate browser** is unavailable, open **Settings → AI Tools → Codex** for setup guidance. A custom Chromium executable may be selected by the computer operator with `POCKET_DEV_BROWSER_EXECUTABLE`. Pocket Dev does not download a browser or attach to your everyday profile. Browser tools supplied by a VS Code extension or the Codex desktop app are not automatically available through the Codex CLI app-server; the optional MCP integration supplies a supported path for personal chats.
+
+Shared AI sessions retain their isolated workspace tools. They do not inherit this browser, personal MCP servers, or the source computer's browser profile. See [Connected computers and shared AI](UNIFIED_CONNECTIONS.md).
+
 ## Let an agent use Pocket Dev
 
 The repository includes a reusable [Pocket Dev skill](../skills/pocket-dev/SKILL.md). Add the `skills/pocket-dev` folder to your coding agent's supported skill location or give the assistant its public URL. It covers local setup, continuing a project and the terminal API. It does not grant access or install anything by itself.

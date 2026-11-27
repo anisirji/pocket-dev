@@ -6,6 +6,9 @@ function cameraOnState(state) {
   if (!camera) return;
   const testing = camera.state === 'testing';
   $('cameraPrepare').disabled = testing || !camera.enabled;
+  $('cameraPrepare').disabled ||= state.remotePermissions?.cameraView === false;
+  $('microphonePrepare').disabled = testing || !camera.enabled || state.remotePermissions?.microphoneView === false;
+  $('microphoneDetail').textContent = camera.microphoneVerifiedAt ? `Microphone verified: ${new Date(camera.microphoneVerifiedAt).toLocaleString()}. Permission applies to this computer, not each remote connection.` : 'Prepare microphone access once. Choose persistent permission in the browser when offered.';
   $('cameraPrepare').textContent = testing ? 'Checking camera…' : camera.verifiedAt ? 'Test remote camera again' : 'Prepare remote camera';
   $('cameraState').textContent = !camera.enabled ? 'Disabled' : testing ? 'Waiting for browser permission' : camera.state === 'error' ? 'Needs attention' : camera.verifiedAt ? 'Camera verified' : 'Not prepared';
   $('cameraErr').textContent = camera.error || '';
@@ -19,9 +22,16 @@ $('cameraPrepare').onclick = async () => {
   $('cameraErr').textContent = '';
   try {
     const result = await api('POST', '/api/camera/prepare', {});
-    cameraOnState({ camera: result });
+    cameraOnState({ camera: result, remotePermissions: state.remotePermissions });
   } catch (err) {
     $('cameraErr').textContent = err.message;
     $('cameraPrepare').disabled = false;
   }
+};
+$('microphonePrepare').onclick = async () => {
+  $('microphonePrepare').disabled = true; $('cameraErr').textContent = '';
+  try {
+    const result = await api('POST', '/api/camera/prepare', { media: { video: false, listen: true, talk: false } });
+    cameraOnState({ camera: result, remotePermissions: state.remotePermissions });
+  } catch (error) { $('cameraErr').textContent = error.message; $('microphonePrepare').disabled = false; }
 };

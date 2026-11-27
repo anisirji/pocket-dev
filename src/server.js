@@ -19,11 +19,17 @@ import { startAdmin } from './auth/admin.js';
 import { createVersionCheck, installKind, readInstalledVersion, cachedUpdateLine } from './setup/update.js';
 import { createNotifier, createUpdateReminder } from './machine/desktop-notify.js';
 import { createPhoneAccess } from './auth/access.js';
+import { createNotifications, notificationSettings, updateNotificationSettings } from './core/notifications.js';
+import { createBrowserPush } from './core/browser-push.js';
+import { createFeatures, featureError } from './core/features.js';
+import { browserAutomationStatus } from './chat/browser-tools.js';
 import { createChatApi } from './chat/index.js';
 import { createFilesApi } from './workspace/files.js';
 import { platform } from './core/platform.js';
 import { createCollaborators } from './auth/collaborators.js';
-import { captureScreen } from './machine/screen.js';
+import { captureScreen, screenSupport } from './machine/screen.js';
+import { createScreenInputAdapter } from './machine/screen-input.js';
+import { createScreenControl } from './machine/screen-control.js';
 import { createCamera } from './machine/camera.js';
 import { createBrowserCamera, localCameraHost } from './machine/browser-camera.js';
 import { createCameraSupport } from './setup/camera-support.js';
@@ -51,17 +57,22 @@ const BODY_MAX = 64_000;
 const UPLOAD_MAX = 25 * 1024 * 1024;
 
 const config = openConfig(resolveConfigPath());
+let screenAccessGeneration = 0;
 const cameraSupport = createCameraSupport();
 const PORT = Number(process.env.PORT) || config.read().port || 7777;
 const browserCapture = config.read().cameraBackend !== 'ffmpeg';
 const camera = browserCapture
-  ? createBrowserCamera({ origin: () => `http://127.0.0.1:${PORT}`, openUrl: (url) => {
+  ? createBrowserCamera({ origin: () => `http://127.0.0.1:${PORT}`, openUrl: (url, options) => {
     if (process.env.POCKET_DEV_CAMERA_HOST_RECORD) { fs.writeFileSync(process.env.POCKET_DEV_CAMERA_HOST_RECORD, url, { mode: 0o600 }); return true; }
     if (process.env.NODE_TEST_CONTEXT) return false;
-    return platform.openUrl(url);
-  }, enabled: () => config.read().cameraView !== false,
+    return platform.openUrl(url, options);
+  }, enabled: () => config.read().cameraView !== false || config.read().microphoneView !== false,
+    videoEnabled: () => config.read().cameraView !== false, audioEnabled: () => config.read().microphoneView !== false,
+    authorized: (id) => id === 'local-camera-setup' || (id.startsWith('room-') ? connections.connected(id.slice(5)) && connections.grant(id.slice(5)).computerAccess === true : auth.isActiveDevice(id)),
     verifiedAt: () => config.read().cameraSetup?.origin === `http://127.0.0.1:${PORT}` ? config.read().cameraSetup?.verifiedAt : 0,
-    onVerified: (verifiedAt) => config.update({ cameraSetup: { verifiedAt, origin: `http://127.0.0.1:${PORT}` } }),
+    onVerified: (verifiedAt) => config.update({ cameraSetup: { ...config.read().cameraSetup, verifiedAt, origin: `http://127.0.0.1:${PORT}` } }),
+    microphoneVerifiedAt: () => config.read().cameraSetup?.origin === `http://127.0.0.1:${PORT}` ? config.read().cameraSetup?.microphoneVerifiedAt : 0,
+    onMicrophoneVerified: (microphoneVerifiedAt) => config.update({ cameraSetup: { ...config.read().cameraSetup, microphoneVerifiedAt, origin: `http://127.0.0.1:${PORT}` } }),
     iceServers: () => Array.isArray(config.read().cameraIceServers) ? config.read().cameraIceServers : [{ urls: 'stun:stun.cloudflare.com:3478' }] })
   : createCamera({ enabled: () => config.read().cameraView !== false, binary: cameraSupport.binary });
 const network = () => readNetwork(config);
@@ -117,10 +128,10 @@ function handoffArrival(req) {
 const remoteHost = () => (urls().remote ? new URL(urls().remote).hostname : null);
 const MISDIRECTED = 'Misdirected Request: this server answers only to its own addresses.';
 
-let collaborators;
+let collaborators, screenControl, admin;
 const auth = createAuth({ config, port: PORT, urls, localNote: LOCAL_NOTE,
   extraActiveCount: () => collaborators?.sessionCount() || 0,
-  onLockdown: () => collaborators?.lockdown(),
+  onLockdown: () => { collaborators?.lockdown(); screenControl?.stop('Desktop control ended during lockdown.'); camera.revokeAll('Remote media ended during lockdown.'); },
 });
 collaborators = createCollaborators({ config, auth, urls });
 collaborators.revokeRoom(null); // Retain project copies while retiring inherited room grants.
@@ -335,8 +346,10 @@ function wireSession(session) {
     broadcast(session, { t: 'out', d });
   });
   session.pty.onExit(({ exitCode }) => {
+    if (session.exitCode !== null) return;
     session.exitCode = exitCode;
     broadcast(session, { t: 'exit', code: exitCode });
+    if (session.monitor) notifications.publish({ id: `command:${session.id}:exit`, category: 'builds', title: exitCode === 0 ? 'Monitored command completed' : 'Monitored command stopped', body: `${folderName(session.cwd)} · Exit code ${exitCode}`, audience: [session.monitor], action: { kind: 'terminal', id: session.id } });
   });
 }
 
@@ -377,9 +390,11 @@ async function adoptTerminals() {
 }
 
 // `command`, when given, is typed into the new shell once its prompt is up.
-async function createSession(cwd, base = folderName(cwd), command) {
+async function createSession(cwd, base = folderName(cwd), command, monitor = null) {
   if (!ptyStatus.available) throw ptyUnavailable();
   const shell = platform.defaultShell();
+  if (monitor && (platform.platform !== 'darwin' || !['zsh', 'bash', 'sh'].includes(path.basename(shell)))) throw httpError(409, 'Monitored commands need a supported Mac shell (zsh, bash or sh).');
+  const args = monitor ? ['-lc', command] : platform.shellArgs(shell);
   // launchd and nohup start node without LANG, which makes ls print non-ASCII filenames as ???.
   const env = { ...process.env, LANG: 'en_US.UTF-8', LC_CTYPE: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', TERM: 'xterm-256color' };
   const id = crypto.randomBytes(6).toString('hex');
@@ -388,19 +403,19 @@ async function createSession(cwd, base = folderName(cwd), command) {
   let proc = null;
   if (terminalHost) {
     try {
-      proc = await terminalHost.create({ id, title, cwd, shell, args: platform.shellArgs(shell), env, cols: 80, rows: 24 });
+      proc = await terminalHost.create({ id, title, cwd, shell, args, env, cols: 80, rows: 24 });
     } catch (err) {
       console.warn(`Could not start the terminal in the host, starting it here instead: ${err.message}`);
     }
   }
   const remote = proc !== null;
-  proc ??= ptyStatus.pty.spawn(shell, platform.shellArgs(shell), { name: 'xterm-256color', cols: 80, rows: 24, cwd, env });
+  proc ??= ptyStatus.pty.spawn(shell, args, { name: 'xterm-256color', cols: 80, rows: 24, cwd, env });
   const session = {
-    id, title, cwd, pty: proc, remote, scrollback: '', clients: new Set(), exitCode: null, startedAt: Date.now(), activeAt: Date.now(),
+    id, title, cwd, pty: proc, remote, scrollback: '', clients: new Set(), exitCode: null, startedAt: Date.now(), activeAt: Date.now(), monitor,
   };
   wireSession(session);
   sessions.set(session.id, session);
-  if (command) typeWhenIdle(proc, `${command}\r`);
+  if (command && !monitor) typeWhenIdle(proc, `${command}\r`);
   return session;
 }
 
@@ -432,7 +447,10 @@ function endSession(id, note) {
 }
 
 // `persistent` tells the phone whether this terminal keeps running through an update.
-const sessionView = ({ id, title, exitCode, cwd, startedAt, activeAt, remote }) => ({ id, title, exitCode, cwd, startedAt, activeAt, persistent: remote === true });
+const sessionView = ({ id, title, exitCode, cwd, startedAt, activeAt, remote, monitor }) => ({ id, title, exitCode, cwd, startedAt, activeAt, persistent: remote === true, ...(monitor && { monitored: true }) });
+// Only action receipts live here, never command output or replay instructions. A reconnect
+// cannot rerun a monitored command, including while its first shell is still being created.
+const monitoredStarts = new Map();
 
 const isDim = (n) => Number.isInteger(n) && n >= 10 && n <= 500;
 
@@ -656,9 +674,41 @@ async function handleApi(req, res, url) {
   if (authReply) return sendJson(res, authReply.status, authReply.body, authReply.headers);
   if (resource === 'local' && key === 'power') {
     if (req.roomPeer || !auth.isLocalRequest(req)) return sendJson(res, 403, { error: `Only a script run on ${platform.host.the} can use this.` });
+    if (['lid', 'shutdown-force'].includes(url.pathname.split('/')[4])) return sendJson(res, 403, { error: 'Use an authenticated power request for administrator actions.' });
     return handlePowerApi(req, res, url.pathname.split('/')[4], { readJson, sendJson, wss, sessions });
   }
   if (!auth.deviceFor(req)) return sendJson(res, 401, { error: 'Not logged in' });
+  if (resource === 'features' && req.method === 'GET') return sendJson(res, 200, await features.check(key, { fresh: url.searchParams.get('fresh') === '1' }));
+  if (url.pathname === '/api/screen/control/support' && req.method === 'GET') {
+    if (config.read().screenView === false) return sendJson(res, 403, { error: 'Screen access is turned off.' });
+    return sendJson(res, 200, await features.check('screen-control', { fresh: true }));
+  }
+  if (url.pathname === '/api/screen/control') {
+    const device = auth.deviceFor(req);
+    if (req.method === 'GET') return sendJson(res, 200, screenControl.status(device.id));
+    if (req.method === 'POST') { const body = await readJson(req); return sendJson(res, 200, await screenControl.request(device, body.display)); }
+    if (req.method === 'DELETE') { const body = await readJson(req); screenControl.cancel(device.id, body.requestId); return sendJson(res, 200, { state: 'off' }); }
+    return sendJson(res, 405, { error: 'Method not allowed' });
+  }
+  if (req.method === 'GET' && url.pathname === '/api/setup/browser') return sendJson(res, 200, await features.check('browser'));
+  if (resource === 'notifications') {
+    if (key === 'push' && url.pathname === '/api/notifications/push') {
+      if (req.roomPeer) return sendJson(res, 403, { error: 'Open this computer directly to enable its browser notifications.' });
+      try {
+        if (req.method === 'GET') return sendJson(res, 200, push.status(auth.deviceFor(req).id));
+        if (req.method === 'POST') return sendJson(res, 200, push.subscribe(auth.deviceFor(req).id, await readJson(req)));
+        if (req.method === 'DELETE') return sendJson(res, 200, push.unsubscribe(auth.deviceFor(req).id, (await readJson(req)).endpoint));
+      } catch (error) { return sendJson(res, error.status || 400, { error: error.message }); }
+      return sendJson(res, 405, { error: 'Method not allowed' });
+    }
+    if (key) return sendJson(res, 404, { error: 'Not found' });
+    if (req.method === 'GET') return sendJson(res, 200, { ...notificationSettings(config), scope: `${room.deviceId() || 'local'}:${auth.deviceFor(req).id}` });
+    if (req.method === 'PUT') {
+      try { const settings = updateNotificationSettings(config, await readJson(req)); notifications.preferencesChanged(); return sendJson(res, 200, settings); }
+      catch (error) { return sendJson(res, error.status || 400, { error: error.message }); }
+    }
+    return sendJson(res, 405, { error: 'Method not allowed' });
+  }
   if (req.method === 'GET' && url.pathname === '/api/local/workspace') {
     if (req.roomPeer) return sendJson(res, 403, { error: 'Workspace login identity is local to this device.' });
     return sendJson(res, 200, { owner: auth.deviceFor(req).id, deviceId: room.deviceId() });
@@ -666,9 +716,10 @@ async function handleApi(req, res, url) {
   if (resource === 'camera') {
     const owner = auth.deviceFor(req).id;
     try {
-      if (['/api/camera', '/api/camera/support', '/api/camera/install', '/api/camera/start', '/api/camera/frame'].includes(url.pathname) && config.read().cameraView === false) return sendJson(res, 403, { error: 'Camera access is turned off. On this computer, run: pocket-dev config set cameraView true' });
+      const permissions = { camera: config.read().cameraView !== false, microphone: browserCapture && config.read().microphoneView !== false };
+      if (['/api/camera', '/api/camera/support', '/api/camera/install', '/api/camera/start', '/api/camera/frame'].includes(url.pathname) && (!permissions.camera && (!permissions.microphone || ['/api/camera/frame', '/api/camera/install'].includes(url.pathname)))) return sendJson(res, 403, { error: 'Camera access is disabled in Admin.' });
       if (req.method === 'GET' && url.pathname === '/api/camera/support') return sendJson(res, 200, browserCapture
-        ? { state: 'ready', available: true, canInstall: false, captureMethod: 'browser', setup: camera.setupStatus(), message: 'Uses the computer browser. No camera helper installation is needed.' }
+        ? { state: 'ready', available: true, canInstall: false, captureMethod: 'browser', permissions, setup: camera.setupStatus(), message: 'Uses the computer browser. Permissions are saved for this computer until revoked.' }
         : await cameraSupport.status());
       if (req.method === 'POST' && url.pathname === '/api/camera/install') {
         await readJson(req);
@@ -676,10 +727,11 @@ async function handleApi(req, res, url) {
         return sendJson(res, 200, cameraSupport.startInstall());
       }
       if (!browserCapture && ((req.method === 'GET' && url.pathname === '/api/camera') || (req.method === 'POST' && url.pathname === '/api/camera/start'))) await cameraSupport.status();
-      if (req.method === 'GET' && url.pathname === '/api/camera') return sendJson(res, 200, { cameras: await camera.devices() });
+      if (req.method === 'GET' && url.pathname === '/api/camera') return sendJson(res, 200, { cameras: permissions.camera ? await camera.devices() : [], permissions });
       if (req.method === 'POST' && url.pathname === '/api/camera/start') {
         const body = await readJson(req);
-        return sendJson(res, 200, await camera.start(owner, body.camera));
+        if (!browserCapture && body.media && (body.media.listen || body.media.talk || body.media.video === false)) return sendJson(res, 400, { error: 'Camera audio requires the browser capture backend.' });
+        return sendJson(res, 200, await camera.start(owner, body.camera, body.media));
       }
       if (req.method === 'POST' && url.pathname === '/api/camera/stop') {
         const body = await readJson(req);
@@ -734,25 +786,42 @@ async function handleApi(req, res, url) {
     case 'GET health':
       return sendJson(res, 200, { ...(await collectHealth()), terminals: { available: ptyStatus.available, reason: ptyStatus.reason } });
     case 'GET screen': {
-      if (config.read().screenView === false) return sendJson(res, 403, { error: `Screen view is turned off. On ${platform.host.the}, run: pocket-dev config set screenView true` });
+      if (config.read().screenView === false) return sendJson(res, 403, { error: 'Screen viewing is disabled in Admin.' });
       try {
-        const jpeg = await captureScreen();
+        const generation = screenAccessGeneration;
+        const jpeg = await captureScreen({ quality: url.searchParams.get('quality') || 'balanced', ...(url.searchParams.has('display') && { display: url.searchParams.get('display') }) });
+        if (config.read().screenView === false || generation !== screenAccessGeneration) return sendJson(res, 403, { error: 'Screen viewing was disabled in Admin.' });
         res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': jpeg.length, 'cache-control': 'no-store' });
         return res.end(jpeg);
       } catch (err) {
-        return sendJson(res, 503, { error: err.message });
+        return sendJson(res, err.status || 503, featureError('screen', err));
       }
     }
+    case 'GET screen/support':
+      if (config.read().screenView === false) return sendJson(res, 403, { error: 'Screen viewing is turned off on this computer.' });
+      return sendJson(res, 200, await features.check('screen'));
     case 'GET terminals':
       return sendJson(res, 200, terminalsView());
     case 'GET sessions':
       return sendJson(res, 200, [...sessions.values()].map(sessionView));
     case 'POST sessions': {
-      const { cwd = HOME, command } = await readJson(req);
+      const { cwd = HOME, command, monitor = false, requestId } = await readJson(req);
       const dir = resolveDir(cwd);
       if (!dir) return sendJson(res, 400, { error: `Not a folder: ${cwd}` });
       if (command !== undefined && !isShortcut(command)) return sendJson(res, 400, { error: 'command must be one line of 1 to 200 characters.' });
-      const session = await createSession(dir, undefined, command);
+      if (typeof monitor !== 'boolean' || (monitor && (!command || typeof requestId !== 'string' || !/^[A-Za-z0-9_-]{16,80}$/.test(requestId)))) return sendJson(res, 400, { error: 'Monitoring needs an explicit command and a valid action ID.' });
+      let session;
+      if (monitor) {
+        const deviceId = auth.deviceFor(req).id, receipt = `${deviceId}:${requestId}`, fingerprint = crypto.createHash('sha256').update(JSON.stringify([dir, command])).digest('hex');
+        const existing = monitoredStarts.get(receipt);
+        if (existing && existing.fingerprint !== fingerprint) return sendJson(res, 409, { error: 'This action ID belongs to another command.' });
+        if (!existing) {
+          if (monitoredStarts.size >= 1024) return sendJson(res, 409, { error: 'This server has reached its monitored command limit. Use an ordinary terminal or restart Pocket Dev after active tasks finish.' });
+          monitoredStarts.set(receipt, { fingerprint, work: createSession(dir, undefined, command, deviceId).then((started) => started.id) });
+        }
+        session = sessions.get(await monitoredStarts.get(receipt).work);
+        if (!session) return sendJson(res, 409, { error: 'This command was already started and its terminal was closed. It has not been run again.' });
+      } else session = await createSession(dir, undefined, command);
       rememberRecent(dir);
       return sendJson(res, 201, sessionView(session));
     }
@@ -888,6 +957,10 @@ const PAGES = {
   '/settings.js': 'settings.js', '/settings.css': 'settings.css',
   '/apps.js': 'apps.js', '/apps.css': 'apps.css', '/screen.js': 'screen.js', '/screen.css': 'screen.css', '/camera.js': 'camera.js', '/camera.css': 'camera.css', '/health.js': 'health.js', '/health.css': 'health.css', '/macstatus.js': 'macstatus.js', '/macstatus.css': 'macstatus.css', '/power.js': 'power.js', '/service.js': 'service.js', '/setup-tools.js': 'setup-tools.js',
   '/camera-host.html': 'camera-host.html', '/camera-host.js': 'camera-host.js', '/camera-host.css': 'camera-host.css',
+  '/chat-activity.js': 'chat-activity.js', '/notifications.js': 'notifications.js', '/notifications.css': 'notifications.css', '/notification-preferences.js': 'notification-preferences.js',
+  '/notification-store.js': 'notification-store.js', '/notifications-worker.js': 'notifications-worker.js',
+  '/feature-guides.js': 'feature-guides.js', '/feature-guides.css': 'feature-guides.css',
+  '/screen-control.js': 'screen-control.js',
   '/chat.js': 'chat.js', '/chat.css': 'chat.css', '/files.js': 'files.js', '/files.css': 'files.css',
   '/workspace.html': 'workspace.html', '/workspace.js': 'workspace.js', '/workspace.css': 'workspace.css',
   '/workspace-core.js': 'workspace-core.js',
@@ -899,6 +972,7 @@ const PAGES = {
   '/collaborators.js': 'collaborators.js', '/collaborators.css': 'collaborators.css',
   '/connected-computers.js': 'connected-computers.js', '/connected-computers.css': 'connected-computers.css',
   '/room-invite.js': 'room-invite.js', '/room.css': 'room.css', '/room-scan.js': 'room-scan.js',
+  '/connection-qr.js': 'connection-qr.js', '/connection-qr.css': 'connection-qr.css',
   '/vendor/qrcode/qrcode.js': 'vendor/qrcode/qrcode.js', '/vendor/jsqr/jsQR.js': 'vendor/jsqr/jsQR.js', '/terminals-off.js': 'terminals-off.js',
   '/invite': 'invite.html', '/invite.js': 'invite.js', '/guest.js': 'guest.js', '/guest.css': 'guest.css',
   '/welcome.js': 'welcome.js', '/greeting-copy.js': 'greeting-copy.js', '/favicon.svg': 'favicon.svg', '/keep-caret.js': 'keep-caret.js', '/file-choice.js': 'file-choice.js', '/update-notice.js': 'update-notice.js', '/update-notice.css': 'update-notice.css',
@@ -920,7 +994,7 @@ function servePage(req, res, pathname) {
   }
   res.writeHead(200, { 'content-type': TYPES[path.extname(file)], 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff',
     'x-frame-options': file === 'index.html' && ['1', 'chat'].includes(new URL(req.url, 'http://localhost').searchParams.get('workspacePanel')) ? 'SAMEORIGIN' : 'DENY',
-    ...(CAMERA_HOST_PAGES.has(file) && { 'permissions-policy': 'camera=(self), microphone=()' }) });
+    ...(CAMERA_HOST_PAGES.has(file) && { 'permissions-policy': 'camera=(self), microphone=(self)' }) });
   fs.createReadStream(path.join(PACKAGE_ROOT, 'public', file)).pipe(res);
 }
 
@@ -957,19 +1031,31 @@ const server = http.createServer(async (req, res) => {
     } else if (url.pathname.startsWith('/api/')) await handleApi(req, res, url);
     else servePage(req, res, url.pathname);
   } catch (err) {
-    if (!res.headersSent) sendJson(res, err.status ?? 400, { error: err.message });
+    if (!res.headersSent) sendJson(res, err.status ?? 400, err.feature ? featureError(err.feature, err) : { error: err.message });
   }
 });
 
 // Terminal and chat sockets share this server, so a disconnect, sleep or shutdown that closes wss.clients closes both.
 const wss = new WebSocketServer({ noServer: true });
 const cameraWss = new WebSocketServer({ noServer: true, maxPayload: 2 * 1024 * 1024 });
-const chatApi = createChatApi({ sendJson, readJson, config, wss, room, connections });
+const push = createBrowserPush({ stateDir: STATE_DIR, authorized: auth.isActiveDevice, online: (id) => notifications.online(id), computerId: () => room.deviceId(), preferences: () => notifications.preferences() });
+screenControl = createScreenControl({ adapter: createScreenInputAdapter(), enabled: () => config.read().screenView !== false && config.read().screenControl !== false,
+  approval: {
+    has: () => config.read().screenControlApproved === true,
+    grant: () => config.update({ screenControlApproved: true }),
+    revoke: () => config.update({ screenControlApproved: false }),
+  },
+  authorized: (id) => id.startsWith('room-') ? connections.connected(id.slice(5)) && connections.grant(id.slice(5)).computerAccess === true : auth.isActiveDevice(id) });
+const features = createFeatures({ browser: browserAutomationStatus, screen: screenSupport, 'screen-control': screenControl.support,
+    camera: async () => browserCapture ? { state: config.read().cameraView === false ? 'permission-required' : 'ready', available: config.read().cameraView !== false, captureMethod: 'browser', setup: camera.setupStatus(), message: 'Camera and audio use the computer browser with separate permissions.' } : cameraSupport.status(),
+  terminals: () => ({ state: ptyStatus.available ? 'ready' : 'setup-required', ...ptyStatus }) });
+const notifications = createNotifications({ config, computerId: () => room.deviceId(), deliverPush: push.deliver });
+const chatApi = createChatApi({ sendJson, readJson, config, wss, room, connections, onActivity: notifications.chatEvent });
 
 const rejectUpgrade = (socket, status, text) => {
   socket.end(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 };
-const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade });
+const messages = createMessages({ auth, collaborators, config, wss, rejectUpgrade, onNotification: notifications.publish });
 
 server.on('upgrade', async (req, socket, head) => {
   if (insecureRemote(req) || !hostAllowed(req.headers.host)) return rejectUpgrade(socket, 421, 'Misdirected Request');
@@ -998,6 +1084,17 @@ server.on('upgrade', async (req, socket, head) => {
   if (!device) return rejectUpgrade(socket, 401, 'Unauthorized');
   // SameSite=Strict should already block cross-site upgrades; the Origin check is the backstop.
   if (!sameOrigin(req)) return rejectUpgrade(socket, 403, 'Forbidden');
+  if (pathname === '/ws/screen-control') {
+    const token = target.searchParams.get('token');
+    if (!screenControl.acceptsOwner(device.id, token)) return rejectUpgrade(socket, 403, 'Forbidden');
+    return wss.handleUpgrade(req, socket, head, (ws) => { ws.isAlive = true; ws.on('pong', () => { ws.isAlive = true; }); auth.trackSocket(device, ws); screenControl.attachOwner(device.id, token, ws); });
+  }
+  if (pathname === '/ws/notifications') {
+    return wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.isAlive = true; ws.on('pong', () => { ws.isAlive = true; });
+      auth.trackSocket(device, ws); notifications.attach(ws, device, chatApi.list());
+    });
+  }
   if (pathname === '/ws/camera-view') {
     const id = target.searchParams.get('id');
     if (!browserCapture || !camera.acceptsViewer(device.id, id)) return rejectUpgrade(socket, 403, 'Forbidden');
@@ -1131,7 +1228,7 @@ const access = createPhoneAccess({
 tunnel = createTunnel({ port: PORT, isConnected: () => access.view().connected, network, token: readToken, log: auth.admin.log });
 process.once('exit', () => { cameraSupport.dispose(); camera.dispose(); tunnel.dispose(); remotePorts.closeAll(); });
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
-  tunnel.dispose(); room.close();
+  tunnel.dispose(); room.close(); notifications.close(); push.close(); screenControl.close(); admin?.close();
   const forced = setTimeout(() => process.exit(0), 2000);
   Promise.allSettled([remoteProviders.close(), chatApi.close()]).finally(() => { clearTimeout(forced); process.exit(0); });
 });
@@ -1151,7 +1248,9 @@ versionCheck.start();
   remind();
   setInterval(remind, 30 * 60_000).unref();
 }
-const admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, camera: browserCapture ? camera : null, sections: adminSections, update: versionCheck, updateMeta: { version: readInstalledVersion(), kind: process.env.POCKET_DEV_INSTALL_KIND || installKind() } }).catch((err) => {
+admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, camera: browserCapture ? camera : null, media: camera, screenControl, sections: adminSections,
+  onRemotePermissionsChange: (changes) => { if (changes.screenView === false) screenAccessGeneration++; },
+  onNotificationSettingsChange: notifications.preferencesChanged, onSetupChanged: () => features.invalidate(), update: versionCheck, updateMeta: { version: readInstalledVersion(), kind: process.env.POCKET_DEV_INSTALL_KIND || installKind() } }).catch((err) => {
   console.error(err.message);
   process.exit(1);
 });

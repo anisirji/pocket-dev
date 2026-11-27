@@ -1,0 +1,26 @@
+{
+  "platform": "Reddit",
+  "community": "r/SideProject",
+  "account": "u/anisirji",
+  "status": "draft_for_moderator_review",
+  "date": "2026-11-19",
+  "title": "I made Pocket Dev so I can check coding tasks from my phone",
+  "body": "I wanted to check on a running coding task without going back to my desk, so I built Pocket Dev.\n\nIt runs on your computer. You open it in your phone's browser to use a terminal or read and continue a Claude Code or Codex chat, including responding to approval requests. You can also check Git changes and browse files. It uses the coding-tool accounts you already have.\n\nIt's free and open source. You don't need a phone app or a Pocket Dev cloud account.\n\nYour computer has to stay on and awake. The default setup works on the same Wi-Fi; using it from outside your home takes extra setup. macOS is the best-tested platform. The main Windows 11 features have been tested on a real PC, but Linux hasn't been tested on a real machine yet.\n\nThe demo uses demo data and scripted agent responses.\n\nSource and setup: https://github.com/anisirji/pocket-dev\n\nIf you run long coding tasks, what would you want to do from your phone? I'm trying to work out which parts are useful on a small screen and which are just frustrating.",
+  "skill": "/Users/ani/.codex/skills/humanizer/SKILL.md",
+  "skill_version": "4.0.0",
+  "draft_file": "reddit-sideproject-humanizer-draft-2026-11-19.md",
+  "media_if_submitted": "/Users/ani/Desktop/pocket-dev-video/final/pocket-dev-promo-16x9-voice.mp4",
+  "previous_submission": "https://www.reddit.com/r/SideProject/comments/1xzykvm/i_built_an_opensource_phone_interface_for_the/",
+  "editorial_review": {
+    "scope": "Title and all body paragraphs reviewed with Humanizer.",
+    "changes": [
+      "Removed formal maker introduction; first-person account makes authorship clear.",
+      "Replaced feature-list cadence with ordinary sentences.",
+      "Removed the forced three-option feedback question and em dash.",
+      "Kept one source link, factual access/platform limits, and demo disclosure."
+    ],
+    "facts_added": false,
+    "fictional_anecdotes_added": false
+  },
+  "publication_note": "User explicitly chose to save the Humanizer rewrite as a draft for moderator review. Saved locally; no new Reddit submission and no moderator message sent."
+}

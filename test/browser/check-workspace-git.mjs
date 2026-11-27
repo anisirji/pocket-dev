@@ -1,0 +1,51 @@
+// Existing Workspace watcher → existing Git status and diff UI. Real scratch repository, no model calls.
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { startServer, until } from '../helpers/server.mjs';
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const cleanups = [], t = { after: (fn) => cleanups.push(fn) };
+let browser;
+try {
+  const server = await startServer(t), project = path.join(server.home, 'git-workspace'); fs.mkdirSync(project);
+  const file = path.join(project, 'app.js'); fs.writeFileSync(file, 'const value = "initial";\n');
+  const git = (...args) => execFileSync('git', args, { cwd: project, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  git('init', '--initial-branch=main'); git('add', 'app.js'); git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'Fixture initial commit');
+  const login = await server.login();
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const [name, value] = login.cookie.split('='); await context.addCookies([{ name, value, url: server.base }]);
+  await context.addInitScript((root) => { localStorage.setItem('pd-welcome-shown', '1'); localStorage.setItem('pd.workspace', JSON.stringify({ root })); }, project);
+  const page = await context.newPage(), errors = []; page.on('pageerror', (error) => errors.push(String(error)));
+  await page.goto(`${server.base}/workspace.html`);
+  const row = page.getByRole('button', { name: 'File app.js', exact: true }); await row.click();
+  await until(async () => (await page.locator('#gitBranch').innerText()).includes('main'));
+  assert.equal(await page.locator('#viewFileChanges').isVisible(), false, 'clean file has no change action');
+  fs.writeFileSync(file, 'const value = "external agent edit";\n');
+  await page.waitForFunction(() => document.querySelector('.cm-content').textContent.includes('external agent edit'));
+  await until(async () => await row.getAttribute('data-git-status') === 'M');
+  assert.equal(await page.locator('.ws-tab .ws-git-badge').innerText(), 'M');
+  await page.locator('.cm-content').click(); await page.keyboard.press('ControlOrMeta+End'); await page.keyboard.insertText('// local draft remains\n');
+  fs.writeFileSync(file, 'const value = "second external edit";\n'); await page.locator('#fileConflict').waitFor();
+  await page.locator('#viewFileChanges').click();
+  const tools = page.frameLocator('#toolsFrame');
+  await tools.locator('.g-diff').filter({ hasText: 'second external edit' }).waitFor();
+  assert.equal(fs.readFileSync(file, 'utf8'), 'const value = "second external edit";\n');
+  assert.match(await page.locator('.cm-content').textContent(), /local draft remains/);
+  await page.locator('#activityGit').click();
+  await tools.locator('.g-graph').waitFor();
+  assert.match(await tools.locator('#git').innerText(), /Fixture initial commit/);
+  // Native Git metadata changes also update indicators without a file write.
+  git('add', 'app.js'); git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'Fixture external commit');
+  await until(async () => !(await row.getAttribute('data-git-status')));
+  assert.equal(await page.locator('#viewFileChanges').isVisible(), false);
+  fs.writeFileSync(path.join(project, 'new.txt'), 'untracked fixture');
+  const untracked = page.getByRole('button', { name: 'File new.txt', exact: true }); await untracked.waitFor();
+  await until(async () => await untracked.getAttribute('data-git-status') === '?');
+  await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole('button', { name: 'Files', exact: true }).click(); await untracked.click();
+  await page.locator('#viewFileChanges').click(); await tools.locator('.g-diff').filter({ hasText: 'untracked fixture' }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  assert.deepEqual(errors, []);
+  console.log('PASS external edits, Git file/tab indicators, existing diff and graph, draft preservation, commits and untracked files on desktop and phone');
+} finally { await browser?.close(); for (const cleanup of cleanups.reverse()) await cleanup(); }

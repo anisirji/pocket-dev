@@ -1,14 +1,16 @@
 import fs from 'node:fs';
-import os from 'node:os';
+import { BROWSER_MCP_NAME, browserAutomationStatus, browserMcpConfig } from './browser-tools.js';
+import { saveToolImages, resultText } from './tool-images.js';
+import { requestCodexPermissions } from './codex-permissions.js';
+import { requestMcpInput } from './mcp-input.js';
 import path from 'node:path';
 import { findBin, engineEnv, cap, lineDiff, OUTPUT_MAX } from './env.js';
-import { connectCodexRpc } from './codex-rpc.js';
+import { connectCodexRpc, codexSocketPath } from './codex-rpc.js';
 import { codexLimitNotices } from './limits.js';
 
 const CODEX_BIN = process.env.POCKET_DEV_CODEX || findBin('codex');
 // A binary override keeps tests/custom installations isolated unless they also select a socket.
-const CODEX_SOCKET = process.env.POCKET_DEV_CODEX_SOCKET || (process.env.POCKET_DEV_CODEX ? null
-  : path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'app-server-control', 'app-server-control.sock'));
+const CODEX_SOCKET = codexSocketPath();
 
 const SANDBOX_POLICY = {
   'read-only': { type: 'readOnly', networkAccess: false },
@@ -46,6 +48,10 @@ export async function settingsSchema() {
     { key: 'approvalPolicy', label: 'Approval', default: 'untrusted', choices: APPROVAL_POLICIES },
     { key: 'sandbox', label: 'Sandbox', default: 'workspace-write', choices: SANDBOXES },
     { key: 'effort', label: 'Effort', default: 'default', choices: EFFORTS },
+    { key: 'browser', label: 'Browser', default: 'off', choices: [
+      { value: 'off', label: 'Off', description: 'No Pocket browser tools' },
+      ...(browserAutomationStatus().available ? [{ value: 'isolated', label: 'Separate browser', description: 'Browser automation in a separate Chrome or Edge session', confirm: 'Allow this personal Codex chat to open and control a separate browser? It will not use your existing browser profile. Browser actions can interact with websites you open.' }] : []),
+    ] },
   ];
 }
 
@@ -63,7 +69,7 @@ const server = {
 
   start() {
     if (this.ready) return this.ready;
-    const ready = connectCodexRpc({ bin: CODEX_BIN, env: engineEnv(), socketPath: CODEX_SOCKET }).then((connection) => {
+    const ready = connectCodexRpc({ bin: CODEX_BIN, env: engineEnv(), socketPath: CODEX_SOCKET, experimental: true }).then((connection) => {
       this.connection = connection;
       connection.onMessage = (msg) => this.onMessage(msg);
       connection.onGone = (err) => {
@@ -101,8 +107,8 @@ const server = {
     this.connection?.write(msg);
   },
 
-  call(method, params) {
-    return this.connection?.call(method, params) ?? Promise.reject(new Error('The Codex connection closed. Send your message again to reconnect.'));
+  call(method, params, timeoutMs) {
+    return this.connection?.call(method, params, timeoutMs) ?? Promise.reject(new Error('The Codex connection closed. Send your message again to reconnect.'));
   },
 
   onMessage(msg) {
@@ -156,7 +162,7 @@ export function createCodexEngine(chat) {
   let turnBase = null;
   const fileChanges = new Map();
   const outputLen = new Map();
-  let threadModel = null;
+  let threadModel = null, effectiveSandbox = null, sandboxMode = null, browserEnabled = false;
   const model = () => (chat.settings.model === 'default' ? null : chat.settings.model);
 
   const withCwd = (command, cwd) => (cwd && cwd !== chat.cwd ? `${command}\n\nin ${cwd}` : command);
@@ -207,7 +213,13 @@ export function createCodexEngine(chat) {
         id: item.id, type: 'tool-run', name: `${item.server}.${item.tool}`, summary: '',
         input: cap(item.arguments, 4000), output: '', status: 'running',
       }),
-      completed: (item) => chat.update(item.id, { status: item.error ? 'error' : 'ok', output: cap(item.error ?? item.result) }),
+      completed: (item) => {
+        const content = item.result?.content;
+        const normalized = Array.isArray(content) ? content.map((block) => block?.type === 'image' && typeof block.data === 'string' ? { type: 'image', source: { type: 'base64', media_type: block.mimeType, data: block.data } } : block) : null;
+        const images = normalized ? saveToolImages(chat.imageDir, normalized, item.id) : new Map();
+        const output = item.error ? cap(item.error) : normalized ? cap(resultText(normalized, images)) : cap(item.result);
+        chat.update(item.id, { status: item.error || item.result?.isError ? 'error' : 'ok', output, ...(images.size && { images: [...images.values()] }) });
+      },
     },
     webSearch: {
       completed: (item) => chat.emit({ id: item.id, type: 'tool-run', name: 'Web search', summary: item.query ?? '', input: cap(item, 4000), output: '', status: 'ok' }),
@@ -308,6 +320,8 @@ export function createCodexEngine(chat) {
       });
     },
     'item/tool/requestUserInput': askUser,
+    'item/permissions/requestApproval': async (id, params) => reply(id, await requestCodexPermissions(chat, params)),
+    'mcpServer/elicitation/request': async (id, params) => reply(id, await requestMcpInput(chat, params)),
   };
 
   const engine = {
@@ -316,6 +330,14 @@ export function createCodexEngine(chat) {
       acquired = true;
       const { approvalPolicy, sandbox } = chat.settings;
       const params = { cwd: chat.cwd, model: model(), approvalPolicy, sandbox };
+      browserEnabled = chat.settings.browser === 'isolated';
+      try {
+        if (browserEnabled) {
+          const { config } = await server.call('config/read', { cwd: chat.cwd, includeLayers: false });
+          if (config?.mcp_servers?.[BROWSER_MCP_NAME]) throw new Error('An MCP server named pocket_dev_browser already exists. Keep using that configured server or rename it before enabling Pocket browser tools.');
+          params.config = { [`mcp_servers.${BROWSER_MCP_NAME}`]: browserMcpConfig(chat) };
+        } else if (chat.browserToolsUsed) params.config = { [`mcp_servers.${BROWSER_MCP_NAME}`]: { command: process.execPath, args: ['-e', 'process.exit(0)'], enabled: false } };
+      } catch (error) { acquired = false; server.release(); throw error; }
       let res;
       try {
         res = chat.sessionId
@@ -330,9 +352,21 @@ export function createCodexEngine(chat) {
         throw err;
       }
       threadId = res.thread.id;
+      if (!browserEnabled && chat.browserToolsUsed) {
+        try {
+          const inventory = await server.call('mcpServerStatus/list', { threadId, limit: 100 }, 10000);
+          if (!Array.isArray(inventory.data) || inventory.data.some((entry) => entry.name === BROWSER_MCP_NAME && Object.keys(entry.tools || {}).length)) throw new Error('Browser tools remain attached to the native thread.');
+        } catch {
+          await server.call('thread/unsubscribe', { threadId }).catch(() => {});
+          acquired = false; server.release();
+          throw Object.assign(new Error('Codex could not confirm browser access was disabled. Close this conversation in other Codex clients and retry.'), { code: 'BROWSER_DISABLED_UNCONFIRMED', recoverable: true, feature: 'browser' });
+        }
+      }
       threadModel = res.model;
+      sandboxMode = sandbox; effectiveSandbox = res.sandbox || null;
       if (!chat.sessionId) total = { inputTokens: 0, outputTokens: 0 };
       server.threads.set(threadId, engine);
+      if (browserEnabled) chat.browserToolsUsed = true;
       chat.setSession(threadId);
     },
 
@@ -344,7 +378,8 @@ export function createCodexEngine(chat) {
         input: [{ type: 'text', text, text_elements: [] }, ...images.map(({ path }) => ({ type: 'localImage', path }))],
         model: model(),
         approvalPolicy,
-        sandboxPolicy: SANDBOX_POLICY[sandbox],
+        // Preserve the policy computed by Codex for this project, including its actual writable roots.
+        sandboxPolicy: sandbox === sandboxMode && effectiveSandbox ? effectiveSandbox : { ...SANDBOX_POLICY[sandbox], ...(sandbox === 'workspace-write' ? { writableRoots: [chat.cwd] } : {}) },
         effort: effort === 'default' ? null : effort,
       });
       turnId ??= res.turn.id;
@@ -357,6 +392,9 @@ export function createCodexEngine(chat) {
     // The next turn receives the full policy. Suppressing prompts can take
     // effect immediately, including requests already waiting for an answer.
     async configure(changes) {
+      if (Object.hasOwn(changes, 'browser')) {
+        await engine.stop(); if (chat.engine === engine) chat.engine = null;
+      }
       if (changes.approvalPolicy === 'never') {
         for (const [requestId, { event }] of chat.requests) {
           if (event.type === 'permission-request') chat.answer(requestId, { decision: 'deny' });
@@ -367,11 +405,13 @@ export function createCodexEngine(chat) {
 
     async stop() {
       if (!acquired) return;
+      acquired = false;
       if (threadId) {
+        if (browserEnabled) await server.call('mcpServer/tool/call', { threadId, server: BROWSER_MCP_NAME, tool: 'browser_close', arguments: {} }, 5000).catch(() => {});
         server.threads.delete(threadId);
         await server.call('thread/unsubscribe', { threadId }).catch(() => {});
       }
-      if (acquired) { acquired = false; server.release(); }
+      server.release();
     },
 
     onNotification(method, params) {
@@ -380,7 +420,7 @@ export function createCodexEngine(chat) {
 
     onRequest(id, method, params) {
       const handle = REQUESTS[method];
-      if (handle) handle(id, params).catch(() => reply(id, { decision: 'cancel' }));
+      if (handle) handle(id, params).catch(() => reply(id, method === 'mcpServer/elicitation/request' ? { action: 'cancel', content: null } : method === 'item/permissions/requestApproval' ? { permissions: {}, scope: 'turn' } : { decision: 'cancel' }));
       else server.write({ id, error: { code: -32601, message: `Pocket Dev cannot answer ${method}` } });
     },
 

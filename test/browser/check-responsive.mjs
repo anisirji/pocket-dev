@@ -214,7 +214,7 @@ try {
   await settle();
   await inViewport('.st-sheet');
   await page.getByRole('button', { name: /Connected computers/ }).click();
-  await page.getByRole('button', { name: 'Connect computer', exact: true }).click();
+  await page.getByRole('button', { name: 'Connect another computer', exact: true }).click();
   await page.getByRole('radio', { name: /Someone else/ }).check();
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByLabel('Connection code', { exact: true }).fill('1234-5678');
@@ -228,7 +228,9 @@ try {
   }
   await page.setViewportSize({ width: 393, height: 852 });
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to settings' }).click();
   await page.getByRole('button', { name: /Security & Devices/ }).click();
   assert.ok(await page.locator('.st-form').isVisible());
   await page.getByRole('button', { name: 'Back to settings' }).click();

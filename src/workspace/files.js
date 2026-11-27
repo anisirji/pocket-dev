@@ -337,16 +337,23 @@ export function createFilesApi({ sendJson, readJson, config, sendToMessages = nu
     if (!complete) fail(413, `Too many files to zip (over ${ZIP_MAX_ENTRIES.toLocaleString('en')}). Zip it on ${platform.host.the} instead.`);
     if (bytes > zipMax) fail(413, `That is ${(bytes / GB).toFixed(1)} GB; the zip limit is ${(zipMax / GB).toFixed(1)} GB.`);
     const base = targets.length === 1 ? path.basename(targets[0]) : path.basename(parent) || 'files';
-    const zipper = platform.zipCommand();
+    const zipper = platform.zipCommand({ unicode: /[^\x20-\x7e]/.test(parent + names.join('')) });
     if (!zipper.available) fail(501, zipper.reason);
-    const child = spawn(zipper.cmd, zipper.args, { cwd: parent, stdio: ['pipe', 'pipe', 'pipe'] });
+    const zipDir = zipper.temporaryOutput ? await fsp.mkdtemp(path.join(os.tmpdir(), 'pocket-zip-')) : null;
+    const child = spawn(zipper.cmd, zipper.args, { cwd: parent, stdio: ['pipe', 'pipe', 'pipe'], ...(zipDir && { env: { ...process.env, POCKET_DEV_ZIP_OUT: path.join(zipDir, 'archive.zip') } }) });
     let stderr = '';
     child.stderr.on('data', (d) => { stderr = (stderr + d).slice(-2000); });
     child.on('error', (err) => { stderr = err.message; });
     child.stdin.on('error', () => {});
-    child.stdin.end(names.map((n) => `${n}\n`).join(''));
+    // Windows bsdtar fails while visiting directory entries ending in '/'. It still
+    // identifies a directory correctly without that suffix; -n prevents recursion.
+    const archiveNames = platform.platform === 'win32' ? names.map((name) => name.replaceAll('\\', '/').replace(/\/$/, '')) : names;
+    child.stdin.end(archiveNames.map((n) => `${n}\n`).join(''));
     res.on('close', () => child.exitCode === null && child.kill());
-    const exited = new Promise((r) => child.on('close', r));
+    const exited = new Promise((r) => child.on('close', async (code) => {
+      if (zipDir) await fsp.rm(zipDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(() => {});
+      r(code);
+    }));
     const first = await new Promise((r) => {
       child.stdout.once('data', r);
       child.once('close', () => r(null));

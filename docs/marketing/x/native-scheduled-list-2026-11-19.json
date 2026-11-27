@@ -1,0 +1,85 @@
+{
+  "url": "https://x.com/compose/post/unsent/scheduled",
+  "items": [
+    {
+      "date": "Will send on Fri, Nov 20, 2026 at 8:00 PM",
+      "caption": "I built Pocket Dev to check coding work from my phone.\nClaude Code, Codex, terminals, Git and files stay on my own computer. Free and open source.\nComputer on/awake; remote access needs setup. Demo data + AI narration.\nhttps://github.com/anisirji/pocket-dev\n#OpenSource",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Sat, Nov 21, 2026 at 8:00 PM",
+      "caption": "A coding chat isn't always enough. Sometimes the next step is a terminal command or a look at a file.\nPocket Dev puts those tools in your phone browser. Your computer does the work.\nDemo data + AI narration.\nhttps://github.com/anisirji/pocket-dev\n#ClaudeCode",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Sun, Nov 22, 2026 at 8:00 PM",
+      "caption": "AFK Ep. 1: Claude is waiting for approval. You're at a wedding.\nA fictional story about checking a coding task from your phone, then getting back to the people around you.\nAI narration; remote access set up, computer awake.\nhttps://github.com/anisirji/pocket-dev\n#DeveloperLife",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Mon, Nov 23, 2026 at 8:00 PM",
+      "caption": "AFK Ep. 2: an external uptime alert wakes Arya at 3 AM. Fix the site now or handle it tomorrow?\nFictional story, AI narration. The alert is NOT a Pocket Dev notification. Remote setup + awake computer required.\nhttps://github.com/anisirji/pocket-dev\n#DeveloperLife",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Tue, Nov 24, 2026 at 8:00 PM",
+      "caption": "AFK Ep. 2, alternate ending 1: Arya checks the problem from bed.\nOne fictional outcome, not an audience-selected result. Pocket Dev reaches her awake computer through configured remote access.\nAI narration.\nhttps://github.com/anisirji/pocket-dev\n#ClaudeCode",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Wed, Nov 25, 2026 at 8:00 PM",
+      "caption": "AFK Ep. 2, alternate ending 2: sleep, then handle it tomorrow.\nThe other fictional outcome. Having access to your tools doesn't mean every interruption needs an immediate response.\nAI narration; demo project.\nhttps://github.com/anisirji/pocket-dev\n#DeveloperLife",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Thu, Nov 26, 2026 at 8:00 PM",
+      "caption": "AFK Ep. 3: the train loses signal while tests run at home.\nPocket Dev needs a connection to show new output. The task runs on the computer, which must stay on and awake.\nFictional story; AI narration.\nhttps://github.com/anisirji/pocket-dev\n#ClaudeCode",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Fri, Nov 27, 2026 at 8:00 PM",
+      "caption": "AFK Ep. 4: signal is back. Time to see what happened to the tests.\nA phone connection can drop while the computer keeps working. Reconnect to inspect the result.\nFictional story; AI narration. Remote access configured.\nhttps://github.com/anisirji/pocket-dev\n#OpenSource",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Sat, Nov 28, 2026 at 8:00 PM",
+      "caption": "AFK Ep. 6: three hours to the demo, one dead laptop.\nA fictional look at reaching another computer from a phone. The host still needs to be awake and reachable; the phone isn't running the build.\nAI narration.\nhttps://github.com/anisirji/pocket-dev\n#DeveloperLife",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Sun, Nov 29, 2026 at 8:00 PM",
+      "caption": "AFK Ep. 7: dinner is cooking and a build is running.\nA small check from the phone, then back to dinner. That's the kind of interruption I built Pocket Dev for.\nFictional story; AI narration. Awake computer + remote setup.\nhttps://github.com/anisirji/pocket-dev\n#ClaudeCode",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Mon, Nov 30, 2026 at 8:00 PM",
+      "caption": "AFK Ep. 8: an idea arrives far from the desk.\nPocket Dev can reach the tools on your computer from your phone browser, once remote access is configured. The computer stays awake.\nFictional story; AI narration.\nhttps://github.com/anisirji/pocket-dev\n#OpenSource",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Tue, Dec 1, 2026 at 8:00 PM",
+      "caption": "How the AFK setup works: Pocket Dev runs on your computer and opens in your phone browser.\nStart on the same Wi-Fi. Away-from-home access needs extra setup and an awake computer.\nDemo project; AI narration.\nhttps://github.com/anisirji/pocket-dev\n#OpenSource",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Wed, Dec 2, 2026 at 8:00 PM",
+      "caption": "Pocket Dev on macOS: install it, start it, then connect your phone on the same Wi-Fi.\nThis is an older recorded walkthrough with demo data and generated narration. Use the current setup instructions here:\nhttps://www.theani.me/work/pocket-dev/docs/setup\n#OpenSource",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Thu, Dec 3, 2026 at 8:00 PM",
+      "caption": "AFK: Chhath, Part 1. Arya is trying to get home to Maa while work follows her onto the train.\nA fictional film about making room for family, with Pocket Dev in the story.\nAI voices; demo project. Remote access set up, computer awake.\nhttps://github.com/anisirji/pocket-dev",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Fri, Dec 4, 2026 at 8:00 PM",
+      "caption": "AFK: Chhath, Part 2. Arya makes it home. The work still needs checking, but the morning with Maa matters too.\nFictional story; AI voices and demo data. Pocket Dev requires an awake, reachable computer.\nhttps://github.com/anisirji/pocket-dev\n#DeveloperLife",
+      "hasMedia": true
+    },
+    {
+      "date": "Will send on Sat, Dec 5, 2026 at 8:00 PM",
+      "caption": "An 11-second look at Pocket Dev.\nYour phone opens a browser. Your computer runs the coding tools.\nFree and open source. Same Wi-Fi by default; remote access needs setup and an awake computer.\nDemo data + AI narration.\nhttps://github.com/anisirji/pocket-dev\n#OpenSource",
+      "hasMedia": true
+    }
+  ]
+}

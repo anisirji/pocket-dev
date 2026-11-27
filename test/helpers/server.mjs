@@ -57,7 +57,7 @@ exec sleep 300
 }
 
 // `reuse` starts the same server again after it was killed: same state folder, HOME, config and ports.
-export async function startServer(t, { network, devices, token, lanIpFile = true, traceUrl, env: extraEnv, reuse } = {}) {
+export async function startServer(t, { network, devices, token, lanIpFile = true, traceUrl, env: extraEnv, reuse, repo = REPO } = {}) {
   const root = reuse ? reuse.root : fs.mkdtempSync(path.join(os.tmpdir(), 'pocket-dev-internet-'));
   const home = path.join(root, 'home'), state = path.join(root, 'state'), record = path.join(root, 'cloudflared-record');
   const config = path.join(root, 'config.json');
@@ -79,12 +79,14 @@ export async function startServer(t, { network, devices, token, lanIpFile = true
   // macOS's global interactive zsh config saves history after the PTY's parent exits.
   // A test shell needs no user startup files or history writers racing directory cleanup.
   fs.writeFileSync(shell, '#!/bin/sh\nexec /bin/zsh -f\n', { mode: 0o700 });
-  const proc = spawn(process.execPath, ['server.js'], { cwd: REPO, env: isolatedEnv(home, {
-    SHELL: process.platform === 'darwin' ? shell : '/bin/zsh', HISTFILE: '/dev/null', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8',
+  const proc = spawn(process.execPath, ['server.js'], { cwd: repo, env: isolatedEnv(home, {
+    SHELL: process.platform === 'win32' ? 'powershell.exe' : process.platform === 'darwin' ? shell : '/bin/zsh', HISTFILE: '/dev/null', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8',
     PORT: String(port), POCKET_DEV_ADMIN_PORT: String(adminPort), POCKET_DEV_CONFIG: config,
     POCKET_DEV_STATE_DIR: state, POCKET_DEV_NO_OPEN: '1', POCKET_DEV_CLAUDE: '/nonexistent/claude',
     POCKET_DEV_CODEX: '/nonexistent/codex', POCKET_DEV_PMSET: stub, POCKET_DEV_IOREG: stub, POCKET_DEV_TOP: stub, POCKET_DEV_MEMORY_PRESSURE: stub,
     POCKET_DEV_UPDATE_CHECK: stub, POCKET_DEV_OSASCRIPT: stub, POCKET_DEV_TERMINAL_HOST: 'off',
+    POCKET_DEV_SCREENCAPTURE: stub,
+    POCKET_DEV_INPUT_PYTHON: stub,
     POCKET_DEV_CLOUDFLARED: fakeCloudflared(root), POCKET_DEV_FAKE_CF: record,
     POCKET_DEV_PROCESS_FIXTURE: path.join(root, 'no-processes.json'), POCKET_DEV_ROOM_ALLOW_LOOPBACK: '1',
     POCKET_DEV_TRACE_URL: traceUrl ?? 'http://127.0.0.1:9/trace', POCKET_DEV_HANDOFF_TTL_MS: '1500',

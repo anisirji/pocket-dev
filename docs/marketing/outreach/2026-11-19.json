@@ -1,0 +1,175 @@
+{
+  "date": "2026-11-19",
+  "scope": "Find relevant questions and post a small number of useful, individualized public replies; no bulk DMs.",
+  "posts": [
+    {
+      "platform": "Reddit",
+      "account": "u/anisirji",
+      "parent_url": "https://www.reddit.com/r/ClaudeAI/comments/1xhbc71/how_do_you_handle_claude_code_approvals_when/",
+      "parent_author": "u/L_i_n_k0666",
+      "parent_date": "2026-10-28",
+      "fit": "Explicitly asks what people use for agent approvals away from their computer. Open to alternative setups.",
+      "reply": "If you only need Claude Code approvals, I'd try the built-in Remote Control first. You can keep a person reviewing the requests instead of approving everything unattended.\n\nDisclosure: I built Pocket Dev for when I also need Codex, a terminal, Git or files in the same phone browser. It's free and open source, and runs on your own computer with your existing coding-tool accounts: https://github.com/anisirji/pocket-dev\n\nThe host has to stay on and awake. Same-Wi-Fi access is the default; away-from-home access needs extra setup. macOS is best tested, the main Windows 11 features have been tested, and Linux hasn't been tested on a real machine.\n\nIt doesn't send lock-screen push alerts or forward operating-system permission dialogs. You open the browser to review supported agent approval requests.",
+      "status": "removed_by_moderator",
+      "rules_checked": "r/ClaudeAI rules: relevant, constructive, transparent minimal promotion; free to try. Feed karma requirement does not describe comments.",
+      "qualification": "Thread is 22 days old, not a fresh question. No claim that Pocket Dev forwards OS dialogs or sends push alerts.",
+      "reply_url": "https://www.reddit.com/r/ClaudeAI/comments/1xhbc71/comment/19sus626jsxr9/",
+      "reddit_id": "t1_19sus626jsxr9",
+      "recorded_at": "2026-11-19T10:05:32.926578+05:30",
+      "verified_at": "2026-11-19T10:05:32.926578+05:30",
+      "verification": "The reply was created and visible to signed-in u/anisirji. An independent signed-out web check of the exact comment permalink shows [deleted] and Comment removed by moderator. Not a publicly live reply. No further submissions or DMs were sent.",
+      "do_not_resubmit": true
+    }
+  ],
+  "skipped": [
+    {
+      "url": "https://x.com/aiaccountant1/status/2123256312779976988",
+      "reason": "Question concerns visibility across about 100 agents and already has an accepted tool suggestion; no verified Pocket Dev scaling claim."
+    },
+    {
+      "url": "https://x.com/SriramR72/status/2122944728568373607",
+      "reason": "Cursor CLI is the primary workflow; current Pocket Dev does not advertise production Cursor CLI support."
+    },
+    {
+      "url": "https://x.com/sbulaev/status/2122706481384394803",
+      "reason": "Needs live spoken replies; already uses Claude Remote Control. Pocket Dev text chat would not solve the stated voice requirement."
+    },
+    {
+      "url": "https://www.reddit.com/r/ClaudeCode/comments/1xpkk36/how_do_you_manage_prompts_with_claude_code_on/",
+      "reason": "Screenshot concerns an OS/browser permission dialog; do not advertise ordinary agent approvals as a fix."
+    }
+  ],
+  "reply_guidance": {
+    "style": "Short, casual, and specific to the actual question; aim for 1–2 sentences.",
+    "maker_disclosure": "Use I built Pocket Dev when recommending it from the maker account. Do not pretend to be an independent customer.",
+    "claims": "Say what it can help with. Do not promise it solves unsupported features or guarantees a fix.",
+    "npm_package": "@anisirji/pocket-dev",
+    "npm_url": "https://www.npmjs.com/package/@anisirji/pocket-dev",
+    "example": "I built Pocket Dev so you can handle supported agent approvals from your phone. It's free on npm as @anisirji/pocket-dev; your computer needs to stay awake and remote access needs setup.",
+    "removed_comments": "Retain removed replies for review; do not rewrite and repost them to evade moderation."
+  },
+  "questions": [
+    {
+      "id": "reddit-away-approvals",
+      "platform": "reddit",
+      "author": "u/L_i_n_k0666",
+      "question": "How do you handle Claude Code approvals when you are away from your computer?",
+      "url": "https://www.reddit.com/r/ClaudeAI/comments/1xhbc71/how_do_you_handle_claude_code_approvals_when/",
+      "post_date": "2026-10-28",
+      "stage": "removed",
+      "fit": "Good match",
+      "reason": "Explicitly asks what people use for agent approvals away from their computer. Open to alternative setups.",
+      "reply": "If you only need Claude Code approvals, I'd try the built-in Remote Control first. You can keep a person reviewing the requests instead of approving everything unattended.\n\nDisclosure: I built Pocket Dev for when I also need Codex, a terminal, Git or files in the same phone browser. It's free and open source, and runs on your own computer with your existing coding-tool accounts: https://github.com/anisirji/pocket-dev\n\nThe host has to stay on and awake. Same-Wi-Fi access is the default; away-from-home access needs extra setup. macOS is best tested, the main Windows 11 features have been tested, and Linux hasn't been tested on a real machine.\n\nIt doesn't send lock-screen push alerts or forward operating-system permission dialogs. You open the browser to review supported agent approval requests.",
+      "short_draft": "I built Pocket Dev so you can handle supported agent approvals from your phone. It's free on npm as @anisirji/pocket-dev; your computer needs to stay awake and remote access needs setup.",
+      "reply_url": "https://www.reddit.com/r/ClaudeAI/comments/1xhbc71/comment/19sus626jsxr9/",
+      "verification": "The reply was created and visible to signed-in u/anisirji. An independent signed-out web check of the exact comment permalink shows [deleted] and Comment removed by moderator. Not a publicly live reply. No further submissions or DMs were sent.",
+      "next_action": "Wait for moderator guidance. Do not repost the removed reply.",
+      "source_type": "Live thread and signed-out comment verification",
+      "saved_on": "2026-11-19",
+      "reviewed_on": "2026-11-19",
+      "last_action_date": "2026-11-19"
+    },
+    {
+      "id": "x-agent-dashboard",
+      "platform": "x",
+      "author": "@aiaccountant1",
+      "question": "Does this give you a dashboard or better visibility across many agents?",
+      "url": "https://x.com/aiaccountant1/status/2123256312779976988",
+      "post_date": "2026-11-19",
+      "stage": "not_fit",
+      "fit": "Poor match",
+      "reason": "The conversation is about monitoring roughly 100 agents and already has a T3 Code suggestion. Pocket Dev has no verified claim for that monitoring scale.",
+      "next_action": "Skip the product pitch.",
+      "source_type": "Full live X conversation",
+      "saved_on": "2026-11-19",
+      "reviewed_on": "2026-11-19",
+      "last_action_date": "2026-11-19"
+    },
+    {
+      "id": "x-live-voice",
+      "platform": "x",
+      "author": "@sbulaev",
+      "question": "How can Claude Code speak its replies while I am walking, rather than relaying context through Google Drive?",
+      "url": "https://x.com/sbulaev/status/2122706481384394803",
+      "post_date": "2026-11-17",
+      "stage": "not_fit",
+      "fit": "Poor match",
+      "reason": "The author already uses Claude Remote Control and needs live spoken replies. Pocket Dev text chat does not solve the voice requirement.",
+      "next_action": "Do not advertise unsupported voice features.",
+      "source_type": "Full live post and replies",
+      "saved_on": "2026-11-19",
+      "reviewed_on": "2026-11-19",
+      "last_action_date": "2026-11-19"
+    },
+    {
+      "id": "x-cursor-cli",
+      "platform": "x",
+      "author": "@SriramR72",
+      "question": "T3 Code has MCP setup, voice, mobile connection, keyboard navigation and plugin limitations; what would make it work for serious use?",
+      "url": "https://x.com/SriramR72/status/2122944728568373607",
+      "post_date": "2026-11-18",
+      "stage": "not_fit",
+      "fit": "Poor match",
+      "reason": "Cursor CLI is the main workflow; Pocket Dev does not advertise production Cursor CLI support, live voice, or Vim navigation.",
+      "next_action": "Skip rather than claim a fix.",
+      "source_type": "Full live post",
+      "saved_on": "2026-11-19",
+      "reviewed_on": "2026-11-19",
+      "last_action_date": "2026-11-19"
+    },
+    {
+      "id": "reddit-os-permission",
+      "platform": "reddit",
+      "author": "u/ttsoldier",
+      "question": "How do you manage prompts with Claude Code on mobile when a local network permission prompt is stuck on the computer?",
+      "url": "https://www.reddit.com/r/ClaudeCode/comments/1xpkk36/how_do_you_manage_prompts_with_claude_code_on/",
+      "post_date": null,
+      "stage": "not_fit",
+      "fit": "Poor match",
+      "reason": "The screenshot concerns an OS/browser permission dialog. Do not present ordinary agent approval cards as a fix for that dialog. Search-relative dates were unreliable.",
+      "next_action": "Any answer should distinguish OS dialogs from agent prompts.",
+      "source_type": "Public question and screenshot description",
+      "saved_on": "2026-11-19",
+      "reviewed_on": "2026-11-19",
+      "last_action_date": "2026-11-19"
+    },
+    {
+      "id": "x-human-approval",
+      "platform": "x",
+      "author": "@ivanjurashere",
+      "question": "What has frozen one of your overnight AI runs? The thread discusses permission prompts and late requests for tokens or budget approval.",
+      "url": "https://x.com/ivanjurashere/status/2123171779522990488",
+      "post_date": "2026-11-19",
+      "stage": "review",
+      "fit": "Needs context",
+      "reason": "Phone-based human approvals are related, but the author is asking about real experiences and has already changed the unattended pipeline. Do not invent a personal incident or offer an auto-approval bypass.",
+      "short_draft": "I built Pocket Dev so you can handle supported agent approvals from your phone. It's free on npm as @anisirji/pocket-dev; your computer needs to stay awake and remote access needs setup.",
+      "next_action": "Review for a useful contribution before replying. No reply sent.",
+      "source_type": "Full live X thread",
+      "saved_on": "2026-11-19",
+      "reviewed_on": "2026-11-19",
+      "last_action_date": "2026-11-19"
+    },
+    {
+      "id": "reddit-local-phone-workflow",
+      "platform": "reddit",
+      "author": "u/chantepleure",
+      "question": "How do you work on your Claude Code projects from your phone and keep phone/laptop work organized?",
+      "url": "https://www.reddit.com/r/ClaudeAI/comments/1x3w6fc/how_do_you_work_on_your_claude_code_projects_from/",
+      "post_date": null,
+      "stage": "review",
+      "fit": "Needs context",
+      "reason": "The author uses Linux. Pocket Dev has no real-machine Linux validation; current thread date and activity must be checked before outreach.",
+      "next_action": "Check date and Linux suitability. No reply sent.",
+      "source_type": "Public source; live posting date not verified",
+      "saved_on": "2026-11-19",
+      "reviewed_on": "2026-11-19",
+      "last_action_date": "2026-11-19"
+    }
+  ],
+  "last_updated": "2026-11-19T10:05:32.926578+05:30",
+  "status": "research_saved_one_comment_removed",
+  "sent_dm_count": 0,
+  "live_reply_count": 0,
+  "attempted_reply_count": 1
+}

@@ -1,4 +1,6 @@
 import http from 'node:http';
+import { WebSocketServer } from 'ws';
+import { notificationSettings, updateNotificationSettings } from '../core/notifications.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { platform } from '../core/platform.js';
@@ -10,9 +12,12 @@ import { createUpdateRunner } from '../setup/update-runner.js';
 import { ADMIN_FRESH_MS } from '../setup/update.js';
 import { checkPermissions, openPane } from './permissions.js';
 import { captureScreen } from '../machine/screen.js';
-import { svgQr } from '../network/qr.js';
+import { svgQr, qrConnectionAddress } from '../network/qr.js';
 import { readNetwork, networkError, isToken, hasToken, writeToken, findCloudflared } from '../network/network.js';
 import { createContext, cachedStatus } from '../setup/setup.js';
+import { createSetupActions } from '../setup/actions.js';
+import { featureError } from '../core/features.js';
+import { remotePermissions, changeRemotePermissions } from '../machine/remote-permissions.js';
 import { createFolderBrowser } from '../workspace/folder-browser.js';
 
 export const ADMIN_URL_PATH = path.join(STATE_DIR, 'admin.json');
@@ -24,12 +29,20 @@ const FILES = {
   '/': ['admin.html', 'text/html; charset=utf-8'],
   '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
   '/admin.css': ['admin.css', 'text/css; charset=utf-8'],
+  '/connection-qr.css': ['connection-qr.css', 'text/css; charset=utf-8'],
+  '/connection-qr.js': ['connection-qr.js', 'text/javascript; charset=utf-8'],
+  '/feature-guides.js': ['feature-guides.js', 'text/javascript; charset=utf-8'],
+  '/feature-guides.css': ['feature-guides.css', 'text/css; charset=utf-8'],
+  '/admin-screen-control.js': ['admin-screen-control.js', 'text/javascript; charset=utf-8'],
+  '/admin-setup.js': ['admin-setup.js', 'text/javascript; charset=utf-8'],
   '/admin-client.js': ['admin-client.js', 'text/javascript; charset=utf-8'],
   '/admin-nav.js': ['admin-nav.js', 'text/javascript; charset=utf-8'],
   '/admin-heartbeat.js': ['admin-heartbeat.js', 'text/javascript; charset=utf-8'],
   '/admin-permissions.js': ['admin-permissions.js', 'text/javascript; charset=utf-8'],
   '/admin-camera.js': ['admin-camera.js', 'text/javascript; charset=utf-8'],
   '/admin-update.js': ['admin-update.js', 'text/javascript; charset=utf-8'],
+  '/notification-preferences.js': ['notification-preferences.js', 'text/javascript; charset=utf-8'],
+  '/notifications.css': ['notifications.css', 'text/css; charset=utf-8'],
   '/admin-update.css': ['admin-update.css', 'text/css; charset=utf-8'],
   '/collaborators.js': ['collaborators.js', 'text/javascript; charset=utf-8'],
   '/collaborators.css': ['collaborators.css', 'text/css; charset=utf-8'],
@@ -115,7 +128,8 @@ function failedLogins(entries) {
 // `urls()` returns the phone listener's current { lan, local, remote } base URLs.
 const setupStatus = cachedStatus(createContext());
 
-export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections, camera = null, update = null, updateMeta = null }) {
+export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections, camera = null, media = camera, screenControl = null, update = null, updateMeta = null, onRemotePermissionsChange = () => {}, onNotificationSettingsChange = () => {}, onSetupChanged = () => {} }) {
+  const setupActions = createSetupActions({ context: createContext(), config, stateDir: STATE_DIR, changed() { setupStatus.invalidate(); onSetupChanged(); } });
   const browseFolders = createFolderBrowser({ config });
   const port = Number(process.env.POCKET_DEV_ADMIN_PORT) || config.read().adminPort || mainPort + 1;
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
@@ -142,6 +156,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
       return { ...view, items: [], empty: `Could not read: ${err.message}` };
     }
   }));
+  const permissionsView = () => ({ ...remotePermissions(config), screenControlSupported: platform.platform === 'darwin', microphoneSupported: Boolean(camera) });
 
   async function state() {
     const a = auth.admin.state();
@@ -166,9 +181,13 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
         remote: urls().remote,
       },
       network: networkState(),
+      qrConnections: auth.qrConnections(),
       service: await serviceView(),
       permissionsSetup: config.read().permissionsSetup ?? null,
       camera: camera?.setupStatus() ?? null,
+      screenControl: screenControl?.localState() ?? { state: 'off' },
+      remotePermissions: permissionsView(),
+      setup: setupActions.snapshot(),
       sections: await sectionViews(),
     };
   }
@@ -250,7 +269,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   // `os` lets the phone word its update steps for this computer (Dock tile, Start menu, app menu).
   const serviceView = async () => {
     const view = update?.view() ?? null;
-    return { ...(await serviceStatus()), update: view && { ...view, os: process.platform } };
+    return { ...(await serviceStatus()), updateReminders: notificationSettings(config).preferences.inAppUpdates, update: view && { ...view, os: process.platform } };
   };
 
   // The Admin page's Update button. It exists only when the quiet check is on and this copy knows its version.
@@ -305,9 +324,23 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   }
 
   const route = router({
-    'POST /api/camera/prepare': () => {
+    'GET /api/setup/plan': async () => ok(await setupActions.plan()),
+    'POST /api/setup/actions': async ({ body }) => reply(202, await setupActions.start(body)),
+    'POST /api/setup/progress': ({ body }) => ok(setupActions.progress(body.step)),
+    'POST /api/setup/complete': async () => ok(await setupActions.complete()),
+    'POST /api/screen/control/approve': async ({ body }) => {
+      if (!screenControl || typeof body.requestId !== 'string' || typeof body.allow !== 'boolean') return reply(400, { error: 'Choose a current control request and approval decision.' });
+      return ok(await screenControl.approve(body.requestId, body.allow));
+    },
+    'POST /api/screen/control/stop': () => { screenControl?.revokeCurrent(); return ok({ state: 'off' }); },
+    'GET /api/remote-permissions': () => ok(permissionsView()),
+    'PUT /api/remote-permissions': ({ body }) => {
+      changeRemotePermissions(config, body, { camera: media, screenControl, changed: (changes) => { onRemotePermissionsChange(changes); onSetupChanged(); } });
+      return ok(permissionsView());
+    },
+    'POST /api/camera/prepare': ({ body }) => {
       if (!camera) return reply(409, { error: 'Remote camera preparation requires the browser capture backend.' });
-      try { return ok(camera.prepare()); }
+      try { return ok(camera.prepare(body.media)); }
       catch (err) { return reply(err.status || 400, { error: err.message }); }
     },
     'GET /api/permissions': async () => ok({ items: await checkPermissions(), setup: config.read().permissionsSetup ?? null }),
@@ -317,6 +350,8 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
       return ok({ setup: body.status });
     },
     'POST /api/permissions/:id/request': ({ params }) => requestPermission(params.id),
+    'GET /api/notifications': () => ok(notificationSettings(config)),
+    'PUT /api/notifications': ({ body }) => { const settings = updateNotificationSettings(config, body); onNotificationSettingsChange(); return ok(settings); },
     'GET /api/state': async () => ok(await state()),
     'GET /api/log': ({ query }) => {
       const filter = query.get('filter') ?? 'all';
@@ -333,9 +368,8 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
       const kind = body.kind ?? 'login';
       if (!['share', 'login'].includes(kind)) return reply(400, { error: 'kind must be share or login.' });
       if (!access.view().connected) return reply(409, { error: 'Phone access is off. Connect first, then show the code.' });
-      const address = urls().remote ?? urls().lan;
-      if (!address) return reply(409, { error: readNetwork(config).wifi ? `No Wi-Fi address. Connect ${platform.host.this} to a network first.` : 'The internet link is not connected yet. Wait for it, or turn Wi-Fi access back on.' });
-      if (kind === 'login') return ok(await auth.admin.mintQr());
+      const address = qrConnectionAddress(auth.qrConnections(), body.connection);
+      if (kind === 'login') return ok(await auth.admin.mintQr(address));
       return ok({ url: address, svg: await svgQr(address) });
     },
     'POST /api/sections/:section/:item': async ({ params }) => {
@@ -387,6 +421,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
     const { pathname, searchParams } = new URL(req.url, 'http://localhost');
     try {
       if (req.method === 'GET' && pathname === '/api/folders/browse') return send(200, await browseFolders(new URL(req.url, 'http://localhost')));
+      if (req.method === 'GET' && pathname === '/api/setup/actions/events') return setupActions.stream(req, res, HEADERS);
       if (req.method === 'POST' && pathname === '/api/folders/create') return send(200, await browseFolders.create(await readJson(req)));
       if (pathname === '/api/messages' || pathname.startsWith('/api/messages/')) return messages.handleApi(req, res, { mac: true, headers: HEADERS });
       if (pathname === '/api/collaborators' || pathname.startsWith('/api/collaborators/')) {
@@ -405,12 +440,21 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
       const r = await found.handler({ params: found.params, query: searchParams, body });
       send(r.status, r.body);
     } catch (err) {
-      if (!res.headersSent) send(err.status || 400, { error: err.message });
+      if (!res.headersSent) send(err.status || 400, err.feature ? featureError(err.feature, err) : { error: err.message });
     }
   }
 
   const listen = (host) => new Promise((resolve, reject) => {
     const server = http.createServer(handle);
+    if (screenControl) {
+      const sockets = new WebSocketServer({ noServer: true, maxPayload: 2000 });
+      server.on('upgrade', (req, socket, head) => {
+        const url = new URL(req.url, 'http://localhost');
+        if (refusal(req) || url.pathname !== '/ws/screen-control-host' || !screenControl.acceptsHost(url.searchParams.get('token'))) { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return; }
+        sockets.handleUpgrade(req, socket, head, (ws) => screenControl.attachHost(ws, url.searchParams.get('token')));
+      });
+      server.once('close', () => sockets.close());
+    }
     server.once('error', reject);
     server.listen(port, host, () => resolve(server));
   });
@@ -428,6 +472,8 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   // Routes the phone can call on the main listener, after the server checked its login.
   const phoneRoute = router({
     'GET /api/service': async () => ok(await serviceView()),
+    'GET /api/notifications': () => ok(notificationSettings(config)),
+    'PUT /api/notifications': ({ body }) => { const settings = updateNotificationSettings(config, body); onNotificationSettingsChange(); return ok(settings); },
     'GET /api/setup/status': async () => ok(await setupStatus()),
     'PUT /api/service/autostart': ({ body }) => changeAutostart(body, 'phone'),
     'POST /api/service/restart': ({ req }) => restart('phone', req),
@@ -445,6 +491,7 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
   });
 
   return {
+    close() { setupActions.close(); },
     url,
     port,
     line: `Admin (${platform.host.this} only): ${url}`,

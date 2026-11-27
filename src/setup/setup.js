@@ -69,7 +69,7 @@ export function assertNoSecret(argv) {
 export const needsShell = (cmd, platform = process.platform) => platform === 'win32' && !/\.(exe|com)$/i.test(String(cmd));
 
 // Resolves { code, stdout, stderr, timedOut, error } and never rejects. `inherit` hands the terminal to the program.
-export function realRun(cmd, args, { timeout = 0, inherit = false, env, cwd } = {}) {
+export function realRun(cmd, args, { timeout = 0, inherit = false, env, cwd, onOutput, group = false, signal } = {}) {
   assertNoSecret([cmd, ...args]);
   return new Promise((resolve) => {
     const win = needsShell(cmd);
@@ -80,15 +80,20 @@ export function realRun(cmd, args, { timeout = 0, inherit = false, env, cwd } = 
       const stdio = inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'];
       child = win
         ? spawn([cmd, ...args].map(quote).join(' '), { stdio, env, cwd, shell: true, windowsHide: !inherit })
-        : spawn(cmd, args, { stdio, env, cwd, windowsHide: !inherit });
+        : spawn(cmd, args, { stdio, env, cwd, windowsHide: !inherit, detached: group && process.platform !== 'win32' });
     } catch (error) { return resolve({ code: null, stdout: '', stderr: '', timedOut: false, error }); }
     let stdout = '', stderr = '', timedOut = false, settled = false;
-    const done = (r) => { if (!settled) { settled = true; clearTimeout(timer); resolve({ stdout, stderr, timedOut, error: null, ...r }); } };
-    const timer = timeout ? setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, timeout) : null;
-    child.stdout?.on('data', (d) => { stdout = (stdout + d).slice(-20_000); });
-    child.stderr?.on('data', (d) => { stderr = (stderr + d).slice(-20_000); });
+    let abortTimer;
+    const kill = (name) => { if (group && process.platform !== 'win32' && child.pid) { try { process.kill(-child.pid, name); } catch {} } else child.kill(name); };
+    const abort = () => { kill('SIGTERM'); abortTimer = setTimeout(() => { if (!settled) kill('SIGKILL'); }, 400); };
+    const done = (r) => { if (!settled) { settled = true; clearTimeout(timer); clearTimeout(abortTimer); signal?.removeEventListener('abort', abort); resolve({ stdout, stderr, timedOut, error: null, ...r }); } };
+    const timer = timeout ? setTimeout(() => { timedOut = true; if (group && process.platform !== 'win32' && child.pid) { try { process.kill(-child.pid, 'SIGKILL'); } catch {} } else child.kill('SIGKILL'); }, timeout) : null;
+    const output = (data) => { try { onOutput?.(String(data)); } catch {} };
+    child.stdout?.on('data', (d) => { stdout = (stdout + d).slice(-20_000); output(d); });
+    child.stderr?.on('data', (d) => { stderr = (stderr + d).slice(-20_000); output(d); });
     child.on('error', (error) => done({ code: null, error }));
     child.on('close', (code) => done({ code }));
+    if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
   });
 }
 
@@ -235,12 +240,15 @@ export async function collectStatus(ctx) {
 
 // The phone asks often and each look runs a few programs, so one answer is shared for a short while.
 export function cachedStatus(ctx = createContext(), ttlMs = 20_000, now = Date.now) {
-  let at = 0, pending = null, last = null;
-  return () => {
+  let at = 0, pending = null, last = null, revision = 0;
+  const read = () => {
     if (last && now() - at < ttlMs) return Promise.resolve(last);
-    pending ??= collectStatus(ctx).then((v) => { last = v; at = now(); return v; }).finally(() => { pending = null; });
+    const current = revision;
+    pending ??= collectStatus(ctx).then((v) => { if (current === revision) { last = v; at = now(); } return v; }).finally(() => { pending = null; });
     return pending;
   };
+  read.invalidate = () => { revision++; last = null; at = 0; };
+  return read;
 }
 
 // ---- Context ------------------------------------------------------------------------------------------------------

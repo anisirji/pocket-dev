@@ -85,7 +85,7 @@
 
   let vitalsAlerts = [], performanceAlerts = [], performance = null;
   let connection = navigator.onLine === false ? 'offline' : 'checking';
-  let receivedAt = null, active = null, vitalsRequest = null, pollTimer = 0, authExpired = false;
+  let receivedAt = null, active = null, vitalsRequest = null, pollTimer = 0, authExpired = false, settingsOpen = false;
 
   function allAlerts() {
     const alerts = [...vitalsAlerts, ...performanceAlerts];
@@ -202,7 +202,7 @@
     location.replace('/login.html');
   }
   async function poll() {
-    if (active || document.hidden || authExpired || navigator.onLine === false) return;
+    if (active || document.hidden || settingsOpen || authExpired || navigator.onLine === false) return;
     clearTimeout(pollTimer);
     const request = active = requestJson('/api/performance');
     try {
@@ -224,12 +224,12 @@
     } finally {
       if (active === request) {
         active = null;
-        if (!document.hidden && !authExpired && navigator.onLine !== false) pollTimer = setTimeout(poll, POLL_MS);
+        if (!document.hidden && !settingsOpen && !authExpired && navigator.onLine !== false) pollTimer = setTimeout(poll, POLL_MS);
       }
     }
   }
   async function pollVitals() {
-    if (vitalsRequest || document.hidden || authExpired || navigator.onLine === false) return;
+    if (vitalsRequest || document.hidden || settingsOpen || authExpired || navigator.onLine === false) return;
     const request = vitalsRequest = requestJson('/api/power/vitals');
     try {
       const data = await request.result;
@@ -245,13 +245,17 @@
     updateAge(); poll(); pollVitals();
   }
   setInterval(() => {
-    if (document.hidden || authExpired) return;
+    if (document.hidden || settingsOpen || authExpired) return;
     if (navigator.onLine === false) setConnection('offline');
     else if (receivedAt !== null && Date.now() - receivedAt > STALE_MS && connection === 'connected') setConnection('unreachable');
     updateAge();
   }, 1000);
   setInterval(pollVitals, VITALS_MS);
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopRequests(); else resume(); });
+  document.addEventListener('pd-settings-visibility', (event) => {
+    settingsOpen = event.detail === true;
+    if (settingsOpen) stopRequests(); else resume();
+  });
   window.addEventListener('offline', () => { stopRequests(); setConnection('offline'); });
   window.addEventListener('online', resume);
   window.addEventListener('pageshow', resume);

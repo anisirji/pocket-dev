@@ -402,6 +402,7 @@ export function createClaudeEngine(chat, restricted = null) {
           pathToClaudeCodeExecutable: CLAUDE_BIN,
           env: engineEnv(),
           settings: ENGINE_SETTINGS,
+          settingSources: ['user', 'project', 'local'],
           canUseTool,
           ...(restricted || {}),
           stderr: (d) => { stderrTail = (stderrTail + d).slice(-2000); },

@@ -22,6 +22,7 @@ let child = null;
 let sleepRequestedAt = null;
 // null, or { state: 'pending' | 'blocked' | 'error', at, apps?, error? }
 let shutdown = null;
+let privilegedAction = null;
 
 // caffeinate is held off from a sleep request until the Mac is back, so it cannot block the sleep.
 const wantedMode = () => (sleepRequestedAt ? 'off' : mode);
@@ -119,7 +120,7 @@ export async function vitals() {
 }
 
 // What the phone's power screen offers; any of these this system cannot do is listed in powerStatus().unsupported.
-const POWER_FEATURES = ['keepAwake', 'sleepNow', 'shutDown', 'temperature', 'lid', 'lidSleep'];
+const POWER_FEATURES = ['keepAwake', 'sleepNow', 'shutDown', 'forceShutDown', 'temperature', 'lid', 'lidSleep'];
 
 export async function powerStatus() {
   const caffeinatePid = child?.proc.pid ?? null;
@@ -135,6 +136,7 @@ export async function powerStatus() {
     lidClosed: lid.closed ?? false,
     repoDir: PACKAGE_ROOT,
     shutdown,
+    authorizationPending: privilegedAction,
     updateInProgress: updating,
     temperature,
     assertions,
@@ -180,6 +182,10 @@ async function shutDown({ wss, sessions }) {
     shutdown = { state: 'error', at, error: err.message };
     return;
   }
+  watchShutdown(at);
+}
+
+function watchShutdown(at) {
   setTimeout(async () => {
     if (shutdown?.at !== at) return;
     let apps = [];
@@ -194,12 +200,40 @@ async function shutDown({ wss, sessions }) {
 export async function handlePowerApi(req, res, action, { readJson, sendJson, wss, sessions }) {
   restoreAfterSleep();
   const route = `${req.method} ${action ?? ''}`;
-  const feature = { 'POST sleep': 'sleepNow', 'POST shutdown': 'shutDown', 'PUT ': 'keepAwake' }[route];
+  const feature = { 'POST sleep': 'sleepNow', 'POST shutdown': 'shutDown', 'POST shutdown-force': 'forceShutDown', 'POST lid': 'lidSleep', 'PUT ': 'keepAwake' }[route];
   const cap = feature && platform.capabilities()[feature];
   if (cap && !cap.available) return sendJson(res, 501, { error: `Not available on this system: ${cap.reason}`, unsupported: true });
-  if ((route === 'POST sleep' || route === 'POST shutdown') && await platform.updateInProgress()) {
+  if (privilegedAction && feature) return sendJson(res, 409, { error: 'Another power action is awaiting approval. Finish or cancel it first.' });
+  if (['POST sleep', 'POST shutdown', 'POST shutdown-force'].includes(route) && await platform.updateInProgress()) {
     return sendJson(res, 409, { error: updateRefusal(action === 'sleep' ? 'Sleeping' : 'Shutting down'), updateInProgress: true });
   }
+  if (route === 'POST lid' || route === 'POST shutdown-force' || (route === 'POST sleep' && (await platform.lid()).sleepDisabled)) {
+    const body = await readJson(req);
+    if (body.confirmed !== true) return sendJson(res, 400, { error: 'Confirm this power action before continuing.' });
+    if (route === 'POST lid' && typeof body.disabled !== 'boolean') return sendJson(res, 400, { error: 'disabled must be true or false.' });
+    if (privilegedAction) return sendJson(res, 409, { error: 'Another power action is awaiting approval. Finish or cancel it first.' });
+    privilegedAction = action;
+    try {
+      if (route === 'POST lid') {
+        await platform.setLidSleepDisabled(body.disabled);
+        const status = await powerStatus();
+        if (status.lidSleepDisabled !== body.disabled) return sendJson(res, 503, { error: 'The lid setting did not change. Check administrator approval and try again.' });
+        return sendJson(res, 200, { ...status, authorizationPending: null });
+      }
+      if (route === 'POST shutdown-force') {
+        await platform.forceShutDown();
+        shutdown = { state: 'pending', at: Date.now() };
+        watchShutdown(shutdown.at);
+        return sendJson(res, 202, { shutdown });
+      }
+      await platform.prepareSleep();
+      if (await platform.updateInProgress()) return sendJson(res, 409, { error: updateRefusal('Sleeping'), updateInProgress: true });
+    } catch (error) {
+      return sendJson(res, error.status || 503, { error: error.message, ...(error.cancelled && { cancelled: true }) });
+    } finally { privilegedAction = null; }
+  }
+  // A native prompt may have opened while an update/lid check above was awaiting the OS.
+  if (privilegedAction && feature) return sendJson(res, 409, { error: 'Another power action is awaiting approval. Finish or cancel it first.' });
   if (route === 'POST sleep') {
     sleepNow(wss);
     return sendJson(res, 202, { sleepingInMs: SLEEP_DELAY_MS });
@@ -217,6 +251,7 @@ export async function handlePowerApi(req, res, action, { readJson, sendJson, wss
   if (req.method === 'GET') return sendJson(res, 200, await powerStatus());
   if (req.method !== 'PUT') return sendJson(res, 405, { error: 'Use GET or PUT' });
   const { awake } = await readJson(req);
+  if (privilegedAction) return sendJson(res, 409, { error: 'Another power action is awaiting approval. Finish or cancel it first.' });
   if (!AWAKE_MODES.includes(awake)) return sendJson(res, 400, { error: `awake must be one of: ${AWAKE_MODES.join(', ')}` });
   setAwake(awake);
   return sendJson(res, 200, await powerStatus());

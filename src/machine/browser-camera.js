@@ -4,6 +4,15 @@ const fail = (status, message) => Object.assign(new Error(message), { status });
 const DEFAULT = { id: 'default', name: 'Default computer camera' };
 const MAX_FRAME = 2 * 1024 * 1024;
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+export function cameraMedia(given) {
+  const media = { video: true, listen: false, talk: false };
+  if (given == null) return media;
+  if (typeof given !== 'object' || Array.isArray(given) || Object.entries(given).some(([key, value]) => !Object.hasOwn(media, key) || typeof value !== 'boolean')) throw fail(400, 'Choose valid camera and audio controls.');
+  Object.assign(media, given);
+  if (!media.video && !media.listen && !media.talk) throw fail(400, 'Enable the camera, listening or push to talk before starting.');
+  return media;
+}
+const extendedMedia = (media) => media && (!media.video || media.listen || media.talk) ? { media } : {};
 
 // Signaling is forwarded only between the authenticated viewer and its local camera host.
 export function cameraSignal(message, descriptionType) {
@@ -29,16 +38,22 @@ export function localCameraHost(req) {
 
 // The computer browser owns permission and sends video directly to authenticated viewers.
 // Its loopback socket carries signaling and bounded JPEGs for the relay fallback.
-export function createBrowserCamera({ origin, openUrl, enabled = () => true, now = Date.now,
+export function createBrowserCamera({ origin, openUrl, enabled = () => true, videoEnabled = enabled, audioEnabled = () => true, authorized = () => true, now = Date.now,
   idleMs = 15_000, firstFrameMs = 25_000, staleMs = 5000, setupFrameMs = 90_000,
-  verifiedAt = () => 0, onVerified = () => {}, iceServers = () => [{ urls: 'stun:stun.cloudflare.com:3478' }] } = {}) {
+  verifiedAt = () => 0, onVerified = () => {}, microphoneVerifiedAt = () => 0, onMicrophoneVerified = () => {}, iceServers = () => [{ urls: 'stun:stun.cloudflare.com:3478' }] } = {}) {
   let host = null, cameras = [], disposed = false;
   let lastVerified = verifiedAt(), setupJob = null, setupError = null;
+  let lastMicrophoneVerified = microphoneVerifiedAt();
   const leases = new Map();
   const check = () => {
     if (disposed) throw fail(503, 'Camera service is stopping.');
-    if (!enabled()) throw fail(403, 'Camera access is turned off. On this computer, run: pocket-dev config set cameraView true');
+    if (!enabled()) throw fail(403, 'Camera and microphone access are disabled in Admin.');
   };
+  const permits = (media) => (!media.video || videoEnabled()) && (!(media.listen || media.talk) || audioEnabled());
+  function checkMedia(media) {
+    if (media.video && !videoEnabled()) throw fail(403, 'Camera access is disabled in Admin.');
+    if ((media.listen || media.talk) && !audioEnabled()) throw fail(403, 'Microphone and audio access is disabled in Admin.');
+  }
   function notify(h) { for (const wake of [...h.waiters]) wake(); }
   function send(h, message) {
     if (h?.socket?.readyState === 1) h.socket.send(JSON.stringify(message));
@@ -49,6 +64,9 @@ export function createBrowserCamera({ origin, openUrl, enabled = () => true, now
     host.error = fail(410, message);
     host.frame = null;
     host.camera = null;
+    host.mediaKey = null;
+    host.readyMedia = null;
+    host.warnings = {};
     notify(host);
   }
   function rate() {
@@ -61,12 +79,13 @@ export function createBrowserCamera({ origin, openUrl, enabled = () => true, now
     leases.delete(id);
     send(host, { type: 'viewer-left', viewer: id });
     lease.viewer?.close(1000, message);
-    if (!leases.size) stopCapture(message); else rate();
+    if (!leases.size) stopCapture(message); else { syncMedia(); rate(); }
     if (host) notify(host);
   }
   function sweep() {
     for (const [id, lease] of leases) if (!lease.pending && now() - lease.at >= idleMs) drop(id);
     if (!enabled()) for (const id of [...leases.keys()]) drop(id, 'Camera access disabled.');
+    for (const [id, lease] of leases) if (!permits(lease.media) || !authorized(lease.owner)) drop(id, 'Remote media access was revoked in Admin.');
     if (host?.camera && !leases.size) stopCapture();
   }
   const timer = setInterval(sweep, Math.min(1000, idleMs));
@@ -89,32 +108,44 @@ export function createBrowserCamera({ origin, openUrl, enabled = () => true, now
     notify(h);
   }
   async function devices() { check(); return [{ ...DEFAULT }, ...cameras]; }
-  async function start(owner, id = 'default') {
+  function syncMedia() {
+    if (disposed || !enabled() || !host || !leases.size) return;
+    const media = { video: [...leases.values()].some((lease) => lease.media.video), listen: [...leases.values()].some((lease) => lease.media.listen), talk: [...leases.values()].some((lease) => lease.media.talk) };
+    const key = JSON.stringify(media); if (host.mediaKey === key) return;
+    host.mediaKey = key; host.media = media; host.frame = null; host.warnings = {}; host.readyMedia = null;
+    for (const lease of leases.values()) if (lease.viewer?.readyState === 1 && lease.transport !== 'jpeg') lease.viewer.send(JSON.stringify({ type: 'media-reset' }));
+    send(host, { type: 'start', camera: host.camera || 'default', ...extendedMedia(media) });
+  }
+  async function start(owner, id = 'default', given) {
     check(); sweep();
-    if (id !== 'default' && !cameras.some((camera) => camera.id === id)) throw fail(400, 'Choose a connected camera. Reopen Device camera to refresh the list.');
-    if (host?.camera && leases.size && id !== 'default' && host.camera !== id && host.activeId !== id) throw fail(409, 'Another viewer is using a different camera. Stop that preview first.');
+    const media = cameraMedia(given);
+    checkMedia(media);
+    if (!authorized(owner)) throw fail(403, 'This device is no longer authorized for remote media.');
+    if (media.video && id !== 'default' && !cameras.some((camera) => camera.id === id)) throw fail(400, 'Choose a connected camera. Reopen Device camera to refresh the list.');
+    if (media.video && host?.media?.video && leases.size && id !== 'default' && host.camera !== id && host.activeId !== id) throw fail(409, 'Another viewer is using a different camera. Stop that preview first.');
     for (const [key, lease] of leases) if (lease.owner === owner) drop(key);
     const session = crypto.randomUUID();
-    leases.set(session, { owner, at: now(), pending: 0 });
+    leases.set(session, { owner, at: now(), pending: 0, media });
     if (!host || (!host.socket && host.launched && host.error)) {
       host = { token: crypto.randomBytes(32).toString('hex'), socket: null, launched: false, frame: null, at: 0, error: null,
         camera: null, activeId: null, waiters: new Set() };
     }
     const h = host;
-    if (!h.camera || h.error) {
+    if (!h.camera || h.error || (media.video && !h.media?.video)) {
       h.error = null; h.frame = null; h.camera = id;
-      send(h, { type: 'start', camera: id });
     }
+    syncMedia();
     if (!h.launched) {
       h.launched = true;
-      Promise.resolve().then(() => openUrl(`${origin()}/camera-host.html#${h.token}`)).then((opened) => {
+      Promise.resolve().then(() => openUrl(`${origin()}/camera-host.html#${h.token}`, { background: true })).then((opened) => {
         if (opened === false) error(h, 'Could not open a browser on the computer. Make sure a desktop browser is installed and the computer is signed in.');
       }).catch(() => error(h, 'Could not open the computer browser. Sign in on the computer and try again.'));
     }
-    return { id: session, camera: cameras.find((camera) => camera.id === id)?.name || DEFAULT.name, streaming: true };
+    return { id: session, camera: cameras.find((camera) => camera.id === id)?.name || DEFAULT.name, streaming: true, ...extendedMedia(media) };
   }
   async function frame(owner, id, { signal, waitMs = firstFrameMs } = {}) {
     const lease = own(owner, id), h = host;
+    if (!lease.media.video) throw fail(400, 'Enable the camera before requesting an image.');
     if (h.error) throw h.error;
     lease.pending++;
     try {
@@ -141,14 +172,17 @@ export function createBrowserCamera({ origin, openUrl, enabled = () => true, now
     } finally { lease.pending--; lease.at = now(); }
   }
   function acceptsHost(req, token) {
+    sweep();
     if (disposed || !enabled() || !localCameraHost(req) || !leases.size || !host || host.socket || !/^[0-9a-f]{64}$/.test(token || '')) return false;
     return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(host.token));
   }
   function attachHost(socket) {
+    sweep();
     const h = host;
     if (!h || !leases.size || h.socket || !enabled()) { socket.close(1008, 'Camera session ended'); return; }
     h.socket = socket;
     socket.on('message', (raw, binary) => {
+      sweep();
       if (host !== h || !enabled() || !leases.size) { send(h, { type: 'stop' }); return; }
       if (binary) {
         if (!h.camera || h.error) return;
@@ -161,7 +195,7 @@ export function createBrowserCamera({ origin, openUrl, enabled = () => true, now
         }
         for (const lease of leases.values()) {
           const viewer = lease.viewer;
-          if (viewer?.readyState === 1 && lease.transport !== 'rtc' && lease.inFlight < 3 && (viewer.bufferedAmount || 0) < 256 * 1024) {
+          if (viewer?.readyState === 1 && lease.media.video && lease.transport !== 'rtc' && lease.inFlight < 3 && (viewer.bufferedAmount || 0) < 256 * 1024) {
             lease.inFlight++; viewer.send(h.frame);
           }
         }
@@ -179,6 +213,17 @@ export function createBrowserCamera({ origin, openUrl, enabled = () => true, now
         if (typeof message.activeId === 'string') h.activeId = message.activeId;
       } else if (message.type === 'permission' && ['granted', 'prompt', 'denied', 'unknown'].includes(message.state)) {
         h.permissionState = message.state;
+      } else if (message.type === 'media-ready' && message.media && typeof message.media.listen === 'boolean') {
+        h.readyMedia = { video: message.media.video === true, listen: message.media.listen === true };
+        if (h.readyMedia.listen && audioEnabled() && [...leases.values()].some((lease) => lease.media.listen)) {
+          lastMicrophoneVerified = now();
+          try { onMicrophoneVerified(lastMicrophoneVerified); } catch { /* media permission remains subject to the host browser */ }
+        }
+        notify(h);
+      } else if (message.type === 'media-warning' && typeof message.message === 'string') {
+        const kind = message.kind === 'playback' ? 'playback' : 'microphone', warning = { type: 'media-warning', message: message.message.slice(0, 500) };
+        h.warnings ||= {}; h.warnings[kind] = warning;
+        for (const lease of leases.values()) if (lease.viewer?.readyState === 1 && (kind === 'playback' ? lease.media.talk : lease.media.listen)) lease.viewer.send(JSON.stringify(warning));
       } else if (message.type === 'error') {
         if (message.code === 'NotAllowedError' && typeof message.message === 'string') setupError = message.message.slice(0, 1000);
         error(h, typeof message.message === 'string' ? message.message.slice(0, 1000) : 'Could not open the camera in the computer browser.');
@@ -194,8 +239,8 @@ export function createBrowserCamera({ origin, openUrl, enabled = () => true, now
       error(h, 'The computer camera tab was closed. Tap Start camera to open it again.');
     });
     socket.on('error', () => error(h, 'The computer camera connection was interrupted.'));
-    send(h, { type: 'start', camera: h.camera || 'default' });
-    for (const [id, lease] of leases) if (lease.viewer?.readyState === 1 && lease.transport !== 'jpeg') send(h, { type: 'viewer', viewer: id, iceServers: iceServers() });
+    send(h, { type: 'start', camera: h.camera || 'default', ...extendedMedia(h.media) });
+    for (const [id, lease] of leases) if (lease.viewer?.readyState === 1 && lease.transport !== 'jpeg') send(h, { type: 'viewer', viewer: id, iceServers: iceServers(), ...extendedMedia(lease.media) });
     rate();
   }
   function acceptsViewer(owner, id) {
@@ -207,9 +252,10 @@ export function createBrowserCamera({ origin, openUrl, enabled = () => true, now
     if (lease.viewer) { socket.close(1008, 'Viewer already connected'); return; }
     lease.viewer = socket; lease.transport = 'pending'; lease.inFlight = 0;
     socket.send(JSON.stringify({ type: 'hello', iceServers: iceServers() }));
-    send(host, { type: 'viewer', viewer: id, iceServers: iceServers() });
+    send(host, { type: 'viewer', viewer: id, iceServers: iceServers(), ...extendedMedia(lease.media) });
     if (host?.error) socket.send(JSON.stringify({ type: 'error', message: host.error.message }));
-    else if (host?.frame) { lease.inFlight++; socket.send(host.frame); }
+    else if (host?.frame && lease.media.video) { lease.inFlight++; socket.send(host.frame); }
+    for (const [kind, warning] of Object.entries(host?.warnings || {})) if (kind === 'playback' ? lease.media.talk : lease.media.listen) socket.send(JSON.stringify(warning));
     socket.on('message', (raw, binary) => {
       if (binary) return;
       try { own(owner, id); } catch { socket.close(1008, 'Camera session ended'); return; }
@@ -223,7 +269,8 @@ export function createBrowserCamera({ origin, openUrl, enabled = () => true, now
       } else if (message.type === 'rtc-ready') {
         lease.transport = 'rtc'; lease.inFlight = 0; rate();
       } else if (message.type === 'fallback') {
-        lease.transport = 'jpeg'; lease.inFlight = 0; send(host, { type: 'viewer-left', viewer: id }); rate();
+        lease.media.listen = lease.media.talk = false;
+        lease.transport = 'jpeg'; lease.inFlight = 0; send(host, { type: 'viewer-left', viewer: id }); syncMedia(); rate();
       }
     });
     socket.on('close', () => { if (leases.get(id)?.viewer === socket) drop(id); });
@@ -234,22 +281,37 @@ export function createBrowserCamera({ origin, openUrl, enabled = () => true, now
     return { state: setupJob ? 'testing' : setupError ? 'error' : lastVerified ? 'verified' : 'not-set-up',
       verifiedAt: lastVerified || null, permissionBeforeCapture: host?.permissionState || 'unknown', error: setupError, connected: host?.socket?.readyState === 1, enabled: enabled() };
   }
-  function prepare() {
+  function prepare(given) {
     check();
+    const media = cameraMedia(given); checkMedia(media);
     if (setupJob) return setupStatus();
     if (leases.size) throw fail(409, 'Stop the current camera preview before running setup.');
     setupError = null;
     setupJob = (async () => {
       let session;
       try {
-        session = await start('local-camera-setup');
-        await frame('local-camera-setup', session.id, { waitMs: setupFrameMs });
+        session = await start('local-camera-setup', 'default', media);
+        if (media.video) await frame('local-camera-setup', session.id, { waitMs: setupFrameMs });
+        if (media.listen) {
+          const h = host;
+          await new Promise((resolve, reject) => {
+            const finish = (error) => { clearTimeout(timeout); h.waiters.delete(wake); error ? reject(error) : resolve(); };
+            const wake = () => {
+              if (!leases.has(session.id) || !audioEnabled()) return finish(fail(403, 'Microphone access was disabled in Admin.'));
+              if (h.error) return finish(h.error);
+              if (h.readyMedia) finish(h.readyMedia.listen ? null : fail(403, 'Microphone permission was not allowed. Allow it in the computer browser and try again.'));
+            };
+            const timeout = setTimeout(() => finish(fail(503, 'Microphone permission did not arrive. Check the prompt on the computer.')), setupFrameMs);
+            h.waiters.add(wake); wake();
+          });
+        }
       } catch (err) { setupError = err.message; }
       finally { if (session) stop('local-camera-setup', session.id); }
     })().finally(() => { setupJob = null; });
     return setupStatus();
   }
-  return { devices, start, frame, stop, acceptsHost, attachHost, acceptsViewer, attachViewer, setupStatus, prepare, dispose() {
+  return { devices, start, frame, stop, acceptsHost, attachHost, acceptsViewer, attachViewer, setupStatus: () => ({ ...setupStatus(), microphoneVerifiedAt: lastMicrophoneVerified || null }), prepare,
+    reconcile: sweep, revokeAll(message = 'Remote media stopped in Admin.') { for (const id of [...leases.keys()]) drop(id, message); stopCapture(message); }, dispose() {
     disposed = true; clearInterval(timer);
     for (const id of [...leases.keys()]) drop(id);
     stopCapture(); host?.socket?.close(1001, 'Pocket Dev stopped');

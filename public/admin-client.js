@@ -620,105 +620,30 @@ $('approveFrom').addEventListener('change', (e) => act(() => api('PUT', '/api/se
 
 // ---- Share and login QR codes
 
-const qrViews = {
-  share: { button: 'shareQrBtn', box: 'shareQr', code: 'shareQrCode', url: 'shareQrUrl', copy: 'shareQrCopy', label: 'Show share QR' },
-  login: { button: 'qrBtn', box: 'qr', code: 'qrCode', url: 'qrUrl', copy: 'qrCopy', label: 'Show login QR' },
-};
-let qrAddress = null;
-let qrGeneration = 0;
-let qrExpiryTimer = 0;
-const qrLoading = new Set();
-
 async function copyLink(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast('Copied');
-  } catch {
-    toast('Could not copy. Select the link and copy it manually.', true);
-  }
+  try { await navigator.clipboard.writeText(text); toast('Copied'); }
+  catch { toast('Could not copy. Select the link and copy it manually.', true); }
 }
 
-function clearQr(kind) {
-  const view = qrViews[kind];
-  $(view.box).hidden = true;
-  $(view.code).replaceChildren();
-  $(view.url).textContent = '';
-  $(view.button).textContent = view.label;
-  $(view.button).setAttribute('aria-expanded', 'false');
-  if (kind === 'login') {
-    clearTimeout(qrExpiryTimer);
-    $('qrExpiry').textContent = '';
-  }
-}
+const connectionQrs = [
+  { kind: 'share', button: 'shareQrBtn', box: 'shareQr', ids: { code: 'shareQrCode', url: 'shareQrUrl', copy: 'shareQrCopy' } },
+  { kind: 'login', button: 'qrBtn', box: 'qr', ids: { code: 'qrCode', url: 'qrUrl', copy: 'qrCopy', expiry: 'qrExpiry' } },
+].map(({ kind, button, box, ids }) => window.PocketConnectionQr.mount($(box), {
+  kind, button: $(button), ids,
+  request: (connection) => api('POST', '/api/qr', { kind, connection }),
+}));
 
-// Codes point at the internet link when there is one, so a phone's first login lands on the address that works anywhere.
 function renderSharing(online = true) {
-  const address = online && state?.access.connected ? state.urls.remote ?? state.urls.lan : null;
+  const choices = window.PocketConnectionQr.options(state);
+  const enabled = online && Boolean(state?.access.connected);
   const reason = !online ? 'Cannot reach Pocket Dev. QR codes will be available when it reconnects.'
-    : !state?.access.connected ? 'Press Connect on the Overview page to share or log in a phone.'
-      : !address ? (state.network.wifi ? 'Connect this Mac to Wi-Fi to show a QR code.' : 'Wait for the internet link to connect.') : '';
-  $('sharingNote').textContent = state?.urls.remote ? 'Works from anywhere through your internet link.' : 'Scan from a phone on the same Wi-Fi as this Mac.';
-  if (address !== qrAddress) {
-    qrGeneration++;
-    qrAddress = address;
-    for (const kind of Object.keys(qrViews)) clearQr(kind);
-    $('qrErr').textContent = '';
-  }
-  $('qrUnavailable').textContent = reason;
-  $('qrUnavailable').hidden = !reason;
+    : !enabled ? 'Press Connect on the Overview page to share or log in a phone.'
+      : !(choices.local || choices.remote) ? 'No connection address is ready. Check Wi-Fi and Internet on this computer.' : '';
+  $('sharingNote').textContent = choices.remoteEnabled ? 'Choose Wi-Fi for the same network, or Remote when you are away.' : 'Scan from a phone on the same local network as this computer.';
+  $('qrUnavailable').textContent = reason; $('qrUnavailable').hidden = !reason;
   $('qrTtl').textContent = state?.qrTtlMin ?? 10;
-  for (const [kind, view] of Object.entries(qrViews)) {
-    $(view.button).disabled = !address || qrLoading.has(kind);
-    $(view.button).title = reason;
-  }
-}
-
-for (const [kind, view] of Object.entries(qrViews)) {
-  $(view.copy).addEventListener('click', () => copyLink($(view.url).textContent));
-  $(view.button).addEventListener('click', async () => {
-    if (!qrAddress || qrLoading.has(kind)) return;
-    const generation = qrGeneration;
-    qrLoading.add(kind);
-    clearQr(kind);
-    $(view.button).textContent = 'Creating…';
-    $(view.button).setAttribute('aria-busy', 'true');
-    $('qrErr').textContent = '';
-    renderSharing();
-    try {
-      const { svg, url, expiresAt } = await api('POST', '/api/qr', { kind });
-      if (generation !== qrGeneration) return;
-      if ((kind === 'share' && new URL(url).search) || (kind === 'login' && !Number.isFinite(expiresAt))) {
-        $('qrErr').textContent = 'Restart Pocket Dev to load the updated QR options, then try again.';
-        return;
-      }
-      if (new URL(url).origin !== qrAddress) {
-        $('qrErr').textContent = 'The Wi-Fi address changed. Try again for a current code.';
-        return;
-      }
-      if (kind === 'login' && expiresAt <= Date.now()) {
-        $('qrErr').textContent = 'The login QR expired. Show a new code.';
-        return;
-      }
-      $(view.code).innerHTML = svg;
-      $(view.url).textContent = url;
-      $(view.box).hidden = false;
-      $(view.button).setAttribute('aria-expanded', 'true');
-      if (kind === 'login') {
-        $('qrExpiry').textContent = `Expires at ${new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Works once.`;
-        qrExpiryTimer = setTimeout(() => {
-          clearQr('login');
-          $('qrErr').textContent = 'The login QR expired. Show a new code.';
-        }, expiresAt - Date.now());
-      }
-    } catch (err) {
-      if (generation === qrGeneration) $('qrErr').textContent = err.message;
-    } finally {
-      qrLoading.delete(kind);
-      $(view.button).removeAttribute('aria-busy');
-      $(view.button).textContent = $(view.box).hidden ? view.label : kind === 'login' ? 'New login QR' : 'Refresh share QR';
-      renderSharing($('offline').hidden);
-    }
-  });
+  for (const qr of connectionQrs) qr.update(choices, enabled);
+  window.PocketAdminSetup?.updateConnections(state, online);
 }
 
 // ---- Live overview
@@ -919,7 +844,9 @@ async function refresh(force = false) {
     renderLive();
     renderService();
     permissionsOnState(state);
+    if (typeof remotePermissionsOnState === 'function') remotePermissionsOnState(state);
     if (typeof cameraOnState === 'function') cameraOnState(state);
+    window.pocketDevAdminControl?.update(state.screenControl);
   } catch {
     $('offline').hidden = false;
     $('restartBtn').disabled = true;
@@ -938,6 +865,9 @@ function renderUpdated() {
   $('updated').textContent = lastOk ? `Updated ${ago(lastOk)} · refreshes every 5 s` : '';
 }
 
-setInterval(refresh, REFRESH_MS);
+setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 route();
+
+window.PocketNotificationPreferences?.mount($('notificationPreferences'), api, { lazy: true });
+document.addEventListener('DOMContentLoaded', () => { const heading = document.querySelector('#permissions .panel-head'); if (heading && window.PocketGuides) heading.append(window.PocketGuides.button('setup')); });

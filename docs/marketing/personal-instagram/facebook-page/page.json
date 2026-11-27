@@ -1,0 +1,37 @@
+{
+  "name": "Pocket Dev",
+  "category": "Software",
+  "website": "https://www.theani.me/work/pocket-dev",
+  "bio": "Your dev computer, from your phone. Terminals, coding-agent chats, Git and files. Free and open source. Built for more freedom.",
+  "profile_image": "/Users/ani/Desktop/pocket-dev/assets/brand/png/pocket-dev-512.png",
+  "cover_image": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/facebook-page/cover.png",
+  "status": "created_and_branded",
+  "user_authorization": "User explicitly requested a new Pocket Dev Facebook Page instead of connecting ALL for You, for linking hap.pyani and scheduling Instagram Stories.",
+  "attempted_at": "2026-11-18T12:23:29.243706+00:00",
+  "creation_confirmation": "Facebook: Success! You’ve created Pocket Dev. / Pocket Dev was created.",
+  "created_at": "2026-11-18T12:24:00.393100+00:00",
+  "page_id": "61596461440548",
+  "url": "https://www.facebook.com/profile.php?id=61596461440548",
+  "setup_completed_at": "2026-11-18T12:32:55.781483+00:00",
+  "bio_verified": true,
+  "profile_image_uploaded": true,
+  "cover_image_uploaded": true,
+  "website_verified": true,
+  "action_button": {
+    "label": "Learn more",
+    "url": "https://www.theani.me/work/pocket-dev",
+    "status": "saved"
+  },
+  "verified_at": "2026-11-18T12:35:44.983751+00:00",
+  "business_suite_asset_id": "1449010154961929",
+  "business_suite_business_id": "1019945724490944",
+  "business_suite_url": "https://business.facebook.com/latest/home?business_id=1019945724490944&asset_id=1449010154961929",
+  "metricool_connection": {
+    "status": "connected",
+    "brand": "afk_pocket_dev",
+    "page_name": "Pocket Dev",
+    "page_id": "1449010154961929",
+    "verified_at": "2026-11-18T18:15:09.992Z",
+    "confirmation": "Metricool Connections displays Facebook / Page / Pocket Dev after selecting the Page matching ID 1449010154961929."
+  }
+}

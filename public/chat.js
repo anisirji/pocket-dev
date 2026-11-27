@@ -3,7 +3,15 @@
   // for connection.js. Keep the chat entry points usable for explaining recovery.
   if (typeof window.PocketDevConnection !== 'function' || typeof window.PocketDevDrafts !== 'function') {
     const message = window.pocketDev.clientUpdateMessage;
-    window.pocketDevChat = {
+    document.addEventListener('pd-chat-status', ({ detail: chat }) => {
+    if (!chat || !inWorkspace(chat)) return;
+    const index = list.findIndex((item) => item.id === chat.id);
+    if (index >= 0 && (list[index].updatedAt || 0) > (chat.updatedAt || 0)) return;
+    if (index >= 0) list[index] = chat; else list.push(chat);
+    list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); listKey = '';
+    if (stack.at(-1)?.layer === 'list') renderList();
+  });
+  window.pocketDevChat = {
     setWorkspace(value) {
       const changed = workspace?.rootPath !== value.rootPath; workspace = value;
       if (changed) { list = []; computer = []; listKey = ''; optionsPromise = null; replace([{ layer: 'list' }, ...(value.activeChatId ? [{ layer: 'convo', id: value.activeChatId }] : [])]); }
@@ -612,7 +620,8 @@
   }
 
   function chatRow(c) {
-    const [label, cls] = c.pending ? WAITING : STATUS[c.status] || [c.status, 'idle'];
+    const activity = window.PocketChatActivity?.describe(c);
+    const [label, cls] = activity ? [activity.label, activity.style] : c.pending ? WAITING : STATUS[c.status] || [c.status, 'idle'];
     const row = button(`chat-row${cls === 'wait' ? ' chat-row-wait' : ''}`, null, () => c.sessionId ? openComputerChat(c, row) : showChat(c));
     const line1 = el('div', 'chat-row-line');
     const chip = el('span', `chat-status chat-st-${cls}`);
@@ -2373,6 +2382,14 @@
     attachFiles([...e.dataTransfer.files]);
   });
 
+  document.addEventListener('pd-chat-status', ({ detail: chat }) => {
+    if (!chat || !inWorkspace(chat)) return;
+    const index = list.findIndex((item) => item.id === chat.id);
+    if (index >= 0 && (list[index].updatedAt || 0) > (chat.updatedAt || 0)) return;
+    if (index >= 0) list[index] = chat; else list.push(chat);
+    list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); listKey = '';
+    if (stack.at(-1)?.layer === 'list') renderList();
+  });
   window.pocketDevChat = {
     snapshot: () => convo.id ? { root: workspace?.rootPath, id: convo.id, chat: convo.chat, events: convo.events.slice(-300), draft: ui.input.value } : null,
     setVisible(visible) { presentationVisible = visible; if (visible) schedule(); },
@@ -2417,7 +2434,7 @@
     push(...layers);
   }
   window.addEventListener('hashchange', openFromHash);
-  const restored = sharedOverlays && !location.hash.startsWith('#chat') && savedStack();
+  const restored = sharedOverlays && !location.hash.startsWith('#chat') && !/^#camera(?:=[0-9a-f]{4,64})?$/.test(location.hash) && savedStack();
   if (restored?.length) push(...restored);
   else openFromHash();
 })();

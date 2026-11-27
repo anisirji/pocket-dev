@@ -15,11 +15,13 @@ const stored = (key, fallback) => { try { return JSON.parse(localStorage.getItem
 const remember = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
 const basename = (path) => path.split(/[\\/]/).filter(Boolean).at(-1) || path;
 const state = { root: '', tabs: [], active: null, dirs: new Map(), expanded: new Set(), treeRun: 0, openRun: 0, currentTool: 'terminal', sessions: stored('pd.workspace.sessions', {}) };
+state.git = new Map(); state.gitDirs = new Set();
 const context = new WorkspaceContext(), scheduler = new Scheduler(4);
 window.PocketWorkspace = { context };
 let cache, ownerNamespace, persistTimer, watchController, watchTimer, retryTimer, retryDelay = 1000, switching = 0, applyingRemote = false, treeRows = [], treeNodes = new Map(), selectedEntry, restoring = false;
 state.layout = { explorer: true, ai: true, terminal: true }; state.chat = null;
 let editor, picker, newKind = 'file', frameReady, readyResolve, filterTimer, searchRun = 0, leaving = false;
+let gitTimer, gitRun = 0;
 frameReady = new Promise((resolve) => { readyResolve = resolve; });
 function error(message) { $('workspaceError').firstElementChild.textContent = message; $('workspaceError').hidden = !message; }
 function status(message) { $('workspaceStatus').textContent = message; }
@@ -41,7 +43,7 @@ function snapshot() {
   const active = current(); if (active && !active.media && editor) active.view = editor.snapshot();
   const candidate = $('chatFrame').contentWindow?.pocketDevChat?.snapshot?.();
   const chatSnapshot = candidate?.root === state.root ? candidate : state.chatSnapshot;
-  return { root: state.root, active: state.active, tabs: state.tabs.slice(-20).map(({ state: _state, saving: _saving, ...file }) => file), dirs: [...state.dirs].slice(0, 96), expanded: [...state.expanded], scroll: $('fileTree').scrollTop, sessions: state.sessions, chat: state.chat, chatSnapshot, activeTerminal: state.activeTerminal, provider: $('aiProvider').value, layout: state.layout, dimensions: { explorer: document.documentElement.style.getPropertyValue('--explorer-width'), ai: document.documentElement.style.getPropertyValue('--ai-width'), terminal: document.documentElement.style.getPropertyValue('--tools-height') } };
+  return { root: state.root, active: state.active, tabs: state.tabs.slice(-20).map(({ state: _state, saving: _saving, ...file }) => file), dirs: [...state.dirs].slice(0, 96), expanded: [...state.expanded], scroll: $('fileTree').scrollTop, sessions: state.sessions, chat: state.chat, chatSnapshot, activeTerminal: state.activeTerminal, provider: $('aiProvider').value, layout: state.layout, mobile: $('workspace').dataset.mobile, dimensions: { explorer: document.documentElement.style.getPropertyValue('--explorer-width'), ai: document.documentElement.style.getPropertyValue('--ai-width'), terminal: document.documentElement.style.getPropertyValue('--tools-height') } };
 }
 function persist() {
   if (!state.root || restoring) return;
@@ -69,12 +71,16 @@ function renderTabs() {
  tab.setAttribute('role', 'tab'); tab.setAttribute('aria-selected', String(state.active === file.path)); tab.title = file.path;
     const open = button((dirty(file) ? '● ' : '') + file.name, () => activate(file.path), 'ws-tab-main'); open.setAttribute('aria-label', `Open ${file.name}${dirty(file) ? ', unsaved changes' : ''}`);
     const close = button('×', () => closeFile(file), 'ws-tab-close'); close.setAttribute('aria-label', `Close ${file.name}`);
-    tab.append(open, close); return tab;
+    const change = state.git.get(file.path);
+    if (change) { const badge = el('span', 'ws-git-badge', change.code); badge.title = change.label; badge.setAttribute('aria-label', change.label); tab.append(open, badge, close); }
+    else tab.append(open, close);
+    return tab;
   }));
   const file = current();
   $('saveFile').disabled = !file || file.media || !dirty(file) || file.saving;
   $('saveFile').textContent = file?.saving ? 'Saving…' : 'Save';
   $('reloadFile').disabled = !file || file.media || file.saving;
+  $('viewFileChanges').hidden = !file || !state.git.has(file.path);
   document.title = `${file?.name ? file.name + ' · ' : ''}${basename(state.root) || 'Workspace'} · Pocket Dev`;
 }
 function renderTree() {
@@ -109,6 +115,11 @@ function renderVisibleTree() {
     row.setAttribute('aria-current', String(state.active === entry.path));
     const label = `${directory ? state.expanded.has(entry.path) ? '⌄' : '›' : '‹›'} ${entry.name}`;
     if (row.dataset.label !== label) { row.replaceChildren(el('span', 'ws-tree-icon', label.slice(0, label.indexOf(' '))), el('span', '', entry.name)); row.dataset.label = label; }
+    const change = state.git.get(entry.path), changedFolder = directory && state.gitDirs.has(entry.path);
+    let badge = row.querySelector('.ws-git-badge');
+    if ((change || changedFolder) && !badge) { badge = el('span', 'ws-git-badge'); row.append(badge); }
+    if (badge) { badge.hidden = !change && !changedFolder; badge.textContent = change?.code || '●'; badge.title = change?.label || 'Contains Git changes'; }
+    row.dataset.gitStatus = change?.code || (changedFolder ? 'contains' : '');
     nodes.push(line);
   }
   nodes.push(after);
@@ -136,6 +147,7 @@ async function toggleFolder(path) {
 }
 async function refreshFiles() {
   if (!state.root) return chooseFolder();
+  scheduleGitRefresh();
   const run = ++state.treeRun;
   try {
     await Promise.all([state.root, ...state.expanded].map((path) => loadDir(path).catch((failure) => { if (path === state.root) throw failure; state.expanded.delete(path); })));
@@ -144,7 +156,7 @@ async function refreshFiles() {
 }
 async function selectFolder(path, { startup = false } = {}) {
   const run = ++switching;
-  await flushSnapshot(); scheduler.cancelReads(); watchController?.abort(); clearTimeout(watchTimer); clearTimeout(retryTimer); clearTimeout(state.prefetchTimer);
+  await flushSnapshot(); scheduler.cancelReads(); watchController?.abort(); clearTimeout(watchTimer); clearTimeout(retryTimer); clearTimeout(state.prefetchTimer); clearTimeout(gitTimer); gitRun++;
   try {
     const login = await api('GET', '/api/local/workspace');
     let access, offline = false;
@@ -162,8 +174,12 @@ async function selectFolder(path, { startup = false } = {}) {
     restoring = true;
     const saved = await cache.get(access.root); if (run !== switching) return;
     state.prefetch = new Map(); state.root = access.root; state.tabs = saved?.tabs || []; state.active = null;
+    state.git = new Map(); state.gitDirs = new Set(); state.gitRoot = null; state.gitControl = null; $('gitBranch').textContent = '';
     state.dirs = new Map(saved?.dirs || []); state.expanded = new Set(saved?.expanded || []); state.sessions = saved?.sessions || {}; state.chat = saved?.chat || null; state.chatSnapshot = saved?.chatSnapshot || null; state.activeTerminal = saved?.activeTerminal || null; context.update({ activeChatId: state.chat, activeTerminalId: state.activeTerminal, terminalSessionIds: Object.values(state.sessions) });
     state.layout = { explorer: true, ai: true, terminal: true, ...saved?.layout };
+    const panel = ['files', 'editor', 'ai', 'tools'].includes(saved?.mobile) ? saved.mobile : 'editor';
+    $('workspace').dataset.mobile = panel;
+    document.querySelectorAll('button[data-mobile]').forEach((node) => node.setAttribute('aria-pressed', String(node.dataset.mobile === panel)));
     state.tabs.forEach((f) => { f.saving = false; }); selectedEntry = null; treeNodes.clear(); searchRun++;
     $('fileFilter').value = ''; $('projectName').textContent = basename(state.root); $('workspaceDevice').textContent = window.PocketMachine?.say('This Mac') || 'This device'; $('projectPath').textContent = state.root; $('projectPath').title = state.root;
     for (const [key, value] of Object.entries(saved?.dimensions || {})) if (/^\d+(\.\d+)?px$/.test(value)) document.documentElement.style.setProperty(key === 'explorer' ? '--explorer-width' : key === 'ai' ? '--ai-width' : '--tools-height', value);
@@ -173,7 +189,7 @@ async function selectFolder(path, { startup = false } = {}) {
     if (!offline) { refreshFiles(); for (const file of state.tabs) if (!file.media) validateFile(file, file.path === state.active ? 0 : 2); }
     updateFrames(); if (state.layout.terminal) showTool('terminal', { focus: false });
     if (state.layout.ai) ensureChat(); if (!startup && matchMedia('(max-width: 760px)').matches) mobile('files');
-    read('/api/git/status?' + new URLSearchParams({ repo: state.root }), 2).then((data) => { if (run === switching) $('gitBranch').textContent = data.branch || ''; }).catch(() => {});
+    if (!offline) refreshGit(true);
   } catch (failure) { restoring = false; if (failure.name !== 'AbortError') error(failure.message); throw failure; }
 }
 function chooseFolder(event) {
@@ -426,6 +442,13 @@ async function loadProviders() {
     if (selected && options.tools[selected]) $('aiProvider').value = selected;
   } catch (failure) { if (failure.name !== 'AbortError') error(failure.message); }
 }
+window.PocketWorkspace.openChat = async (id) => {
+  const chat = await api('GET', `/api/chat/${encodeURIComponent(id)}`);
+  if (chat.cwd !== state.root) { await flushSnapshot(); location.assign(`/#chat=${encodeURIComponent(id)}`); return; }
+  state.chat = id; context.update({ activeChatId: id }); state.layout.ai = true;
+  if (matchMedia('(max-width:760px)').matches) $('workspace').dataset.mobile = 'ai';
+  applyLayout(); const client = await ensureChat(); client?.pocketDevChat?.open(id); persist();
+};
 async function newChat() {
   if (!state.root) return chooseFolder();
   state.layout.ai = true; applyLayout(); mobile('ai'); await ensureChat();
@@ -448,6 +471,7 @@ async function copyText(text) {
 function fileMenu(entry, event) {
   selectedEntry = entry; const menu = $('fileMenu'); menu.replaceChildren();
   const item = (label, run) => menu.append(button(label, async () => { menu.hidePopover(); try { await run(); } catch (failure) { error(failure.message); } }));
+  if (state.git.has(entry.path)) item('View Git diff', () => openGitChange(entry.path));
   item('Open terminal here', () => showTerminalAt(entryDirectory(entry)));
   item('Add to AI context', async () => { await ensureChat(); mobile('ai'); const client = $('chatFrame').contentWindow; client?.pocketDevChat?.addContext?.(entry.path); });
   item('Copy relative path', () => copyText(relative(entry.path))); item('Copy absolute path', () => copyText(entry.path));
@@ -513,7 +537,8 @@ async function validateFile(file, priority = 0) {
   }
 }
 async function revokeWorkspace() {
-  watchController?.abort(); scheduler.cancelReads(); clearTimeout(persistTimer); clearTimeout(retryTimer); clearTimeout(watchTimer);
+  watchController?.abort(); scheduler.cancelReads(); clearTimeout(persistTimer); clearTimeout(retryTimer); clearTimeout(watchTimer); clearTimeout(gitTimer); gitRun++;
+  state.git.clear(); state.gitDirs.clear(); state.gitRoot = null; state.gitControl = null; $('gitBranch').textContent = '';
   const deniedCache = cache; cache = null; state.root = ''; context.set({ deviceId: '', rootPath: '', permissions: {} });
   await deniedCache?.clear();
   state.tabs = []; state.dirs.clear(); state.expanded.clear(); state.active = null; state.root = '';
@@ -530,10 +555,52 @@ async function reconcile() {
     await Promise.all(state.tabs.filter((file) => !file.media).map((file) => validateFile(file, file.path === state.active ? 0 : 2)));
   } catch (failure) { if (![401,403].includes(failure.status)) connection(false); }
 }
+function scheduleGitRefresh() {
+  clearTimeout(gitTimer);
+  if (!document.hidden && state.gitRoot) gitTimer = setTimeout(() => refreshGit(), 600);
+}
+async function refreshGit(discover = false) {
+  if (document.hidden || !state.root) return;
+  const valid = context.capture(), run = ++gitRun;
+  try {
+    if (discover) {
+      const repo = await api('POST', '/api/git/open', { path: state.root });
+      if (!valid() || run !== gitRun) return;
+      state.gitRoot = repo.path;
+      const control = repo.path.replace(/[\\/]$/, '') + (repo.path.includes('\\') ? '\\' : '/') + '.git';
+      if (within(control, state.root)) read('/api/files/list?' + new URLSearchParams({ path: control, showHidden: '1' }), 3).then((data) => {
+        if (valid() && data.path === control) { state.gitControl = control; restartWatch(); }
+      }).catch(() => {});
+    }
+    if (!state.gitRoot) return;
+    const data = await read('/api/git/status?' + new URLSearchParams({ repo: state.gitRoot }), 2);
+    if (!valid() || run !== gitRun) return;
+    const changes = new Map(), directories = new Set(), separator = state.gitRoot.includes('\\') ? '\\' : '/';
+    for (const file of data.files || []) {
+      const path = state.gitRoot.replace(/[\\/]$/, '') + separator + file.path.replaceAll('/', separator);
+      if (!within(path, state.root)) continue;
+      const code = file.untracked ? '?' : file.unstaged || file.staged;
+      const label = ({ '?': 'Untracked in Git', M: 'Modified in Git', A: 'Added in Git', D: 'Deleted in Git', R: 'Renamed in Git', C: 'Copied in Git', U: 'Git merge conflict', T: 'File type changed in Git' })[code] || 'Changed in Git';
+      changes.set(path, { ...file, code, label, source: file.untracked ? 'untracked' : file.unstaged ? 'unstaged' : 'staged' });
+      let parent = path.slice(0, path.lastIndexOf(separator));
+      while (within(parent, state.root) && parent !== state.root) { directories.add(parent); parent = parent.slice(0, parent.lastIndexOf(separator)); }
+    }
+    state.git = changes; state.gitDirs = directories;
+    $('gitBranch').textContent = [data.branch, changes.size && `${changes.size} changed`].filter(Boolean).join(' · ');
+    renderTabs(); renderVisibleTree();
+  } catch { /* A folder without Git remains a fully usable workspace. */ }
+}
+async function openGitChange(path) {
+  const valid = context.capture(), change = state.git.get(path); if (!change) return;
+  state.layout.terminal = true; applyLayout(); mobile('tools');
+  const client = await terminalReady(); if (!valid()) return;
+  client.pocketDev.openGit(state.gitRoot, { path: change.path, origPath: change.source === 'staged' ? change.origPath : null, source: change.source });
+}
 async function startWatch() {
   watchController?.abort(); clearTimeout(retryTimer); if (!state.root) return;
   const valid = context.capture(), controller = watchController = new AbortController();
   const dirs = new Set([state.root, ...state.expanded]); for (const file of state.tabs) dirs.add(entryDirectory(file));
+  if (state.gitControl) dirs.add(state.gitControl);
   const params = new URLSearchParams({ path: state.root }); [...dirs].filter((p) => within(p, state.root)).slice(0, 96).forEach((p) => params.append('dir', p));
   try {
     const response = await fetch('/api/files/watch?' + params, { signal: controller.signal, headers: { 'x-pocket-dev': '1' } });
@@ -553,6 +620,7 @@ async function startWatch() {
         if (message.type === 'ready' || message.type === 'reset') { if (!document.hidden) reconcile(); }
         if (message.type === 'changes') {
           if (document.hidden) { state.needsReconcile = true; continue; }
+          scheduleGitRefresh();
           for (const change of message.changes) {
             if (state.dirs.has(change.dir)) loadDir(change.dir).then(() => { renderTree(); persist(); }).catch(() => {});
             for (const file of state.tabs) if (change.paths.includes(file.path) || change.paths.includes(change.dir) || change.paths.some((path) => within(file.path, path))) validateFile(file, file.path === state.active ? 0 : 2);
@@ -578,6 +646,7 @@ $('activityGit').onclick = async () => { state.layout.terminal = true; applyLayo
 $('workspaceDevice').onclick = () => window.PocketMachine?.openSwitcher?.();
 $('renameTerminal').onclick = async () => { $('terminalMenu').hidePopover(); (await terminalReady()).pocketDev.renameActive(); };
 $('activitySettings').onclick = () => $('workspaceMenu').togglePopover();
+if (window.PocketGuides) { const help = window.PocketGuides.button('workspace'); $('workspaceMenu').append(help); help.onclick = () => { $('workspaceMenu').hidePopover(); window.PocketGuides.open('workspace'); }; }
 document.querySelectorAll('[data-toggle]').forEach((node) => node.onclick = () => {
   const key = node.dataset.toggle; state.layout[key] = !state.layout[key]; applyLayout();
   if (key === 'terminal' && !state.layout.terminal) document.body.classList.remove('ws-max-tools');
@@ -585,6 +654,7 @@ document.querySelectorAll('[data-toggle]').forEach((node) => node.onclick = () =
   if (matchMedia('(max-width:760px)').matches) mobile(key === 'explorer' ? 'files' : key === 'terminal' ? 'tools' : 'ai');
 });
 $('newChat').onclick = newChat; $('aiProvider').onchange = () => { context.update({ selectedAIProvider: $('aiProvider').value }); persist(); };
+$('viewFileChanges').onclick = () => openGitChange(state.active).catch((failure) => error(failure.message));
 $('autoSave').checked = stored('pd.workspace.autoSave', false); $('autoSave').onchange = () => remember('pd.workspace.autoSave', $('autoSave').checked);
 $('compareFile').onclick = () => { const file = current(); $('localVersion').value = file.content; $('remoteVersion').value = file.conflict?.content || '(File removed or renamed)'; $('compareDialog').showModal(); };
 $('closeCompare').onclick = () => $('compareDialog').close();
@@ -601,7 +671,7 @@ $('fileTree').addEventListener('pointerover', (event) => {
   const valid = context.capture();
   clearTimeout(state.prefetchTimer); state.prefetchTimer = setTimeout(() => { if (!valid()) return; read('/api/files/text?' + new URLSearchParams({ path: file.path }), 3).then((data) => { if (!valid()) return; state.prefetch ||= new Map(); state.prefetch.set(data.path, data); if (state.prefetch.size > 4) state.prefetch.delete(state.prefetch.keys().next().value); }).catch(() => {}); }, 180);
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) flushSnapshot(); else { reconcile(); restartWatch(); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { clearTimeout(gitTimer); flushSnapshot(); } else { reconcile(); restartWatch(); scheduleGitRefresh(); } });
 window.addEventListener('focus', () => { if (state.needsReconcile) { state.needsReconcile = false; reconcile(); } });
 window.addEventListener('pd-workspace-clear', () => { clearTimeout(persistTimer); revokeWorkspace(); });
 window.addEventListener('online', () => { reconcile(); restartWatch(); }); window.addEventListener('offline', () => connection(false));

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
-import { startServer, pause } from '../helpers/server.mjs';
+import { startServer, pause, until } from '../helpers/server.mjs';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const cleanups = [], t = { after: (fn) => cleanups.push(fn) };
 const fake = new URL('../helpers/fake-claude.mjs', import.meta.url).pathname;
@@ -39,12 +39,17 @@ try {
     await page.getByRole('button', { name: /Connected computers/ }).click();
     await page.locator('.cc-computer').first().waitFor();
     assert.equal(await page.locator('.cc-computer').count(), 2);
+    assert.match(await page.locator('.cc-summary').innerText(), /^2 computers ·/);
+    assert.match(await page.locator('.st-category[data-category="computers"] small').textContent(), /^2 computers ·/);
     await page.getByRole('button', { name: 'Others', exact: true }).click();
     assert.equal(await page.locator('.cc-computer').count(), 1);
     await page.locator('.cc-computer').first().click();
     assert.ok((await page.locator('.cc').innerText()).includes('Computer access is not shared.'));
+    assert.equal(await page.locator(`[data-computer-resources="${aId}"]`).count(), 0, 'AI-only access never displays resource readings');
     assert.equal(await page.getByRole('button', { name: 'Open computer', exact: true }).count(), 0);
     await page.keyboard.press('Escape');
+    await page.locator('.cc-computer').first().waitFor();
+    await page.getByRole('button', { name: 'Back to settings' }).click();
     await page.locator('.cc').waitFor({ state: 'detached' });
     await page.getByRole('button', { name: 'Close settings' }).click();
     await page.evaluate((id) => { location.hash = `chat=${id}`; }, chat.id);
@@ -58,6 +63,27 @@ try {
     await context.close();
     console.log(`PASS settings, AI-only details, provider sources and responsive layout at ${width}px`);
   }
+  assert.equal((await call(b, 'GET', `/m/${aId}/api/performance`)).status, 403, 'AI-only access cannot request performance');
+  await call(a, 'PATCH', `/api/connections/${bId}`, { computerAccess: true, confirmOwnership: true });
+  await until(async () => (await call(b, 'GET', '/api/connections')).data.computers.some((computer) => computer.deviceId === aId && computer.canOpen));
+  const selected = await browser.newContext({ viewport: { width: 1280, height: 844 } });
+  const [name, value] = logins[1].cookie.split('='); await selected.addCookies([{ name, value, url: b.base }]);
+  await selected.addInitScript((id) => { localStorage.setItem('pd-welcome-shown', '1'); localStorage.setItem(`m.${id}:pd-welcome-shown`, '1'); localStorage.setItem('pd.machine', id); }, aId);
+  const page = await selected.newPage(), reads = [];
+  await page.route('**/api/performance', (route) => { reads.push(new URL(route.request().url()).pathname); return route.fulfill({ json: { cpu: { usedPercent: 24 }, memory: { freePercent: 52 } } }); });
+  await page.goto(b.base);
+  await page.evaluate(() => { const original = PocketMachine.readPerformance; window.computerResourceReads = 0; PocketMachine.readPerformance = (...args) => { window.computerResourceReads++; return original(...args); }; });
+  await page.locator('#settingsBtn').click(); await page.locator('[data-category="computers"]').click();
+  await until(async () => (await page.locator(`[data-computer-resources="${aId}"]`).innerText()).includes('CPU 24% · RAM 48%'));
+  await until(async () => (await page.locator(`[data-computer-resources="${bId}"]`).innerText()).includes('CPU 24% · RAM 48%'));
+  assert.ok(reads.includes('/api/performance'), 'front-door computer readings stay local when another computer is selected');
+  assert.ok(reads.includes(`/m/${aId}/api/performance`), 'authorized peer readings reuse the existing forwarder');
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'selected-computer Settings fits the phone');
+  await page.getByRole('button', { name: 'Close settings', exact: true }).click();
+  const closed = await page.evaluate(() => computerResourceReads); await pause(11000); assert.equal(await page.evaluate(() => computerResourceReads), closed, 'closed computer settings stop resource polling');
+  await selected.close();
+  console.log('PASS authorized resource rows, AI-only denial, selected-computer routing and hidden-page cleanup');
 } finally {
   await browser?.close();
   for (const cleanup of cleanups.reverse()) await cleanup();

@@ -6,7 +6,7 @@
 (() => {
   const ID = /^[0-9a-f]{4,64}$/;
   // Paths that always belong to the device the phone is logged in on: its room, login, and its own settings and network.
-  const LOCAL_API = /^\/api\/(connections|room|login|logout|devices|local|network|settings|invitations|collaborators)(\/|$)/;
+  const LOCAL_API = /^\/api\/(connection|handoff|connections|room|login|logout|devices|local|network|settings|setup|invitations|collaborators)(\/|$)/;
   // What a collaborator-rank device answers to: files and messages (and the status check the page starts with).
   const COLLABORATOR_API = /^\/api\/(files|messages|status|folders)(\/|$)/;
   const GLOBAL_KEYS = new Set(['pd.machine', 'pd.machine.devices']);
@@ -62,15 +62,31 @@
       .replace(/\b[Tt]he Mac\b/g, name).replace(/\b[Tt]his Mac\b/g, name).replace(/\bMac\b/g, name);
   }
 
-  globalThis.PocketMachine = { sayFor, blockedFor, rewriteUrl, storageKey, allowedViews, rankText, stateText, sortDevices };
+  function computerSummary(computers) {
+    const total = computers.length, online = computers.filter((computer) => computer.online && !computer.disconnected).length;
+    if (!total) return 'No computers available';
+    if (total === 1 && online === 1) return '1 computer · Online';
+    return `${total} ${total === 1 ? 'computer' : 'computers'} · ${online} online${total > online ? ` · ${total - online} offline` : ''}`;
+  }
+  globalThis.PocketMachine = { sayFor, blockedFor, rewriteUrl, storageKey, allowedViews, rankText, stateText, sortDevices, computerSummary };
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
 
   const realFetch = window.fetch.bind(window);
+  // Connected computers is owned by the front door. Read each authorized computer explicitly,
+  // independently of the currently selected Workspace computer, through the existing forwarder.
+  PocketMachine.readPerformance = async (computer, signal) => {
+    if (!computer?.canOpen || (!computer.self && !ID.test(computer.deviceId))) throw new Error('Computer access is required to read resources.');
+    const response = await realFetch(computer.self ? '/api/performance' : `/m/${computer.deviceId}/api/performance`, { signal, cache: 'no-store' });
+    if (!response.ok) throw new Error('Resource information is unavailable.');
+    return response.json();
+  };
   const proto = Storage.prototype;
   const raw = { get: proto.getItem, set: proto.setItem, remove: proto.removeItem };
   const read = (key) => { try { return raw.get.call(localStorage, key); } catch { return null; } };
   const write = (key, value) => { try { if (value == null) raw.remove.call(localStorage, key); else raw.set.call(localStorage, key, value); } catch {} };
 
+  const cameraLanding = /^#camera(?:=([0-9a-f]{4,64}))?$/.exec(location.hash || '');
+  if (cameraLanding) write('pd.machine', cameraLanding[1] || null);
   let id = read('pd.machine');
   if (id && !ID.test(id)) id = null;
   let devices = [];
@@ -232,7 +248,11 @@
       return row;
     }));
     const connect = el('button', 'mc-row', 'Connect computer');
-    connect.onclick = () => { closeSheet(); import('/connected-computers.js').then((m) => m.openConnectedComputers()); };
+    connect.onclick = () => {
+      closeSheet();
+      if (window.pocketDevSettings?.open) window.pocketDevSettings.open('computers');
+      else import('/connected-computers.js').then((m) => m.openConnectedComputers());
+    };
     list.append(connect);
   }
   // The sheet only ever opens from a tap on the strip name or the chip, and never survives a reload or a page restore:

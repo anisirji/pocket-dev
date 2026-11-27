@@ -9,11 +9,19 @@
 <link rel="stylesheet" href="/folder-picker.css">
 <script src="/folder-picker.js"></script>
 <link rel="stylesheet" href="/admin.css">
+<link rel="stylesheet" href="/connection-qr.css">
+<script src="/connection-qr.js"></script>
+<link rel="stylesheet" href="/feature-guides.css">
+<script src="/feature-guides.js" defer></script>
+<script src="/admin-screen-control.js" defer></script>
 <link rel="stylesheet" href="/admin-update.css">
 <link rel="stylesheet" href="/collaborators.css">
 <link rel="stylesheet" href="/messages.css">
 <script src="/admin-nav.js"></script>
+<script src="/notification-preferences.js" defer></script>
 <script src="/admin-client.js" defer></script>
+<link rel="stylesheet" href="/notifications.css">
+<script src="/admin-setup.js" defer></script>
 <script src="/admin-permissions.js" defer></script>
 <script src="/admin-camera.js" defer></script>
 <script src="/admin-update.js" defer></script>
@@ -32,6 +40,7 @@
 </header>
 
 <div class="layout">
+  <aside id="screenControlIndicator" class="control-indicator" role="status" hidden><strong id="screenControlTitle"></strong><p id="screenControlMessage"></p><div id="screenControlActions"></div><p id="screenControlError" role="alert"></p></aside>
   <nav class="nav" id="nav" aria-label="Sections">
   <a href="#overview" data-group="overview"><span>Overview</span><b class="badge" data-badge="overview" hidden></b></a>
   <a href="#devices" data-group="devices"><span>Devices &amp; access</span><b class="badge" data-badge="devices" hidden></b></a>
@@ -260,6 +269,7 @@
           <dl class="urls" id="urls"></dl>
         </div>
         <p class="err" id="settingsErr"></p>
+        <div id="notificationPreferences"></div>
       </section>
 
     <section id="camera" class="panel" aria-labelledby="cameraTitle">
@@ -267,6 +277,8 @@
       <p class="desc">Prepare camera access once on this computer. Afterwards, Start camera on your phone opens it remotely without someone at the computer.</p>
       <p class="note">Choose a persistent camera permission in the browser when available. Keep this computer awake, signed in and connected. Browser or operating-system permission changes may require setup again.</p>
       <button type="button" class="btn" id="cameraPrepare">Prepare remote camera</button>
+      <button type="button" class="btn" id="microphonePrepare">Prepare microphone once</button>
+      <p class="note" id="microphoneDetail" role="status"></p>
       <p class="note" id="cameraDetail" role="status"></p>
       <p class="err" id="cameraErr" role="alert"></p>
     </section>
@@ -283,6 +295,8 @@
         <span class="seg"><button type="button" class="btn btn-sm" id="permSetup">Run setup</button> <button type="button" class="btn btn-sm" id="permRecheck">Check again</button></span>
       </div>
       <p class="note">Checked on this Mac for the program that runs Pocket Dev. Checking Control System Events can make macOS show a pop-up here.</p>
+      <div id="remotePermissions"></div>
+      <p class="err" id="remotePermissionsError" role="alert"></p>
       <div id="permBody"></div>
       <p class="err" id="permErr"></p>
     </section>
@@ -310,6 +324,7 @@
     <p class="setup-step" id="setupStep"></p>
     <h3 id="setupTitle"></h3>
     <p id="setupWhy"></p>
+    <div id="setupContent"></div>
     <p class="setup-status" id="setupStatus" aria-live="polite"></p>
     <div class="dialog-actions" id="setupActions"></div>
   </div>

@@ -1,0 +1,23 @@
+{
+  "platform": "LinkedIn",
+  "account": "ROHIT KUMAR DAS",
+  "profile_url": "https://www.linkedin.com/in/rohit-kumar-das-583b28223/",
+  "status": "published",
+  "visibility": "Anyone",
+  "body": "My partner Ani and I built Pocket Dev because we wanted to spend less time tied to a desk without losing touch with our work.\n\nPocket Dev is free and open source. It brings your computer’s terminals, Claude Code and Codex chats, Git and files to your phone’s browser. Your work keeps running on your own computer, using your existing coding-agent accounts.\n\nNo phone app or Pocket Dev cloud account needed. Use the same Wi-Fi, or set up remote access for when you’re away. Your computer needs to stay on and awake.\n\nTry it: https://www.theani.me/work/pocket-dev\nGitHub: https://github.com/anisirji/pocket-dev\nPackage: https://www.npmjs.com/package/@anisirji/pocket-dev\nLet your AI help you set it up: https://www.theani.me/work/pocket-dev/prompts\n\nIf it makes your day a little freer, share it with three people you’d love to see escape the PC cage too. No pressure. ❤️\n\nVideo shows a demo project with scripted agent responses.\n\nWhat would you want to check from your phone first?\n\n#PocketDev #OpenSource #DeveloperTools",
+  "video": "/Users/ani/Desktop/pocket-dev-video/final2/hero-9x16-bella.mp4",
+  "mention_target": null,
+  "note": "User confirms he has no LinkedIn profile. Credited as partner Ani in plain text with website link. User explicitly requests shared creator credit, video, photo, GitHub and npm links. LinkedIn allows images or a single video, so the product image is planned in the first comment.",
+  "photo": "/Users/ani/Desktop/pocket-dev/docs/screenshots/hero.png",
+  "photo_placement": "first_comment",
+  "submission_attempted_at": "2026-11-18T10:02:29.725322+00:00",
+  "url": "https://www.linkedin.com/feed/update/urn:li:activity:7528759827150532608/",
+  "published_at": "2026-11-18T10:03:53.229243+00:00",
+  "verification": "Reloaded the direct permalink. Rohit’s post and partner credit persist; the 30.4-second video loads; website, GitHub, npm and setup links are in the post; Rohit’s first comment and loaded product image persist.",
+  "photo_comment": {
+    "body": "A closer look at Pocket Dev’s terminal, coding chat, rooms and tasks. Screens show demo data.",
+    "status": "published",
+    "image": "/Users/ani/Desktop/pocket-dev/docs/screenshots/hero.png"
+  },
+  "verified_at": "2026-11-18T10:05:29.175386+00:00"
+}

@@ -735,6 +735,7 @@
   }
 
   let previewEl = null;
+  let previewEntry = null;
   const PREVIEWS = {
     image: (e, body, fail) => {
       const img = h('img');
@@ -789,6 +790,7 @@
 
   function openPreview(e) {
     closePreview();
+    previewEntry = e;
     overlays.open('files-preview', closePreview);
     const kind = kindOf(e);
     const sheet = h('div', 'fx-sheet');
@@ -860,6 +862,7 @@
     previewEl.querySelectorAll('video, audio').forEach((m) => m.pause());
     previewEl.remove();
     previewEl = null;
+    previewEntry = null;
   }
 
   // Uploads run a few at a time (UPLOAD_CONCURRENCY); the rest wait and start as slots free up.
@@ -1005,6 +1008,22 @@
   }
 
   const closeFiles = () => overlays.close('files');
+
+  window.pocketDev?.navigation?.register('files', {
+    snapshot: () => state.open ? { trail: state.trail, query: state.query, scroll: state.els.list.scrollTop, preview: previewEntry?.path, overChat: state.root.classList.contains('fx-from-chat') } : null,
+    async restore(saved) {
+      const trail = Array.isArray(saved?.trail) ? saved.trail.filter((path) => typeof path === 'string').slice(-64) : [];
+      await window.openFiles(trail[0], { overChat: Boolean(saved?.overChat) });
+      for (const path of trail.slice(1)) await navigate(path);
+      if (typeof saved?.query === 'string' && saved.query) {
+        state.els.input.value = saved.query; state.els.clear.hidden = false;
+        await runSearch(saved.query);
+      }
+      if (Number.isFinite(saved?.scroll)) state.els.list.scrollTop = Math.max(0, saved.scroll);
+      const entry = state.dir?.entries.find((item) => item.path === saved?.preview);
+      if (entry && !isDirish(entry)) openPreview(entry);
+    },
+  });
 
   window.openFiles = async (path, { overChat = false } = {}) => {
     overlays ??= window.pocketDev?.overlays ?? localOverlays();

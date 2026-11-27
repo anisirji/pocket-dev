@@ -1,0 +1,32 @@
+Claude for Open Source application draft
+Prepared: November 23, 2026
+
+Applicant: Aniket Singh
+GitHub: https://github.com/anisirji
+Project: Pocket Dev
+Repository: https://github.com/anisirji/pocket-dev
+Package: https://www.npmjs.com/package/@anisirji/pocket-dev
+License: ISC
+Requested consideration: Ecosystem Impact track
+
+WHY I AM APPLYING
+
+I maintain Pocket Dev, an ISC-licensed, self-hosted developer tool that lets developers access their computer's terminals, Claude Code and Codex conversations, Git, and files from a phone browser.
+
+I built it to make it easier to stay connected to development work when away from a desk. It supports continuing conversations between computer and phone, responding to approval requests, and accessing multiple computers. It runs on the developer's own machine, with no separate cloud account or phone app required, and supports macOS, Windows, and Linux.
+
+Everyone at my company uses Pocket Dev, and they use it very often. This gives me a practical environment for maintaining the tool around real use. I also publish the source, npm package, setup guides, and troubleshooting documentation so developers outside the company can use and extend it.
+
+The npm package recorded 1,963 downloads between October 24 and November 22, 2026. Pocket Dev is still an early-stage project, and I am applying for consideration under the Ecosystem Impact track based on its practical value as open-source developer tooling.
+
+HOW I WOULD USE THE SUBSCRIPTION
+
+I would use Claude to maintain Pocket Dev: investigate bugs in continuing sessions between computer and phone, improve approval and permission handling, make installation and updates more reliable across operating systems, review security-sensitive changes, and improve regression coverage and documentation. The subscription would support my own work as the project's maintainer.
+
+REFERENCE NOTES (NOT APPLICATION ANSWERS)
+
+Company-wide adoption and frequent use are reported by the applicant. No company name or employee count has been supplied.
+The npm download count measures package downloads, not unique users.
+GitHub account created October 5, 2020; public Pocket Dev contribution verified November 19, 2026.
+Program: https://claude.com/contact-sales/claude-for-oss
+Terms: https://www.anthropic.com/claude-for-oss-terms

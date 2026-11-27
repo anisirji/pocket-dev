@@ -1,9 +1,16 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { createRequire } from 'node:module';
 import readline from 'node:readline';
 import WebSocket from 'ws';
+
+export function codexSocketPath({ platform = process.platform, env = process.env, home = os.homedir() } = {}) {
+  if (env.POCKET_DEV_CODEX_SOCKET) return env.POCKET_DEV_CODEX_SOCKET;
+  if (platform === 'win32' || env.POCKET_DEV_CODEX) return null;
+  return path.join(env.CODEX_HOME || path.join(home, '.codex'), 'app-server-control', 'app-server-control.sock');
+}
 
 // A connection to the shared daemon, or to a private stdio server on older Codex installs.
 // Closing a daemon connection must never stop the daemon or its other clients' work.

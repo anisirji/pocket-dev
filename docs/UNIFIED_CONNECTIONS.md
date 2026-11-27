@@ -43,6 +43,8 @@ Relevant project content goes to the source computer and the AI service. The sou
 
 Remote commands run with a private home directory, a minimal environment and an OS sandbox. Their sandbox currently has no network access. Local terminals and local AI engines retain their existing behavior.
 
+Personal Codex chats can explicitly enable a separate browser through the optional Playwright MCP integration. This per-chat setting is excluded from shared-provider capabilities. Shared Codex still starts with environment-free threads and inherited MCP servers disabled; authorizing shared AI does not authorize browser access on the source computer. [Personal browser setup](AI_SETUP.md#browser-automation-in-personal-codex-chats) describes the local option.
+
 ## Upgrade behavior
 
 The persistent computer ID is retained. Device signing keys and `connections.json` are added in the local state directory. Old blanket Room grants are revoked without deleting their project copies. Start the updated version on both computers, then approve personal access explicitly from the target computer’s details.

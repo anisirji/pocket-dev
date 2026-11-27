@@ -65,41 +65,90 @@ function row(t) {
   return li;
 }
 
+const names = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' };
 export async function renderToolsSection(container, api = window.api) {
   if (!document.getElementById('sx-style')) {
-    const style = h('style', null, STYLE);
-    style.id = 'sx-style';
-    document.head.append(style);
+    const style = h('style', null, STYLE); style.id = 'sx-style'; document.head.append(style);
   }
-  const title = h('h3', null, 'Installed on this computer');
-  const err = h('p', 'st-err');
-  const list = h('ul', 'sx-list');
-  const hint = h('p', 'st-note', 'To fix everything in one go, run this in a terminal on this computer: pocket-dev setup');
-  container.replaceChildren(title, list, hint, err);
+  const ticket = {}; container._toolsTicket = ticket;
+  const current = () => container._toolsTicket === ticket && container.isConnected;
+  const err = h('p', 'st-err'); err.setAttribute('role', 'alert');
+  container.replaceChildren(h('p', 'st-note', 'Checking AI tools…'), err);
   try {
-    const { tools } = await api('GET', '/api/setup/status');
-    list.replaceChildren(...tools.map(row));
     const state = await api('GET', '/api/connections');
-    for (const [type, provider] of Object.entries(state.providers).filter(([, p]) => p.installed)) {
-      const label = h('label', 'st-check');
-      const toggle = h('input'); toggle.type = 'checkbox'; toggle.checked = provider.enabled; toggle.disabled = !provider.supported;
-      const name = { claude: 'Claude', codex: 'Codex', antigravity: 'Antigravity', copilot: 'Copilot' }[type];
-      label.append(toggle, document.createTextNode(`Share ${name}`));
+    // Connection grants belong to the front-door computer. Read its setup status even when the workspace uses a peer.
+    const { tools } = await api('GET', '/api/setup/status');
+    if (!current()) return;
+    const self = state.computers.find((computer) => computer.self);
+    const scope = h('p', 'st-note', `Installed on ${self?.name || 'this computer'}`);
+    function list() {
+      if (!current()) return;
+      const providers = h('div', 'sx-providers');
+      for (const [type, name] of Object.entries(names)) {
+        const provider = state.providers[type];
+        const tool = tools.find((item) => item.id === type);
+        const button = h('button', 'st-link sx-provider'); button.type = 'button';
+        const text = h('span'); text.append(h('span', null, name), h('small', 'st-note', tool ? describe(tool) : provider?.installed ? 'Installed' : 'Not installed'));
+        button.append(text, h('span', 'st-chev', '›'));
+        const openProvider = () => {
+          if (!window.pocketDevSettings?.pushView(`settings-provider-${type}`, name, list, () => detail(type))) detail(type);
+        };
+        button.onclick = openProvider;
+        window.pocketDevSettings?.registerRoute(`settings-provider-${type}`, openProvider);
+        providers.append(button);
+      }
+      const helpers = h('details', 'sx-helpers'), helperList = h('ul', 'sx-list');
+      helpers.append(h('summary', null, 'Other tools on this computer'));
+      helperList.replaceChildren(...tools.filter((tool) => !names[tool.id]).map(row)); helpers.append(helperList);
+      const shared = h('div', 'sx-shared'); shared.append(h('h3', null, 'Available from connected computers'));
+      for (const provider of state.shared) shared.append(h('p', 'st-note', `${names[provider.type] || provider.type} · ${provider.name} · Available`));
+      if (!state.shared.length) shared.append(h('p', 'st-note', 'Providers appear here when a connected computer shares AI with you.'));
+      container.replaceChildren(scope, providers, shared, helpers, err);
+    }
+    function detail(type) {
+      const name = names[type], provider = state.providers[type], tool = tools.find((item) => item.id === type);
+      const setup = h('section', 'sx-setup'); setup.append(h('h3', null, 'Setup & login'));
+      if (tool) { const toolsList = h('ul', 'sx-list'); toolsList.append(row(tool)); setup.append(toolsList); }
+      else setup.append(h('p', 'st-note', provider?.installed ? 'Installed. Manage setup and login on this computer.' : 'Not installed. Run pocket-dev setup on this computer to see available installation options.'));
+      if (type === 'codex') {
+        const browser = h('p', 'st-note', 'Checking browser automation…'); setup.append(h('h3', null, 'Browser automation'), browser);
+        api('GET', '/api/setup/browser').then((status) => { if (current()) { browser.textContent = status.message; browser.dataset.featureState = status.state; } }).catch(() => { if (current()) browser.textContent = 'Browser tools could not be checked. Check the computer connection and retry.'; });
+        setup.append(h('p', 'st-note', 'Browser access is off by default. Shared Codex sessions do not inherit the AI source computer’s browser.'));
+      }
+      const sharing = h('section', 'sx-sharing'); sharing.append(h('h3', null, 'Sharing'));
+      const label = h('label', 'st-check sx-share'), toggle = h('input'); toggle.type = 'checkbox'; toggle.setAttribute('role', 'switch');
+      toggle.checked = !!provider?.enabled; toggle.disabled = !provider?.installed || !provider?.supported;
+      label.append(document.createTextNode(`Share ${name}`), toggle); sharing.append(label);
+      const status = h('p', 'st-note', !provider?.supported ? `${name} sharing is not available yet. Local chats continue to work.` : !provider.installed ? `Install ${name} on this computer before sharing it.` : 'Only authorized computers can use this provider.');
+      sharing.append(status);
       toggle.onchange = async () => {
         const enabled = toggle.checked; toggle.disabled = true; err.textContent = '';
-        try { await api('PATCH', `/api/connections/providers/${type}`, { enabled }); }
-        catch (e) { toggle.checked = !enabled; err.textContent = e.message; }
-        finally { toggle.disabled = false; }
+        try { await api('PATCH', `/api/connections/providers/${type}`, { enabled }); provider.enabled = enabled; }
+        catch (error) { toggle.checked = !enabled; err.textContent = error.message; }
+        finally { toggle.disabled = !provider.installed || !provider.supported; }
       };
-      container.append(label);
-      if (!provider.supported) container.append(h('p', 'st-note', `${name} sharing is not available yet. Local chats continue to work.`));
+      const authorized = h('section', 'sx-authorized'); authorized.append(h('h3', null, 'Authorized computers'));
+      const peers = state.computers.filter((computer) => !computer.self && !computer.disconnected);
+      for (const computer of peers) {
+        const access = h('label', 'st-check sx-share'), input = h('input'); input.type = 'checkbox'; input.checked = computer.sharing.includes(type); input.disabled = !provider?.installed || !provider?.supported;
+        const text = h('span'); text.append(h('span', null, computer.name), h('small', 'st-note', computer.connectionType === 'personal' ? 'My computer' : 'AI only'));
+        access.append(text, input); authorized.append(access);
+        input.onchange = async () => {
+          const on = input.checked; input.disabled = true; err.textContent = '';
+          const ai = on ? [...new Set([...computer.sharing, type])] : computer.sharing.filter((item) => item !== type);
+          try { await api('PATCH', `/api/connections/${computer.deviceId}`, { ai }); computer.sharing = ai; }
+          catch (error) { input.checked = !on; err.textContent = error.message; }
+          finally { input.disabled = !provider.installed || !provider.supported; }
+        };
+      }
+      if (!peers.length) authorized.append(h('p', 'st-note', 'No connected computers. Add one in Connected computers to authorize it here.'));
+      authorized.append(h('p', 'st-note', 'Sharing AI does not grant computer access. Relevant project content is sent to the AI source computer and its AI service.'));
+      container.replaceChildren(scope, setup, sharing, authorized, err);
     }
-    const manage = h('button', 'st-btn', 'Choose authorized computers');
-    manage.type = 'button'; manage.onclick = () => import('/connected-computers.js').then((m) => m.openConnectedComputers());
-    container.append(manage, h('p', 'st-note', 'Only authorized computers can use your shared providers.'), h('h3', null, 'Available from connected computers'));
-    for (const provider of state.shared) container.append(h('p', 'st-note', `${provider.type[0].toUpperCase()}${provider.type.slice(1)} · ${provider.name} · Available`));
-    if (!state.shared.length) container.append(h('p', 'st-note', 'Connected computers will appear here when they share an AI provider with you.'));
-  } catch (e) {
-    err.textContent = `Could not check the tools: ${e.message}`;
+    list();
+  } catch (error) {
+    if (!current()) return;
+    const retry = h('button', 'st-btn', 'Retry'); retry.type = 'button'; retry.onclick = () => renderToolsSection(container, api);
+    err.textContent = `Could not check the tools: ${error.message}`; container.replaceChildren(err, retry);
   }
 }

@@ -6,14 +6,24 @@ import path from 'node:path';
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { WebSocketServer } from 'ws';
-import { connectCodexRpc } from '../src/chat/codex-rpc.js';
+import { connectCodexRpc, codexSocketPath } from '../src/chat/codex-rpc.js';
 import { Chat } from '../src/chat/chat.js';
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+test('Windows uses stdio instead of attempting a Unix control socket, while explicit and Mac daemon choices survive', () => {
+  assert.equal(codexSocketPath({ platform: 'win32', env: {}, home: 'C:\\Users\\fixture' }), null);
+  assert.equal(codexSocketPath({ platform: 'darwin', env: {}, home: '/fixture' }), path.join('/fixture', '.codex', 'app-server-control', 'app-server-control.sock'));
+  assert.equal(codexSocketPath({ platform: 'darwin', env: { POCKET_DEV_CODEX: '/custom/codex' } }), null);
+  assert.equal(codexSocketPath({ platform: 'darwin', env: { POCKET_DEV_CODEX_SOCKET: '/custom/control.sock' } }), '/custom/control.sock');
+});
 async function until(fn) {
   for (let i = 0; i < 100; i++) { if (fn()) return; await pause(20); }
   assert.fail('Condition timed out');
 }
+
+// These exercise the Unix daemon and a shebang executable. Windows uses stdio;
+// its real launcher and native browser protocol are checked separately.
+const unixTest = (name, run) => test(name, { skip: process.platform === 'win32' && 'Unix socket/shebang fixture; Windows uses stdio' }, run);
 
 async function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-codex-'));
@@ -37,8 +47,10 @@ async function fixture(t) {
       }
       if (msg.method === 'thread/resume' || msg.method === 'thread/start') {
         await pause(25);
-        return reply(ws, msg.id, { thread: { id: msg.params.threadId || 'new-thread' }, model: 'fixture' });
+        return reply(ws, msg.id, { thread: { id: msg.params.threadId || 'new-thread' }, model: 'fixture', sandbox: msg.params.sandbox === 'read-only' ? { type: 'readOnly', networkAccess: false } : { type: 'workspaceWrite', writableRoots: [dir], networkAccess: true } });
       }
+      if (msg.method === 'config/read') return reply(ws, msg.id, { config: {} });
+      if (msg.method === 'mcpServerStatus/list') return reply(ws, msg.id, { data: [], nextCursor: null });
       if (msg.method === 'turn/start') return reply(ws, msg.id, { turn: { id: 'turn-1' } });
       if (msg.method === 'thread/unsubscribe') return reply(ws, msg.id, {});
       if (msg.method === 'never-answers') return;
@@ -55,7 +67,7 @@ async function fixture(t) {
   return { dir, socketPath, wss, requests, notify, connections: () => connections };
 }
 
-test('shared daemon accepts multiple clients; disconnecting one leaves the other usable', async (t) => {
+unixTest('shared daemon accepts multiple clients; disconnecting one leaves the other usable', async (t) => {
   const f = await fixture(t);
   const options = { bin: '/must-not-spawn', socketPath: f.socketPath };
   const a = await connectCodexRpc(options), b = await connectCodexRpc(options);
@@ -68,7 +80,7 @@ test('shared daemon accepts multiple clients; disconnecting one leaves the other
   assert.equal(f.requests.some((r) => /shutdown|archive/.test(r.method)), false);
 });
 
-test('missing and stale sockets fall back to stdio; timeouts and close reject pending calls', async (t) => {
+unixTest('missing and stale sockets fall back to stdio; timeouts and close reject pending calls', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pd-codex-stdio-'));
   const bin = path.join(dir, 'codex');
   fs.writeFileSync(bin, `#!/usr/bin/env node
@@ -96,7 +108,7 @@ rl.on('line', line => {
   }
 });
 
-test('shared server loss rejects calls and reports the disconnect once', async (t) => {
+unixTest('shared server loss rejects calls and reports the disconnect once', async (t) => {
   const f = await fixture(t);
   const rpc = await connectCodexRpc({ socketPath: f.socketPath });
   t.after(() => rpc.close());
@@ -132,7 +144,7 @@ async function engineFixture(t) {
   return { ...f, codex, makeChat };
 }
 
-test('model discovery and startup share a connection without racing; questions and replies round-trip', async (t) => {
+unixTest('model discovery and startup share a connection without racing; questions and replies round-trip', async (t) => {
   const f = await engineFixture(t);
   const { chat, engine } = f.makeChat('terminal-thread');
   const [models] = await Promise.all([f.codex.listModels(), engine.start()]);
@@ -158,7 +170,7 @@ test('model discovery and startup share a connection without racing; questions a
   await until(() => f.wss.clients.size === 0);
 });
 
-test('a foreign writer gets an actionable error and releases the failed startup connection', async (t) => {
+unixTest('a foreign writer gets an actionable error and releases the failed startup connection', async (t) => {
   const f = await engineFixture(t);
   const { engine } = f.makeChat('locked');
   await assert.rejects(engine.start(), /Close its original Codex session/);
@@ -169,7 +181,7 @@ test('a foreign writer gets an actionable error and releases the failed startup 
   assert.equal(f.connections(), 2);
 });
 
-test('Never ask takes effect during a turn, declines pending and new approvals, and preserves questions', async (t) => {
+unixTest('Never ask takes effect during a turn, declines pending and new approvals, and preserves questions', async (t) => {
   const f = await engineFixture(t);
   const { chat, engine } = f.makeChat('approval-thread');
   await engine.start();
@@ -207,4 +219,45 @@ test('Never ask takes effect during a turn, declines pending and new approvals, 
   chat.startTurn();
   await engine.send({ text: 'continue', images: [] });
   assert.equal(f.requests.filter((r) => r.method === 'turn/start').at(-1).params.approvalPolicy, 'never');
+});
+
+
+unixTest('personal Codex keeps its native project policy and routes MCP form input through existing cards', async (t) => {
+  const f = await engineFixture(t), { chat, engine } = f.makeChat('mcp-input-thread');
+  await engine.start(); chat.startTurn(); await engine.send({ text: 'work', images: [] });
+  const turn = f.requests.find((request) => request.method === 'turn/start');
+  assert.deepEqual(turn.params.sandboxPolicy, { type: 'workspaceWrite', writableRoots: [f.dir], networkAccess: true });
+  const socket = [...f.wss.clients][0];
+  socket.send(JSON.stringify({ id: 'mcp-form', method: 'mcpServer/elicitation/request', params: { threadId: chat.sessionId, mode: 'form', serverName: 'browser', message: 'Choose a tab', requestedSchema: { type: 'object', properties: { tab: { type: 'integer', minimum: 1 } }, required: ['tab'] } } }));
+  await until(() => chat.requests.size === 1);
+  assert.equal(chat.activity, 'awaiting-input');
+  chat.answer(chat.requests.keys().next().value, { answers: { tab: ['2'] } });
+  await until(() => f.requests.some((request) => request.id === 'mcp-form' && request.result));
+  assert.deepEqual(f.requests.find((request) => request.id === 'mcp-form' && request.result).result, { action: 'accept', content: { tab: 2 } });
+});
+
+unixTest('Codex MCP screenshots reuse authenticated chat images without retaining base64 transcripts', async (t) => {
+  const f = await engineFixture(t), { chat, engine } = f.makeChat('browser-images'); await engine.start();
+  const params = { threadId: chat.sessionId, item: { id: 'browser-shot', type: 'mcpToolCall', server: 'browser', tool: 'screenshot', arguments: {} } };
+  engine.onNotification('item/started', params);
+  const png = 'iVBORw0KGgo=';
+  engine.onNotification('item/completed', { ...params, item: { ...params.item, result: { content: [{ type: 'text', text: 'Browser screenshot' }, { type: 'image', data: png, mimeType: 'image/png' }] } } });
+  const event = chat.find('browser-shot'); assert.equal(event.images.length, 1); assert.equal(event.output, 'Browser screenshot');
+  assert.equal(fs.readFileSync(path.join(chat.imageDir, event.images[0])).toString('base64'), png);
+  assert.equal(JSON.stringify(event).includes(png), false);
+});
+
+
+unixTest('browser-off never creates an incomplete MCP configuration on a cold Codex start', async (t) => {
+  const f = await engineFixture(t), { chat, engine } = f.makeChat('browser-off'); chat.settings.browser = 'off';
+  await engine.start();
+  assert.equal(f.requests.find((request) => request.method === 'thread/resume').params.config, undefined);
+});
+
+unixTest('turning off previously used browser tools supplies a disabled entry and verifies removal', async (t) => {
+  const f = await engineFixture(t), { chat, engine } = f.makeChat('previous-browser'); chat.settings.browser = 'off'; chat.browserToolsUsed = true;
+  await engine.start();
+  const config = f.requests.find((request) => request.method === 'thread/resume').params.config;
+  assert.equal(config['mcp_servers.pocket_dev_browser'].enabled, false);
+  assert.ok(f.requests.some((request) => request.method === 'mcpServerStatus/list'));
 });

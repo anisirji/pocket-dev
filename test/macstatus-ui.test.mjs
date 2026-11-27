@@ -165,3 +165,12 @@ test('a server error means readings are unavailable, rather than proof that the 
   const malformed = fixture({ response: () => ({}) }); await settle();
   assert.equal(malformed.root.cls('ms-state').textContent, 'Readings unavailable');
 });
+
+test('Settings pauses the hidden status strip and resumes it on close', async () => {
+  const f = fixture(); await settle();
+  f.document.listeners['pd-settings-visibility']({ detail: true });
+  const count = f.calls.length; await f.advance(35000);
+  assert.equal(f.calls.length, count);
+  f.document.listeners['pd-settings-visibility']({ detail: false }); await settle();
+  assert.ok(f.calls.length > count);
+});

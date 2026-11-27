@@ -50,6 +50,7 @@
   // the Wi-Fi address it came from, carrying the same view. The Wi-Fi side never navigates on its own, so there is
   // no loop.
   const landingHash = location.hash;
+  const secureCameraLanding = /^#camera(?:=[0-9a-f]{4,64})?$/.test(landingHash);
   let justLinked = new URLSearchParams(location.search).get('linked') === '1';
   if (justLinked) history.replaceState(history.state, '', location.pathname + location.hash);
 
@@ -78,7 +79,8 @@
   // Wi-Fi only, where its internet cookie is no login, and the reply to the closing request may never arrive.
   async function turnOffInternet() {
     const remote = info.route === 'remote';
-    if (!confirm(remote ? 'Turn off internet access? This phone then reaches the device only on its Wi-Fi, and switches there now.' : 'Turn off internet access? Only the device itself can turn it back on.')) return;
+    const ask = (message) => window.pocketDevSettings?.confirm(message, 'Turn off') ?? Promise.resolve(confirm(message));
+    if (!await ask(remote ? 'Turn off internet access? This phone then reaches the device only on its Wi-Fi, and switches there now.' : 'Turn off internet access? Only the device itself can turn it back on.')) return;
     const next = remote && info.lanUrl ? (await window.api('POST', '/api/handoff', { direction: 'to-lan' })).url + fragment() : null;
     try { await window.api('PUT', '/api/network', { internet: { kind: 'off' } }); } catch {}
     if (next) location.assign(next);
@@ -129,11 +131,11 @@
     if (!enabled()) store.remove('pd.net.remoteUrl');
     if (justLinked && enabled() && info.route === 'remote') {
       justLinked = false;
-      if (info.lanUrl) return location.replace(info.lanUrl + (landingHash || fragment()));
+      if (info.lanUrl && !secureCameraLanding) return location.replace(info.lanUrl + (landingHash || fragment()));
       showPrompt('linked');
       return renderSection();
     }
-    const nearby = enabled() && info.route === 'remote' && info.sameNetwork === true && info.lanUrl && !store.get(`pd.net.notNow.${info.networkKey}`);
+    const nearby = !secureCameraLanding && enabled() && info.route === 'remote' && info.sameNetwork === true && info.lanUrl && !store.get(`pd.net.notNow.${info.networkKey}`);
     const unlinked = enabled() && info.route === 'local' && info.linked === false && info.remoteUrl && !store.get(`pd.net.linkNotNow.${hostOf(info.remoteUrl)}`);
     if (nearby) showPrompt('local');
     else if (unlinked) showPrompt('link');
@@ -228,6 +230,14 @@
     check,
     socket,
     fragment,
+    async openSecureCamera() {
+      await check();
+      if (!info?.remoteUrl || new URL(info.remoteUrl).protocol !== 'https:') throw new Error('Hold to speak needs HTTPS. Enable Remote Access in Admin, then open its secure connection.');
+      const { url } = await window.api('POST', '/api/handoff', { direction: 'to-remote' });
+      if (new URL(url).protocol !== 'https:') throw new Error('A secure Pocket Dev connection is unavailable.');
+      const machine = store.get('pd.machine');
+      location.assign(url + (/^[0-9a-f]{4,64}$/.test(machine || '') ? `#camera=${machine}` : '#camera'));
+    },
     mount(node) {
       section = node;
       renderSection();

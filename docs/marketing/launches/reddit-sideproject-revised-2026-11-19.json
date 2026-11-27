@@ -1,0 +1,48 @@
+{
+  "title": "I built an open-source phone interface for the coding tools running on my computer",
+  "body": "I'm the maker of Pocket Dev. I wanted to check a running coding task or respond to an approval request without returning to my desk.\n\nIt runs on your own computer and opens in your phone's browser. You can use terminals, read and continue Claude Code or Codex conversations, inspect Git changes, and browse files. It uses your existing coding-tool logins.\n\nIt's free and open source. There's no phone app or Pocket Dev cloud account. Your computer needs to stay on and awake. Same-Wi-Fi access is the default; access from outside your home needs additional setup.\n\nThe attached demo uses demo data and scripted agent responses. macOS is the best-tested platform; the main Windows 11 features have been tested on a real PC, while Linux hasn't been tested on a real machine.\n\nSource and setup: https://github.com/anisirji/pocket-dev\n\nFor people who run long coding tasks: which would you actually use from a phone\u2014checking progress, handling approvals, or reviewing a diff? I'm especially interested in what would make the small-screen workflow frustrating.",
+  "platform": "Reddit",
+  "community": "r/SideProject",
+  "account": "u/anisirji",
+  "date": "2026-11-19",
+  "status": "removed_by_reddit_filters",
+  "reddit_id": "t3_1xzykvm",
+  "permalink": "https://www.reddit.com/r/SideProject/comments/1xzykvm/i_built_an_opensource_phone_interface_for_the/",
+  "original_permalink": "https://www.reddit.com/r/SideProject/comments/1xz54bl/i_built_pocket_dev_to_check_coding_work_from_my/",
+  "verified_at": "2026-11-19T08:25:14.974196+05:30",
+  "verification": "One user-authorized revised submission succeeded as a native video post, then was immediately removed by Reddit filters. The logged-in direct permalink and independent logged-out web page both explicitly show the removal notice. Not publicly published.",
+  "media": {
+    "path": "/Users/ani/Desktop/pocket-dev-video/final/pocket-dev-promo-16x9-voice.mp4",
+    "filename": "pocket-dev-demo-59s.mp4",
+    "bytes": 3654895,
+    "source_duration_seconds": 58.666,
+    "source_dimensions": "1920x1080",
+    "upload_confirmation": "Native composer showed attached video preview and submission redirect identified createdPostType=video. Public playback unavailable because the post is filtered.",
+    "signed_in_processed_video_duration_seconds": 58.666016,
+    "processing_confirmation": "The signed-in post contains a processed native Reddit video with duration 58.666016 seconds, matching the full source. The independent logged-out post remains filtered."
+  },
+  "changes": [
+    "One official GitHub link instead of three external links",
+    "Removed unsupported first-10-users claim and installation-prompt CTA",
+    "Clear maker disclosure and one specific feedback question",
+    "Native demo instead of external YouTube link",
+    "Retained honest access requirements, platform-testing limits, and demo-data disclosure"
+  ],
+  "account_observations": {
+    "reddit_age_display": "1 d",
+    "karma_display": 1,
+    "verification_status": "not established",
+    "assessment": "A new low-karma account is a plausible account-reputation factor, not a confirmed filter diagnosis."
+  },
+  "community_checks": {
+    "rules_url": "https://www.reddit.com/r/SideProject/about/rules.json",
+    "rules_result": "No custom rules returned; site rules include Spam.",
+    "composer": "Public community; accepted native video and body; flair unavailable; no eligibility block displayed."
+  },
+  "next_action": "Moderator review of the existing revised submission. No further resubmissions, deletions, alternate accounts, or moderator messages performed.",
+  "research_sources": [
+    "https://support.reddithelp.com/hc/en-us/articles/360043504051-Spam",
+    "https://support.reddithelp.com/hc/en-us/articles/27441485903124-Reputation-filter",
+    "https://support.reddithelp.com/hc/en-us/articles/15484440494356-Moderation-Queue"
+  ]
+}

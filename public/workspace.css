@@ -143,6 +143,9 @@ select { font: inherit; color: var(--text); background: var(--panel); border: 1p
 .ws-tree-line:hover .ws-tree-more, .ws-tree-line:focus-within .ws-tree-more { opacity: 1; }
 .ws-file-tree { padding: 0; overflow-anchor: none; position: relative; }
 .ws-tree-row { height: 30px; min-height: 30px; }
+.ws-tree-row > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ws-git-badge { color: var(--accent); flex: none; padding-inline: 3px; font: 600 11px/1.2 ui-monospace, monospace; }
+.ws-git-badge[hidden] { display: none; }
 .ws-conflict { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 12px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: 12px; }
 .ws-conflict span { flex: 1; }
 .ws-conflict button { color: var(--accent); padding: 5px; }

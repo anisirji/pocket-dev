@@ -51,6 +51,39 @@ test('Mac shutdown turns an Automation refusal into the help text, and a timeout
   await assert.rejects(timedOut.p.shutDown(), /may be asking on the Mac/);
 });
 
+test('Mac privileged power uses fixed native authorization, protects the lid and never embeds passwords', async () => {
+  const { p, calls } = fake({ os: 'darwin', answer: OUT('SleepDisabled 1\n"AppleClamshellState" = No') });
+  await p.setLidSleepDisabled(true); await p.setLidSleepDisabled(false); await p.prepareSleep(); await p.forceShutDown();
+  const privileged = calls.filter((call) => call.args.at(-1)?.includes('with administrator privileges'));
+  assert.equal(privileged.length, 4);
+  for (const call of privileged) {
+    assert.equal(call.cmd, '/usr/bin/osascript'); assert.equal(call.o.timeout, 120000);
+    assert.doesNotMatch(call.args.at(-1), /password|sudo|Terminal/);
+    // Parse the shell string exactly as osascript receives it, checking quote/escape preservation.
+    const command = JSON.parse(call.args.at(-1).slice('do shell script '.length, -' with administrator privileges'.length));
+    assert.match(command, /disablesleep [01]|\/sbin\/shutdown -h now/);
+  }
+  assert.match(privileged[0].args.at(-1), /AppleClamshellState/);
+  assert.match(privileged[2].args.at(-1), /softwareupdated/);
+  assert.match(privileged[3].args.at(-1), /softwareupdated/);
+  assert.ok(privileged[3].args.at(-1).includes('[s]oftwareupdate'), 'updater check cannot match its own command line');
+  const closed = fake({ os: 'darwin', answer: OUT('"AppleClamshellState" = Yes') });
+  await assert.rejects(closed.p.setLidSleepDisabled(false), /Open the laptop lid/);
+  assert.equal(closed.calls.some((call) => call.args.at(-1)?.includes('with administrator privileges')), false);
+  const cancelled = fake({ os: 'darwin', answer: () => ({ code: 1, stderr: 'User canceled. (-128)', stdout: '' }) });
+  await assert.rejects(cancelled.p.forceShutDown(), (error) => error.cancelled && error.status === 409);
+});
+
+test('Windows and Linux force shutdown use their native commands; lid changes stay unsupported', async () => {
+  for (const os of ['win32', 'linux']) {
+    const { p, calls } = fake({ os, files: ['systemctl'] });
+    await p.forceShutDown();
+    assert.deepEqual([calls[0].cmd, calls[0].args], os === 'win32' ? ['shutdown.exe', ['/s', '/f', '/t', '0']] : ['systemctl', ['poweroff', '--force']]);
+    await assert.rejects(p.setLidSleepDisabled(true), /Not available/);
+    assert.equal(calls.length, 1);
+  }
+});
+
 test('Linux power: systemd-inhibit, systemctl and the battery read from /sys', async () => {
   const sys = {
     '/sys/class/power_supply/BAT0/type': 'Battery\n', '/sys/class/power_supply/BAT0/capacity': '55\n', '/sys/class/power_supply/BAT0/status': 'Discharging\n',

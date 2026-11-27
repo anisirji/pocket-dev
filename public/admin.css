@@ -159,6 +159,7 @@ input:disabled { opacity: .5; }
 .setting-text { display: grid; gap: 2px; min-width: 0; }
 .setting-text small { color: var(--muted); font-size: 12.5px; }
 .switch-label { cursor: pointer; }
+#remotePermissions .setting-text { flex: 1; }
 .stepper { display: flex; align-items: center; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); }
 .stepper button { width: 34px; height: 32px; border: 0; background: none; font-size: 18px; line-height: 1; }
 .stepper button:disabled { opacity: .35; cursor: default; }
@@ -184,6 +185,7 @@ input:disabled { opacity: .5; }
 /* Live */
 .live { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
 .live-section { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--bg); min-width: 0; }
+.live-section .empty { overflow-wrap: anywhere; }
 .live-section h3 { margin: 0 0 4px; font-size: 13px; font-weight: 650; display: flex; gap: 8px; }
 .live-section h3 span { color: var(--muted); font-weight: 500; }
 .live-item { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); }
@@ -280,3 +282,20 @@ dialog.danger #askOk { background: #d93b33; border-color: #d93b33; color: #fff; 
 }
 
 #permissions .panel-head .seg { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; border: 0; background: none; }
+.control-indicator { position: fixed; z-index: 5000; top: 12px; left: 50%; transform: translateX(-50%); width: min(500px, calc(100% - 24px)); padding: 16px; border: 2px solid var(--accent, #6aa9ff); border-radius: 12px; background: var(--panel, #131823); color: var(--text, #d7dce5); box-shadow: 0 8px 30px #0006; }
+.control-indicator[hidden] { display: none; }
+.control-indicator p { margin: 8px 0; font-size: 13px; }
+.control-indicator button { min-height: 44px; margin-right: 8px; }
+.setup-tool { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.setup-tool > div { display: grid; flex: 1; min-width: 150px; }
+.setup-tool small { color: var(--muted); }
+.setup-tool details { width: 100%; }
+.setup-tool pre, .setup-output { overflow-wrap: anywhere; white-space: pre-wrap; max-height: 180px; overflow-y: auto; font-size: 12px; }
+#setupContent input { box-sizing: border-box; display: block; width: 100%; margin: 8px 0; padding: 10px; }
+#setupContent img { display: block; max-width: 100%; }
+.setup button, .setup input { min-height: 44px; }
+#setup { width: min(620px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+#setup .dialog-actions { flex-wrap: wrap; }
+#setup .setup { display: flex; flex-direction: column; box-sizing: border-box; max-height: calc(100dvh - 32px); }
+#setupContent { overflow: auto; min-height: 0; }
+#setup .setup > :not(#setupContent) { flex-shrink: 0; }

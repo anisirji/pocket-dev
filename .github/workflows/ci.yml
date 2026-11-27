@@ -40,25 +40,44 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright
           npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "playwright"; console.log("CHROME_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
       - name: Check phone, tablet and desktop layouts
         run: node test/browser/check-responsive.mjs
       - name: Check camera viewer and computer browser capture
         run: |
           node test/browser/check-camera.mjs
           node test/browser/check-camera-host.mjs
+          node test/browser/check-camera-audio.mjs
+          node test/browser/check-hold-to-speak.mjs
+          node test/browser/check-screen.mjs
+          node test/browser/check-screen-control.mjs
       - name: Check project workspace and editor
         run: |
           node test/browser/check-workspace.mjs
           node test/browser/check-workspace-persistence.mjs
+          node test/browser/check-workspace-git.mjs
       - name: Check shared folder dialogs and computer routing
         run: node test/browser/check-folder-picker.mjs
+      - name: Check native Settings navigation and lifecycle
+        run: |
+          node test/browser/check-settings.mjs
+          node test/browser/check-navigation-refresh.mjs
+          node test/browser/check-power-actions.mjs
+      - name: Check personal browser consent and notifications
+        run: |
+          node test/browser/check-codex-browser.mjs
+          node test/browser/check-notifications.mjs
+          node test/browser/check-guides.mjs
+          node test/browser/check-setup.mjs
+          node test/browser/check-connection-qr.mjs
+          node test/browser/check-monitored-command.mjs
       - name: Check connected computers and provider switching
         run: |
           node test/browser/check-connections.mjs
           node test/browser/check-engine-dropdown.mjs
 
   windows-updater:
-    name: Windows connections, AI isolation and updater
+    name: Windows connections, Settings, AI isolation and updater
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
@@ -75,3 +94,15 @@ jobs:
         run: node --test test/codex-windows-launch.test.mjs test/connections-unit.test.mjs test/remote-codex.test.mjs test/remote-handshake.test.mjs test/workspace-leases.test.mjs test/static-assets.test.mjs test/room.test.mjs test/room-invite.test.mjs
       - name: Test workspace state, folder picker and native filesystem notifications
         run: node --test test/workspace-core.test.mjs test/folder-picker-ui.test.mjs test/workspace-watch-native.test.mjs
+      - name: Test Windows Codex transport, camera lifecycle, notifications and ZIP downloads
+        run: node --test test/codex-rpc.test.mjs test/browser-camera.test.mjs test/notifications.test.mjs test/files-zip-windows.test.mjs test/connection-qr.test.mjs
+      - name: Test background browser launch requests
+        run: node --test --test-name-pattern="background URL" test/platform.test.mjs
+      - name: Check Settings in native Windows Edge
+        shell: pwsh
+        run: |
+          $settingsResult = Join-Path $env:RUNNER_TEMP "pocket-settings-windows.json"
+          node test/native/check-settings-windows.mjs (Get-Location).Path $settingsResult
+          $settingsExit = $LASTEXITCODE
+          Get-Content -LiteralPath $settingsResult
+          exit $settingsExit

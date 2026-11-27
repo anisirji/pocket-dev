@@ -63,7 +63,7 @@ export function createCamera({ os = process.platform, binary = () => process.env
   let capture = null, listing = null;
   const leases = new Map();
   const supported = () => {
-    if (!enabled()) throw fail(403, 'Camera access is turned off. On this computer, run: pocket-dev config set cameraView true');
+    if (!enabled()) throw fail(403, 'Camera access is disabled in Admin.');
     if (!['darwin', 'win32', 'linux'].includes(os)) throw fail(503, 'Camera access is unavailable on this system.');
     const bin = binary();
     if (!bin) throw fail(503, 'Camera support is missing. Open Device camera and tap Install camera support.');
@@ -163,5 +163,5 @@ export function createCamera({ os = process.platform, binary = () => process.env
     if (leases.get(id)?.owner === owner) leases.delete(id);
     if (!leases.size) terminate(capture);
   }
-  return { devices, start, frame, stop, dispose() { clearInterval(timer); terminate(capture); } };
+  return { devices, start, frame, stop, reconcile: sweep, revokeAll() { leases.clear(); terminate(capture); }, dispose() { clearInterval(timer); terminate(capture); } };
 }

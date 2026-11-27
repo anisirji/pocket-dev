@@ -19,11 +19,14 @@ test('camera routes require login and mutation protections, and respect the host
   assert.equal((await s.request('POST', '/api/camera/install', { cookie, body: {}, csrf: false })).status, 403);
   assert.equal((await s.request('POST', '/api/camera/install', { cookie, body: {}, headers: { origin: 'https://elsewhere.example' } })).status, 403);
   fs.writeFileSync(s.config, JSON.stringify({ ...JSON.parse(fs.readFileSync(s.config)), cameraView: false }));
-  for (const [method, path, body] of [['GET', ''], ['GET', '/support'], ['POST', '/install', {}], ['POST', '/start', { camera: '0' }], ['GET', '/frame?id=guess']]) {
+  for (const [method, path, body] of [['POST', '/install', {}], ['POST', '/start', { camera: '0' }], ['GET', '/frame?id=guess']]) {
     const res = await s.request(method, `/api/camera${path}`, { cookie, body });
     assert.equal(res.status, 403);
-    assert.match(res.data.error, /cameraView true/);
+    assert.match(res.data.error, /disabled in Admin/);
   }
+  const videoOff = await s.request('GET', '/api/camera', { cookie });
+  assert.deepEqual(videoOff.data.cameras, []); assert.equal(videoOff.data.permissions.camera, false);
+  assert.equal((await s.request('GET', '/api/camera/support', { cookie })).data.permissions.microphone, true, 'audio remains independently available');
   // Cleanup works even after the feature is disabled.
   assert.equal((await s.request('POST', '/api/camera/stop', { cookie, body: { id: 'guess' } })).status, 200);
   assert.equal((await s.request('GET', '/api/camera/unknown', { cookie })).status, 404);

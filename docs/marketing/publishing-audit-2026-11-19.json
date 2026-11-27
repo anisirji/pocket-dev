@@ -1,0 +1,104 @@
+{
+  "started": "2026-11-18",
+  "verified": "2026-11-19",
+  "timezone": "Asia/Kolkata",
+  "status": "awaiting_personal_instagram_verification",
+  "inventory": {
+    "selected_finished_videos": 18,
+    "duplicate_exports_excluded": 19,
+    "source_files_exist": true
+  },
+  "counts": {
+    "youtube": {
+      "published": 6,
+      "scheduled": 12,
+      "covered": 18,
+      "live_verified": true
+    },
+    "instagram_brand": {
+      "published": 3,
+      "scheduled": 15,
+      "covered": 18,
+      "live_verified": true
+    },
+    "facebook": {
+      "published": 0,
+      "scheduled": 18,
+      "covered": 18,
+      "live_verified": true
+    },
+    "linkedin": {
+      "published": 1,
+      "scheduled": 17,
+      "covered": 18,
+      "live_verified": true,
+      "total_native_scheduled_posts": 23,
+      "existing_posts_preserved": 6
+    },
+    "instagram_personal": {
+      "published": 1,
+      "scheduled_last_verified_2026_11_18": 13,
+      "covered_recorded": 14,
+      "remaining": 4,
+      "access": "WhatsApp two-step verification pending"
+    },
+    "x_anisirji": {
+      "finished_videos": 18,
+      "published_posts": 2,
+      "published_videos": 2,
+      "scheduled_posts": 16,
+      "scheduled_videos": 16,
+      "second_account_scheduled_posts": 0,
+      "covered": 18,
+      "last_verified": "2026-11-19"
+    }
+  },
+  "verification": {
+    "metricool_rows": 49,
+    "metricool_facebook_pending": 18,
+    "metricool_instagram_pending": 14,
+    "metricool_instagram_published": 2,
+    "metricool_youtube_pending": 10,
+    "metricool_youtube_historical_published": 8,
+    "youtube_native_alternate_schedules": 2,
+    "linkedin_native_scheduled_posts": 23,
+    "linkedin_new_videos": 17,
+    "linkedin_existing_posts_preserved": 6,
+    "linkedin_duplicates": 0
+  },
+  "remaining": {
+    "account": "hap.pyani",
+    "videos": [
+      "product-demo-wide",
+      "teaser-wide",
+      "afk-3am-ending1",
+      "afk-3am-ending2"
+    ],
+    "count": 4,
+    "reason": "Instagram account switch is awaiting WhatsApp two-step verification; no code has been entered in the connected Chrome verification screen.",
+    "prepared_queue": "personal-instagram/video-completion-queue.json"
+  },
+  "reddit": {
+    "status": "removed_by_reddit_filters",
+    "verified": "2026-11-19",
+    "url": "https://www.reddit.com/r/SideProject/comments/1xzykvm/i_built_an_opensource_phone_interface_for_the/",
+    "original_url": "https://www.reddit.com/r/SideProject/comments/1xz54bl/i_built_pocket_dev_to_check_coding_work_from_my/",
+    "revised_submission_record": "launches/reddit-sideproject-revised-2026-11-19.json",
+    "note": "Rewritten native-video post submitted once at the user request; immediately filtered again and independently verified logged out. Requires moderator review."
+  },
+  "latest_metricool_release": "2027-01-07T20:00:00+05:30",
+  "latest_linkedin_release": "2026-12-25T11:00:00+05:30",
+  "x": {
+    "account": "anisirji",
+    "status": "complete_for_active_account_second_suspended",
+    "published_url": "https://x.com/anisirji/status/2123263433990946972",
+    "queue": "x/queue.json",
+    "schedule": "X_SCHEDULE.md",
+    "second_account": {
+      "handle": "AniketS22200779",
+      "status": "suspended",
+      "verification": "Signed-in public profile explicitly displays Account suspended. No posts, schedules, or attempts to bypass that restriction made."
+    },
+    "account_notice": "X displayed Unlock more on X: discoverability and non-follower DM access remain limited until the account is established. No artificial engagement performed."
+  }
+}

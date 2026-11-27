@@ -1,11 +1,60 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { createBrowserCamera, localCameraHost, cameraSignal } from '../src/machine/browser-camera.js';
+import { createBrowserCamera, localCameraHost, cameraSignal, cameraMedia } from '../src/machine/browser-camera.js';
 import { until } from './helpers/server.mjs';
 
 const jpeg = Buffer.from([255, 216, 1, 2, 255, 217]);
 const local = { socket: { remoteAddress: '127.0.0.1' }, headers: {} };
+test('camera/audio options are explicit and reject ambiguous or empty media requests', () => {
+  assert.deepEqual(cameraMedia(), { video: true, listen: false, talk: false });
+  assert.deepEqual(cameraMedia({ video: false, listen: true }), { video: false, listen: true, talk: false });
+  for (const value of [{ video: false }, { listen: 'yes' }, { audio: true }, []]) assert.throws(() => cameraMedia(value), { status: 400 });
+});
+
+test('Admin disables active microphone/WebRTC leases immediately while independent video stays available', async (t) => {
+  let audio = true;
+  const f = fixture(t, { audioEnabled: () => audio });
+  const video = await f.camera.start('video'), host = socket(f.camera), videoViewer = socket();
+  f.camera.attachViewer('video', video.id, videoViewer);
+  const mic = await f.camera.start('audio', 'default', { video: false, listen: true, talk: true });
+  const audioViewer = socket(); f.camera.attachViewer('audio', mic.id, audioViewer); audioViewer.message({ type: 'rtc-ready' });
+  audio = false; f.camera.reconcile();
+  assert.equal(audioViewer.readyState, 3); assert.equal(videoViewer.readyState, 1);
+  assert.ok(host.sent.some((message) => message.type === 'viewer-left' && message.viewer === mic.id));
+  assert.equal(f.camera.acceptsViewer('audio', mic.id), false);
+  await assert.rejects(f.camera.start('new connection', 'default', { video: false, listen: true }), { status: 403 });
+  await assert.rejects(f.camera.start('new connection', 'default', { video: true, talk: true }), { status: 403 });
+  audio = true;
+  assert.equal(f.camera.acceptsViewer('audio', mic.id), false, 'reenabling never revives an old lease');
+});
+
+test('camera revocation closes video and keeps audio-only permission independent for every connection', async (t) => {
+  let video = true;
+  const f = fixture(t, { videoEnabled: () => video });
+  const cam = await f.camera.start('first'), host = socket(f.camera), camViewer = socket(); f.camera.attachViewer('first', cam.id, camViewer);
+  const mic = await f.camera.start('second', 'default', { video: false, listen: true }), micViewer = socket(); f.camera.attachViewer('second', mic.id, micViewer);
+  video = false; f.camera.reconcile();
+  assert.equal(camViewer.readyState, 3); assert.equal(micViewer.readyState, 1);
+  assert.equal(host.sent.findLast((message) => message.type === 'start').media.video, false);
+  await assert.rejects(f.camera.start('new connection'), { status: 403 });
+  f.camera.revokeAll(); assert.equal(micViewer.readyState, 3); assert.equal(host.sent.at(-1).type, 'stop');
+});
+
+test('microphone preparation verifies one global permission without capturing a video frame', async (t) => {
+  let verified = 0;
+  const f = fixture(t, { onMicrophoneVerified: (at) => { verified = at; } });
+  f.camera.prepare({ video: false, listen: true, talk: false });
+  await until(() => f.opened.length === 1);
+  const host = socket(f.camera);
+  assert.deepEqual(host.sent[0].media, { video: false, listen: true, talk: false });
+  host.message({ type: 'media-ready', media: { video: false, listen: true } });
+  await until(() => f.camera.setupStatus().state !== 'testing');
+  assert.ok(verified); assert.equal(f.camera.setupStatus().microphoneVerifiedAt, verified);
+  assert.equal(host.sent.at(-1).type, 'stop');
+  await f.camera.start('a new authorized connection', 'default', { video: false, listen: true });
+  assert.equal(f.opened.length, 1, 'the verified host permission is reused across connections');
+});
 function fixture(t, options = {}) {
   const opened = [];
   const camera = createBrowserCamera({ origin: () => 'http://127.0.0.1:7777', openUrl: (url) => { opened.push(url); return true; }, ...options });
@@ -19,6 +68,21 @@ function socket(camera) {
   if (camera) camera.attachHost(ws);
   return ws;
 }
+test('audio-only viewers receive no camera frames; fallback and disconnect remove their microphone request', async (t) => {
+  const f = fixture(t), video = await f.camera.start('video'), host = socket(f.camera), videoViewer = socket();
+  f.camera.attachViewer('video', video.id, videoViewer);
+  const audio = await f.camera.start('audio', 'default', { video: false, listen: true, talk: true }), audioViewer = socket();
+  f.camera.attachViewer('audio', audio.id, audioViewer);
+  assert.deepEqual(host.sent.findLast((message) => message.type === 'start').media, { video: true, listen: true, talk: true });
+  assert.deepEqual(host.sent.findLast((message) => message.type === 'viewer').media, { video: false, listen: true, talk: true });
+  await assert.rejects(f.camera.frame('audio', audio.id), { status: 400 });
+  await assert.rejects(f.camera.frame('unrelated', audio.id), { status: 410 });
+  host.image(); assert.ok(videoViewer.sent.some(Buffer.isBuffer)); assert.equal(audioViewer.sent.some(Buffer.isBuffer), false);
+  audioViewer.message({ type: 'fallback' });
+  assert.equal(host.sent.findLast((message) => message.type === 'start').media, undefined, 'fallback disables audio while keeping the other camera viewer');
+  audioViewer.close(); assert.equal(host.sent.at(-1).type === 'stop', false);
+  videoViewer.close(); assert.equal(host.sent.at(-1).type, 'stop');
+});
 
 test('listing is passive; only Start camera opens the local browser, with a private token', async (t) => {
   const f = fixture(t);
@@ -35,6 +99,18 @@ test('listing is passive; only Start camera opens the local browser, with a priv
   const pending = f.camera.frame('a', a.id);
   ws.image();
   assert.deepEqual(await pending, jpeg);
+});
+
+test('camera requests background launch by default and reuses its connected host', async (t) => {
+  const requests = [];
+  const f = fixture(t, { openUrl: (url, options) => { requests.push({ url, options }); return true; } });
+  await f.camera.devices(); assert.equal(requests.length, 0);
+  await f.camera.start('first');
+  assert.deepEqual(requests[0].options, { background: true });
+  assert.match(requests[0].url, /\/camera-host\.html#[0-9a-f]{64}$/);
+  socket(f.camera);
+  await f.camera.start('second');
+  assert.equal(requests.length, 1, 'another viewer does not reopen or foreground the capture browser');
 });
 
 test('camera host credentials are restricted to direct loopback, even with a valid token', async (t) => {

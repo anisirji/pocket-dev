@@ -95,6 +95,30 @@ test('open a URL on Linux without xdg-open launches nothing and says why', () =>
   assert.match(p.capabilities().openUrl.reason, /xdg-open/);
 });
 
+test('background URL launches request no activation without interpreting the URL as shell code', () => {
+  const url = 'http://127.0.0.1:7777/camera-host.html#test%25&untrusted="$(ignored)"';
+  for (const system of ['darwin', 'win32', 'linux']) {
+    const opened = [], env = { PATH: '/usr/bin:/bin', XDG_ACTIVATION_TOKEN: 'old-user-gesture', DESKTOP_STARTUP_ID: 'old_TIME123' };
+    const p = createPlatform({ platform: system, env, exists: () => true, launch: (cmd, args, options) => opened.push({ cmd, args, options }) });
+    assert.equal(p.openUrl(url, { background: true }), true);
+    assert.equal(opened.length, 1, 'one request opens at most one browser');
+    const call = opened[0];
+    if (system === 'darwin') assert.deepEqual(call, { cmd: 'open', args: ['-g', url], options: undefined });
+    else if (system === 'win32') {
+      assert.equal(call.cmd, 'powershell.exe'); assert.equal(call.options.windowsHide, true);
+      assert.equal(call.options.env.POCKET_DEV_OPEN_URL, url);
+      const script = Buffer.from(call.args.at(-1), 'base64').toString('utf16le');
+      assert.ok(!script.includes(url)); assert.match(script, /ShellExecuteW\(.*\$env:POCKET_DEV_OPEN_URL.*4\)/);
+      assert.ok(call.args.includes('-STA'));
+    } else {
+      assert.equal(call.cmd, 'xdg-open'); assert.deepEqual(call.args, [url]);
+      assert.equal(call.options.env.XDG_ACTIVATION_TOKEN, undefined);
+      assert.equal(call.options.env.DESKTOP_STARTUP_ID, 'pocket-dev-camera_TIME0');
+    }
+    assert.equal(env.XDG_ACTIVATION_TOKEN, 'old-user-gesture', 'launch options do not mutate the service environment');
+  }
+});
+
 test('default shell: $SHELL first, else /bin/zsh on Mac, zsh then bash on Linux, PowerShell on Windows', () => {
   const sh = (os, files = [], env = {}) => fake({ os, files, platformOpts: { env } }).p.defaultShell();
   assert.equal(sh('darwin', [], { SHELL: '/opt/homebrew/bin/fish' }), '/opt/homebrew/bin/fish');

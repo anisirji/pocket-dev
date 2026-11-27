@@ -7,6 +7,16 @@
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <title>Pocket Dev</title>
 <script src="/machine.js"></script>
+<link rel="stylesheet" href="/connection-qr.css">
+<script src="/connection-qr.js"></script>
+<script src="/chat-activity.js"></script>
+<link rel="stylesheet" href="/feature-guides.css">
+<script src="/feature-guides.js" defer></script>
+<script src="/screen-control.js" defer></script>
+<link rel="stylesheet" href="/notifications.css">
+  <script src="/notification-store.js" defer></script>
+  <script src="/notifications.js" defer></script>
+<script src="/notification-preferences.js" defer></script>
 <script>if (parent !== window && new URLSearchParams(location.search).has('workspacePanel')) document.documentElement.classList.add('workspace-panel'); if (parent !== window && new URLSearchParams(location.search).get('workspacePanel') === 'chat') document.documentElement.classList.add('workspace-chat');</script>
 <link rel="stylesheet" href="/machine.css">
 <link rel="stylesheet" href="/folder-picker.css">
@@ -701,7 +711,19 @@ const overlays = (() => {
     const depth = e.state?.pdPage === PAGE ? e.state.pdOverlay : 0;
     while (stack.length > depth) stack.pop().onClose();
   });
+  // Rebuild reload navigation above the original base entry, so repeated refreshes do not accumulate old sheets.
+  const oldDepth = history.state?.pdOverlay;
+  if (!location.hash && performance.getEntriesByType('navigation')[0]?.type === 'reload' && history.state?.pdPage && Number.isInteger(oldDepth) && oldDepth > 0 && oldDepth < history.length) {
+    run(() => new Promise((resolve) => {
+      const done = () => { clearTimeout(timer); ownPop = null; resolve(); };
+      const timer = setTimeout(done, 1000);
+      ownPop = done;
+      history.go(-oldDepth);
+    }));
+  }
   return {
+    names: () => stack.map((entry) => entry.name),
+    settled: () => queue,
     open(name, onClose) {
       stack.push({ name, onClose });
       const depth = stack.length;
@@ -724,6 +746,49 @@ const overlays = (() => {
       if (stack.length) this.close(stack[0].name);
     },
   };
+})();
+
+// Save only navigation supplied by each screen; forms, approvals and generated login keys are never replayed.
+const navigation = (() => {
+  const key = `pd.navigation:${location.pathname}${location.search}:${store.get('pd.machine') || 'self'}`;
+  const screens = new Map();
+  const explicitLink = Boolean(location.hash);
+  let cleared = false;
+  let finish;
+  const ready = new Promise((resolve) => { finish = resolve; });
+  let saved;
+  try {
+    saved = performance.getEntriesByType('navigation')[0]?.type === 'reload' ? JSON.parse(sessionStorage.getItem(key)) : null;
+    sessionStorage.removeItem(key);
+  } catch {}
+  window.addEventListener('pd-workspace-clear', () => {
+    cleared = true; saved = null;
+    try { sessionStorage.removeItem(key); } catch {}
+  });
+  window.addEventListener('pagehide', () => {
+    if (cleared) return;
+    try {
+      const entries = overlays.names().flatMap((name) => {
+        const value = screens.get(name)?.snapshot();
+        return value ? [{ name, value }] : [];
+      });
+      if (entries.length) sessionStorage.setItem(key, JSON.stringify(entries));
+      else sessionStorage.removeItem(key);
+    } catch {}
+  });
+  window.addEventListener('DOMContentLoaded', async () => {
+    for (const entry of Array.isArray(saved) ? saved.slice(0, 16) : []) {
+      // Explicit deep links take precedence over a previously open screen.
+      if (explicitLink) break;
+      try { await screens.get(entry.name)?.restore(entry.value); }
+      catch (error) { console.warn('Could not restore Pocket Dev page:', error); }
+    }
+    saved = null;
+    await overlays.settled();
+    finish();
+    window.dispatchEvent(new Event('pd-navigation-restored'));
+  }, { once: true });
+  return { register: (name, screen) => screens.set(name, screen), ready };
 })();
 
 // The folder sheet, the shortcut sheet and the copy view share one level; opening one replaces another.
@@ -913,6 +978,7 @@ $('textClose').addEventListener('click', hideLayer);
 let shortcuts = null;
 let shortcutNote = '';
 let editingShortcuts = false;
+let monitorShortcut = false, startingShortcut = false;
 const addShortcut = sheetForm('Command, e.g. npm test', 'Add', async (text, input) => {
   if (await saveShortcuts((list) => [...list, text])) input.value = '';
 });
@@ -921,6 +987,7 @@ addShortcut.querySelector('input').maxLength = 200;
 async function openShortcuts() {
   shortcutNote = '';
   editingShortcuts = false;
+  monitorShortcut = false;
   showLayer('shortcuts');
   try { shortcuts = await api('GET', '/api/shortcuts'); } catch (err) { shortcutNote = err.message; }
   if (layer === 'shortcuts') renderShortcuts();
@@ -946,9 +1013,16 @@ function saveShortcuts(change) {
 // A row's index can shift while earlier edits are saving; find the command again in the current list.
 const findShortcut = (list, i, text) => (list[i] === text ? i : list.indexOf(text));
 
-function runShortcut(text) {
+async function runShortcut(text) {
   const view = active();
-  if (!view) return;
+  if (!view || startingShortcut) return;
+  if (monitorShortcut) {
+    startingShortcut = true;
+    try { const session = await api('POST', '/api/sessions', { cwd: view.cwd, command: text, monitor: true, requestId: crypto.randomUUID() }); hideLayer(); window.pocketDev.openSession(session); }
+    catch (error) { shortcutNote = `${error.message} Check Terminals before trying again; the command has not been retried.`; if (layer === 'shortcuts') renderShortcuts(); }
+    finally { startingShortcut = false; }
+    return;
+  }
   hideLayer();
   runCommand(view, text);
 }
@@ -992,6 +1066,12 @@ function renderShortcuts() {
     );
     return row;
   });
+  if (!editingShortcuts) {
+    const row = h('label', 'row'), input = document.createElement('input'); input.type = 'checkbox'; input.checked = monitorShortcut;
+    input.onchange = () => { monitorShortcut = input.checked; };
+    row.append(input, h('span', 'row-text', 'Notify when finished · run in a new terminal'));
+    rows.unshift(row);
+  }
   setSheet({
     title: 'Shortcuts',
     action: toggle,
@@ -1229,15 +1309,7 @@ const POWER_REASONS = new Set(['mac-sleeping', 'mac-shutting-down']);
 const power = import('/power.js');
 let powerPaused = false;
 
-// Anything that needs sudo runs here, so macOS asks for the password in that terminal and the server never sees it.
-async function runInTerminal(command, cwd) {
-  const s = await api('POST', '/api/sessions', { cwd, command });
-  overlays.closeAll();
-  window.pocketDev.openSession(s);
-}
-
 const powerOptions = {
-  runInTerminal,
   openApps: () => window.openAppsSheet(),
   async onBack() {
     powerPaused = false;
@@ -1256,14 +1328,15 @@ power.then((m) => m.renderGearBattery($('gearBattery'), api));
 
 window.pocketDev = {
   overlays,
+  navigation,
   power,
   powerOptions,
   showClientError,
   clientUpdateMessage: CLIENT_UPDATE_MESSAGE,
   // openFolder runs first so the view switch does not start a second, competing load of the Git view.
-  openGit(folder) {
+  openGit(folder, change) {
     overlays.closeAll();
-    window.pocketDevGit.openFolder(folder);
+    window.pocketDevGit.openFolder(folder, change);
     setView('git');
   },
   // Resume continues a conversation from either view; the new terminal has to be on screen.

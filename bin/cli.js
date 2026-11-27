@@ -78,7 +78,7 @@ async function start(args) {
   if (adminPort) process.env.POCKET_DEV_ADMIN_PORT = adminPort;
   if (args.includes('--no-open')) process.env.POCKET_DEV_NO_OPEN = '1';
   let guided;
-  try { guided = await firstRun({ ctx, runSetup, noSetup: args.includes('--no-setup') }) === 'ran'; } catch (err) {
+  try { guided = await firstRun({ ctx, runSetup, graphical: true, noSetup: args.includes('--no-setup') }) === 'ran'; } catch (err) {
     if (err.code === 'SIGINT') fail(STOPPED, 130);
     throw err;
   }

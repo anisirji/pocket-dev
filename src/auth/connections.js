@@ -52,7 +52,7 @@ export function createConnections({ room, stateDir = STATE_DIR, installed = () =
     const types = PROVIDERS.filter((type) => allowed(origin, type));
     const catalog = types.length ? await schemas(types) : {};
     return { deviceId: room.deviceId(), name: members().find((m) => m.deviceId === room.deviceId())?.name || os.hostname(),
-      providers: types.map((type) => ({ type, deviceId: room.deviceId(), settings: (catalog[type] || []).map((setting) => type === 'claude' && setting.key === 'mode' ? { ...setting, choices: setting.choices.filter((choice) => choice.value !== 'auto') } : setting) })) };
+      providers: types.map((type) => ({ type, deviceId: room.deviceId(), settings: (catalog[type] || []).filter((setting) => setting.key !== 'browser').map((setting) => type === 'claude' && setting.key === 'mode' ? { ...setting, choices: setting.choices.filter((choice) => choice.value !== 'auto') } : setting) })) };
   }
   async function available() {
     const results = await Promise.allSettled(members().filter((m) => m.deviceId !== room.deviceId() && connected(m.deviceId) && m.status === 'online')

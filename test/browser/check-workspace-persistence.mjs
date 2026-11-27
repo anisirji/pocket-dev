@@ -91,7 +91,14 @@ try {
     await page.setViewportSize(size);
     for (const panel of (size.width <= 760 ? ['files','editor','ai','tools'] : ['editor'])) { if (size.width <= 760) await page.locator(`.ws-mobile [data-mobile="${panel}"]`).click(); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false); }
   }
-  await page.setViewportSize({ width: 390, height: 844 }); await page.locator('.ws-mobile [data-mobile="editor"]').click(); await page.screenshot({ path: '/tmp/pocket-dev-workspace-redesign-mobile.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const panel of ['files', 'ai', 'tools', 'editor']) {
+    await page.locator(`.ws-mobile [data-mobile="${panel}"]`).click(); await pause(400); await page.reload();
+    await content.filter({ hasText: 'offline edit' }).waitFor({ state: 'attached' });
+    assert.equal(await page.locator('#workspace').getAttribute('data-mobile'), panel, 'refresh preserves the selected mobile workspace panel');
+    assert.equal(await page.locator(`.ws-mobile [data-mobile="${panel}"]`).getAttribute('aria-pressed'), 'true');
+  }
+  await page.screenshot({ path: '/tmp/pocket-dev-workspace-redesign-mobile.png' });
   await page.setViewportSize({ width: 1440, height: 960 }); await page.locator('#workspaceSettings').click(); await page.locator('#workspaceTheme').selectOption('dark'); await page.locator('#workspaceMenu').evaluate((el) => el.hidePopover()); const darkTerminal = await page.frameLocator('#toolsFrame').locator('.term.active .xterm-viewport').evaluate((el) => getComputedStyle(el).backgroundColor); assert.ok(!darkTerminal.includes('248'), 'terminal theme updates with the workspace'); await page.screenshot({ path: '/tmp/pocket-dev-workspace-redesign-dark.png' }); await page.locator('#workspaceSettings').click(); await page.locator('#workspaceTheme').selectOption('light'); await page.locator('#workspaceMenu').evaluate((el) => el.hidePopover()); await page.screenshot({ path: '/tmp/pocket-dev-workspace-redesign-light.png' });
   const large = path.join(a, 'large'); fs.mkdirSync(large); for (let i = 0; i < 2100; i++) fs.writeFileSync(path.join(large, `file-${String(i).padStart(4, '0')}.js`), 'const n = 1;');
   await page.getByRole('button', { name: 'Folder large', exact: true }).click(); await page.getByRole('button', { name: 'File file-0000.js', exact: true }).waitFor();

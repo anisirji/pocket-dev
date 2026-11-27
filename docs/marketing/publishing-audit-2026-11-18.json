@@ -1,0 +1,255 @@
+{
+  "audit_date": "2026-11-18",
+  "timezone": "Asia/Kolkata",
+  "verification_level": "Saved records reconciled; live calendars inaccessible without sign-in",
+  "live_access": {
+    "metricool": "Login page",
+    "instagram": "Login page",
+    "facebook_business_suite": "Login page",
+    "linkedin": "Login redirect and security verification",
+    "youtube_studio": "Google sign-in page"
+  },
+  "inventory": {
+    "finished_export_files": 37,
+    "selected_finished_videos": 18,
+    "alternate_exports": 19,
+    "missing_source_files": []
+  },
+  "summary": {
+    "youtube": {
+      "scheduled_in_saved_records": 12,
+      "published_in_saved_records": 4,
+      "unlisted_in_saved_records": 2,
+      "last_verified": "2026-11-17"
+    },
+    "instagram_brand": {
+      "scheduled_in_saved_records": 12,
+      "published_in_saved_records": 1,
+      "last_verified": "2026-11-17"
+    },
+    "instagram_personal": {
+      "scheduled_reels_in_saved_records": 14,
+      "scheduled_feed_posts_in_saved_records": 3,
+      "last_verified": "2026-11-18"
+    },
+    "instagram_stories": {
+      "prepared": 14,
+      "scheduled_in_saved_records": 0
+    },
+    "facebook": {
+      "page_created": true,
+      "confirmed_video_schedules_in_saved_records": 0,
+      "instagram_crossposting": false
+    },
+    "linkedin": {
+      "published_videos_in_saved_records": 1,
+      "scheduled_videos_in_saved_records": 1,
+      "scheduled_posts_total": 6,
+      "last_verified": "2026-11-18"
+    },
+    "reddit": {
+      "launch_status": "removed_by_reddit_filters",
+      "confirmed_video_schedules_in_saved_records": 0
+    }
+  },
+  "videos": [
+    {
+      "id": "hero",
+      "title": "Your dev computer, from your phone | Pocket Dev",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final2/hero-9x16-bella.mp4",
+      "source_exists": true,
+      "youtube": "Published (recorded)",
+      "instagram_brand": "Published (recorded)",
+      "instagram_personal": "Scheduled 2026-11-18T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "Published (recorded)"
+    },
+    {
+      "id": "chhath-part1",
+      "title": "The Last Train Home | AFK: Chhath Part 1 | Pocket Dev",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final5/chhath-part1.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-11-17T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-11-17T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-20T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "chhath-part2",
+      "title": "Before the Sun Rises | AFK: Chhath Part 2 | Pocket Dev",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final5/chhath-part2.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-11-18T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-11-18T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-21T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "product-demo",
+      "title": "Claude Code, Codex and terminals from your phone | Pocket Dev",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final/pocket-dev-promo-9x16-voice.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-11-20T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-11-20T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-19T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "afk-wedding",
+      "title": "Claude needs approval. You are at a wedding. | AFK Ep. 1",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep1-wedding.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-11-22T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-11-22T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-22T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "afk-3am-question",
+      "title": "3 AM. The site is down. You choose the ending. | AFK Ep. 2",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-question.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-11-24T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-11-24T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-23T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "afk-train-part1",
+      "title": "The train lost signal. What happened to the tests? | AFK Ep. 3",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep3-train-part1.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-11-27T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-11-27T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-24T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "afk-train-part2",
+      "title": "Signal restored. The terminal kept running. | AFK Ep. 4",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep4-train-part2.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-11-28T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-11-28T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-25T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "afk-waiting-room",
+      "title": "A quick code review in the waiting room | AFK Ep. 5",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep5-waiting-room.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-11-30T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-11-30T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-26T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "afk-hackathon",
+      "title": "Three hours to the demo. One dead laptop. | AFK Ep. 6",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep6-hackathon.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-12-02T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-12-02T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-27T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "afk-dinner",
+      "title": "Dinner is cooking. The build is running. | AFK Ep. 7",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep7-dinner.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-12-04T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-12-04T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-28T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "afk-village",
+      "title": "The idea arrived far from the desk | AFK Ep. 8",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep8-village.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-12-06T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-12-06T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-29T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "afk-setup",
+      "title": "How the AFK setup works | Pocket Dev | AFK Ep. 9",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep9-setup.mp4",
+      "source_exists": true,
+      "youtube": "Scheduled 2026-12-08T20:00:00+05:30",
+      "instagram_brand": "Scheduled 2026-12-08T20:00:00+05:30",
+      "instagram_personal": "Scheduled 2026-11-30T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "tutorial-macos-quick",
+      "title": "Install Pocket Dev on macOS and connect your phone | Quick start",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final4/t1-install-macos-16x9-quick.mp4",
+      "source_exists": true,
+      "youtube": "Published (recorded)",
+      "instagram_brand": "No record",
+      "instagram_personal": "Scheduled 2026-12-01T20:00:00+05:30",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "product-demo-wide",
+      "title": "Pocket Dev demo: Claude Code, Codex, Git and terminals from your phone",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final/pocket-dev-promo-16x9-voice.mp4",
+      "source_exists": true,
+      "youtube": "Published (recorded)",
+      "instagram_brand": "No record",
+      "instagram_personal": "No record",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "teaser-wide",
+      "title": "Your dev computer, from your phone | Pocket Dev teaser",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final/pocket-dev-teaser-16x9-voice.mp4",
+      "source_exists": true,
+      "youtube": "Published (recorded)",
+      "instagram_brand": "No record",
+      "instagram_personal": "No record",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "afk-3am-ending1",
+      "title": "3 AM: Fix it from bed | AFK Ep. 2 | Alternate ending 1",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-ending1.mp4",
+      "source_exists": true,
+      "youtube": "Unlisted; conditional",
+      "instagram_brand": "No record",
+      "instagram_personal": "No record",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    },
+    {
+      "id": "afk-3am-ending2",
+      "title": "3 AM: Sleep and handle it tomorrow | AFK Ep. 2 | Alternate ending 2",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-ending2.mp4",
+      "source_exists": true,
+      "youtube": "Unlisted; conditional",
+      "instagram_brand": "No record",
+      "instagram_personal": "No record",
+      "facebook": "No confirmed schedule record",
+      "linkedin": "No record"
+    }
+  ]
+}

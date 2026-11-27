@@ -3,8 +3,8 @@
 .camera-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .camera-bar h2 { flex: 1; margin: 0; font-size: 16px; font-weight: 600; }
 .camera-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; }
-.camera-select { flex: 1; min-width: 120px; max-width: 100%; height: 40px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; font-size: 14px; }
-.camera-btn { min-height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 14px; }
+.camera-select { flex: 1; min-width: 120px; max-width: 100%; height: 44px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; font-size: 14px; }
+.camera-btn { min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 14px; }
 .camera-btn:disabled, .camera-select:disabled { opacity: .5; }
 .camera-btn:focus-visible, .camera-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .camera-btn.start { background: var(--accent); color: var(--bg); }
@@ -25,3 +25,12 @@
 .camera-setup progress { display: block; width: 100%; margin: 0 0 12px; accent-color: var(--accent); }
 .camera-setup progress[hidden] { display: none; }
 @media (max-width: 480px) { .camera-select { flex-basis: 100%; } }
+.camera-audio-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px; }
+.camera-audio-controls[hidden] { display: none; }
+.camera-preview[hidden] { display: none; }
+.camera-audio-controls label { display: flex; gap: 8px; align-items: center; min-height: 44px; font-size: 14px; }
+.camera-audio-controls input { width: 20px; height: 20px; accent-color: var(--accent); }
+.camera-audio-controls button { min-height: 44px; touch-action: none; }
+.camera-audio-controls [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.camera-audio-controls [aria-pressed] { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.camera-talk-hint { flex-basis: 100%; margin: 0; color: var(--muted); font-size: 13px; }

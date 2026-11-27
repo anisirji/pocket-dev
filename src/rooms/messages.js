@@ -161,7 +161,7 @@ const identity = ({ key, kind, name }) => ({ key, kind, name });
 //
 // Local message history keeps its original format. Historical room copies remain readable from
 // cached files, but no messages, attachments or deletions propagate to another computer.
-export function createMessages({ auth, collaborators, config, wss, rejectUpgrade, stateDir = STATE_DIR, statfs = fsp.statfs }) {
+export function createMessages({ auth, collaborators, config, wss, rejectUpgrade, stateDir = STATE_DIR, statfs = fsp.statfs, onNotification = () => {} }) {
   const dir = privateDir(path.join(stateDir, 'messages'));
   const filesDir = privateDir(path.join(dir, 'files'));
   const thumbsDir = privateDir(path.join(dir, 'thumbs'));
@@ -265,6 +265,9 @@ export function createMessages({ auth, collaborators, config, wss, rejectUpgrade
     for (const [ws, v] of sockets) {
       if (ws.readyState === ws.OPEN && canSee(v)(m)) ws.send(JSON.stringify({ t: 'message', message: messageView(m, v) }));
     }
+    const { devices, roleAccessEnabled } = auth.admin.state();
+    const audience = devices.filter((device) => device.status === 'active' && (!roleAccessEnabled || device.role === 'admin') && m.from.key !== `device:${device.id}` && canSee(deviceParticipant(device))(m)).map((device) => device.id);
+    if (audience.length) try { onNotification({ id: `message:${m.seq}`, category: 'messages', title: m.to === null ? `${nameOf(m.from)} in Everyone` : nameOf(m.from), body: m.text.split('\n')[0].slice(0, 200) || 'New attachment', sound: true, audience, action: { kind: 'message', id: m.to === null ? 'everyone' : pub(m.from.key) } }); } catch {}
   }
   // Called before the messages change, while their viewers can still be worked out.
   function retract(list, only = () => true) {

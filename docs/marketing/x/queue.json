@@ -1,0 +1,470 @@
+{
+  "account": "anisirji",
+  "timezone": "Asia/Kolkata",
+  "date": "2026-11-19",
+  "published": [
+    {
+      "id": "hospital-and-demo",
+      "platform": "X",
+      "account": "anisirji",
+      "title": "AFK Ep. 5: The Waiting Room + Pocket Dev demo",
+      "caption": "Mum's appointment is running late. A teammate needs a fix.\n\nAFK Ep. 5 + Pocket Dev demo: review code from your phone, then put it away.\n\nFictional story/demo data; AI narration. Computer awake; remote setup required.\nhttps://github.com/anisirji/pocket-dev\n#ClaudeCode",
+      "videos": [
+        "/Users/ani/Desktop/pocket-dev-video/final3/ep5-waiting-room.mp4",
+        "/Users/ani/Desktop/pocket-dev-video/final/pocket-dev-promo-16x9-voice.mp4"
+      ],
+      "video_ids": [
+        "afk-waiting-room",
+        "product-demo-wide"
+      ],
+      "status": "published",
+      "url": "https://x.com/anisirji/status/2123263433990946972",
+      "published_at": "2026-11-19T09:23:45+05:30",
+      "ai_label": true,
+      "verification": "X showed Your post was sent. Direct permalink reloaded and displays the exact caption, both native videos, Made with AI, account anisirji and timestamp November 19 at 9:23 AM IST. Independent web retrieval is blocked by X (403); not a logged-out visibility verification.",
+      "native_playback": [
+        {
+          "duration_seconds": 33.429333,
+          "width": 720,
+          "height": 1280
+        },
+        {
+          "duration_seconds": 58.633,
+          "width": 1280,
+          "height": 720
+        }
+      ],
+      "playback_verification": "Both server-transcoded videos retain full source duration within a normal codec-frame tolerance."
+    }
+  ],
+  "posts": [
+    {
+      "id": "hero",
+      "title": "Your dev computer, from your phone | Pocket Dev",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "I built Pocket Dev to check coding work from my phone.\nClaude Code, Codex, terminals, Git and files stay on my own computer. Free and open source.\nComputer on/awake; remote access needs setup. Demo data + AI narration.\nhttps://github.com/anisirji/pocket-dev\n#OpenSource",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final2/hero-9x16-bella.mp4",
+      "at": "2026-11-20T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 254,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:28:23.249869+05:30",
+      "confirmation": "Your post will be sent on Fri, Nov 20, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Fri, Nov 20, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:28:30.375899+05:30",
+      "uploaded_media": {
+        "duration": 30.4,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Fri, Nov 20, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.046745+05:30"
+    },
+    {
+      "id": "product-demo",
+      "title": "Claude Code, Codex and terminals from your phone | Pocket Dev",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "A coding chat isn't always enough. Sometimes the next step is a terminal command or a look at a file.\nPocket Dev puts those tools in your phone browser. Your computer does the work.\nDemo data + AI narration.\nhttps://github.com/anisirji/pocket-dev\n#ClaudeCode",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final/pocket-dev-promo-9x16-voice.mp4",
+      "at": "2026-11-21T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 243,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:29:35.585857+05:30",
+      "confirmation": "Your post will be sent on Sat, Nov 21, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Sat, Nov 21, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:29:59.439592+05:30",
+      "uploaded_media": {
+        "duration": 32.466016,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Sat, Nov 21, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.046970+05:30"
+    },
+    {
+      "id": "afk-wedding",
+      "title": "Claude needs approval. You are at a wedding. | AFK Ep. 1",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "AFK Ep. 1: Claude is waiting for approval. You're at a wedding.\nA fictional story about checking a coding task from your phone, then getting back to the people around you.\nAI narration; remote access set up, computer awake.\nhttps://github.com/anisirji/pocket-dev\n#DeveloperLife",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep1-wedding.mp4",
+      "at": "2026-11-22T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 262,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:30:58.210048+05:30",
+      "confirmation": "Your post will be sent on Sun, Nov 22, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Sun, Nov 22, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:31:00.780047+05:30",
+      "uploaded_media": {
+        "duration": 32,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Sun, Nov 22, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047025+05:30"
+    },
+    {
+      "id": "afk-3am-question",
+      "title": "3 AM. The site is down. You choose the ending. | AFK Ep. 2",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "AFK Ep. 2: an external uptime alert wakes Arya at 3 AM. Fix the site now or handle it tomorrow?\nFictional story, AI narration. The alert is NOT a Pocket Dev notification. Remote setup + awake computer required.\nhttps://github.com/anisirji/pocket-dev\n#DeveloperLife",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-question.mp4",
+      "at": "2026-11-23T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 249,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:31:29.814228+05:30",
+      "confirmation": "Your post will be sent on Mon, Nov 23, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Mon, Nov 23, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:31:31.622430+05:30",
+      "uploaded_media": {
+        "duration": 30.442,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Mon, Nov 23, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047076+05:30"
+    },
+    {
+      "id": "afk-3am-ending1",
+      "title": "3 AM: Fix it from bed | AFK Ep. 2 | Alternate ending 1",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "AFK Ep. 2, alternate ending 1: Arya checks the problem from bed.\nOne fictional outcome, not an audience-selected result. Pocket Dev reaches her awake computer through configured remote access.\nAI narration.\nhttps://github.com/anisirji/pocket-dev\n#ClaudeCode",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-ending1.mp4",
+      "at": "2026-11-24T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 242,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:31:57.290507+05:30",
+      "confirmation": "Your post will be sent on Tue, Nov 24, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Tue, Nov 24, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:31:58.896600+05:30",
+      "uploaded_media": {
+        "duration": 30.4,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Tue, Nov 24, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047121+05:30"
+    },
+    {
+      "id": "afk-3am-ending2",
+      "title": "3 AM: Sleep and handle it tomorrow | AFK Ep. 2 | Alternate ending 2",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "AFK Ep. 2, alternate ending 2: sleep, then handle it tomorrow.\nThe other fictional outcome. Having access to your tools doesn't mean every interruption needs an immediate response.\nAI narration; demo project.\nhttps://github.com/anisirji/pocket-dev\n#DeveloperLife",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-ending2.mp4",
+      "at": "2026-11-25T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 247,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:32:24.593240+05:30",
+      "confirmation": "Your post will be sent on Wed, Nov 25, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Wed, Nov 25, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:32:29.738517+05:30",
+      "uploaded_media": {
+        "duration": 30.613,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Wed, Nov 25, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047166+05:30"
+    },
+    {
+      "id": "afk-train-part1",
+      "title": "The train lost signal. What happened to the tests? | AFK Ep. 3",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "AFK Ep. 3: the train loses signal while tests run at home.\nPocket Dev needs a connection to show new output. The task runs on the computer, which must stay on and awake.\nFictional story; AI narration.\nhttps://github.com/anisirji/pocket-dev\n#ClaudeCode",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep3-train-part1.mp4",
+      "at": "2026-11-26T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 236,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:32:57.709469+05:30",
+      "confirmation": "Your post will be sent on Thu, Nov 26, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Thu, Nov 26, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:32:59.482369+05:30",
+      "uploaded_media": {
+        "duration": 30.272,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Thu, Nov 26, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047212+05:30"
+    },
+    {
+      "id": "afk-train-part2",
+      "title": "Signal restored. The terminal kept running. | AFK Ep. 4",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "AFK Ep. 4: signal is back. Time to see what happened to the tests.\nA phone connection can drop while the computer keeps working. Reconnect to inspect the result.\nFictional story; AI narration. Remote access configured.\nhttps://github.com/anisirji/pocket-dev\n#OpenSource",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep4-train-part2.mp4",
+      "at": "2026-11-27T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 254,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:33:26.376591+05:30",
+      "confirmation": "Your post will be sent on Fri, Nov 27, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Fri, Nov 27, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:33:28.841587+05:30",
+      "uploaded_media": {
+        "duration": 30.336,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Fri, Nov 27, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047257+05:30"
+    },
+    {
+      "id": "afk-hackathon",
+      "title": "Three hours to the demo. One dead laptop. | AFK Ep. 6",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "AFK Ep. 6: three hours to the demo, one dead laptop.\nA fictional look at reaching another computer from a phone. The host still needs to be awake and reachable; the phone isn't running the build.\nAI narration.\nhttps://github.com/anisirji/pocket-dev\n#DeveloperLife",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep6-hackathon.mp4",
+      "at": "2026-11-28T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 248,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:33:58.950900+05:30",
+      "confirmation": "Your post will be sent on Sat, Nov 28, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Sat, Nov 28, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:34:01.298299+05:30",
+      "uploaded_media": {
+        "duration": 34.453,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Sat, Nov 28, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047303+05:30"
+    },
+    {
+      "id": "afk-dinner",
+      "title": "Dinner is cooking. The build is running. | AFK Ep. 7",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "AFK Ep. 7: dinner is cooking and a build is running.\nA small check from the phone, then back to dinner. That's the kind of interruption I built Pocket Dev for.\nFictional story; AI narration. Awake computer + remote setup.\nhttps://github.com/anisirji/pocket-dev\n#ClaudeCode",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep7-dinner.mp4",
+      "at": "2026-11-29T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 257,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:34:28.969615+05:30",
+      "confirmation": "Your post will be sent on Sun, Nov 29, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Sun, Nov 29, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:34:30.687041+05:30",
+      "uploaded_media": {
+        "duration": 32.085,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Sun, Nov 29, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047348+05:30"
+    },
+    {
+      "id": "afk-village",
+      "title": "The idea arrived far from the desk | AFK Ep. 8",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "AFK Ep. 8: an idea arrives far from the desk.\nPocket Dev can reach the tools on your computer from your phone browser, once remote access is configured. The computer stays awake.\nFictional story; AI narration.\nhttps://github.com/anisirji/pocket-dev\n#OpenSource",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep8-village.mp4",
+      "at": "2026-11-30T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 245,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:35:03.615229+05:30",
+      "confirmation": "Your post will be sent on Mon, Nov 30, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Mon, Nov 30, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:35:05.227140+05:30",
+      "uploaded_media": {
+        "duration": 39.786,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Mon, Nov 30, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047393+05:30"
+    },
+    {
+      "id": "afk-setup",
+      "title": "How the AFK setup works | Pocket Dev | AFK Ep. 9",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "How the AFK setup works: Pocket Dev runs on your computer and opens in your phone browser.\nStart on the same Wi-Fi. Away-from-home access needs extra setup and an awake computer.\nDemo project; AI narration.\nhttps://github.com/anisirji/pocket-dev\n#OpenSource",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep9-setup.mp4",
+      "at": "2026-12-01T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 242,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:35:31.894822+05:30",
+      "confirmation": "Your post will be sent on Tue, Dec 1, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Tue, Dec 1, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:35:38.017247+05:30",
+      "uploaded_media": {
+        "duration": 40.768,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Tue, Dec 1, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047438+05:30"
+    },
+    {
+      "id": "tutorial-macos-quick",
+      "title": "Install Pocket Dev on macOS and connect your phone | Quick start",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "Pocket Dev on macOS: install it, start it, then connect your phone on the same Wi-Fi.\nThis is an older recorded walkthrough with demo data and generated narration. Use the current setup instructions here:\nhttps://www.theani.me/work/pocket-dev/docs/setup\n#OpenSource",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final4/t1-install-macos-16x9-quick.mp4",
+      "at": "2026-12-02T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 240,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:36:34.580298+05:30",
+      "confirmation": "Your post will be sent on Wed, Dec 2, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Wed, Dec 2, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:36:42.539336+05:30",
+      "uploaded_media": {
+        "duration": 100.736,
+        "width": 1920,
+        "height": 1080
+      },
+      "native_list_confirmation": "Will send on Wed, Dec 2, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047481+05:30"
+    },
+    {
+      "id": "chhath-part1",
+      "title": "The Last Train Home | AFK: Chhath Part 1 | Pocket Dev",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "AFK: Chhath, Part 1. Arya is trying to get home to Maa while work follows her onto the train.\nA fictional film about making room for family, with Pocket Dev in the story.\nAI voices; demo project. Remote access set up, computer awake.\nhttps://github.com/anisirji/pocket-dev",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final5/chhath-part1.mp4",
+      "at": "2026-12-03T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 257,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:37:50.270968+05:30",
+      "confirmation": "Your post will be sent on Thu, Dec 3, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Thu, Dec 3, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:37:52.733722+05:30",
+      "uploaded_media": {
+        "duration": 97.813,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Thu, Dec 3, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047528+05:30"
+    },
+    {
+      "id": "chhath-part2",
+      "title": "Before the Sun Rises | AFK: Chhath Part 2 | Pocket Dev",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "AFK: Chhath, Part 2. Arya makes it home. The work still needs checking, but the morning with Maa matters too.\nFictional story; AI voices and demo data. Pocket Dev requires an awake, reachable computer.\nhttps://github.com/anisirji/pocket-dev\n#DeveloperLife",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final5/chhath-part2.mp4",
+      "at": "2026-12-04T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 240,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:38:38.044345+05:30",
+      "confirmation": "Your post will be sent on Fri, Dec 4, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Fri, Dec 4, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:38:40.327428+05:30",
+      "uploaded_media": {
+        "duration": 99.413,
+        "width": 1080,
+        "height": 1920
+      },
+      "native_list_confirmation": "Will send on Fri, Dec 4, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047572+05:30"
+    },
+    {
+      "id": "teaser-wide",
+      "title": "Your dev computer, from your phone | Pocket Dev teaser",
+      "account": "anisirji",
+      "platform": "X",
+      "caption": "An 11-second look at Pocket Dev.\nYour phone opens a browser. Your computer runs the coding tools.\nFree and open source. Same Wi-Fi by default; remote access needs setup and an awake computer.\nDemo data + AI narration.\nhttps://github.com/anisirji/pocket-dev\n#OpenSource",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final/pocket-dev-teaser-16x9-voice.mp4",
+      "at": "2026-12-05T20:00:00+05:30",
+      "status": "scheduled",
+      "weighted_length": 253,
+      "scheduler": "X native",
+      "ai_label": true,
+      "submission_attempt_at": "2026-11-19T09:39:10.369364+05:30",
+      "confirmation": "Your post will be sent on Sat, Dec 5, 2026 at 8:00 PM\nView",
+      "native_schedule_preview": "Will send on Sat, Dec 5, 2026 at 8:00 PM",
+      "verified_at": "2026-11-19T09:39:12.375267+05:30",
+      "uploaded_media": {
+        "duration": 11.4,
+        "width": 1920,
+        "height": 1080
+      },
+      "native_list_confirmation": "Will send on Sat, Dec 5, 2026 at 8:00 PM",
+      "native_list_verified_at": "2026-11-19T09:40:22.047617+05:30"
+    }
+  ],
+  "second_account": {
+    "handle": "AniketS22200779",
+    "status": "suspended",
+    "verification": "Signed-in public profile explicitly displays Account suspended. No posts, schedules, or attempts to bypass that restriction made."
+  },
+  "account_notice": "X displayed Unlock more on X: discoverability and non-follower DM access remain limited until the account is established. No artificial engagement performed.",
+  "cadence": "One future video post daily at 20:00 IST. Test slot, not an analytics-backed best-time claim.",
+  "native_list_verification": {
+    "count": 16,
+    "unique_caption_matches": 16,
+    "date_time_matches": 16,
+    "all_have_video": true,
+    "verified_at": "2026-11-19T09:40:22.047617+05:30",
+    "url": "https://x.com/compose/post/unsent/scheduled"
+  },
+  "community_posts": [
+    {
+      "id": "vibe-coding-launch",
+      "platform": "X",
+      "account": "anisirji",
+      "title": "Vibe Coding: phone workflows for Claude Code/Codex",
+      "body": "I built Pocket Dev for quick terminal checks and code reviews from a phone. Free/open source; work runs on your own awake computer. Remote setup needed.\n\nClaude Code/Codex users: what do you use away from the desk?\n\nDemo + fictional AFK story:\nhttps://x.com/anisirji/status/2123263433990946972",
+      "status": "published",
+      "published_at": "2026-11-19T09:42:00+05:30",
+      "url": "https://x.com/anisirji/status/2123268028041470015",
+      "community": "Vibe Coding",
+      "community_id": "1898129646782497027",
+      "community_url": "https://x.com/i/communities/1898129646782497027",
+      "quote_of": "https://x.com/anisirji/status/2123263433990946972",
+      "video_ids": [],
+      "ai_label": true,
+      "verification": "Joined the open community after reviewing its three displayed rules. Composer audience explicitly Vibe Coding and account anisirji. X confirmed Your post was sent to Vibe Coding. Direct permalink displays Community post, Vibe Coding link, exact copy, native quote of the original two-video launch, Made with AI and 9:42 AM November 19 timestamp."
+    }
+  ],
+  "status": "complete_for_active_account_second_suspended",
+  "coverage": {
+    "finished_videos": 18,
+    "published_posts": 2,
+    "published_videos": 2,
+    "scheduled_posts": 16,
+    "scheduled_videos": 16,
+    "second_account_scheduled_posts": 0
+  },
+  "completed_at": "2026-11-19T09:43:13.592987+05:30"
+}

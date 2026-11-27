@@ -1,0 +1,1017 @@
+{
+  "account": "hap.pyani",
+  "prepared": "2026-11-18",
+  "timezone": "Asia/Kolkata",
+  "cadence": "One reel daily with supporting posts and stories, explicitly chosen by user.",
+  "voice": "we",
+  "note": "This is a prepared queue, not proof of remote scheduling. Confirm exact account and publishing capabilities first. Initial intended slot: 8 PM IST. Shift the starting day forward if access is obtained after that slot. Silent copies, alternate voices and duplicate aspect ratios are excluded.",
+  "reels": [
+    {
+      "id": "hero",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "Your dev computer, from your phone | Pocket Dev",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final2/hero-9x16-bella.mp4",
+      "cover": null,
+      "caption": "We built Pocket Dev because we wanted to spend less time tied to a desk without losing touch with our work.\n\nClaude Code, Codex, terminals, Git and files — from your phone’s browser, running on your own computer.\n\nFree and open source. No phone app or Pocket Dev cloud account needed. Your computer must stay on and awake. Access away from the same Wi-Fi needs optional setup.\n\nThe video shows a demo project with scripted agent responses.\n\nExplore Pocket Dev: theani.me/work/pocket-dev\nAI setup prompts: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nIf it makes your day a little freer, share it with three people you’d love to see escape the PC cage too. No pressure. ❤️\n\nProject updates: @afk_pocket_dev\n\n#PocketDev #OpenSource #DeveloperTools #BuildInPublic\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-18T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "published",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/01-hero.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T10:53:44.281579+00:00",
+      "ai_label": true,
+      "facebook_crosspost": false,
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled; opened saved entry, verified 18 November 2026 at 20:00 IST and 3 collaborators.",
+      "verified_at": "2026-11-18T10:59:52.231913+00:00",
+      "ai_label_requested": true,
+      "actual_ai_label": null,
+      "actual_caption": "We built Pocket Dev because we wanted to spend less time tied to a desk without losing touch with our work.\n\nClaude Code, Codex, terminals, Git and files — from your phone’s browser, running on your own computer.\n\nFree and open source. No phone app or Pocket Dev cloud account needed. Your computer must stay on and awake. Access away from the same Wi-Fi needs optional setup.\n\nThe video shows a demo project with scripted agent responses.\n\nExplore Pocket Dev: theani.me/work/pocket-dev\nAI setup prompts: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nIf it makes your day a little freer, share it with three people you’d love to see escape the PC cage too. No pressure. ❤️\n\nProject updates: @afk_pocket_dev\n\n#PocketDev #OpenSource #DeveloperTools #BuildInPublic",
+      "caption_revision_persisted": false,
+      "saved_edit_ai_toggle": false,
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "date": "Wed, 18 Nov 2026",
+        "verified_at": "2026-11-18T11:47:53.702022+00:00",
+        "note": "Observed in the saved Reel editor before reviewing the series crops. Original 9:16 format preserved.",
+        "source_duration": 30.4
+      },
+      "url": "https://www.instagram.com/hap.pyani/reel/Df4uaTcsr7Y/",
+      "publication_verified_at": "2026-11-18T18:40:01.424Z",
+      "publication_confirmation": "Meta Business Suite Published list and @afk_pocket_dev collaborator grid show the matching @hap.pyani hero Reel published 18 November at 20:00."
+    },
+    {
+      "id": "product-demo",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "Pocket Dev product walkthrough",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final/pocket-dev-promo-9x16-voice.mp4",
+      "cover": null,
+      "caption": "What does Pocket Dev actually do?\n\nReal terminals, Claude Code, Codex, Git and files on your computer — from your phone's browser. It runs on your own machine, with your existing coding-agent accounts.\n\nNo phone app or Pocket Dev cloud account.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\nDemo data, scripted agent responses and a simulated install scene are shown. Same Wi-Fi by default; optional remote access needs setup and an awake computer.\n\nWhat would you use first?\n\n#PocketDev #ClaudeCode #Codex #OpenSource #BuildInPublic\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-19T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/02-product-demo.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:48:28.322402+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-19T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:48:47.409344+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "What does Pocket Dev actually do?\n\nReal terminals, Claude Code, Codex, Git and files on your computer — from your phone's browser. It runs on your own machine, with your existing coding-agent accounts.\n\nNo phone app or Pocket Dev cloud account.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\nDemo data, scripted agent responses and a simulated install scene are shown. Same Wi-Fi by default; optional remote access needs setup and an awake computer.\n\nWhat would you use first?\n\n#PocketDev #ClaudeCode #Codex #OpenSource #BuildInPublic\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1080,
+          "height": 1920
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:47:57.074022+00:00",
+        "completed_at": "2026-11-18T11:48:57.258617+00:00",
+        "verified_full_format": true
+      },
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 32.57619,
+        "date": "Thu, 19 Nov 2026",
+        "verified_at": "2026-11-18T11:48:57.258672+00:00"
+      }
+    },
+    {
+      "id": "chhath-part1",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "Chhath Part 1 — The Last Train Home",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final5/chhath-part1.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final5/chhath-part1-cover.png",
+      "caption": "The last train home. A promise to Maa. One unfinished task.\n\nAFK · Chhath · Pocket Dev\nPart 1: The Last Train Home\n\nArya is going home for Chhath Puja, but work has other plans. Will she make it in time?\n\nFollow @afk_pocket_dev for Part 2.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\n#ChhathPuja #Chhath #PocketDev #DeveloperLife #AFK\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-20T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/03-chhath-part1.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:27:30.954530+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-20T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:27:52.773075+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "The last train home. A promise to Maa. One unfinished task.\n\nAFK · Chhath · Pocket Dev\nPart 1: The Last Train Home\n\nArya is going home for Chhath Puja, but work has other plans. Will she make it in time?\n\nFollow @afk_pocket_dev for Part 2.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\n#ChhathPuja #Chhath #PocketDev #DeveloperLife #AFK\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "reason": "Saved video is square (720×720), while original is vertical. Replace before publication.",
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:26:50.267875+00:00",
+        "cropped_copy_deleted": true,
+        "verified_full_format": true,
+        "completed_at": "2026-11-18T11:28:22.717683+00:00"
+      },
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 97.918708,
+        "date": "Fri, 20 Nov 2026",
+        "verified_at": "2026-11-18T11:28:22.717683+00:00"
+      }
+    },
+    {
+      "id": "chhath-part2",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "Chhath Part 2 — Before the Sun Rises",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final5/chhath-part2.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final5/chhath-part2-cover.png",
+      "caption": "Some things can wait. Some moments cannot.\n\nAFK · Chhath · Pocket Dev\nPart 2: Before the Sun Rises\n\nWatch Part 1 on our profile first.\n\nA story about work, family and finding your way home. What part stayed with you?\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#ChhathPuja #Chhath #PocketDev #DeveloperLife #AFK\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-21T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/04-chhath-part2.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:29:32.227043+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-21T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:29:52.371633+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "Some things can wait. Some moments cannot.\n\nAFK · Chhath · Pocket Dev\nPart 2: Before the Sun Rises\n\nWatch Part 1 on our profile first.\n\nA story about work, family and finding your way home. What part stayed with you?\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#ChhathPuja #Chhath #PocketDev #DeveloperLife #AFK\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1080,
+          "height": 1920
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:28:58.861561+00:00",
+        "verified_full_format": true,
+        "completed_at": "2026-11-18T11:33:20.773767+00:00"
+      },
+      "crop_correction_error": null,
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 99.518708,
+        "date": "Sat, 21 Nov 2026",
+        "verified_at": "2026-11-18T11:33:20.773767+00:00"
+      }
+    },
+    {
+      "id": "afk-wedding",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "AFK 1 — The Wedding",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep1-wedding.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final3/ep1-wedding-cover.png",
+      "caption": "Claude is waiting for approval. Arya is at a wedding.\n\nTwenty seconds, then back to the family photo.\n\nAFK, episode 1: The Wedding.\n\nEver stepped away from a family event to check work?\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#PocketDev #ClaudeCode #DeveloperLife #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-22T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/05-afk-wedding.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:34:57.009221+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-22T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:35:20.286996+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "Claude is waiting for approval. Arya is at a wedding.\n\nTwenty seconds, then back to the family photo.\n\nAFK, episode 1: The Wedding.\n\nEver stepped away from a family event to check work?\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#PocketDev #ClaudeCode #DeveloperLife #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1080,
+          "height": 1920
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:34:22.963119+00:00",
+        "completed_at": "2026-11-18T11:35:30.593015+00:00",
+        "verified_full_format": true
+      },
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 32.105375,
+        "date": "Sun, 22 Nov 2026",
+        "verified_at": "2026-11-18T11:35:30.593073+00:00"
+      }
+    },
+    {
+      "id": "afk-3am-question",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "AFK 2 — 3 AM: choose the ending",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-question.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-question-cover.png",
+      "caption": "3:07 AM. The site is down. What should Arya do?\n\nComment 1: fix it from bed.\nComment 2: sleep and handle it in the morning.\n\nAFK, episode 2. You choose the ending.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\nThe alert in this fictional story comes from an external uptime monitor. Pocket Dev does not send notifications to a locked phone.\n\n#PocketDev #DeveloperLife #DevOps #AFK #BuildInPublic\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-23T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/06-afk-3am-question.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:36:10.805507+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-23T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:36:30.315451+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "3:07 AM. The site is down. What should Arya do?\n\nComment 1: fix it from bed.\nComment 2: sleep and handle it in the morning.\n\nAFK, episode 2. You choose the ending.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\nThe alert in this fictional story comes from an external uptime monitor. Pocket Dev does not send notifications to a locked phone.\n\n#PocketDev #DeveloperLife #DevOps #AFK #BuildInPublic\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1080,
+          "height": 1920
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:35:38.367352+00:00",
+        "completed_at": "2026-11-18T11:36:40.960820+00:00",
+        "verified_full_format": true
+      },
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 30.548042,
+        "date": "Mon, 23 Nov 2026",
+        "verified_at": "2026-11-18T11:36:40.960882+00:00"
+      }
+    },
+    {
+      "id": "afk-train-part1",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "AFK 3 — The Train, Part 1",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep3-train-part1.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final3/ep3-train-part1-cover.png",
+      "caption": "A demo in one hour. Tests running. Then the train loses signal.\n\nWhat happens to the work?\n\nAFK, episode 3: The Train, Part 1. Follow for the next part.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\n#PocketDev #DeveloperLife #Coding #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-24T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/07-afk-train-part1.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:37:19.260060+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-24T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:37:38.380666+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "A demo in one hour. Tests running. Then the train loses signal.\n\nWhat happens to the work?\n\nAFK, episode 3: The Train, Part 1. Follow for the next part.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\n#PocketDev #DeveloperLife #Coding #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1080,
+          "height": 1920
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:36:47.601268+00:00",
+        "completed_at": "2026-11-18T11:37:49.539338+00:00",
+        "verified_full_format": true
+      },
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 30.377375,
+        "date": "Tue, 24 Nov 2026",
+        "verified_at": "2026-11-18T11:37:49.539410+00:00"
+      }
+    },
+    {
+      "id": "afk-train-part2",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "AFK 4 — The Train, Part 2",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep4-train-part2.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final3/ep4-train-part2-cover.png",
+      "caption": "The signal came back. The terminal had kept running.\n\nAFK, episode 4: The Train, Part 2. Watch Part 1 on our profile first.\n\nPocket Dev terminals replay recent output when your browser reconnects. The computer must remain running; terminals do not survive a computer restart.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#PocketDev #Terminal #DeveloperLife #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-25T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/08-afk-train-part2.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:38:27.837289+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-25T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:38:47.105639+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "The signal came back. The terminal had kept running.\n\nAFK, episode 4: The Train, Part 2. Watch Part 1 on our profile first.\n\nPocket Dev terminals replay recent output when your browser reconnects. The computer must remain running; terminals do not survive a computer restart.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#PocketDev #Terminal #DeveloperLife #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1080,
+          "height": 1920
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:37:55.432030+00:00",
+        "completed_at": "2026-11-18T11:38:58.008430+00:00",
+        "verified_full_format": true
+      },
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 30.441375,
+        "date": "Wed, 25 Nov 2026",
+        "verified_at": "2026-11-18T11:38:58.008508+00:00"
+      }
+    },
+    {
+      "id": "afk-waiting-room",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "AFK 5 — The Waiting Room",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep5-waiting-room.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final3/ep5-waiting-room-cover.png",
+      "caption": "A quick review. Then the phone goes away.\n\nAFK, episode 5: The Waiting Room.\n\nWork fits around life. Who does this story remind you of?\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#PocketDev #DeveloperLife #Git #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-26T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/09-afk-waiting-room.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:39:39.792693+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-26T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:40:01.685668+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "A quick review. Then the phone goes away.\n\nAFK, episode 5: The Waiting Room.\n\nWork fits around life. Who does this story remind you of?\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#PocketDev #DeveloperLife #Git #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1080,
+          "height": 1920
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:39:06.703001+00:00",
+        "completed_at": "2026-11-18T11:40:12.971687+00:00",
+        "verified_full_format": true
+      },
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 33.492042,
+        "date": "Thu, 26 Nov 2026",
+        "verified_at": "2026-11-18T11:40:12.971743+00:00"
+      }
+    },
+    {
+      "id": "afk-hackathon",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "AFK 6 — The Hackathon",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep6-hackathon.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final3/ep6-hackathon-cover.png",
+      "caption": "Three hours to the demo. One dead laptop.\n\nArya shares scoped project access so her friend can keep working.\n\nAFK, episode 6: The Hackathon.\n\nWho is your hackathon partner?\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\nScoped collaborator access is not shared AI-chat access.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#PocketDev #Hackathon #BuildInPublic #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-27T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/10-afk-hackathon.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:40:51.578668+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-27T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:41:10.658699+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "Three hours to the demo. One dead laptop.\n\nArya shares scoped project access so her friend can keep working.\n\nAFK, episode 6: The Hackathon.\n\nWho is your hackathon partner?\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\nScoped collaborator access is not shared AI-chat access.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#PocketDev #Hackathon #BuildInPublic #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1080,
+          "height": 1920
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:40:19.736098+00:00",
+        "completed_at": "2026-11-18T11:41:21.925225+00:00",
+        "verified_full_format": true
+      },
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 34.453,
+        "date": "Fri, 27 Nov 2026",
+        "verified_at": "2026-11-18T11:41:21.925286+00:00"
+      }
+    },
+    {
+      "id": "afk-dinner",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "AFK 7 — Dinner",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep7-dinner.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final3/ep7-dinner-cover.png",
+      "caption": "Dinner is cooking. The build is running.\n\nAFK, episode 7: Dinner.\n\nWhich command sent that message? Leave your guess — the answer is in episode 8.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\nMessages are checked inside Pocket Dev; this is not a notification to a locked phone.\n\n#PocketDev #DeveloperLife #Terminal #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-28T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/11-afk-dinner.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:42:00.832048+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-28T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:42:18.875680+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "Dinner is cooking. The build is running.\n\nAFK, episode 7: Dinner.\n\nWhich command sent that message? Leave your guess — the answer is in episode 8.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\nMessages are checked inside Pocket Dev; this is not a notification to a locked phone.\n\n#PocketDev #DeveloperLife #Terminal #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1080,
+          "height": 1920
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:41:28.730202+00:00",
+        "completed_at": "2026-11-18T11:42:29.520777+00:00",
+        "verified_full_format": true
+      },
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 32.085,
+        "date": "Sat, 28 Nov 2026",
+        "verified_at": "2026-11-18T11:42:29.520838+00:00"
+      }
+    },
+    {
+      "id": "afk-village",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "AFK 8 — The Village",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep8-village.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final3/ep8-village-cover.png",
+      "caption": "The idea arrived far from the desk.\n\nAFK, episode 8: The Village.\n\nWhere did your best project idea come to you?\n\nEpisode 7's quiz answer is in this episode's end card.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#PocketDev #IndieHacker #DeveloperLife #AFK #BuildInPublic\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-29T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/12-afk-village.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:43:12.568680+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-29T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:43:32.156978+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "The idea arrived far from the desk.\n\nAFK, episode 8: The Village.\n\nWhere did your best project idea come to you?\n\nEpisode 7's quiz answer is in this episode's end card.\n\nFictional AFK story, real Pocket Dev app, demo project. Remote access configured; computer on and awake.\n\nPocket Dev: your dev computer, from your phone. Free and open source. Source and setup: github.com/anisirji/pocket-dev\n\n#PocketDev #IndieHacker #DeveloperLife #AFK #BuildInPublic\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1080,
+          "height": 1920
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:42:40.456884+00:00",
+        "completed_at": "2026-11-18T11:43:44.122299+00:00",
+        "verified_full_format": true
+      },
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 39.892042,
+        "date": "Sun, 29 Nov 2026",
+        "verified_at": "2026-11-18T11:43:44.122369+00:00"
+      }
+    },
+    {
+      "id": "afk-setup",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "AFK 9 — How Arya does it",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep9-setup.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final3/ep9-setup-cover.png",
+      "caption": "The setup behind the AFK stories.\n\nInstall Pocket Dev on your computer, connect your phone, and keep the work on your own machine.\n\nAFK, episode 9: How Arya does it.\n\nCurrent step-by-step setup: www.theani.me/work/pocket-dev/docs\n\nIllustrated story with demo projects. Remote access is optional and requires setup; the computer must stay on and awake. Claude Code and Codex use your own accounts.\n\nWhich AFK episode felt most familiar?\n\n#PocketDev #ClaudeCode #Codex #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "intended_publish_at": "2026-11-30T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/13-afk-setup.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:44:25.834453+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-11-30T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:44:44.733517+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "The setup behind the AFK stories.\n\nInstall Pocket Dev on your computer, connect your phone, and keep the work on your own machine.\n\nAFK, episode 9: How Arya does it.\n\nCurrent step-by-step setup: www.theani.me/work/pocket-dev/docs\n\nIllustrated story with demo projects. Remote access is optional and requires setup; the computer must stay on and awake. Claude Code and Codex use your own accounts.\n\nWhich AFK episode felt most familiar?\n\n#PocketDev #ClaudeCode #Codex #AFK #OpenSource\n\nExplore: theani.me/work/pocket-dev\nAI setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1080,
+          "height": 1920
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:43:52.488473+00:00",
+        "completed_at": "2026-11-18T11:45:17.655234+00:00",
+        "verified_full_format": true
+      },
+      "saved_video_verified": {
+        "width": 720,
+        "height": 1280,
+        "duration": 40.873375,
+        "date": "Mon, 30 Nov 2026",
+        "verified_at": "2026-11-18T11:45:17.655316+00:00"
+      }
+    },
+    {
+      "id": "tutorial-macos-quick",
+      "account": "hap.pyani",
+      "type": "reel",
+      "title": "Install Pocket Dev on macOS and connect your phone | Quick start",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final4/t1-install-macos-16x9-quick.mp4",
+      "cover": "/Users/ani/Desktop/pocket-dev-video/final4/t1-quick-thumbnail.png",
+      "caption": "Pocket Dev on macOS: an older quick-start recording showing the basic installation and phone connection.\n\nThe setup screens have changed since this video was made. Follow our current guide for the instructions to use now:\ntheani.me/work/pocket-dev/docs/setup\n\nPrefer help from your AI? Copy our setup prompt:\ntheani.me/work/pocket-dev/prompts\n\nFree and open source. Your computer must stay on and awake. Remote access needs optional setup.\n\nSource: github.com/anisirji/pocket-dev\nProject updates: @afk_pocket_dev\n\n#PocketDev #OpenSource #macOS #DeveloperTools\n\nAI-generated narration.",
+      "intended_publish_at": "2026-12-01T20:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "generated_narration": true,
+      "manual_ai_label": true,
+      "status": "scheduled",
+      "story_asset": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/14-tutorial-macos-quick.png",
+      "confirmed_remote_id": null,
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:45:59.630494+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": true,
+      "scheduled_for": "2026-12-01T20:00:00+05:30",
+      "confirmed_at": "2026-11-18T11:46:18.653292+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "Pocket Dev on macOS: an older quick-start recording showing the basic installation and phone connection.\n\nThe setup screens have changed since this video was made. Follow our current guide for the instructions to use now:\ntheani.me/work/pocket-dev/docs/setup\n\nPrefer help from your AI? Copy our setup prompt:\ntheani.me/work/pocket-dev/prompts\n\nFree and open source. Your computer must stay on and awake. Remote access needs optional setup.\n\nSource: github.com/anisirji/pocket-dev\nProject updates: @afk_pocket_dev\n\n#PocketDev #OpenSource #macOS #DeveloperTools\n\nAI-generated narration.",
+      "crop_correction": {
+        "old_saved_video": {
+          "width": 720,
+          "height": 720
+        },
+        "original_video": {
+          "width": 1920,
+          "height": 1080
+        },
+        "previous_confirmation": "Instagram displayed Your reel has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+        "started_at": "2026-11-18T11:45:25.966106+00:00",
+        "completed_at": "2026-11-18T11:46:51.911919+00:00",
+        "verified_full_format": true
+      },
+      "saved_video_verified": {
+        "width": 1280,
+        "height": 720,
+        "duration": 100.841375,
+        "date": "Tue, 1 Dec 2026",
+        "verified_at": "2026-11-18T11:46:51.911977+00:00"
+      }
+    }
+  ],
+  "conditional_endings": {
+    "status": "await_real_response_counts",
+    "question_id": "afk-3am-question",
+    "options": [
+      "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-ending1.mp4",
+      "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-ending2.mp4"
+    ],
+    "rule": "Do not claim audience choice without actual responses. Do not automatically post both endings."
+  },
+  "supporting_posts": [
+    {
+      "id": "launch-carousel",
+      "type": "carousel",
+      "intended_publish_at": "2026-11-18T18:30:00+05:30",
+      "status": "scheduled",
+      "slides": [
+        "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/carousel/01-intro.png",
+        "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/carousel/02-terminal.png",
+        "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/carousel/03-chat.png",
+        "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/carousel/04-setup.png",
+        "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/carousel/05-share.png"
+      ],
+      "caption": "We built Pocket Dev to make stepping away from the desk a little easier.\n\nSwipe through the terminal, coding chat and setup options. Screens use demo data and scripted agent responses. Your computer must stay on and awake; remote access needs optional setup.\n\nExplore: theani.me/work/pocket-dev\nAI setup prompts: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\n#PocketDev #OpenSource #DeveloperTools",
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:19:11.324573+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": false,
+      "scheduled_for": "2026-11-18T18:30:00+05:30",
+      "confirmed_at": "2026-11-18T11:22:35.406170+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your post has been scheduled. Verified hap.pyani, 18 November 18:30 IST, five full 4:5 images, exact caption and all three collaborator selections. Facebook and Threads crossposting off.",
+      "actual_caption": "We built Pocket Dev to make stepping away from the desk a little easier.\n\nSwipe through the terminal, coding chat and setup options. Screens use demo data and scripted agent responses. Your computer must stay on and awake; remote access needs optional setup.\n\nExplore: theani.me/work/pocket-dev\nAI setup prompts: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\n#PocketDev #OpenSource #DeveloperTools",
+      "threads_crosspost": false
+    },
+    {
+      "id": "setup-carousel",
+      "type": "carousel",
+      "intended_publish_at": "2026-11-23T18:30:00+05:30",
+      "status": "scheduled",
+      "slides": [
+        "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/carousel/06-setup-intro.png",
+        "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/carousel/07-connect.png",
+        "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/carousel/08-ask-ai.png"
+      ],
+      "caption": "Start on your computer, connect your phone, and let your AI help if you want.\n\nWe’ve put the current guide and copyable prompts here:\ntheani.me/work/pocket-dev/docs/setup\ntheani.me/work/pocket-dev/prompts\n\nYour computer must stay on and awake. Remote access needs optional setup.\n\n#PocketDev #OpenSource #DeveloperTools",
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:23:02.380782+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": false,
+      "scheduled_for": "2026-11-23T18:30:00+05:30",
+      "confirmed_at": "2026-11-18T11:23:13.919451+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your post has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "Start on your computer, connect your phone, and let your AI help if you want.\n\nWe’ve put the current guide and copyable prompts here:\ntheani.me/work/pocket-dev/docs/setup\ntheani.me/work/pocket-dev/prompts\n\nYour computer must stay on and awake. Remote access needs optional setup.\n\n#PocketDev #OpenSource #DeveloperTools"
+    },
+    {
+      "id": "freedom-note",
+      "type": "image",
+      "intended_publish_at": "2026-11-28T18:30:00+05:30",
+      "status": "scheduled",
+      "slides": [
+        "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/carousel/09-freedom-note.png"
+      ],
+      "caption": "We built Pocket Dev because we wanted to spend less time tied to a desk and more time living, without losing touch with our work.\n\nIf it makes your day a little freer, share it with three people you’d love to see escape the PC cage too. If they find it useful, invite them to share it with three more.\n\nNo pressure. Just something useful, passed from one person to another. ❤️\n\nLet your AI help with setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\n#PocketDev #OpenSource #DeveloperTools",
+      "collaborators_requested": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "attempted_at": "2026-11-18T11:23:42.883211+00:00",
+      "collaborators_selected": [
+        "afk_pocket_dev",
+        "_.ro_.hit",
+        "__harshahaha_00"
+      ],
+      "facebook_crosspost": false,
+      "ai_label_requested": false,
+      "scheduled_for": "2026-11-28T18:30:00+05:30",
+      "confirmed_at": "2026-11-18T11:24:00.422270+00:00",
+      "scheduler": "Instagram native web",
+      "confirmation": "Instagram displayed Your post has been scheduled. Account, caption, date/time, original media, Instagram-only destination and all three collaborator selections checked before submission.",
+      "actual_caption": "We built Pocket Dev because we wanted to spend less time tied to a desk and more time living, without losing touch with our work.\n\nIf it makes your day a little freer, share it with three people you’d love to see escape the PC cage too. If they find it useful, invite them to share it with three more.\n\nNo pressure. Just something useful, passed from one person to another. ❤️\n\nLet your AI help with setup: theani.me/work/pocket-dev/prompts\nSource: github.com/anisirji/pocket-dev\n\n#PocketDev #OpenSource #DeveloperTools"
+    }
+  ],
+  "stories": {
+    "status": "new_pocket_dev_page_created_connection_in_progress",
+    "plan": "One matching Story card per Reel; native Reel sharing or link sticker when the account and interface support it. Prepared files are not published Stories.",
+    "assets": 14,
+    "queue_file": "/Users/ani/Desktop/pocket-dev/docs/marketing/personal-instagram/stories/queue.json",
+    "approval_question": "User requested creating a new Pocket Dev Facebook Page instead of ALL for You; new Page creation and Instagram link authorized."
+  },
+  "account_verified": true,
+  "account_confirmation": "Signed-in Instagram sidebar and profile link identify hap.pyani in Chrome tab 1923425565.",
+  "collaborators": [
+    "afk_pocket_dev",
+    "_.ro_.hit",
+    "__harshahaha_00"
+  ],
+  "collaborator_note": "Instagram exact matches verified: afk_pocket_dev (pocket dev), _.ro_.hit (Rohit Kumar), __harshahaha_00 (Raw Wizi). User explicitly confirmed corrected Harsh handle.",
+  "calendar_verification": {
+    "verified_at": "2026-11-18T11:50:29.005854+00:00",
+    "account": "hap.pyani",
+    "matching_entries": 17,
+    "duplicates": 0,
+    "weeks": [
+      {
+        "cards": [
+          {
+            "opening": "We built Pocket Dev to make stepping away from the desk a little easier.",
+            "time": "18:30"
+          },
+          {
+            "opening": "We built Pocket Dev because we wanted to spend less time tied to a desk without losing touch with our work.",
+            "time": "20:00"
+          },
+          {
+            "opening": "What does Pocket Dev actually do?",
+            "time": "20:00"
+          },
+          {
+            "opening": "The last train home. A promise to Maa. One unfinished task.",
+            "time": "20:00"
+          },
+          {
+            "opening": "Some things can wait. Some moments cannot.",
+            "time": "20:00"
+          }
+        ],
+        "days": [
+          "15 Sun",
+          "16 Mon",
+          "17 Tue",
+          "18 Wed",
+          "19 Thu",
+          "20 Fri",
+          "21 Sat"
+        ]
+      },
+      {
+        "cards": [
+          {
+            "opening": "Claude is waiting for approval. Arya is at a wedding.",
+            "time": "20:00"
+          },
+          {
+            "opening": "Start on your computer, connect your phone, and let your AI help if you want.",
+            "time": "18:30"
+          },
+          {
+            "opening": "3:07 AM. The site is down. What should Arya do?",
+            "time": "20:00"
+          },
+          {
+            "opening": "A demo in one hour. Tests running. Then the train loses signal.",
+            "time": "20:00"
+          },
+          {
+            "opening": "The signal came back. The terminal had kept running.",
+            "time": "20:00"
+          },
+          {
+            "opening": "A quick review. Then the phone goes away.",
+            "time": "20:00"
+          },
+          {
+            "opening": "Three hours to the demo. One dead laptop.",
+            "time": "20:00"
+          },
+          {
+            "opening": "We built Pocket Dev because we wanted to spend less time tied to a desk and more time living, without losing touch with our work.",
+            "time": "18:30"
+          },
+          {
+            "opening": "Dinner is cooking. The build is running.",
+            "time": "20:00"
+          }
+        ],
+        "days": [
+          "22 Sun",
+          "23 Mon",
+          "24 Tue",
+          "25 Wed",
+          "26 Thu",
+          "27 Fri",
+          "28 Sat"
+        ]
+      },
+      {
+        "cards": [
+          {
+            "opening": "The idea arrived far from the desk.",
+            "time": "20:00"
+          },
+          {
+            "opening": "The setup behind the AFK stories.",
+            "time": "20:00"
+          },
+          {
+            "opening": "Pocket Dev on macOS: an older quick-start recording showing the basic installation and phone connection.",
+            "time": "20:00"
+          }
+        ],
+        "days": [
+          "29 Sun",
+          "30 Mon",
+          "1 Tue",
+          "2 Wed",
+          "3 Thu",
+          "4 Fri",
+          "5 Sat"
+        ]
+      }
+    ],
+    "timezone": "Asia/Kolkata"
+  },
+  "execution_status": {
+    "as_of": "2026-11-18T11:52:46.277927+00:00",
+    "account": "hap.pyani",
+    "reels_scheduled": 13,
+    "feed_posts_scheduled": 3,
+    "saved_video_formats_verified": 14,
+    "calendar_entries_verified": 17,
+    "duplicates": 0,
+    "stories_published": 0,
+    "stories_scheduled": 0,
+    "story_artwork_prepared": 14,
+    "story_connection_choice": "new_pocket_dev_page",
+    "collaborators": [
+      "afk_pocket_dev",
+      "_.ro_.hit",
+      "__harshahaha_00"
+    ],
+    "collaborator_acceptance": "pending recipients; selections saved in scheduled entries",
+    "reels_published": 1,
+    "current_access": "Switching to hap.pyani requires WhatsApp two-step verification; user has been asked to complete it directly in Chrome."
+  }
+}

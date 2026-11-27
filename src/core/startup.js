@@ -80,8 +80,12 @@ export async function runningInstance(stateDir, fetchFn = fetch) {
 
 // Plan C11: the first start on a computer that was never set up runs the guided setup when a person is at a terminal.
 // Without one (a script, CI, npx in a pipe) it prints the status table and the command, and the start goes on.
-export async function firstRun({ ctx, runSetup, noSetup = false }) {
+export async function firstRun({ ctx, runSetup, noSetup = false, graphical = false }) {
   if (noSetup || ctx.env.POCKET_DEV_NO_SETUP || ctx.setupDone.read()) return 'skipped';
+  if (graphical && ctx.platform === 'darwin' && ctx.isTTY && !ctx.env.CI && !ctx.env.SSH_CONNECTION && !ctx.env.SSH_TTY && !ctx.env.POCKET_DEV_NO_OPEN) {
+    ctx.out('Finish setup in the local Admin page that opens in your browser. You can also run: pocket-dev setup');
+    return 'graphical';
+  }
   if (!ctx.isTTY || ctx.env.CI) {
     await runSetup(['--check'], ctx);
     ctx.out('This computer has not been set up yet. In a terminal, run: pocket-dev setup');

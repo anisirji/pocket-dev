@@ -11,11 +11,11 @@
     let hiddenAt = 0;
     return {
       info: () => info,
-      pinging: () => Boolean(info) && !later,
+      pinging: () => Boolean(info) && !later && info.remind !== false,
       async load() {
         let found = null;
         try { found = await fetchUpdate(); } catch { /* offline: keep what we knew */ return info; }
-        info = found?.available ? { latest: found.latest, current: found.current, command: found.command ?? null, os: found.os ?? null } : null;
+        info = found?.available ? { latest: found.latest, current: found.current, command: found.command ?? null, os: found.os ?? null, ...(found.remind === false ? { remind: false } : {}) } : null;
         return info;
       },
       later() { later = true; },
@@ -65,7 +65,8 @@
     async fetchUpdate() {
       const res = await fetch('/api/service', { cache: 'no-store' });
       if (!res.ok) return null;
-      return (await res.json()).update ?? null;
+      const service = await res.json();
+      return service.update ? { ...service.update, remind: service.updateReminders !== false } : null;
     },
   });
 
@@ -140,5 +141,6 @@
   document.addEventListener('visibilitychange', async () => {
     if (await notice.visibility(document.hidden)) { render(); showPing(); }
   });
+  document.addEventListener('pd-notification-preferences', (event) => { if (event.detail.inAppUpdates === false) closePing(); });
   void check();
 })();

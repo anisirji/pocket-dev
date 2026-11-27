@@ -1,0 +1,20 @@
+{
+  "account": "ROHIT KUMAR DAS",
+  "profile_url": "https://www.linkedin.com/in/rohit-kumar-das-583b28223/",
+  "status": "published_verified",
+  "previous_headline": "Student at Rungta College of Engineering & Technology Kohka-Kurud Bhilai.",
+  "headline": "Building Pocket Dev with Ani | Free, open-source developer tools",
+  "about": "I’m building Pocket Dev with my partner Ani to help developers spend less time tied to a desk without losing touch with their work.\n\nPocket Dev is free and open source. It brings your computer’s terminals, Claude Code and Codex chats, Git and files to your phone’s browser. Your work stays on your own computer, using your existing coding-agent accounts.\n\nUse it on the same Wi-Fi, or configure optional remote access when you’re away. Your computer needs to stay on and awake.\n\nWebsite: https://www.theani.me/work/pocket-dev\nSource: https://github.com/anisirji/pocket-dev\nnpm: https://www.npmjs.com/package/@anisirji/pocket-dev\nAI-assisted setup: https://www.theani.me/work/pocket-dev/prompts",
+  "featured_post": "https://www.linkedin.com/feed/update/urn:li:activity:7528759827150532608/",
+  "industry": "Software Development",
+  "location": "Jamshedpur, Jharkhand, India",
+  "banner": "/Users/ani/Desktop/pocket-dev/docs/marketing/linkedin-branding/banner.png",
+  "contact_websites": [
+    "https://www.theani.me/work/pocket-dev",
+    "https://github.com/anisirji/pocket-dev",
+    "https://www.npmjs.com/package/@anisirji/pocket-dev"
+  ],
+  "verified_at": "2026-11-18T10:16:49.827081+00:00",
+  "verification": "Headline, About, Jamshedpur location, Featured launch post and banner persisted after reloading. Contact overlay saved exact website, GitHub and npm destinations. Downloaded and visually inspected live banner. User supplied postal code used in editor; not retained in marketing record. Follow-ups subsequently scheduled in LinkedIn; see LINKEDIN_SCHEDULE.md.",
+  "followups": "Two follow-up posts scheduled natively in LinkedIn for 23 and 26 November 2026 at 11 AM IST; see LINKEDIN_SCHEDULE.md."
+}

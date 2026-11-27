@@ -88,7 +88,7 @@ test('the command waits for the result and gives up after its time limit', async
 });
 
 function windowsRunner(t, { handOff, last = null } = {}) {
-  const check = createVersionCheck({ version: '2.1.3', stateDir: tmp(t), lookup: async () => '2.1.4' });
+  const check = createVersionCheck({ version: '2.1.3', stateDir: tmp(t), lookup: async () => '2.1.4', env: {} });
   const handed = [];
   const r = createUpdateRunner({
     versionCheck: check, kind: 'global', version: '2.1.3', readVersion: () => '2.1.3', platform: 'win32',

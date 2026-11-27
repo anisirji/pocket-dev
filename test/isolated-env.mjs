@@ -12,6 +12,7 @@ export function isolatedEnv(home, extra = {}) {
   return {
     ...env,
     HOME: home,
+    ...(process.platform === 'win32' ? { USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(home, 'AppData', 'Local') } : {}),
     CLAUDE_CONFIG_DIR: path.join(home, '.claude'),
     CODEX_HOME: path.join(home, '.codex'),
     POCKET_DEV_CLAUDE_DIR: path.join(home, '.claude', 'projects'),

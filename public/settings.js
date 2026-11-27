@@ -99,10 +99,8 @@
       <section>
         <h3>Log in another phone</h3>
         <p class="st-note">Scan the code with the other phone's camera. It logs in without the password, works once, and expires in 10 minutes.</p>
-        <p class="st-note st-addr"></p>
         <button class="st-btn" data-act="qr">Show login QR</button>
-        <div class="st-qr" hidden></div>
-        <button class="st-btn" data-act="copy-qr" hidden>Copy link</button>
+        <div class="st-connection-qr" hidden></div>
         <p class="st-err" data-for="qr"></p>
       </section>
       <section>
@@ -119,41 +117,203 @@
   let editingId = null;
   let timer = 0;
   let currentPage = 'home';
+  let suppressRender = false, previousFocus;
+  const frames = [], positions = new Map();
+  const routes = new Map([
+    ['apps', () => window.openAppsSheet()], ['health', () => window.openHealthSheet()],
+    ['screen', () => window.openScreenSheet()], ['camera', () => window.openCameraSheet()],
+  ]);
   const body = $('.st-body');
-  const home = el('div', 'st-home-nav');
-  const computerInfo = el('div', 'st-computer-info');
-  home.append(computerInfo);
   const originalSections = [...body.children];
+  const pages = [
+    ['computers', 'Connected computers', 'Your computers and shared connections', '▣'],
+    ['connection', 'Connection', 'Wi-Fi & Internet', '↔'],
+    ['tools', 'AI Tools', 'Setup, sharing & authorized computers', '✦'],
+    ['controls', 'Computer controls', 'Power, applications, health, screen & camera', '⌘'],
+    ['security', 'Security & Devices', 'Logins, approvals, device limit & password', '◇'],
+    ['service', 'Service & Updates', 'Startup, updates & restart', '↻'],
+  ];
   for (const section of originalSections) {
     const mount = section.dataset.mount;
     section.dataset.settingsPage = mount === 'connection' ? 'connection' : mount === 'service' ? 'service' : mount === 'tools' ? 'tools'
-      : section.querySelector('.st-summary, .st-stepper, [data-form="password"], [data-act="qr"]') ? 'security'
-      : section.querySelector('[data-act="room"], [data-act="logout"]') ? 'home' : 'controls';
-    if (mount === 'collaborators') section.remove();
+      : section.querySelector('.st-summary, .st-stepper, [data-form="password"], [data-act="qr"]') ? 'security' : 'controls';
+    if (mount === 'collaborators' || section.querySelector('[data-act="room"], [data-act="logout"]')) section.remove();
   }
-  const pages = [
-    ['connection', 'Connection', 'Wi-Fi & Internet'], ['tools', 'AI Tools', 'Installed and shared providers'],
-    ['controls', 'Computer controls', 'Power, apps, health, screen & camera'],
-    ['security', 'Security & Devices', 'Password, logins & approvals'], ['service', 'Service & Updates', 'Startup, restart & updates'],
-  ];
-  home.append(el('h3', null, 'Connectivity'), originalSections[0]);
-  for (const [key, name, description] of pages) {
-    if (key === 'controls') home.append(el('h3', null, 'General'));
-    const b = el('button', 'st-link'); b.type = 'button';
-    const text = el('span'); text.append(el('span', null, name), el('small', null, description));
-    b.append(text, el('span', 'st-chev', '›')); b.onclick = () => showPage(key); home.append(b);
+  $('.st-body h3').textContent = 'Logged-in devices';
+  $('[data-act="apps"] span').textContent = 'Applications';
+  $('[data-act="screen"] span').textContent = 'Screen';
+  for (const input of sheet.querySelectorAll('.st-form input:not([type="checkbox"])')) input.setAttribute('aria-label', input.placeholder);
+
+  const shell = el('div', 'st-window');
+  const nav = el('nav', 'st-nav'); nav.setAttribute('aria-label', 'Settings categories');
+  const navTitle = el('h1', 'st-nav-title', 'Settings');
+  const computerInfo = el('div', 'st-computer-info');
+  computerInfo.append(el('strong', null, 'This computer'), el('p', 'st-note', 'Checking connection…'));
+  nav.append(navTitle, computerInfo);
+  for (const [key, name, description, icon] of pages) {
+    const button = el('button', 'st-category'); button.type = 'button'; button.dataset.category = key;
+    const mark = el('span', 'st-category-icon', icon); mark.setAttribute('aria-hidden', 'true');
+    const text = el('span', 'st-category-text'); text.append(el('span', null, name), el('small', null, description));
+    button.append(mark, text, el('span', 'st-chev', '›')); button.onclick = () => showPage(key); nav.append(button);
   }
-  home.append(originalSections.at(-1));
-  body.prepend(home);
-  const back = el('button', 'st-back', '←'); back.type = 'button'; back.setAttribute('aria-label', 'Back to settings');
-  back.onclick = () => showPage('home'); $('.st-head').prepend(back);
+  const logoutSection = originalSections.at(-1); logoutSection.className = 'st-logout'; nav.append(logoutSection);
+  const credit = el('footer', 'st-credit'); credit.append('Written by ');
+  const author = el('a', null, 'theani.me'); author.href = 'https://theani.me'; author.target = '_blank'; author.rel = 'noopener noreferrer'; credit.append(author); nav.append(credit);
+  const content = el('main', 'st-content');
+  const head = $('.st-head');
+  const back = el('button', 'st-back', '‹'); back.type = 'button'; back.setAttribute('aria-label', 'Back to settings');
+  back.onclick = () => goBack(); head.prepend(back);
+  const help = el('button', 'pd-guide-button', '?'); help.type = 'button'; help.hidden = true; head.querySelector('h2').after(help);
+  const panelMount = el('div', 'st-panel-mount'); panelMount.hidden = true;
+  const welcome = el('div', 'st-welcome'); welcome.append(el('h2', null, 'Your Pocket Dev'), el('p', null, 'Choose a category to manage your computers, tools and connection.'));
+  content.append(head, welcome, body, panelMount); shell.append(nav, content); sheet.replaceChildren(shell);
+  head.querySelector('h2').tabIndex = -1;
+  const top = () => frames.at(-1);
+  const visible = (node) => !sheet.hidden && !document.hidden && !!node?.getClientRects().length;
+  const scrollNodes = (frame) => frame?.panel ? [frame.panel, ...frame.panel.querySelectorAll('.rs-body, .apps-scroll, .health-scroll, .screen-scroll')] : frame ? [body] : [nav, body];
+  function remember() {
+    const nodes = scrollNodes(top());
+    positions.set(top()?.name || 'home', nodes.map((node) => [node, node.scrollTop]));
+    if (top()) top().focus = document.activeElement;
+  }
+  function restore() {
+    const frame = top(), name = frame?.name || 'home';
+    requestAnimationFrame(() => {
+      if ((top()?.name || 'home') !== name || sheet.hidden) return;
+      for (const [node, value] of positions.get(name) || []) if (node.isConnected) node.scrollTop = value;
+      if (frame?.focus?.getClientRects().length) frame.focus.focus({ preventScroll: true });
+    });
+  }
+  function renderRoute() {
+    if (suppressRender || sheet.hidden) return;
+    const frame = top(); currentPage = frame?.category || 'home'; sheet.dataset.page = currentPage;
+    if (currentPage !== 'security') loginQr.hide();
+    const panel = frame?.panel;
+    for (const node of panelMount.children) node.hidden = node !== panel;
+    panelMount.hidden = !panel; body.hidden = currentPage === 'home' || !!panel;
+    welcome.hidden = currentPage !== 'home';
+    for (const section of body.children) section.hidden = section.dataset.settingsPage !== currentPage;
+    for (const button of nav.querySelectorAll('[data-category]')) {
+      if (button.dataset.category === currentPage) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
+    }
+    head.querySelector('h2').textContent = frame?.title || 'Settings'; back.hidden = !frame;
+    const guide = Object.hasOwn(window.PocketGuides?.definitions || {}, frame?.name || '') ? frame.name : frame?.category;
+    help.hidden = !Object.hasOwn(window.PocketGuides?.definitions || {}, guide || '');
+    if (!help.hidden) { help.setAttribute('aria-label', `Help with ${window.PocketGuides.definitions[guide].title}`); help.onclick = () => window.PocketGuides.open(guide); }
+    back.setAttribute('aria-label', frames.length > 1 ? 'Back' : 'Back to settings');
+    if (currentPage !== 'controls' || panel) { $('.st-power').replaceChildren(); $('.st-batt').replaceChildren(); }
+    else mountPower();
+    if (frame && !frame.loaded && !panel) { frame.loaded = true; frame.ready = loadCategory(frame); }
+    restore();
+  }
+  function pushFrame(frame) {
+    remember();
+    if (!frame.panel && !positions.has(frame.name)) positions.set(frame.name, [[body, 0]]);
+    frames.push(frame);
+    overlays.open(frame.name, () => {
+      const index = frames.indexOf(frame); if (index < 0) return;
+      frames.splice(index, 1); frame.observer?.disconnect(); frame.exit?.(); positions.delete(frame.name); renderRoute();
+    });
+    renderRoute();
+    requestAnimationFrame(() => { if (top() === frame) head.querySelector('h2').focus({ preventScroll: true }); });
+  }
   function showPage(page) {
-    currentPage = page; sheet.dataset.page = page; home.hidden = page !== 'home'; back.hidden = page === 'home';
-    for (const section of [...body.children].filter((n) => n !== home)) section.hidden = section.dataset.settingsPage !== page;
-    $('.st-head h2').textContent = page === 'home' ? 'Settings' : pages.find(([key]) => key === page)?.[1] || 'Settings';
-    body.scrollTop = 0;
+    if (sheet.hidden) return;
+    if (page === currentPage && frames.length === 1) return;
+    suppressRender = true;
+    if (frames.length) overlays.close(frames[0].name);
+    suppressRender = false;
+    if (page === 'home') return renderRoute();
+    const title = pages.find(([key]) => key === page)?.[1]; if (!title) return;
+    pushFrame({ name: page === 'computers' ? 'computers' : `settings-${page}`, category: page, title });
   }
-  showPage('home');
+  function goBack() { if (top()) overlays.close(top().name); else overlays.close('settings'); }
+  async function loadCategory(frame) {
+    const active = () => frames.includes(frame) && !sheet.hidden;
+    const mount = $(`[data-mount="${frame.category}"]`);
+    try {
+      if (frame.category === 'computers') {
+        const module = await import('/connected-computers.js'); if (active()) await module.openConnectedComputers();
+      } else if (frame.category === 'connection') window.pocketDevNetwork?.mount(mount);
+      else if (frame.category === 'service') {
+        const module = await import('/service.js'); if (active()) await module.renderServiceSection(mount, api);
+      } else if (frame.category === 'tools') {
+        const module = await import('/setup-tools.js'); if (active()) await module.renderToolsSection(mount, api);
+      } else if (frame.category === 'security') {
+        $('.st-summary').textContent = 'Reading logged-in devices…';
+        if (!settings) for (const button of sheet.querySelectorAll('[data-step], [data-act=limit]')) button.disabled = true;
+        await refresh();
+      }
+      else if (frame.category === 'controls') refreshApps();
+    } catch (err) {
+      if (active()) {
+        const error = el('p', 'st-err', err.message); (mount || body).append(error);
+        frame.loaded = false;
+      }
+    }
+  }
+  // Existing panels retain their own controls and cleanup; this shell supplies their container and navigation.
+  function presentPanel(root, name, cleanup) {
+    if (sheet.hidden || document.querySelector('.pw-screen')) return false;
+    let frame = top();
+    const isCategory = name === 'computers' && frame?.name === 'computers';
+    if (!isCategory) frame = { name, category: currentPage, title: root.querySelector('h2')?.textContent || name };
+    const originalRole = root.getAttribute('role'), originalModal = root.getAttribute('aria-modal');
+    const originalControls = [...root.querySelectorAll('header h2, [class$="-bar"] h2, header button, [class$="-bar"] button')].map((node) => [node, node.hidden, node.style.display]);
+    const originalToolbarHidden = root.firstElementChild?.hidden;
+    root.setAttribute('role', 'region'); root.removeAttribute('aria-modal');
+    root.dataset.settingsPanel = name; panelMount.append(root);
+    root.querySelectorAll('header h2, [class$="-bar"] h2').forEach((node) => node.hidden = true);
+    const toolbar = root.firstElementChild;
+    for (const button of toolbar?.querySelectorAll('button') || []) {
+      if (/^(Close|[‹←]|.*Back)/.test(button.textContent) || button.classList.contains('rs-back')) button.hidden = true;
+    }
+    if (toolbar && ![...toolbar.children].some((node) => !node.hidden)) toolbar.hidden = true;
+    frame.panel = root;
+    frame.exit = () => {
+      cleanup(); root.remove(); delete root.dataset.settingsPanel;
+      if (originalRole === null) root.removeAttribute('role'); else root.setAttribute('role', originalRole);
+      if (originalModal === null) root.removeAttribute('aria-modal'); else root.setAttribute('aria-modal', originalModal);
+      for (const [node, hidden, display] of originalControls) { node.hidden = hidden; node.style.display = display; }
+      if (toolbar) toolbar.hidden = originalToolbarHidden;
+      // Health, screen and camera cache their DOM for later entry points outside Settings.
+      if (!['apps', 'computers'].includes(name)) { root.hidden = true; document.body.append(root); }
+    };
+    frame.observer = new MutationObserver(() => {
+      if (!frames.includes(frame)) return;
+      const title = root.querySelector('h2')?.textContent; if (title) frame.title = title;
+      if (top()?.panel === root) head.querySelector('h2').textContent = frame.title;
+      // A detail can re-show its original Back button; navigation stays in the shared header.
+      root.querySelectorAll('.apps-bar > button:first-child').forEach((node) => node.style.display = 'none');
+    });
+    frame.observer.observe(root, { subtree: true, childList: true, characterData: true });
+    if (isCategory) renderRoute(); else pushFrame(frame);
+    return true;
+  }
+  function pushView(name, title, cleanup, render, data) {
+    if (sheet.hidden || !top() || document.querySelector('.pw-screen')) return false;
+    const frame = { name, title, category: currentPage, panel: top().panel, exit: cleanup, loaded: true, data };
+    pushFrame(frame); render?.(); return true;
+  }
+  function confirmAction(message, action = 'Continue') {
+    if (sheet.hidden || document.querySelector('.pw-screen')) return Promise.resolve(window.confirm(message));
+    return new Promise((resolve) => {
+      const dialog = el('dialog', 'st-confirm');
+      const heading = el('h2', null, 'Are you sure?'); heading.id = 'st-confirm-title';
+      dialog.setAttribute('aria-labelledby', heading.id);
+      const text = el('p', null, message), actions = el('div', 'st-confirm-actions');
+      const cancel = el('button', 'st-btn', 'Cancel'), accept = el('button', 'st-primary', action);
+      let settled = false;
+      const finish = (answer) => { if (settled) return; settled = true; dialog.close(); dialog.remove(); resolve(answer); };
+      const key = `settings-confirm`;
+      overlays.open(key, () => finish(false));
+      const answer = (value) => { finish(value); overlays.close(key); };
+      cancel.onclick = () => answer(false); accept.onclick = () => answer(true);
+      dialog.oncancel = (event) => { event.preventDefault(); answer(false); };
+      actions.append(cancel, accept); dialog.append(heading, text, actions); shell.append(dialog); dialog.showModal(); cancel.focus();
+    });
+  }
+  renderRoute();
 
   function renderDevices() {
     const { devices, currentDeviceId } = settings;
@@ -183,7 +343,7 @@
     if (!settings.approveFromDevices) return box.replaceChildren();
     const off = el('button', 'st-btn', 'Turn off approving from phones');
     off.onclick = async () => {
-      if (!confirm('Turn off approving logins from phones? Only the device itself can turn it back on.')) return;
+      if (!await confirmAction('Turn off approving logins from phones? Only the device itself can turn it back on.')) return;
       try {
         await api('PUT', '/api/settings/approve-from-devices', { on: false });
         await refresh();
@@ -195,7 +355,7 @@
   }
 
   async function decide(d, action) {
-    if (action === 'deny' && !confirm(`Deny ${d.name} (code ${d.code})? It goes back to the login page.`)) return;
+    if (action === 'deny' && !await confirmAction(`Deny ${d.name} (code ${d.code})? It goes back to the login page.`)) return;
     try {
       await api('POST', `/api/devices/${d.id}/${action}`);
       msg('err', 'devices', '');
@@ -211,12 +371,18 @@
   notice.setAttribute('role', 'status');
   document.getElementById('clientError').after(notice);
   let noticedCode = '';
+  window.addEventListener('pd-computers-changed', ({ detail }) => {
+    nav.querySelector('[data-category="computers"] small').textContent = window.PocketMachine.computerSummary(detail);
+  });
   window.pocketDevSettings = {
+    presentPanel, pushView, show: showPage, back: goBack, isVisible: visible, confirm: confirmAction,
+    registerRoute: (name, resume) => routes.set(name, resume),
+    open: (page = 'home') => { open(); if (page !== 'home') showPage(page); },
     waiting({ kind, code }) {
       if (code === noticedCode) return;
       noticedCode = code;
       const review = el('button', 'st-primary', 'Review');
-      review.onclick = () => { notice.hidden = true; open(); };
+      review.onclick = () => { notice.hidden = true; open(); showPage('security'); };
       const dismiss = el('button', 'st-btn', 'Dismiss');
       dismiss.onclick = () => { notice.hidden = true; };
       const actions = el('span', 'st-notice-actions');
@@ -281,7 +447,7 @@
 
   async function logout(d, isCurrent) {
     const question = isCurrent ? LOGOUT_SELF : `Log out ${d.name}? Its open terminals disconnect now.`;
-    if (!confirm(question)) return;
+    if (!await confirmAction(question, 'Log out')) return;
     try {
       await api('DELETE', `/api/devices/${d.id}`);
       if (isCurrent) { await window.clearPocketWorkspaceData?.(); return location.replace('/login.html'); }
@@ -292,6 +458,7 @@
   }
 
   function renderLimit() {
+    $('[data-act="limit"]').disabled = false;
     $('.st-stepper output').textContent = limit;
     $('[data-step="-1"]').disabled = limit <= MIN_DEVICES;
     $('[data-step="1"]').disabled = limit >= MAX_DEVICES;
@@ -302,16 +469,11 @@
     $('[data-note="limit"]').textContent = settings.roleAccessEnabled ? `The limit includes Admin devices and active collaborator sessions (${count} total). New invitations never log out an Admin. Lowering the limit does not end current sessions.` : `Password logins stop at this many devices. Lowering the limit logs nobody out; it only blocks new password logins.${over} QR logins always work and replace the device used least recently.`;
   }
 
-  function renderAddress() {
-    const { lan, local, remote, localNote } = settings.urls;
-    if (settings.via === 'remote') {
-      $('.st-addr').textContent = `Or open ${remote} on the other phone and type the password.`;
-      return;
-    }
-    $('.st-addr').textContent = lan
-      ? `Or open ${lan} on the other phone and type the password. ${local} also works (${localNote}).`
-      : `This device has no network right now. ${local} works once it is back on Wi-Fi (${localNote}).`;
-  }
+  const loginQr = window.PocketConnectionQr.mount($('.st-connection-qr'), {
+    button: $('[data-act="qr"]'), codeClass: 'st-qr',
+    request: (connection) => api('POST', '/api/settings/qr-key', { connection }),
+  });
+  function renderAddress() { loginQr.update(window.PocketConnectionQr.options(settings)); }
 
   async function refreshApps() {
     try {
@@ -327,7 +489,7 @@
   // Mounted while the sheet is open: both poll /api/power until they leave the page.
   async function mountPower() {
     const { renderPowerSection, renderBatteryBadge } = await power;
-    if (sheet.hidden || $('.st-power').childElementCount) return;
+    if (sheet.hidden || currentPage !== 'controls' || top()?.panel || $('.st-power').childElementCount) return;
     renderPowerSection($('.st-power'), api, powerOptions);
     renderBatteryBadge($('.st-batt'), api);
   }
@@ -338,9 +500,9 @@
   $('[data-act="camera"]').addEventListener('click', () => window.openCameraSheet());
 
   async function refresh() {
-    refreshApps();
     try {
       const fresh = await api('GET', '/api/settings');
+      if (sheet.hidden) return;
       const stepperUntouched = !settings || settings.maxDevices === limit;
       settings = fresh;
       if (stepperUntouched) limit = fresh.maxDevices;
@@ -373,23 +535,6 @@
     }
   });
 
-  $('[data-act="qr"]').addEventListener('click', async (e) => {
-    msg('err', 'qr', '');
-    try {
-      const { svg, url } = await api('POST', '/api/settings/qr-key');
-      const box = $('.st-qr');
-      box.innerHTML = svg;
-      box.hidden = false;
-      const copy = $('[data-act="copy-qr"]');
-      copy.hidden = false;
-      copy.textContent = 'Copy link';
-      copy.onclick = async () => { copy.textContent = (await window.copyText?.(url)) ? 'Copied' : 'Copy failed'; };
-      e.target.textContent = 'New code';
-    } catch (err) {
-      msg('err', 'qr', err.message);
-    }
-  });
-
   $('[data-form="password"]').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -413,49 +558,98 @@
   });
 
   $('[data-act="logout"]').addEventListener('click', async () => {
-    if (!confirm(LOGOUT_SELF)) return;
-    try { await api('POST', '/api/logout'); } catch {}
-    location.replace('/login.html');
+    if (!await confirmAction(LOGOUT_SELF, 'Log out')) return;
+    try { await api('POST', '/api/logout'); await window.clearPocketWorkspaceData?.(); location.replace('/login.html'); } catch (err) { window.alert(err.message); }
   });
 
   function hide() {
-    sheet.hidden = true;
+    sheet.hidden = true; document.body.classList.remove('pd-settings-open');
+    document.dispatchEvent(new CustomEvent('pd-settings-visibility', { detail: false }));
+    previousFocus?.focus?.();
     $('.st-power').replaceChildren();
     $('.st-batt').replaceChildren();
     clearInterval(timer);
     editingId = null;
-    $('.st-qr').hidden = true;
-    $('.st-qr').replaceChildren();
-    $('[data-act="copy-qr"]').hidden = true;
-    $('[data-act="qr"]').textContent = 'Show login QR';
+    $('[data-form="password"]').reset();
+    loginQr.update({ local: null, remote: null, remoteEnabled: false }, false);
   }
 
   $('.st-close').addEventListener('click', () => overlays.close('settings'));
 
   async function open() {
-    document.activeElement?.blur();
     if (!sheet.hidden) return;
-    overlays.open('settings', hide);
-    settings = null;
-    sheet.hidden = false;
-    showPage('home');
-    sheet.querySelector('.st-body').scrollTop = 0;
+    previousFocus = document.activeElement; previousFocus?.blur();
+    overlays.open('settings', hide); settings = null; sheet.hidden = false; document.body.classList.add('pd-settings-open');
+    document.dispatchEvent(new CustomEvent('pd-settings-visibility', { detail: true }));
+    positions.clear(); renderRoute();
+    head.querySelector('h2').focus();
     clearInterval(timer);
-    timer = setInterval(refresh, REFRESH_MS);
-    window.pocketDevNetwork?.mount($('[data-mount="connection"]'));
-    import('/service.js').then((m) => m.renderServiceSection($('[data-mount="service"]'), api)).catch(() => {});
-    import('/setup-tools.js').then((m) => m.renderToolsSection($('[data-mount="tools"]'), api)).catch(() => {});
-    import('/connected-computers.js').then((m) => m.connectionSummary()).then((t) => { $('.st-room-sum').textContent = t; }).catch(() => {});
-    api('GET', '/api/connections').then((s) => {
-      const self = s.computers.find((m) => m.self);
-      computerInfo.replaceChildren(el('strong', null, self?.name || 'This computer'), el('p', 'st-note', 'This computer · Online'));
-    }).catch(() => {});
-    mountPower();
-    await refresh();
+    timer = setInterval(() => {
+      if (document.hidden || sheet.hidden || top()?.panel) return;
+      if (currentPage === 'security') refresh();
+      if (currentPage === 'controls') refreshApps();
+    }, REFRESH_MS);
+    try {
+      const state = await api('GET', '/api/connections'); if (sheet.hidden) return;
+      const self = state.computers.find((computer) => computer.self);
+      computerInfo.replaceChildren(el('strong', null, self?.name || 'This computer'), el('p', 'st-note', 'Connected · This computer'));
+      nav.querySelector('[data-category="computers"] small').textContent = window.PocketMachine.computerSummary(state.computers);
+    } catch {
+      computerInfo.replaceChildren(el('strong', null, 'This computer'), el('p', 'st-note', 'Connection unavailable'));
+    }
   }
-
-  $('[data-act="room"]').addEventListener('click', () => {
-    import('/connected-computers.js').then((m) => m.openConnectedComputers()).catch((err) => msg('err', 'room', `Could not load connected computers: ${err.message}. Reload this page.`));
+  sheet.addEventListener('keydown', (event) => {
+    if (event.key !== 'Tab' || shell.querySelector('dialog[open]')) return;
+    const nodes = [...sheet.querySelectorAll('button, input, select, a[href], [tabindex="0"]')].filter((node) => !node.disabled && node.getClientRects().length);
+    if (event.shiftKey && document.activeElement === nodes[0]) { event.preventDefault(); nodes.at(-1)?.focus(); }
+    else if (!event.shiftKey && document.activeElement === nodes.at(-1)) { event.preventDefault(); nodes[0]?.focus(); }
   });
+  document.addEventListener('keydown', (event) => {
+    if (!sheet.hidden && event.key === 'Escape' && !event.defaultPrevented && !shell.querySelector('dialog[open], [popover]:popover-open') && (event.target === document.body || sheet.contains(event.target))) {
+      event.preventDefault(); goBack();
+    }
+  });
+  const fitViewport = () => {
+    sheet.style.setProperty('--st-height', `${window.visualViewport?.height || innerHeight}px`);
+    sheet.style.setProperty('--st-top', `${window.visualViewport?.offsetTop || 0}px`);
+  };
+  window.visualViewport?.addEventListener('resize', fitViewport);
+  window.visualViewport?.addEventListener('scroll', fitViewport); fitViewport();
   document.getElementById('settingsBtn').addEventListener('click', open);
+  window.pocketDev.navigation?.register('settings', {
+    snapshot() {
+      if (sheet.hidden) return null;
+      remember();
+      return { category: currentPage, path: frames.slice(1).map(({ name, data }) => ({ name, data })),
+        scroll: Object.fromEntries([...positions].map(([name, nodes]) => [name, nodes.map(([, value]) => value)])) };
+    },
+    async restore(saved) {
+      if (!saved || !['home', ...pages.map(([key]) => key)].includes(saved.category)) return;
+      open();
+      showPage(saved.category);
+      const categoryFrame = top();
+      const active = () => !sheet.hidden && (categoryFrame ? frames.includes(categoryFrame) : !frames.length);
+      await categoryFrame?.ready;
+      for (const route of Array.isArray(saved.path) ? saved.path.slice(0, 8) : []) {
+        if (!active()) return;
+        const resume = routes.get(route.name), parent = top();
+        if (!resume) break;
+        await resume(route.data);
+        if (top() === parent) break;
+      }
+      if (!active()) return;
+      for (const frame of [null, ...frames]) {
+        const values = saved.scroll?.[frame?.name || 'home'];
+        if (Array.isArray(values)) positions.set(frame?.name || 'home', scrollNodes(frame).map((node, index) => [node, Number.isFinite(values[index]) ? Math.max(0, values[index]) : 0]));
+      }
+      restore();
+    },
+  });
+  if (/^#camera(?:=[0-9a-f]{4,64})?$/.test(location.hash)) {
+    window.addEventListener('DOMContentLoaded', () => {
+      history.replaceState(history.state, '', location.pathname + location.search);
+      window.pocketDevSettings.open('controls');
+      window.openCameraSheet();
+    }, { once: true });
+  }
 })();

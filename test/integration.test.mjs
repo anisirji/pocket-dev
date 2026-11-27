@@ -216,7 +216,7 @@ test('merged phone and admin server', { timeout: 90000 }, async (t) => {
     fs.writeFileSync(config, JSON.stringify({ ...saved, screenView: false }));
     const off = await request('GET', '/api/screen', { cookie: A.cookie });
     assert.equal(off.status, 403);
-    assert.match(off.data.error, /screenView true/);
+    assert.match(off.data.error, /disabled in Admin/);
     fs.writeFileSync(config, JSON.stringify(saved));
   });
   await t.test('permissions: Mac-only, setup status validated and saved, unknown ids refused', async () => {

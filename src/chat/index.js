@@ -124,7 +124,7 @@ function parseAnswer(event, body) {
 // Mount after the auth check: every route here assumes a logged-in caller. config is { read(), update(changes) };
 // chat uses its chatIdleMinutes and chatDefaults keys. `wss` is the server's WebSocketServer, which pings its clients.
 // `engines` replaces Claude and Codex in tests.
-export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINES = BUILT_IN_ENGINES, room = null, connections = null }) {
+export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINES = BUILT_IN_ENGINES, room = null, connections = null, onActivity = null }) {
   const dir = process.env.POCKET_DEV_CHAT_DIR || path.join(process.env.POCKET_DEV_STATE_DIR || path.join(HOME, '.pocket-dev'), 'chats');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const idleMs = () => Number(process.env.POCKET_DEV_CHAT_IDLE_SECONDS) * 1000 || (Number(config.read().chatIdleMinutes) || 10) * 60_000;
@@ -164,6 +164,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     try {
       const chat = Chat.load(path.join(dir, file));
       chat.afterTurn = (status) => afterTurn(chat, status);
+      chat.activityListener = onActivity;
       chats.set(chat.id, chat);
     } catch (err) {
       console.warn(`Skipping unreadable chat ${file}: ${err.message}`);
@@ -258,7 +259,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
   // Moves the chat to another engine. The conversation stays; the new engine starts a fresh session and gets it with the next message.
   // A chat is busy while a reply runs, a request waits for an answer, messages are queued, its engine is waking, or a program
   // on the Mac still holds the conversation. The provider never changes in any of those states, whatever client asks.
-  const busy = (chat) => Boolean(chat.turn || chat.queue.length || chat.requests.size || chat.waking || chat.nativeOpening || chat.nativeHeld);
+  const busy = (chat) => Boolean(chat.turn || chat.queue.length || chat.requests.size || chat.waking || chat.browserChanging || chat.nativeOpening || chat.nativeHeld);
   const busyError = (what, chat) => new BadRequest(chat?.nativeHeld
     ? `${chat.nativeHeld} has this conversation on your computer. Send a message to continue it here before ${what}.`
     : `Stop the reply first, or wait for it to finish, before ${what}.`, 409);
@@ -354,7 +355,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     const live = midRun ? Object.fromEntries(Object.entries(changes).filter(([k]) => k !== 'model')) : changes;
     if (chat.engine && !chat.waking && Object.keys(live).length) {
       const how = await chat.engine.configure(live).catch(() => Object.fromEntries(Object.keys(live).map((k) => [k, 'restart'])));
-      if (Object.values(how).includes('restart')) chat.engine.stale = true;
+      if (Object.values(how).includes('restart') && chat.engine) chat.engine.stale = true;
       applied = { ...applied, ...Object.fromEntries(Object.entries(how).map(([k, v]) => [k, v === 'now' ? 'now' : 'next-turn'])) };
     }
     chat.changed();
@@ -423,6 +424,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       chat.emit({ type: 'status', text: `Continuing ${ENGINES[tool].label} session ${fields.sessionId.slice(0, 8)}` });
     }
     chat.afterTurn = (status) => afterTurn(chat, status);
+    chat.activityListener = onActivity;
     chats.set(chat.id, chat);
     chat.persist();
     await rememberDefaults(chat);
@@ -465,11 +467,16 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
     'PATCH :id': async (req, chat) => {
       const { settings, confirmBypass } = await readJson(req);
       const parsed = parseSettings(await schemaOf(chat.tool, chat.provider), settings, confirmBypass);
+      if (chat.browserChanging) throw new BadRequest('Browser access is changing. Wait for it to finish.', 409);
       const changes = Object.fromEntries(Object.entries(parsed).filter(([k, v]) => chat.settings[k] !== v));
       // The Mac program keeps its own model until it finishes, and the handover resumes the conversation as it left it.
       if (chat.nativeHeld && Object.hasOwn(changes, 'model')) throw new BadRequest(`The model can change once ${chat.nativeHeld} finishes.`, 409);
-      const applied = await configure(chat, changes);
-      return [200, { ...chat.view(), applied }];
+      if (Object.hasOwn(changes, 'browser') && (busy(chat) || chat.activity === 'working')) throw new BadRequest('Stop the current task before changing browser access.', 409);
+      chat.browserChanging = Object.hasOwn(changes, 'browser');
+      try {
+        const applied = await configure(chat, changes);
+        return [200, { ...chat.view(), applied }];
+      } finally { chat.browserChanging = false; }
     },
     'GET :id/permissions': async (req, chat) => [200, permissions(chat)],
     'DELETE :id/permissions': async (req, chat) => {
@@ -483,6 +490,7 @@ export function createChatApi({ sendJson, readJson, config, wss, engines: ENGINE
       return [204];
     },
     'POST :id/message': async (req, chat) => {
+      if (chat.browserChanging) throw new BadRequest('Browser access is changing. Your message has not been sent. Wait for the change to finish, then send it.', 409);
       if (chat.nativeOpening) throw new BadRequest('This conversation is being opened. Please wait a moment.', 409);
       if (chat.nativeReleased) throw new BadRequest('This conversation is open on your computer. Open it from Chats to continue here safely.', 409, 'NATIVE_SESSION_RELEASED');
       const { text = '', attachments, clientMessageId } = await readJson(req);

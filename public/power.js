@@ -1,7 +1,6 @@
 // Power settings section, the battery badges (Settings header, Settings button), and the full-screen sleep / shutdown state.
 // `api(method, url, body)` is index.html's fetch helper: resolves to parsed JSON, throws Error(message).
-// `runInTerminal(command, cwd)` opens a new terminal tab in cwd and runs command (text + Enter). Anything
-// that needs sudo goes through it, so macOS asks for the password in that terminal; the server never sees it.
+// Power actions use the API after confirmation; macOS handles administrator passwords in its native prompt.
 
 const MODES = [
   { id: 'off', label: 'Off', hint: 'Your Mac sleeps on its normal schedule.' },
@@ -13,8 +12,6 @@ const BADGE_POLL_MS = 60_000;
 const SCREEN_POLL_MS = 15_000;
 const SCREEN_FETCH_TIMEOUT_MS = 5000;
 const LOW_BATTERY = 20;
-const LID_POLL_MS = 2000;
-const LID_WAIT_MS = 60_000;
 const LID_CLOSED_TEXT = 'Open the laptop lid to change this. Turning it off while the lid is closed would put the Mac to sleep and disconnect you.';
 const UPDATE_TEXT = 'A macOS update is being installed. Shutting down now could interrupt it. Try again after it finishes.';
 
@@ -74,7 +71,7 @@ const CSS = `
   .pw-confirm ul { margin: 0; padding-left: 18px; }
   .pw-confirm-body { display: grid; gap: 6px; }
   .pw-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
-  .pw-confirm-actions button { height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line, #252d3c); }
+  .pw-confirm-actions button { min-height: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line, #252d3c); }
   .pw-confirm .pw-go { border: 0; background: #f0c674; color: #1a1406; font-weight: 600; }
   .pw-confirm.danger .pw-go { background: var(--danger, #ff7b72); color: #1e0806; }
   .pw-screen { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 24px; background: var(--bg, #0b0e14); color: var(--text, #d7dce5); text-align: center; font-size: 14px; }
@@ -115,7 +112,10 @@ const button = (cls, text, onclick) => {
 // Runs fn now and every ms until the node leaves the page.
 function pollWhileMounted(node, ms, fn) {
   fn();
-  const timer = setInterval(() => (node.isConnected ? fn() : clearInterval(timer)), ms);
+  const timer = setInterval(() => {
+    if (!node.isConnected) return clearInterval(timer);
+    if (!document.hidden && node.getClientRects().length) fn();
+  }, ms);
 }
 
 // An inline "are you sure" box. open(...content) fills and shows it; the confirm button runs onGo.
@@ -172,7 +172,7 @@ async function shutdownSummary(api) {
 // Covers the page while the Mac sleeps or shuts down, and polls slowly until the server answers again.
 // `kind` is the WebSocket close reason: 'mac-sleeping' or 'mac-shutting-down'.
 // `openApps()` (optional) opens the running-apps sheet from the blocked notice.
-export function showPowerScreen(kind, api, { runInTerminal, openApps, onBack } = {}) {
+export function showPowerScreen(kind, api, { openApps, onBack } = {}) {
   injectCss();
   if (document.querySelector('.pw-screen')) return null;
   const screen = el('div', 'pw-screen');
@@ -205,9 +205,14 @@ export function showPowerScreen(kind, api, { runInTerminal, openApps, onBack } =
         render(el('h2', null, 'The Mac did not shut down.'), el('p', 'pw-warn', e.message), button('pw-btn', 'OK', dismiss));
       }
     }, { danger: true });
-    const force = confirmBox('Yes, force it', () => {
-      dismiss();
-      runInTerminal('npm run shutdown -- --force', s.repoDir);
+    const force = confirmBox('Yes, force it', async () => {
+      retryButton.disabled = forceButton.disabled = true;
+      try {
+        await api('POST', '/api/power/shutdown-force', { confirmed: true });
+        waiting();
+      } catch (error) {
+        render(el('h2', null, 'The Mac did not shut down.'), el('p', 'pw-warn', error.message), button('pw-btn', 'OK', dismiss));
+      }
     }, { danger: true });
     const retryButton = button('pw-btn primary', 'Try shut down again', async () => {
       force.close();
@@ -219,11 +224,11 @@ export function showPowerScreen(kind, api, { runInTerminal, openApps, onBack } =
       retry.close();
       force.open(
         el('p', null, 'Force shut down?'),
-        el('p', null, 'Every app quits without saving. Unsaved work in all apps is lost. A terminal opens and asks for your Mac password.'),
+        el('p', null, 'Every app quits without saving. Unsaved work in all apps is lost. Approve any administrator prompt on the computer.'),
       );
     });
     retryButton.disabled = forceButton.disabled = s.updateInProgress;
-    forceButton.disabled ||= !runInTerminal;
+    forceButton.disabled ||= Boolean(s.unsupported?.forceShutDown);
     const actions = el('div', 'pw-screen-actions');
     actions.append(retry.node, retryButton, appsButton, force.node, forceButton, button('pw-btn quiet', 'Keep the Mac on', dismiss));
     const why = el('p', 'pw-warn', 'Probably by an app with unsaved changes. ');
@@ -267,7 +272,7 @@ export function showPowerScreen(kind, api, { runInTerminal, openApps, onBack } =
   return screen;
 }
 
-export function renderPowerSection(container, api, { runInTerminal, openApps, onBack } = {}) {
+export function renderPowerSection(container, api, { openApps, onBack } = {}) {
   injectCss();
   const root = el('section', 'pw');
   const seg = el('div', 'pw-seg');
@@ -281,25 +286,29 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
   const err = el('p', 'pw-err');
 
   const lidVal = el('span', 'pw-val');
+  let lidTarget = false;
   const lidSwitch = button('pw-switch', null, () => {
-    if (shown.lidSleepDisabled) runLid('off');
-    else lidConfirm.open(
-      el('p', null, 'Keep the Mac awake with the lid closed?'),
-      el('p', null, 'Keep it on a desk and plugged in. Never put it in a bag while this is on.'),
+    lidTarget = !shown.lidSleepDisabled;
+    sleepConfirm.close(); shutdownConfirm.close();
+    lidConfirm.open(
+      el('p', null, lidTarget ? 'Keep the Mac awake with the lid closed?' : 'Restore normal sleep when the lid closes?'),
+      ...(lidTarget ? [el('p', null, 'Keep it on a desk and plugged in. Never put it in a bag while this is on.')] : []),
+      el('p', null, 'macOS may ask for an administrator password on the Mac.'),
     );
   });
   lidSwitch.setAttribute('role', 'switch');
   lidSwitch.setAttribute('aria-label', 'Stay awake with the lid closed');
   const lidSub = el('p', 'pw-sub');
-  const lidConfirm = confirmBox('Open terminal', () => runLid('on'));
+  const lidConfirm = confirmBox('Confirm', () => runLid(lidTarget));
   const lid = el('div', 'pw-row');
   lid.append(el('b', null, 'Lid closed'), lidVal, lidSwitch, lidSub, lidConfirm.node);
 
   const sleepConfirm = confirmBox('Sleep', () => sleep());
   const shutdownConfirm = confirmBox('Shut down', () => shutDown(), { danger: true });
   const sleepButton = button('pw-btn', 'Put Mac to sleep', () => {
-    shutdownConfirm.close();
-    sleepConfirm.open(el('p', null, 'Put the Mac to sleep? Pocket Dev disconnects until you open the lid or press a key on the Mac.'));
+    lidConfirm.close(); shutdownConfirm.close();
+    sleepConfirm.open(el('p', null, 'Put the Mac to sleep? Pocket Dev disconnects until you open the lid or press a key on the Mac.'),
+      ...(shown.lidSleepDisabled ? [el('p', null, 'Normal lid sleep will be restored. macOS may ask for an administrator password on the Mac.')] : []));
   });
   const shutdownButton = button('pw-btn danger', 'Shut down Mac', openShutdownConfirm);
   const updateWarn = el('p', 'pw-warn', UPDATE_TEXT);
@@ -317,23 +326,20 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
   container.append(root);
 
   let shown = null;
-  let lidWait = null;
-  const screenOptions = { runInTerminal, openApps, onBack };
+  let busy = false;
+  const screenOptions = { openApps, onBack };
 
   function showLid(s) {
-    if (lidWait && s.lidSleepDisabled === lidWait.target) lidWait = null;
     lidVal.textContent = s.lidSleepDisabled ? 'On' : 'Off';
-    lidSwitch.setAttribute('aria-checked', String(lidWait ? lidWait.target : s.lidSleepDisabled));
-    lidSwitch.disabled = s.lidClosed || Boolean(lidWait) || !runInTerminal;
+    lidSwitch.setAttribute('aria-checked', String(s.lidSleepDisabled));
+    lidSwitch.disabled = s.lidClosed || busy || Boolean(s.authorizationPending);
     lid.classList.toggle('locked', s.lidClosed);
     if (s.lidClosed) lidConfirm.close();
-    const command = el('code', null, `npm run lid -- ${s.lidSleepDisabled ? 'off' : 'on'}`);
     if (s.lidClosed) lidSub.replaceChildren(LID_CLOSED_TEXT);
-    else if (lidWait) lidSub.replaceChildren('Type your Mac password in the new terminal.');
+    else if (busy || s.authorizationPending) lidSub.replaceChildren('Waiting for the power action. Approve any administrator prompt on the Mac.');
     else lidSub.replaceChildren(
       s.lidSleepDisabled ? 'Stays awake with the lid shut. ' : 'Sleeps when the lid shuts. ',
-      runInTerminal ? 'Tapping runs ' : 'Change with: ', command,
-      runInTerminal ? ' in a new terminal (needs your Mac password).' : ' (needs your Mac password)',
+      'Changing this asks for confirmation and may require administrator approval on the Mac.',
     );
   }
 
@@ -341,7 +347,7 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
     shown = s;
     const off = s.unsupported ?? {};
     const note = (key) => `Not available on this system. ${off[key]}`;
-    for (const b of buttons) b.disabled = Boolean(off.keepAwake);
+    for (const b of buttons) b.disabled = busy || Boolean(s.authorizationPending) || Boolean(off.keepAwake);
     lid.hidden = Boolean(off.lid || off.lidSleep);
     for (const b of buttons) b.setAttribute('aria-checked', String(b.dataset.mode === s.awake));
     hint.textContent = off.keepAwake ? note('keepAwake') : MODES.find((m) => m.id === s.awake).hint;
@@ -351,8 +357,8 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
     temp.classList.toggle('hot', s.temperature?.thermal === 'serious' || s.temperature?.thermal === 'critical');
     temp.hidden = !temp.textContent;
     showLid(s);
-    sleepButton.disabled = s.updateInProgress || Boolean(off.sleepNow);
-    shutdownButton.disabled = s.updateInProgress || Boolean(off.shutDown);
+    sleepButton.disabled = busy || Boolean(s.authorizationPending) || s.updateInProgress || Boolean(off.sleepNow);
+    shutdownButton.disabled = busy || Boolean(s.authorizationPending) || s.updateInProgress || Boolean(off.shutDown);
     sleepButton.title = off.sleepNow ? note('sleepNow') : '';
     shutdownButton.title = off.shutDown ? note('shutDown') : '';
     updateWarn.hidden = !s.updateInProgress;
@@ -382,45 +388,27 @@ export function renderPowerSection(container, api, { runInTerminal, openApps, on
     for (const b of buttons) b.disabled = false;
   }
 
-  async function runLid(word) {
-    lidWait = { target: word === 'on', until: Date.now() + LID_WAIT_MS };
-    showLid(shown);
+  async function action(work) {
+    if (busy) return;
+    busy = true; root.setAttribute('aria-busy', 'true'); err.textContent = ''; show(shown);
     try {
-      await runInTerminal(`npm run lid -- ${word}`, shown.repoDir);
+      await work();
     } catch (e) {
-      lidWait = null;
       err.textContent = e.message;
-      showLid(shown);
-      return;
+    } finally {
+      busy = false; root.removeAttribute('aria-busy'); show(shown);
     }
-    const timer = setInterval(async () => {
-      if (!lidWait || !root.isConnected) return clearInterval(timer);
-      if (Date.now() > lidWait.until) {
-        lidWait = null;
-        err.textContent = 'Lid setting did not change within a minute. Check the terminal.';
-        return showLid(shown);
-      }
-      await load(() => api('GET', '/api/power'));
-    }, LID_POLL_MS);
   }
 
-  // With lid sleep off the Mac cannot sleep, so a terminal turns it back on first (sudo) and then sleeps.
-  async function sleep() {
-    try {
-      if (shown.lidSleepDisabled) {
-        if (!runInTerminal) throw new Error('Run npm run sleep in a terminal on the Mac.');
-        await runInTerminal('npm run sleep', shown.repoDir);
-      } else {
-        await api('POST', '/api/power/sleep');
-        showPowerScreen('mac-sleeping', api, screenOptions);
-      }
-    } catch (e) {
-      err.textContent = e.message;
-    }
-  }
+  const runLid = (disabled) => action(async () => show(await api('POST', '/api/power/lid', { disabled, confirmed: true })));
+
+  const sleep = () => action(async () => {
+    await api('POST', '/api/power/sleep', { confirmed: true });
+    showPowerScreen('mac-sleeping', api, screenOptions);
+  });
 
   async function openShutdownConfirm() {
-    sleepConfirm.close();
+    lidConfirm.close(); sleepConfirm.close();
     shutdownConfirm.open(...await shutdownSummary(api));
   }
 

@@ -34,7 +34,21 @@
 - **Private by design:** runs on your own computer as your user, logs in with a password or a one-time QR code, needs no cloud account and nothing installed on the phone.
 - **Set up with AI:** [copyable prompts](https://www.theani.me/work/pocket-dev/prompts) for your coding assistant, an [agent setup guide](docs/AI_SETUP.md) and a reusable agent skill.
 
-## What's new in 2.5
+## Coming in 3.0
+
+Version 3.0.0 is in development and has not been published.
+
+- **Compact Settings:** six categories, persistent desktop navigation and full-screen phone navigation.
+- **Local and Remote QR:** the shared connection popup keeps Wi-Fi selected first and adds a Remote tab when Internet access is enabled, with scan, copy and open actions for either method.
+- **Personal Codex browser tools:** optional browser automation with explicit consent and a separate browser profile.
+- **Clear activity and notifications:** confirmed chat activity, optional completion sounds and supported opt-in browser push.
+- **Screen and camera controls:** display/quality selection, snapshots, independently enabled audio and push to talk; local approval is required for Mac desktop input.
+- **Guided setup:** shared capability checks, actionable setup steps and contextual help.
+- **Windows fixes:** Codex transport selection and ZIP downloads with Unicode filenames and empty directories.
+
+See [3.0 release notes](docs/RELEASE_3.0.md) for validation and remaining hardware checks. The Workspace improvements below carry forward into 3.0.
+
+## Earlier changes in 2.5
 
 - **Persistent Workspace:** activity bar, file explorer, editor, right-side AI conversations and bottom terminals share one project directory. Panels collapse and resize independently.
 - **Recover your work:** restore editor drafts, cursor positions, tabs, layout, chats and terminal sessions. Cache-first loading and incremental file notifications keep the workspace responsive; revision checks preserve conflicting edits.

@@ -34,6 +34,7 @@ function addStyle() {
 
 export async function renderServiceSection(container, api = window.api) {
   addStyle();
+  const ask = (...args) => window.pocketDevSettings?.confirm(...args) ?? Promise.resolve(confirm(args[0]));
   const err = h('p', 'st-err');
   const title = h('h3', null, 'This device');
 
@@ -43,7 +44,7 @@ export async function renderServiceSection(container, api = window.api) {
   const disconnect = h('button', 'st-btn st-danger', 'Disconnect');
   disconnect.type = 'button';
   disconnect.onclick = async () => {
-    if (!confirm('Disconnect this phone and every other device? You can reconnect only from the device itself.')) return;
+    if (!await ask('Disconnect this phone and every other device? You can reconnect only from the device itself.')) return;
     try {
       await api('POST', '/api/access/disconnect', {});
       accessText.replaceChildren(h('b', null, 'Disconnected'), h('small', null, 'Reconnect from the admin page on the device (npm run admin).'));
@@ -79,6 +80,8 @@ export async function renderServiceSection(container, api = window.api) {
   newer.append(newerText);
 
   container.replaceChildren(title, access, newer, restart, auto, err);
+  const notificationPreferences = h('section'); container.append(notificationPreferences);
+  window.PocketNotificationPreferences?.mount(notificationPreferences, api);
 
   // The restart takes the page's own server down, so wait for it to answer again and then load the new code.
   let busy = false;
@@ -118,7 +121,7 @@ export async function renderServiceSection(container, api = window.api) {
   }
   restartBtn.onclick = async () => {
     restartBtn.disabled = true;
-    const ok = confirm(await restartWarning());
+    const ok = await ask(await restartWarning(), 'Restart');
     restartBtn.disabled = false;
     if (!ok) return;
     err.textContent = '';

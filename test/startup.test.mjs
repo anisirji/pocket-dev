@@ -115,3 +115,16 @@ test('--no-setup or POCKET_DEV_NO_SETUP skips the guide for automation', async (
   assert.equal(await env.run(), 'skipped');
   assert.equal(flag.setups.length + env.setups.length, 0);
 });
+
+test('Mac desktop startup uses local graphical setup while headless and explicit CLI flows remain available', async () => {
+  const setups = [], out = [];
+  const ctx = { platform: 'darwin', isTTY: true, env: {}, setupDone: { read: () => false }, out: (line) => out.push(line) };
+  const runSetup = async (args) => setups.push(args);
+  assert.equal(await firstRun({ ctx, runSetup, graphical: true }), 'graphical');
+  assert.equal(setups.length, 0);
+  assert.match(out.join('\n'), /local Admin page/);
+  assert.equal(await firstRun({ ctx: { ...ctx, env: { POCKET_DEV_NO_OPEN: '1' } }, runSetup, graphical: true }), 'ran');
+  assert.equal(await firstRun({ ctx: { ...ctx, isTTY: false }, runSetup, graphical: true }), 'status');
+  assert.equal(await firstRun({ ctx: { ...ctx, env: { SSH_CONNECTION: 'fixture' } }, runSetup, graphical: true }), 'ran');
+  assert.equal(await firstRun({ ctx, runSetup, graphical: true, noSetup: true }), 'skipped');
+});

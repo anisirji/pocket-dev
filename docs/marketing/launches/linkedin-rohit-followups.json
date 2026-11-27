@@ -1,0 +1,40 @@
+{
+  "note": "Both posts scheduled natively in LinkedIn from ROHIT KUMAR DAS. LinkedIn Scheduled (2) list verified both dates, times, copy and media thumbnails. Times are IST (UTC+05:30).",
+  "posts": [
+    {
+      "id": "linkedin-rohit-terminal",
+      "status": "scheduled",
+      "account": "ROHIT KUMAR DAS",
+      "proposed_date_IST": "2026-11-23",
+      "angle": "One small terminal workflow",
+      "asset": "/Users/ani/Desktop/pocket-dev-video/final/clips/clip-terminal.mp4",
+      "body": "A small workflow Pocket Dev supports: checking a terminal from your phone while the command runs on your computer.\n\nOpen the computer’s terminal in your phone’s browser, check the output, and send another command when needed.\n\nPocket Dev also brings coding-agent chats, Git and files into the same browser interface. We built it to make those short check-ins easier when you step away from your desk.\n\nThe clip shows demo data. Same Wi-Fi works by default; away-from-home access needs optional setup. Your computer must stay on and awake.\n\nTry it: https://www.theani.me/work/pocket-dev\nSource: https://github.com/anisirji/pocket-dev\n\nWhich terminal task would you want to check without returning to your desk?\n\n#PocketDev #DeveloperTools #OpenSource",
+      "scheduled_for": "2026-11-23T11:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "attempted_at": "2026-11-18T10:19:26.756393+00:00",
+      "verified_at": "2026-11-18T10:23:27.072036+00:00",
+      "verification": "LinkedIn Scheduled (2) lists terminal post for Monday, November 23, 2026 at 11:00 AM. 9.3-second clip checked before submission; video thumbnail visible in saved schedule.",
+      "previous_body_before_we_edit": "A small workflow Pocket Dev supports: checking a terminal from your phone while the command runs on your computer.\n\nOpen the computer’s terminal in your phone’s browser, check the output, and send another command when needed.\n\nPocket Dev also brings coding-agent chats, Git and files into the same browser interface. My partner Ani and I built it to make those short check-ins easier when you step away from your desk.\n\nThe clip shows demo data. Same Wi-Fi works by default; away-from-home access needs optional setup. Your computer must stay on and awake.\n\nTry it: https://www.theani.me/work/pocket-dev\nSource: https://github.com/anisirji/pocket-dev\n\nWhich terminal task would you want to check without returning to your desk?\n\n#PocketDev #DeveloperTools #OpenSource",
+      "revision_pending": false,
+      "voice_revision_verified_at": "2026-11-18T10:34:55.549606+00:00"
+    },
+    {
+      "id": "linkedin-rohit-setup",
+      "status": "scheduled",
+      "account": "ROHIT KUMAR DAS",
+      "proposed_date_IST": "2026-11-26",
+      "angle": "Getting started with AI-assisted setup",
+      "asset": "/Users/ani/Desktop/pocket-dev/docs/screenshots/02-terminal.png",
+      "body": "Want to try Pocket Dev? Start with the setup guide, or give the setup prompt to your coding assistant.\n\n1. Open the guide on the computer you want to access.\n2. Follow the installation and first-run steps.\n3. Connect your phone on the same Wi-Fi and open the interface in its browser.\n\nThere’s no phone app or Pocket Dev cloud account to create. Claude Code and Codex use your existing accounts. Your computer needs to stay on and awake; remote access away from home needs extra setup.\n\nWe’ve put the setup instructions and copyable AI prompts here:\n\nGuide: https://www.theani.me/work/pocket-dev/docs/setup\nAI setup prompt: https://www.theani.me/work/pocket-dev/prompts\nnpm package: https://www.npmjs.com/package/@anisirji/pocket-dev\n\nThe screenshot shows demo data. What part of setup would you like us to explain more clearly?\n\n#PocketDev #OpenSource #DeveloperTools",
+      "scheduled_for": "2026-11-26T11:00:00+05:30",
+      "timezone": "Asia/Kolkata",
+      "image_alt": "Pocket Dev in a phone browser, showing a demo project’s terminal with a file listing, Git status, and example test output. The screenshot uses demo data.",
+      "attempted_at": "2026-11-18T10:22:34.612813+00:00",
+      "verified_at": "2026-11-18T10:23:27.072036+00:00",
+      "verification": "LinkedIn confirmed scheduling; Scheduled (2) lists the setup post for Thursday, November 26, 2026 at 11:00 AM. Image and alt text checked before submission; image thumbnail visible in saved schedule.",
+      "previous_body_before_we_edit": "Want to try Pocket Dev? Start with the setup guide, or give the setup prompt to your coding assistant.\n\n1. Open the guide on the computer you want to access.\n2. Follow the installation and first-run steps.\n3. Connect your phone on the same Wi-Fi and open the interface in its browser.\n\nThere’s no phone app or Pocket Dev cloud account to create. Claude Code and Codex use your existing accounts. Your computer needs to stay on and awake; remote access away from home needs extra setup.\n\nMy partner Ani and I have put the setup instructions and copyable AI prompts here:\n\nGuide: https://www.theani.me/work/pocket-dev/docs/setup\nAI setup prompt: https://www.theani.me/work/pocket-dev/prompts\nnpm package: https://www.npmjs.com/package/@anisirji/pocket-dev\n\nThe screenshot shows demo data. What part of setup would you like us to explain more clearly?\n\n#PocketDev #OpenSource #DeveloperTools",
+      "revision_pending": false,
+      "voice_revision_verified_at": "2026-11-18T10:34:55.549606+00:00"
+    }
+  ]
+}

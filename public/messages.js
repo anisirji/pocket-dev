@@ -625,6 +625,8 @@ function createMessagesView(root, { api, writeHeader, embedded, readKey, onUnrea
     receive,
     sync,
     lastSeq,
+    currentChat: () => state.chat,
+    isViewing: (chat) => visible() && (state.chat === null || state.chat === chat),
     attachExisting,
     setOnline(on) { state.online = on; renderStatus(); },
     show(chat) {
@@ -663,6 +665,10 @@ export function startPhoneMessages({ api = window.api, badgeOn } = {}) {
     onClose: () => overlays.close('messages'),
     onUnread: (n) => { badge.hidden = !n; badge.textContent = n > 99 ? '99+' : String(n); },
     onIncoming: (m) => {
+      if (window.PocketDevNotifications) {
+        // Owner alerts come from the authenticated notification feed, including while Messages is hidden.
+        return;
+      }
       toast.replaceChildren(el('b', null, m.chat === 'everyone' ? `${who(m.from)} in Everyone` : who(m.from)), el('span', null, m.text.split('\n')[0] || `📎 ${m.files.map((f) => f.name).join(', ')}`));
       toast.hidden = false;
       toast.onclick = () => { toast.hidden = true; show(m.chat); };
@@ -684,7 +690,18 @@ export function startPhoneMessages({ api = window.api, badgeOn } = {}) {
     onMessage: (msg) => view.receive(msg),
     onState: (s) => view.setOnline(s === 'connected'),
   });
-  window.pocketDevMessages = { open: show, connection, attach: (meta) => { show(); view.attachExisting(meta); } };
+  window.pocketDevMessages = { open: show, connection, isViewing: view.isViewing, attach: (meta) => { show(); view.attachExisting(meta); } };
+  window.pocketDev?.navigation?.register('messages', {
+    snapshot: () => open ? { chat: view.currentChat() } : null,
+    restore: (saved) => show(saved?.chat === 'everyone' || /^[0-9a-f]{16}$/.test(saved?.chat) ? saved.chat : null),
+  });
+  function openFromHash() {
+    const match = /^#messages(?:=(everyone|[0-9a-f]{16}))?$/.exec(location.hash);
+    if (!match) return;
+    history.replaceState(history.state, '', location.pathname + location.search);
+    show(match[1]);
+  }
+  window.addEventListener('hashchange', openFromHash); openFromHash();
   return window.pocketDevMessages;
 }
 

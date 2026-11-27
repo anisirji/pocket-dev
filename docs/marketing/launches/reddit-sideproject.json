@@ -1,0 +1,27 @@
+{
+  "platform": "Reddit",
+  "community": "r/SideProject",
+  "account": "u/anisirji",
+  "status": "removed_by_reddit_filters",
+  "date": "2026-11-18",
+  "title": "I built Pocket Dev to check coding work from my phone while it runs on my computer",
+  "body": "I kept going back to my desk just to check a coding task or approve its next step, so I built Pocket Dev.\n\nIt opens your own computer\u2019s terminals, Claude Code and Codex chats, Git and files in your phone\u2019s browser. The work stays on your computer, using your existing coding-agent accounts. It\u2019s free and open source, with no phone app or Pocket Dev cloud account.\n\nDemo (59 seconds): https://www.youtube.com/watch?v=t3WgBzIPRN4\n\nSource and install: https://github.com/anisirji/pocket-dev\n\nWant your coding assistant to help install it? Copy the setup prompt: https://www.theani.me/work/pocket-dev/prompts\n\nThe first 10 users have tried it. I\u2019d like feedback on the setup and which parts you would actually use from a small screen.\n\nSame Wi-Fi by default; optional away-from-home access needs setup and an awake computer. macOS is best tested, the main Windows 11 features were tested on a real PC, and Linux hasn\u2019t been tested on a real machine. The demo uses demo data and scripted agent responses.",
+  "rules_url": "https://www.reddit.com/r/SideProject/about/rules.json",
+  "permalink": "https://www.reddit.com/r/SideProject/comments/1xz54bl/i_built_pocket_dev_to_check_coding_work_from_my/",
+  "note": "Original retained. On November 19 the user explicitly requested research, revision, and another submission; one revised native-video submission was made and also filtered. Stop resubmitting; request moderator review if authorized.",
+  "submission_attempt_at": "2026-11-18T09:11:27.240849+05:30",
+  "reddit_id": "t3_1xz54bl",
+  "verified_at": "2026-11-18T09:12:36.889527+05:30",
+  "verification": "Submission succeeded, but the direct post page explicitly displays: Sorry, this post was removed by Reddit\u2019s filters. Not a publicly live launch.",
+  "latest_live_check": {
+    "date": "2026-11-19",
+    "status": "removed_by_reddit_filters",
+    "confirmation": "Public Reddit permalink still explicitly displays that the post was removed by Reddit filters."
+  },
+  "revised_submission": {
+    "date": "2026-11-19",
+    "permalink": "https://www.reddit.com/r/SideProject/comments/1xzykvm/i_built_an_opensource_phone_interface_for_the/",
+    "status": "removed_by_reddit_filters",
+    "record": "reddit-sideproject-revised-2026-11-19.json"
+  }
+}

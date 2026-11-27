@@ -1,0 +1,39 @@
+{
+  "account": "hap.pyani",
+  "timezone": "Asia/Kolkata",
+  "access": "WhatsApp two-step verification pending in native Chrome",
+  "posts": [
+    {
+      "id": "product-demo-wide",
+      "title": "Pocket Dev demo: Claude Code, Codex, Git and terminals from your phone",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final/pocket-dev-promo-16x9-voice.mp4",
+      "caption": "A wide-screen walkthrough of Pocket Dev: use real terminals, Claude Code, Codex, Git, files and multiple computers from your phone's browser.\n\nPocket Dev is free and open source. It runs on your own computer and uses your existing coding-agent accounts. Nothing to install on the phone and no Pocket Dev cloud account.\n\nSource and setup: https://github.com/anisirji/pocket-dev\nFull guide: https://www.theani.me/work/pocket-dev/docs\n\nDemo data, scripted agent responses and a simulated install scene are shown. Same Wi-Fi by default; optional remote access needs setup and an awake computer.\n\n#PocketDev #ClaudeCode #Codex #OpenSource\n\nAI-generated narration.",
+      "at": "2026-12-02T20:00:00+05:30",
+      "status": "prepared_not_scheduled"
+    },
+    {
+      "id": "teaser-wide",
+      "title": "Your dev computer, from your phone | Pocket Dev teaser",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final/pocket-dev-teaser-16x9-voice.mp4",
+      "caption": "Your laptop does the work. Your phone gives the commands.\n\nPocket Dev brings your computer's terminals, coding agents, Git and files to your phone's browser. Free and open source.\n\nSource and setup: https://github.com/anisirji/pocket-dev\nDemo project shown. Remote access needs setup; the computer must stay on and awake.\n\n#PocketDev #OpenSource\n\nAI-generated narration.",
+      "at": "2026-12-03T20:00:00+05:30",
+      "status": "prepared_not_scheduled"
+    },
+    {
+      "id": "afk-3am-ending1",
+      "title": "3 AM: Fix it from bed | AFK Ep. 2 | Alternate ending 1",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-ending1.mp4",
+      "caption": "Alternate ending 1 for the fictional AFK episode 2: Arya fixes the problem from bed.\n\nThis is an alternate ending, not an audience-selected result. Both alternate endings are being shared as separate fictional outcomes.\n\nPocket Dev is the real, free and open-source app shown in this illustrated story. Demo project. Remote access configured; computer on and awake. The fictional alert comes from an external uptime monitor; Pocket Dev does not send notifications to a locked phone.\n\nSource: https://github.com/anisirji/pocket-dev\n\n#PocketDev #AFK #PocketDevStories\n\nAI-generated narration.",
+      "at": "2026-12-04T20:00:00+05:30",
+      "status": "prepared_not_scheduled"
+    },
+    {
+      "id": "afk-3am-ending2",
+      "title": "3 AM: Sleep and handle it tomorrow | AFK Ep. 2 | Alternate ending 2",
+      "video": "/Users/ani/Desktop/pocket-dev-video/final3/ep2-3am-ending2.mp4",
+      "caption": "Alternate ending 2 for the fictional AFK episode 2: Arya chooses sleep and handles it in the morning.\n\nThis is an alternate ending, not an audience-selected result. Both alternate endings are being shared as separate fictional outcomes.\n\nPocket Dev is the real, free and open-source app shown in this illustrated story. Demo project. Remote access configured; computer on and awake. The fictional alert comes from an external uptime monitor; Pocket Dev does not send notifications to a locked phone.\n\nSource: https://github.com/anisirji/pocket-dev\n\n#PocketDev #AFK #PocketDevStories\n\nAI-generated narration.",
+      "at": "2026-12-05T20:00:00+05:30",
+      "status": "prepared_not_scheduled"
+    }
+  ]
+}

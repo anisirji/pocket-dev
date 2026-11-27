@@ -1,0 +1,10 @@
+.pd-alert { position: fixed; top: calc(var(--status-h, 0px) + env(safe-area-inset-top, 0px) + 12px); right: max(12px, env(safe-area-inset-right, 0px)); z-index: 4000; display: flex; width: min(390px, calc(100% - 24px)); border: 1px solid var(--line, #252d3c); border-radius: 10px; background: var(--panel, #131823); color: var(--text, #d7dce5); box-shadow: 0 8px 28px #0004; font: 14px/1.4 system-ui, sans-serif; }
+.pd-alert[hidden] { display: none; }
+.pd-alert button { min-height: 44px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.pd-alert-message { display: grid; gap: 3px; flex: 1; padding: 12px 14px; text-align: left; min-width: 0; overflow-wrap: anywhere; }
+.pd-alert-message span { color: var(--muted, #7d8799); font-size: 12px; }
+.pd-alert-close { flex: none; width: 44px; align-self: start; font-size: 22px !important; }
+.pd-alert button:focus-visible { outline: 2px solid var(--accent, #6aa9ff); outline-offset: -3px; border-radius: 8px; }
+.pd-notification-preferences label { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 44px; }
+.pd-notification-preferences input { width: 20px; height: 20px; accent-color: var(--accent); }
+.pd-notification-preferences input:disabled { opacity: .5; }

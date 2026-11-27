@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
-import { svgQr } from '../network/qr.js';
+import { svgQr, connectionQrOptions, qrConnectionAddress } from '../network/qr.js';
 import { createSecurityLog } from '../core/security-log.js';
 import { STATE_DIR } from '../core/paths.js';
 import { clientIp, cookieHost, fromConnector, secureCookie } from '../network/transport.js';
-import { ipv6Prefix } from '../network/network.js';
+import { ipv6Prefix, readNetwork } from '../network/network.js';
 import { platform } from '../core/platform.js';
 
 export { STATE_DIR };
@@ -375,6 +375,12 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       .sort((a, b) => b.online - a.online || b.lastSeen - a.lastSeen);
   }
 
+  function qrConnections(req) {
+    const net = readNetwork(config), addresses = { ...urls() };
+    if (req && fromConnector(req)) addresses.remote = `https://${cookieHost(req)}`;
+    return connectionQrOptions(addresses, { remoteEnabled: net.internet.kind !== 'off', remoteHostname: net.internet.hostname });
+  }
+
   function mintQrUrl(address) {
     const now = Date.now();
     for (const [key, expiresAt] of qrKeys) if (expiresAt <= now) qrKeys.delete(key);
@@ -576,7 +582,7 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       const remote = fromConnector(req);
       return reply(200, {
         maxDevices: maxDevices(), currentDeviceId: device.id, devices: listDevices(isActive),
-        urls: { ...urls(), ...(remote && { remote: `https://${cookieHost(req)}` }), localNote }, via: remote ? 'remote' : 'lan',
+        urls: { ...urls(), ...(remote && { remote: `https://${cookieHost(req)}` }), localNote }, qrConnections: qrConnections(req), via: remote ? 'remote' : 'lan',
         roleAccessEnabled: rolesEnabled(), role: device.role || 'owner', collaboratorSessions: extraActiveCount(),
         approveFromDevices: approveFromDevices(), waiting: mayApprove(device) ? listDevices((d) => d.status === 'pending') : [],
       });
@@ -623,13 +629,14 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       const loggedOut = changePassword(next, { logoutAll: logoutOthers, keep: device.id, by: 'phone' });
       return reply(200, { ok: true, loggedOut });
     },
-    // The code points at the address this phone is on, so a phone away from home hands out a link that works from
-    // away. Only an active device reaches this, and with role access on that is an Admin, so the new device is one too.
-    async 'POST /api/settings/qr-key'({ req, device }) {
-      const address = fromConnector(req) ? `https://${cookieHost(req)}` : undefined;
+    // New clients choose Local or Remote explicitly. Omitted selection preserves
+    // the address used by older clients, including a phone arriving through a tunnel.
+    async 'POST /api/settings/qr-key'({ req, device, body }) {
+      const { connection } = await body();
+      const address = qrConnectionAddress(qrConnections(req), connection);
       const url = mintQrUrl(address);
       log('qr-created', { ...about(device), address: new URL(url).origin });
-      return reply(200, { url, svg: await svgQr(url), expiresInMin: QR_TTL_MIN });
+      return reply(200, { url, svg: await svgQr(url), expiresInMin: QR_TTL_MIN, expiresAt: qrKeys.get(new URL(url).searchParams.get('k')) });
     },
   };
   const PUBLIC_ROUTES = new Set(['POST /api/login', 'GET /api/status', 'POST /api/qr-key']);
@@ -744,8 +751,8 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
       if (fromDevices !== undefined) setApproveFromDevices(fromDevices, 'admin');
       return reply(200, { maxDevices: maxDevices(), requireApproval: requireApproval(), approveFromDevices: approveFromDevices() });
     },
-    async mintQr() {
-      const url = mintQrUrl();
+    async mintQr(address) {
+      const url = mintQrUrl(address);
       const expiresAt = qrKeys.get(new URL(url).searchParams.get('k'));
       return { url, svg: await svgQr(url), expiresInMin: QR_TTL_MIN, expiresAt };
     },
@@ -763,6 +770,6 @@ export function createAuth({ config, port, urls, localNote, extraActiveCount = (
     },
   };
 
-  return { passwordLine, noteRestart, lookup, deviceFor, isActiveDevice: (id) => Boolean(findActive(id)), trackSocket, mintQrUrl, redeemQrKey, mintHandoff, redeemHandoff, hasCookieFor, isLocalRequest, handleApi, admin, activeCount,
+  return { passwordLine, noteRestart, lookup, deviceFor, isActiveDevice: (id) => Boolean(findActive(id)), trackSocket, mintQrUrl, qrConnections, redeemQrKey, mintHandoff, redeemHandoff, hasCookieFor, isLocalRequest, handleApi, admin, activeCount,
     isTrustedAdmin: (req) => deviceFor(req)?.role === 'admin' };
 }
