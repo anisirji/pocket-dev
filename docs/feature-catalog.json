@@ -1,7 +1,7 @@
 {
   "product": "Pocket Dev",
   "targetVersion": "3.0.1",
-  "releaseStatus": "implemented; 3.0.1 npm publication authorized; manual stability testing pending",
+  "releaseStatus": "npm 3.0.1 published; manual stability testing pending",
   "tagline": "Your computer. In your pocket.",
   "summary": "Continue AI conversations across devices, share authorized AI capabilities and work on projects from one browser-based workspace.",
   "package": "@anisirji/pocket-dev",
@@ -418,9 +418,9 @@
   "release": {
     "implementation": "complete",
     "manualStability": "pending",
-    "npmPublication": "approved",
+    "npmPublication": "published",
     "publicRelease": "not approved",
-    "note": "Owner authorized npm 3.0.1 after QR-pairing validation on macOS and Windows. Final manual stability testing remains pending; no public GitHub release requested."
+    "note": "npm 3.0.1 published and verified as latest on 27 November 2026 after macOS and Windows QR-pairing validation. Final manual stability testing remains pending; no public GitHub release created."
   },
   "mediaPolicy": "Actual application UI captured on disposable servers with sanitized sample projects. AI responses are scripted; desktop input and camera/audio sources are simulated where identified. Demonstrations do not certify physical hardware, provider entitlement or final manual stability.",
   "manualChecks": [

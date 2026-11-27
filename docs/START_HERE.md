@@ -29,7 +29,7 @@ Keep the computer awake and online. Scan the one-time QR code on the same networ
 
 ## Test the Version 3 preview
 
-Version **3.0.1** includes the QR-pairing update tested on macOS and Windows; npm publication has been authorized by the owner. Final manual stability testing is still pending. Check the npm badge for the currently published version. No public GitHub release has been requested.
+Version **3.0.1** includes the QR-pairing update tested on macOS and Windows; it is published on npm as latest. Final manual stability testing is still pending. Check the npm badge for the currently published version. No public GitHub release has been requested.
 
 For a deliberate source test, use a separate checkout on the computer you intend to test:
 

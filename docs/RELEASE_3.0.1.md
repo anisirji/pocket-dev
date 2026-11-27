@@ -9,3 +9,5 @@
 Validated with the full macOS suite (989 passed, three platform-specific skips, zero failures), 26 Chrome browser scripts, and native Windows Edge pairing and Settings checks at phone and desktop sizes. Final manual stability approval, Safari and physical-phone/webcam checks remain pending. [Detailed validation](QR_PAIRING_UI_VALIDATION.md).
 
 No new dependencies or services. Existing platform limitations, provider grants and local Admin access protections remain in effect. Local Admin normally uses http://localhost:7778; phones use the main connection and Settings.
+
+Published on npm as `latest` on 27 November 2026. Registry tarball SHA-1: `1b634f24693ac96439ecb53caeb972e707be8de3`. No public GitHub release was created.
