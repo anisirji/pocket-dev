@@ -1,7 +1,7 @@
 {
   "product": "Pocket Dev",
-  "targetVersion": "3.0.0",
-  "releaseStatus": "implemented; manual stability testing pending; unpublished",
+  "targetVersion": "3.0.1",
+  "releaseStatus": "implemented; 3.0.1 npm publication authorized; manual stability testing pending",
   "tagline": "Your computer. In your pocket.",
   "summary": "Continue AI conversations across devices, share authorized AI capabilities and work on projects from one browser-based workspace.",
   "package": "@anisirji/pocket-dev",
@@ -16,7 +16,7 @@
       "id": "ai-chat",
       "name": "AI Chat",
       "headline": "Start on your computer. Continue on your phone.",
-      "description": "Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals.",
+      "description": "Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals. Local Antigravity and Copilot are experimental.",
       "guide": "docs/GUIDE.md#chat-with-claude-code-codex-antigravity-and-copilot",
       "details": [
         "Phone ↔ computer handoff",
@@ -354,7 +354,8 @@
         "Open the Local connection address or scan a fresh login QR privately. Local remains available when Remote Access is enabled.",
         "Configure optional internet access from the computer’s Admin page.",
         "Keep the computer running; Pocket Dev does not wake sleeping hardware.",
-        "Use the shared Local and Remote selector to copy or open the intended connection. Sharing an address does not grant a login."
+        "Use the shared Local and Remote selector to copy or open the intended connection. Sharing an address does not grant a login.",
+        "To pair computers, open Connected computers in local Admin or phone Settings. Select My computer only for a computer you own, then Show QR on one and Scan QR on the other. Choose QR photo when the browser cannot use its camera. Both sides must select My computer for computer access; otherwise the connection is AI-only."
       ],
       "troubleshooting": "Check the current address and private-network firewall rules. A Wi-Fi HTTP address supports live alerts, but browser push and phone microphone access require a supported secure context.",
       "media": {
@@ -417,9 +418,9 @@
   "release": {
     "implementation": "complete",
     "manualStability": "pending",
-    "npmPublication": "not approved",
+    "npmPublication": "approved",
     "publicRelease": "not approved",
-    "note": "Version 3.0.0 is a preview. Planned features are implemented; final manual stability testing and release approval are pending."
+    "note": "Owner authorized npm 3.0.1 after QR-pairing validation on macOS and Windows. Final manual stability testing remains pending; no public GitHub release requested."
   },
   "mediaPolicy": "Actual application UI captured on disposable servers with sanitized sample projects. AI responses are scripted; desktop input and camera/audio sources are simulated where identified. Demonstrations do not certify physical hardware, provider entitlement or final manual stability.",
   "manualChecks": [
@@ -505,7 +506,8 @@
         "Open the Local connection address or scan a fresh login QR privately. Local remains available when Remote Access is enabled.",
         "Configure optional internet access from the computer’s Admin page.",
         "Keep the computer running; Pocket Dev does not wake sleeping hardware.",
-        "Use the shared Local and Remote selector to copy or open the intended connection. Sharing an address does not grant a login."
+        "Use the shared Local and Remote selector to copy or open the intended connection. Sharing an address does not grant a login.",
+        "To pair computers, open Connected computers in local Admin or phone Settings. Select My computer only for a computer you own, then Show QR on one and Scan QR on the other. Choose QR photo when the browser cannot use its camera. Both sides must select My computer for computer access; otherwise the connection is AI-only."
       ],
       "troubleshooting": "Check the current address and private-network firewall rules. A Wi-Fi HTTP address supports live alerts, but browser push and phone microphone access require a supported secure context.",
       "video": null
@@ -585,7 +587,7 @@
       "title": "Set it up for me",
       "description": "Paste into a coding assistant running on the computer you want to access.",
       "button": "Copy setup prompt",
-      "text": "Set up Pocket Dev on this computer for AI Chat, authorized AI Sharing and Workspace access from my browser.\n\nRead https://www.theani.me/work/pocket-dev/docs/ai-setup and https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURE_VERIFICATION.md first. Version 3.0.0 is an implemented source preview with final manual stability testing pending. npm installs the currently published package, which can be older. Check the installed version before describing Version 3 controls. Do not publish a package or create a public release.\n\nVerify that your shell is on my intended computer, not a hosted sandbox. Detect OS and shell, check Node.js 22+ and npm, then inspect existing config, service and running work. Reuse an existing installation and server. For a new published installation use npm install -g @anisirji/pocket-dev and pocket-dev doctor. Use a separate checkout if I explicitly choose the source preview; do not replace a running installation as a shortcut.\n\nGuide me through local Admin setup. Let me handle passwords, provider sign-ins and OS permission dialogs. Ask only for choices and access that I have not already authorized. Start on Wi-Fi. Internet access, start at login, keep awake, optional tools, browser push and media/control permissions are separate choices. Keep credentials and one-time QR links private.\n\nHave me confirm a real phone connection before saying phone setup is complete. Keep the host awake and reachable. Report what you actually verified, what used fixtures and what still needs manual checks. Preserve provider restrictions and platform limitations."
+      "text": "Set up Pocket Dev on this computer for AI Chat, authorized AI Sharing and Workspace access from my browser.\n\nRead https://www.theani.me/work/pocket-dev/docs/ai-setup and https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURE_VERIFICATION.md first. Version 3.0.1 includes QR pairing tested on macOS and Windows. Final manual stability testing remains pending. npm installs the currently published package; check its version. Check the installed version before describing Version 3 controls. Do not publish a package or create a public release.\n\nVerify that your shell is on my intended computer, not a hosted sandbox. Detect OS and shell, check Node.js 22+ and npm, then inspect existing config, service and running work. Reuse an existing installation and server. For a new published installation use npm install -g @anisirji/pocket-dev and pocket-dev doctor. Use a separate checkout if I explicitly choose the source preview; do not replace a running installation as a shortcut.\n\nGuide me through local Admin setup. Let me handle passwords, provider sign-ins and OS permission dialogs. Ask only for choices and access that I have not already authorized. Start on Wi-Fi. Internet access, start at login, keep awake, optional tools, browser push and media/control permissions are separate choices. Keep credentials and one-time QR links private.\n\nHave me confirm a real phone connection before saying phone setup is complete. Keep the host awake and reachable. Report what you actually verified, what used fixtures and what still needs manual checks. Preserve provider restrictions and platform limitations."
     },
     {
       "id": "project",

@@ -1248,7 +1248,7 @@ versionCheck.start();
   remind();
   setInterval(remind, 30 * 60_000).unref();
 }
-admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, camera: browserCapture ? camera : null, media: camera, screenControl, sections: adminSections,
+admin = await startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort: PORT, urls, connections, camera: browserCapture ? camera : null, media: camera, screenControl, sections: adminSections,
   onRemotePermissionsChange: (changes) => { if (changes.screenView === false) screenAccessGeneration++; },
   onNotificationSettingsChange: notifications.preferencesChanged, onSetupChanged: () => features.invalidate(), update: versionCheck, updateMeta: { version: readInstalledVersion(), kind: process.env.POCKET_DEV_INSTALL_KIND || installKind() } }).catch((err) => {
   console.error(err.message);

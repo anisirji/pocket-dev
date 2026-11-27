@@ -4,11 +4,13 @@ Pocket Dev uses one computer network for personal computers and AI-only connecti
 
 ## Connect and share
 
-1. Open **Settings → Connected computers → Connect computer**.
-2. Choose **My computer** or **Someone else’s computer**. Create a connection code on one computer and enter its connection details on the other. Codes expire after ten minutes and work once.
+1. Open **Settings → Connected computers → Connect another computer**. On local **Pocket Dev Admin**, use **Devices & access → Connect or manage computers**.
+2. Select **My computer** only for a computer you own. Choose **Show QR** on one computer and **Scan QR** on the other. An already logged-in phone can scan on behalf of the computer whose Settings it has open. **Choose QR photo** accepts a photo or screenshot when the browser cannot use its camera, including Wi-Fi HTTP pages. Manual connection details remain under **Enter connection details instead**. Codes expire after ten minutes and work once.
 3. For personal pairing, both computers must choose the personal-computer flow. Computer access is approved by the owner on the target computer; joining a network does not grant it.
 4. In **Settings → AI Tools**, turn on sharing for the installed provider. In the connected computer’s details, authorize that recipient for the provider. Either computer can share and receive at the same time.
 5. Select the provider in the existing Chat provider selector. Shared entries show the source computer. The project remains on the computer selected in **Work on**.
+
+Showing a QR on both computers does not block pairing: a computer with no other connections can still scan and join. A failed code leaves its previous state intact. Computers with existing peers keep those connections; show the QR on the network host and scan it from the new computer. Joining separate populated networks is not an automatic merge. A phone login QR and a computer-pairing QR serve different purposes.
 
 Shared Claude and Codex sessions use the provider computer’s existing sign-in and normal engine environment. Pocket Dev does not add an API-key requirement, subscription check, billing system, or usage quota. Credentials stay on the provider computer.
 

@@ -116,10 +116,13 @@ try {
       assert.equal(await evaluate('history.length'), historyLength, 'reload preserves the page without duplicate Back entries');
     }
     await evaluate('history.back()'); await wait('.cc-computer');
-    await click('.cc .st-primary'); await wait('.cc-choices');
-    await click('.cc-choice:has(input[value=external])'); await click('.cc .st-primary'); await wait('.cc-field input');
-    await evaluate('history.back()'); await wait('.cc-choices');
-    assert.equal(await evaluate("document.querySelector('input[value=external]').checked"), true);
+    await click('.cc .st-primary'); await wait('.cc-filters');
+    assert.equal(await evaluate("document.querySelector('.cc-field input[type=checkbox]').checked"), false);
+    await evaluate("[...document.querySelectorAll('.cc button')].find(n=>n.textContent==='Scan QR').click()");
+    await wait('.cc-pair-panel');
+    await evaluate('history.back()'); await wait('.cc-computer');
+    await click('.cc .st-primary'); await wait('.cc-field input[type=checkbox]');
+    assert.equal(await evaluate("document.querySelector('.cc-field input[type=checkbox]').checked"), false);
     await choose('connection', width); await wait('.nw-summary');
     await reload(); await wait('.nw-summary');
     assert.equal(await evaluate("document.querySelector('.st-sheet').dataset.page"), 'connection');

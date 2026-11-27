@@ -55,6 +55,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
   let accessResolver = null, keyResolver = null;
   const nonces = new Map();
   const invitations = new Map();
+  let joining = false;
   // Peers this device could not reach on its last try. Local only; the lastSeen age covers a device that stays silent.
   const unreachable = new Set();
   // A peer that has not answered for two intervals (plus a little slack for a slow answer) counts as offline.
@@ -169,6 +170,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
   }
 
   function invite(req, body = {}) {
+    if (joining) fail(409, 'A computer connection is already in progress. Try again when it finishes.');
     needHost();
     // Spent and expired codes are remembered for an hour so the joiner is told which it was.
     for (const [key, entry] of invitations) if (now() - entry.expiresAt > 60 * 60_000) invitations.delete(key);
@@ -182,23 +184,32 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
 
   // On the joining device: its owner picks the level and folders other room members get on this device.
   async function join(body, req) {
-    if (data.room) fail(409, 'This device is already in a room. Leave it first.');
-    const code = text(body.code, 200) || fail(400, 'Give the join code.');
-    const hostAddresses = addresses(Array.isArray(body.host) ? body.host : [body.host], { host: true });
-    const self = { deviceId: data.deviceId, name: text(body.name) || os.hostname(), publicKey: data.identity.publicKey, addresses: addresses(body.addresses ?? myAddresses(req)), ...access(body) };
-    const hostSecret = secret();
-    const r = await send({ addresses: hostAddresses }, 'accept', { code, hostSecret, ...self });
-    if (r.status === 0) fail(502, `Could not reach the host at ${hostAddresses.join(' or ')}.`, 'unreachable');
-    if (r.status !== 200) fail(r.status, r.body.error || 'The host did not accept the code.', r.body.code);
-    const { roomId, hostId, memberSecret, members, revoked } = r.body;
-    data.room = { id: roomId, hostId, revoked, memberSecret, hostSecretHash: hash(hostSecret), members };
-    persist();
-    changed();
+    if (joining) fail(409, 'A computer connection is already in progress.');
+    // Showing an invite creates a host with no peers. It must not prevent that
+    // same computer from scanning the other computer's invite instead.
+    if (data.room && !(isHost() && data.room.members.length === 1)) {
+      fail(409, 'This computer already has connections. Show its QR and scan it from the new computer instead. Existing connections have been kept.', 'existing-connections');
+    }
+    joining = true;
+    try {
+      const code = text(body.code, 200) || fail(400, 'Give the join code.');
+      const hostAddresses = addresses(Array.isArray(body.host) ? body.host : [body.host], { host: true });
+      const self = { deviceId: data.deviceId, name: text(body.name) || os.hostname(), publicKey: data.identity.publicKey, addresses: addresses(body.addresses ?? myAddresses(req)), ...access(body) };
+      const hostSecret = secret();
+      const r = await send({ addresses: hostAddresses }, 'accept', { code, hostSecret, ...self, connectionType: body.connectionType });
+      if (r.status === 0) fail(502, `Could not reach the host at ${hostAddresses.join(' or ')}.`, 'unreachable');
+      if (r.status !== 200) fail(r.status, r.body.error || 'The host did not accept the code.', r.body.code);
+      const { roomId, hostId, memberSecret, members, revoked } = r.body;
+      invitations.clear();
+      data.room = { id: roomId, hostId, revoked, memberSecret, hostSecretHash: hash(hostSecret), members };
+      persist();
+      changed();
 
-    // The host now calls this device back. A device the host cannot reach is in the room but cut off, so say so.
-    const host = hostName();
-    const check = await send(host, 'ping', { roomId, from: data.deviceId, secret: memberSecret, check: true });
-    return { ...view(), pairing: { deviceId: hostId, personal: body.connectionType === 'personal' && r.body.personal === true }, callback: check.body.callback ?? { ok: false, address: self.addresses[0], tried: self.addresses, error: 'The host did not answer the check.' } };
+      // The host now calls this device back. A device the host cannot reach is in the room but cut off, so say so.
+      const host = hostName();
+      const check = await send(host, 'ping', { roomId, from: data.deviceId, secret: memberSecret, check: true });
+      return { ...view(), pairing: { deviceId: hostId, personal: body.connectionType === 'personal' && r.body.personal === true }, callback: check.body.callback ?? { ok: false, address: self.addresses[0], tried: self.addresses, error: 'The host did not answer the check.' } };
+    } finally { joining = false; }
   }
 
   // This device's own addresses changed, or were wrong at join. The host is told and calls back again.
@@ -229,6 +240,7 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
 
   // On the host: a device presents a join code. Public route, the code is the credential.
   async function accept(body) {
+    if (joining) fail(409, 'A computer connection is already in progress. Try again when it finishes.');
     needHost();
     const key = hash(normalizeCode(body.code));
     const entry = invitations.get(key);
@@ -250,11 +262,13 @@ export function createRoom({ stateDir = STATE_DIR, config, urls = () => ({}), fe
     announce(deviceId);
 
     changed();
-    for (const fn of pairHandlers) fn({ deviceId, personal: entry.personal === true });
-    return { personal: entry.personal === true, roomId: data.room.id, hostId: data.room.hostId, memberSecret, members: publicMembers(), revoked: data.room.revoked };
+    const personal = entry.personal === true && body.connectionType === 'personal';
+    for (const fn of pairHandlers) fn({ deviceId, personal });
+    return { personal, roomId: data.room.id, hostId: data.room.hostId, memberSecret, members: publicMembers(), revoked: data.room.revoked };
   }
 
   async function leave() {
+    if (joining) fail(409, 'A computer connection is already in progress.');
     need();
     if (isHost()) {
       if (data.room.members.length > 1) fail(409, 'Hand the room over to another device before leaving.');

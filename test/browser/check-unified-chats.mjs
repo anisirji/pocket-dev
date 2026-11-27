@@ -114,7 +114,7 @@ try {
     await page.waitForSelector('.hist-mac-cmd');
     assert.match(await page.locator('.hist-mac-cmd').innerText(), new RegExp(`claude --resume ${ids[0]}`));
     await page.locator('.hist-mac').getByRole('button', { name: 'Done', exact: true }).click();
-    await page.locator('.chat-settings-wrap .chat-sheet-head button').click();
+    await page.locator('.chat-settings-wrap .chat-sheet-head').getByRole('button', { name: 'Close', exact: true }).click();
     await page.locator('.chat-back').click();
     await page.locator('.chat-search').fill('');
     await page.locator('.chat-refresh').click();

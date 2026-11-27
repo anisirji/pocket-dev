@@ -67,12 +67,14 @@ try {
     const computerName = await title.innerText();
     await reload(); assert.equal(await title.innerText(), computerName);
     await page.goBack(); await sheet.getByRole('button', { name: 'Connect another computer', exact: true }).click();
-    await sheet.getByRole('radio', { name: /Someone else/ }).check();
-    await sheet.getByRole('button', { name: 'Continue', exact: true }).click();
-    await sheet.getByLabel('Connection code', { exact: true }).fill('private code');
-    await reload(); await sheet.getByLabel('Connection code', { exact: true }).waitFor();
-    assert.equal(await sheet.getByLabel('Connection code', { exact: true }).inputValue(), '');
-    await page.goBack(); assert.equal(await sheet.getByRole('radio', { name: /Someone else/ }).isChecked(), true);
+    await sheet.getByLabel('My computer', { exact: true }).uncheck();
+    await sheet.getByText('Enter connection details instead', { exact: true }).click();
+    await sheet.getByLabel('Connection details or code', { exact: true }).fill('private code');
+    await reload(); await sheet.getByRole('button', { name: 'Show QR', exact: true }).waitFor();
+    assert.equal(await sheet.getByLabel('My computer', { exact: true }).isChecked(), false);
+    await sheet.getByText('Enter connection details instead', { exact: true }).click();
+    assert.equal(await sheet.getByLabel('Connection details or code', { exact: true }).inputValue(), '');
+    await page.goBack(); await sheet.getByRole('button', { name: 'Connect another computer', exact: true }).waitFor();
 
     await settings('controls'); await sheet.locator('[data-act="apps"]').click();
     await sheet.locator('.apps-card').filter({ hasText: 'Refresh Fixture' }).click();

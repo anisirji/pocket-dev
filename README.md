@@ -10,7 +10,7 @@ Free and open source. Runs on your computer. Your phone needs only a browser.
 
 [Website](https://www.theani.me/work/pocket-dev) · [All features](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md) · [Setup](https://github.com/anisirji/pocket-dev/blob/main/docs/START_HERE.md) · [Validation](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURE_VERIFICATION.md)
 
-> **Version 3.0.0 preview:** planned features are implemented. Final manual stability testing and release approval are pending. The npm badge and install command refer to the published package, not this preview. [Validation](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURE_VERIFICATION.md) · [Release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_3.0.md).
+> **Version 3.0.1:** planned features are implemented. Final manual stability testing remains pending. The npm badge identifies the currently published version. [Validation](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURE_VERIFICATION.md) · [Release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_3.0.md).
 
 ## Three reasons to use Pocket Dev
 
@@ -18,7 +18,7 @@ Free and open source. Runs on your computer. Your phone needs only a browser.
 
 **Start on your computer. Continue on your phone.**
 
-Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals.
+Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals. Local Antigravity and Copilot are experimental.
 
 <img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/ai-chat.png" width="960" height="600" alt="Pocket Dev 3 AI Chat interface with sanitized demonstration data">
 

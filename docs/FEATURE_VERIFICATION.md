@@ -1,6 +1,6 @@
 # Version 3 feature verification
 
-**Implementation:** complete. **Final manual stability testing:** pending. **npm publication and public release:** not approved.
+**Implementation:** complete. **Final manual stability testing:** pending. **npm publication:** authorized by the owner. **Public GitHub release:** not requested.
 
 This presentation refresh captures the actual shipping UI with isolated sample data. Screenshots and GIFs are evidence of the stated UI checks, not proof that every device, account or network is supported. Historical test results remain in [VALIDATION.md](VALIDATION.md); existing [release notes](RELEASE_3.0.md) are preserved.
 
@@ -34,4 +34,4 @@ Review [current GitHub checks](https://github.com/anisirji/pocket-dev/actions) t
 - GIFs are silent. A sound-synthesis request or received RTP is not a human speech-quality test.
 - Camera frames and desktop input use generated/inert sources in these new assets. No private desktop or camera is recorded.
 - No real public tunnel, subscription transfer, vendor push delivery or destructive power action is demonstrated.
-- Documentation and website updates do not publish 3.0.0 to npm. The registry README changes only with an approved package publication.
+- Documentation and website generation never publishes a package. The registry README is updated with the owner-authorized package publication.

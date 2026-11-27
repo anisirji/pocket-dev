@@ -2,11 +2,11 @@
 
 > Continue AI conversations across devices, share authorized AI capabilities and work on projects from one browser-based workspace.
 
-Target: 3.0.0, implemented preview; final manual stability testing and release approval pending. npm installs the currently published version, which may differ. Node.js 22+. Exact package: @anisirji/pocket-dev. Start: pocket-dev start. No mobile app or required Pocket cloud account.
+Target: 3.0.1, implemented; final manual stability testing pending. Verify the currently published npm version before updating. Node.js 22+. Exact package: @anisirji/pocket-dev. Start: pocket-dev start. No mobile app or required Pocket cloud account.
 
 ## Canonical features
 
-- [AI Chat](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#chat-with-claude-code-codex-antigravity-and-copilot): Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals.
+- [AI Chat](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#chat-with-claude-code-codex-antigravity-and-copilot): Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals. Local Antigravity and Copilot are experimental.
 - [AI Sharing](https://github.com/anisirji/pocket-dev/blob/main/docs/UNIFIED_CONNECTIONS.md): Connect authorized computers and choose a compatible shared AI source while keeping your project on its workspace computer.
 - [Workspace](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#project-workspace): Use a VS Code-inspired editor, files, chat, terminal and Git in one workspace.
 - [Smart Notifications](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#task-alerts): Get a temporary alert and optional short sound when a task completes, fails or needs attention.

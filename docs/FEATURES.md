@@ -2,13 +2,13 @@
 
 Continue AI conversations across devices, share authorized AI capabilities and work on projects from one browser-based workspace.
 
-> **Version 3.0.0 preview:** planned features are implemented. Final manual stability testing and release approval are pending. The npm badge and install command refer to the published package, not this preview. [Validation](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURE_VERIFICATION.md) · [Release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_3.0.md).
+> **Version 3.0.1:** planned features are implemented. Final manual stability testing remains pending. The npm badge identifies the currently published version. [Validation](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURE_VERIFICATION.md) · [Release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_3.0.md).
 
 Actual application UI captured on disposable servers with sanitized sample projects. AI responses are scripted; desktop input and camera/audio sources are simulated where identified. Demonstrations do not certify physical hardware, provider entitlement or final manual stability.
 
 ## AI Chat
 
-**Start on your computer. Continue on your phone.** Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals.
+**Start on your computer. Continue on your phone.** Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals. Local Antigravity and Copilot are experimental.
 
 ![Pocket Dev 3 AI Chat interface with sanitized demonstration data](media/v3/ai-chat.png)
 
@@ -228,6 +228,7 @@ Actual application UI captured on disposable servers with sanitized sample proje
 3. Configure optional internet access from the computer’s Admin page.
 4. Keep the computer running; Pocket Dev does not wake sleeping hardware.
 5. Use the shared Local and Remote selector to copy or open the intended connection. Sharing an address does not grant a login.
+6. To pair computers, open Connected computers in local Admin or phone Settings. Select My computer only for a computer you own, then Show QR on one and Scan QR on the other. Choose QR photo when the browser cannot use its camera. Both sides must select My computer for computer access; otherwise the connection is AI-only.
 
 **If it does not work:** Check the current address and private-network firewall rules. A Wi-Fi HTTP address supports live alerts, but browser push and phone microphone access require a supported secure context.
 

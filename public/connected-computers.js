@@ -1,4 +1,5 @@
-import { parseInvite, inviteLine } from './room-invite.js';
+import { parseInvite, inviteLine, isCode, hostAddress } from './room-invite.js';
+import { cameraSupport, cameraError, startCamera, decodePhoto } from './room-scan.js';
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 const button = (text, action, cls = 'st-btn') => { const b = el('button', cls, text); b.type = 'button'; b.onclick = action; return b; };
 const api = (...args) => window.api(...args);
@@ -10,21 +11,27 @@ export async function connectionSummary() {
   const state = await api('GET', '/api/connections');
   return window.PocketMachine.computerSummary(state.computers);
 }
-export function openConnectedComputers() {
+export function openConnectedComputers({ request = window.api } = {}) {
   if (screen) return;
+  const api = request;
   const previousFocus = document.activeElement;
   const root = el('div', 'rs cc'); screen = root;
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Connected computers');
   const head = el('header', 'rs-head'), title = el('h2', null, 'Connected computers');
   const body = el('div', 'rs-body'), error = el('p', 'st-err'); error.setAttribute('role', 'alert');
-  let state, view = 'list', selected, filter = 'all', working = false, generation = 0, connectionType = 'personal';
+  const message = el('p', 'cc-message'); message.setAttribute('role', 'status');
+  let state, view = 'list', selected, filter = 'all', working = false, generation = 0, connectionType = 'external';
+  let pairingGeneration = 0, scanner, cameraRequest;
+  const pairingTimers = new Set();
+  const later = (fn, ms) => { const id = setTimeout(() => { pairingTimers.delete(id); fn(); }, ms); pairingTimers.add(id); return id; };
+  const stopScanner = () => { pairingGeneration++; cameraRequest?.abort(); cameraRequest = null; scanner?.stop(); scanner = null; for (const id of pairingTimers) clearTimeout(id); pairingTimers.clear(); };
   let resourceController;
   const resources = new Map();
   const draft = { code: '', address: '' };
   const back = button('←', () => view === 'list' ? close() : showList(), 'rs-back'); back.setAttribute('aria-label', 'Back');
-  head.append(back, title); root.append(head, error, body); document.body.append(root);
+  head.append(back, title); root.append(head, error, message, body); document.body.append(root);
   const overlays = window.pocketDev?.overlays;
-  const hide = () => { generation++; resourceController?.abort(); clearInterval(timer); document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', visibleAgain); root.remove(); screen = null; previousFocus?.focus?.(); };
+  const hide = () => { stopScanner(); generation++; resourceController?.abort(); clearInterval(timer); document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', visibleAgain); root.remove(); screen = null; previousFocus?.focus?.(); };
   const close = () => overlays ? overlays.close('computers') : hide();
   const hosted = window.pocketDevSettings?.presentPanel(root, 'computers', hide);
   if (!hosted) overlays?.open('computers', hide);
@@ -75,9 +82,10 @@ export function openConnectedComputers() {
     }));
   }
   function showList() {
+    stopScanner();
     view = 'list'; title.textContent = 'Connected computers';
     if (!state) { body.replaceChildren(note('Loading connected computers…')); return; }
-    const count = el('p', 'cc-summary', window.PocketMachine.computerSummary(state.computers));
+    const count = el('p', 'cc-summary', window.PocketMachine?.computerSummary(state.computers) || `${state.computers.length} computers`);
     const filters = el('div', 'cc-filters'); filters.setAttribute('role', 'group'); filters.setAttribute('aria-label', 'Filter computers');
     for (const [key, label] of [['all', 'All'], ['personal', 'Mine'], ['external', 'Others']]) {
       const b = button(label, () => { filter = key; showList(); }); b.setAttribute('aria-pressed', String(key === filter)); filters.append(b);
@@ -163,43 +171,135 @@ export function openConnectedComputers() {
       if (hosted) window.pocketDevSettings.back(); else showList();
     }), 'st-btn st-danger'));
   }
-  function connectStep() {
-    view = 'connect'; generation++; resourceController?.abort(); title.textContent = 'Connect computer';
-    let type = connectionType;
-    const choice = el('div', 'cc-choices');
-    for (const [key, label, description] of [['personal', 'My computer', 'Access and manage another computer you own.'], ['external', "Someone else’s computer", 'Share AI without granting computer access.']]) {
-      const radio = el('input'); radio.type = 'radio'; radio.name = 'computer-type'; radio.value = key; radio.checked = key === type;
-      radio.onchange = () => { connectionType = type = key; };
-      const text = el('span'); text.append(el('strong', null, label), el('small', null, description));
-      const labelNode = el('label', 'cc-choice'); labelNode.append(radio, text); choice.append(labelNode);
-    }
-    body.replaceChildren(note('1 of 2'), el('h3', 'cc-title', 'Whose computer is it?'), choice, button('Continue', () => enter('computer-code', 'Connect computer', connectStep, () => exchange(type), type), 'st-primary'));
-  }
+  function connectStep() { exchange(connectionType); }
   function exchange(type) {
+    stopScanner(); generation++; resourceController?.abort();
+    message.textContent = ''; error.textContent = '';
     view = 'connect'; title.textContent = 'Connect computer';
-    const received = input('Paste connection details or enter a code'), address = input('Computer address, e.g. http://192.168.1.24:7777');
+    const own = el('input'); own.type = 'checkbox'; own.checked = type === 'personal';
+    const ownership = field('My computer', own);
+    const permissions = note('Off: connect for AI sharing only. On: both owners must select My computer to allow computer access.');
+    const methods = el('div', 'cc-filters'); methods.setAttribute('role', 'group'); methods.setAttribute('aria-label', 'Pair computers');
+    const panel = el('div', 'cc-pair-panel');
+    const received = input('Paste connection details'), address = input('Computer address');
     received.value = draft.code; address.value = draft.address;
     received.oninput = () => { draft.code = received.value; };
     address.oninput = () => { draft.address = address.value; };
-    const invitation = el('div', 'cc-invitation');
-    body.replaceChildren(note('2 of 2'), note('Open Connected computers on the other computer. Create a code here or enter the code from there.'),
-      button('Create connection code', () => run(async () => {
-        const result = await api('POST', '/api/connections/invite', { connectionType: type });
-        const code = el('div', 'rs-code', result.code), line = el('code', 'rs-line', result.invite || inviteLine(result.address, result.code));
+    const status = note('Show a QR here and scan it from the other computer’s Admin or phone Settings.'); status.setAttribute('role', 'status');
+    let mode = '', invitationTimer;
+    const valid = () => screen === root && view === 'connect' && panel.isConnected;
+    const clear = () => { stopScanner(); clearTimeout(invitationTimer); panel.replaceChildren(); error.textContent = ''; };
+    async function connect(text) {
+      const parsed = parseInvite(text);
+      const host = parsed.host || hostAddress(address.value.trim());
+      if (!isCode(parsed.code) || !host) throw new Error('Scan a Pocket Dev computer QR, or paste its connection details.');
+      const result = await api('POST', '/api/connections/join', { code: parsed.code, host, connectionType });
+      if (!valid()) return;
+      clear(); await refresh();
+      if (result.callback?.ok === false) {
+        panel.append(note('Connected, but the other computer cannot reach this one yet. Check Wi-Fi and firewall access.'));
+        status.textContent = 'Connection needs attention';
+      } else {
+        showList(); message.textContent = 'Computer connected.';
+      }
+    }
+    async function showQr() {
+      clear(); mode = 'show'; show.setAttribute('aria-pressed', 'true'); scan.setAttribute('aria-pressed', 'false');
+      const ticket = pairingGeneration;
+      status.textContent = 'Creating connection QR…';
+      try {
+        const result = await api('POST', '/api/connections/invite', { connectionType });
+        if (!valid() || ticket !== pairingGeneration) return;
+        if (typeof result.svg !== 'string') throw new Error('Restart Pocket Dev on this computer to use the updated QR pairing.');
+        const qr = el('div', 'rs-qr cc-pair-qr'); qr.setAttribute('role', 'img'); qr.setAttribute('aria-label', 'One-time computer connection QR'); qr.innerHTML = result.svg;
         const expires = Date.now() + result.expiresInSeconds * 1000;
-        invitation.replaceChildren(code, line, note(`One use · Expires at ${new Date(expires).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`),
-          button('Copy connection details', async () => { const ok = await window.copyText?.(line.textContent); if (!ok) error.textContent = 'Select and copy the connection details above.'; }));
-      })), invitation, el('h3', 'cc-label', 'Or enter a code'), field('Connection code', received), field('Computer address', address),
-      button('Connect', () => run(async () => {
-        const parsed = parseInvite(received.value);
-        await api('POST', '/api/connections/join', { code: parsed.code || received.value.trim(), host: parsed.host || address.value.trim(), connectionType: type });
-        await refresh();
-        if (hosted) { overlays.close('computer-connect'); } else showList();
-      }), 'st-primary'));
+        const expiry = note(`One use · Expires at ${new Date(expires).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+        const line = el('code', 'rs-line', result.invite || inviteLine(result.address, result.code));
+        line.hidden = true;
+        panel.append(qr, expiry, button('Copy connection details', async () => {
+          try {
+            const ok = window.copyText ? await window.copyText(line.textContent) : await navigator.clipboard.writeText(line.textContent).then(() => true);
+            if (!ok) throw new Error(); status.textContent = 'Connection details copied.';
+          } catch { line.hidden = false; status.textContent = 'Select the connection details below and copy them.'; }
+        }), line, button('New QR', () => run(showQr)));
+        status.textContent = 'On the other computer, choose Scan QR. A phone can scan on behalf of the computer whose Settings it has open.';
+        invitationTimer = later(() => {
+          if (!valid() || ticket !== pairingGeneration) return;
+          qr.replaceChildren(); expiry.textContent = 'QR expired. Choose New QR.';
+        }, result.expiresInSeconds * 1000);
+        const known = new Set(state.computers.map((computer) => computer.deviceId));
+        // Poll only while this QR is visible, so pairing finishes on both screens.
+        const watch = async () => {
+          if (!valid() || document.hidden || ticket !== pairingGeneration || Date.now() >= expires) return;
+          try {
+            const fresh = await api('GET', '/api/connections');
+            if (!valid() || ticket !== pairingGeneration) return;
+            if (fresh.computers.some((computer) => !known.has(computer.deviceId))) {
+              state = fresh; showList(); message.textContent = 'Computer connected.'; return;
+            }
+          } catch { /* A temporary connection failure is retried while the QR is visible. */ }
+          later(watch, 1500);
+        };
+        later(watch, 1500);
+      } catch (err) { if (valid() && ticket === pairingGeneration) { status.textContent = ''; throw err; } }
+    }
+    function scanQr() {
+      clear(); mode = 'scan'; show.setAttribute('aria-pressed', 'false'); scan.setAttribute('aria-pressed', 'true');
+      const support = cameraSupport({ isSecureContext: window.isSecureContext, hasCamera: !!navigator.mediaDevices?.getUserMedia, port: location.port });
+      status.textContent = 'Scan the QR shown by the other computer. You can also choose a photo or screenshot.';
+      const video = el('video', 'rs-video'); video.hidden = true; video.setAttribute('aria-label', 'Connection QR scanner');
+      const camera = button('Use camera', () => run(async () => {
+        stopScanner(); const ticket = pairingGeneration;
+        cameraRequest = new AbortController();
+        video.hidden = false;
+        try {
+          const active = await startCamera(video, (text) => {
+            const finish = () => { if (!valid() || ticket !== pairingGeneration) return; if (working) later(finish, 50); else run(() => connect(text)); };
+            finish();
+          }, { signal: cameraRequest.signal });
+          if (!valid() || ticket !== pairingGeneration) { active.stop(); return; }
+          scanner = active;
+        } catch (err) { video.hidden = true; throw new Error(cameraError(err)); }
+      }), 'st-primary');
+      camera.disabled = !support.ok;
+      const photo = el('input'); photo.type = 'file'; photo.accept = 'image/*'; photo.hidden = true;
+      photo.onchange = () => run(async () => {
+        const file = photo.files?.[0]; if (!file) return;
+        stopScanner(); video.hidden = true; const ticket = pairingGeneration;
+        const text = await decodePhoto(file);
+        if (!valid() || ticket !== pairingGeneration) return;
+        if (!text) throw new Error('No QR found. Choose a clear photo showing the whole QR.');
+        await connect(text);
+      }).finally(() => { photo.value = ''; });
+      panel.append(video, camera, button('Choose QR photo', () => photo.click()), photo);
+      if (!support.ok) panel.append(note(window.isSecureContext ? support.text : 'On a Wi-Fi HTTP connection, choose a QR photo. Live camera scanning needs HTTPS or local Admin on the computer.'));
+    }
+    const show = button('Show QR', () => run(showQr), 'st-primary');
+    show.disabled = state.pairing?.canShowQr === false;
+    if (show.disabled) status.textContent = `To add another computer, show the QR from ${state.pairing.hostName || 'your network’s first computer'} and scan it on the new computer. Your existing connections stay connected.`;
+    const scan = button('Scan QR', scanQr);
+    methods.append(show, scan);
+    own.onchange = () => {
+      connectionType = own.checked ? 'personal' : 'external';
+      if (mode === 'show') run(showQr);
+    };
+    const manual = el('details', 'cc-manual'); manual.append(el('summary', null, 'Enter connection details instead'),
+      field('Connection details or code', received), field('Computer address (if entering only a code)', address),
+      button('Connect', () => run(() => connect(received.value)), 'st-primary'));
+    body.replaceChildren(ownership, permissions, methods, status, panel, manual);
   }
-  function onKey(event) { if (!hosted && screen === root && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } }
+  function onKey(event) {
+    if (hosted || screen !== root) return;
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (view === 'list') close(); else showList(); }
+    if (event.key === 'Tab') {
+      const controls = [...root.querySelectorAll('button:not(:disabled), input:not(:disabled), summary, a[href]')].filter((n) => n.getClientRects().length);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
+    }
+  }
   document.addEventListener('keydown', onKey);
-  function visibleAgain() { if (document.hidden) resourceController?.abort(); else if (root.getClientRects().length) { if (view === 'list') refresh(); else refreshResources(); } }
+  function visibleAgain() { if (document.hidden) { resourceController?.abort(); stopScanner(); } else if (root.getClientRects().length) { if (view === 'list') refresh(); else if (view === 'connect') connectStep(); else refreshResources(); } }
   document.addEventListener('visibilitychange', visibleAgain);
   const timer = setInterval(() => { if (!working && !document.hidden && root.getClientRects().length) { if (view === 'list') refresh(); else if (view === 'details') refreshResources(); } }, 10000);
   if (hosted) {

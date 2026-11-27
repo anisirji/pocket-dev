@@ -31,6 +31,12 @@ const FILES = {
   '/admin.css': ['admin.css', 'text/css; charset=utf-8'],
   '/connection-qr.css': ['connection-qr.css', 'text/css; charset=utf-8'],
   '/connection-qr.js': ['connection-qr.js', 'text/javascript; charset=utf-8'],
+  '/connected-computers.js': ['connected-computers.js', 'text/javascript; charset=utf-8'],
+  '/connected-computers.css': ['connected-computers.css', 'text/css; charset=utf-8'],
+  '/room.css': ['room.css', 'text/css; charset=utf-8'],
+  '/room-invite.js': ['room-invite.js', 'text/javascript; charset=utf-8'],
+  '/room-scan.js': ['room-scan.js', 'text/javascript; charset=utf-8'],
+  '/vendor/jsqr/jsQR.js': ['vendor/jsqr/jsQR.js', 'text/javascript; charset=utf-8'],
   '/feature-guides.js': ['feature-guides.js', 'text/javascript; charset=utf-8'],
   '/feature-guides.css': ['feature-guides.css', 'text/css; charset=utf-8'],
   '/admin-screen-control.js': ['admin-screen-control.js', 'text/javascript; charset=utf-8'],
@@ -128,7 +134,7 @@ function failedLogins(entries) {
 // `urls()` returns the phone listener's current { lan, local, remote } base URLs.
 const setupStatus = cachedStatus(createContext());
 
-export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections, camera = null, media = camera, screenControl = null, update = null, updateMeta = null, onRemotePermissionsChange = () => {}, onNotificationSettingsChange = () => {}, onSetupChanged = () => {} }) {
+export async function startAdmin({ auth, collaborators, messages, access, tunnel, config, mainPort, urls, sections, connections = null, camera = null, media = camera, screenControl = null, update = null, updateMeta = null, onRemotePermissionsChange = () => {}, onNotificationSettingsChange = () => {}, onSetupChanged = () => {} }) {
   const setupActions = createSetupActions({ context: createContext(), config, stateDir: STATE_DIR, changed() { setupStatus.invalidate(); onSetupChanged(); } });
   const browseFolders = createFolderBrowser({ config });
   const port = Number(process.env.POCKET_DEV_ADMIN_PORT) || config.read().adminPort || mainPort + 1;
@@ -420,6 +426,11 @@ export async function startAdmin({ auth, collaborators, messages, access, tunnel
     if (why) return send(403, { error: why });
     const { pathname, searchParams } = new URL(req.url, 'http://localhost');
     try {
+      if (connections && (pathname === '/api/connections' || pathname.startsWith('/api/connections/'))) {
+        // Keep local Admin origin/CSRF checks and advertise the public port.
+        req.headers = { ...req.headers, host: `localhost:${mainPort}` };
+        return connections.handleApi(req, res, new URL(req.url, 'http://localhost'), { readJson, sendJson: (_res, status, body) => send(status, body), owner: true });
+      }
       if (req.method === 'GET' && pathname === '/api/folders/browse') return send(200, await browseFolders(new URL(req.url, 'http://localhost')));
       if (req.method === 'GET' && pathname === '/api/setup/actions/events') return setupActions.stream(req, res, HEADERS);
       if (req.method === 'POST' && pathname === '/api/folders/create') return send(200, await browseFolders.create(await readJson(req)));

@@ -29,6 +29,13 @@ async function api(method, path, body) {
   return data;
 }
 
+$('connectedComputersBtn').addEventListener('click', async () => {
+  try {
+    const { openConnectedComputers } = await import('/connected-computers.js');
+    openConnectedComputers({ request: api });
+  } catch (err) { toast(err.message); }
+});
+
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
 function ago(ms) {

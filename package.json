@@ -1,6 +1,6 @@
 {
   "name": "@anisirji/pocket-dev",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Self-hosted AI coding chats, authorized AI sharing, and a connected development workspace for your phone and computer.",
   "author": {
     "name": "anisirji",
@@ -100,7 +100,9 @@
     "docs/feature-catalog.json",
     "docs/media/v3",
     "docs/FEATURE_VERIFICATION.md",
-    "docs/VALIDATION.md"
+    "docs/VALIDATION.md",
+    "docs/RELEASE_3.0.1.md",
+    "docs/QR_PAIRING_UI_VALIDATION.md"
   ],
   "os": [
     "darwin",

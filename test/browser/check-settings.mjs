@@ -77,11 +77,12 @@ try {
     assert.match(await sheet.locator('.cc .rs-body').innerText(), /Access type/i);
     await page.goBack(); await sheet.getByRole('button', { name: 'Connect another computer', exact: true }).waitFor();
     await sheet.getByRole('button', { name: 'Connect another computer', exact: true }).click();
-    await sheet.getByRole('radio', { name: /Someone else/ }).check();
-    await sheet.getByRole('button', { name: 'Continue', exact: true }).click();
-    await sheet.getByLabel('Computer address', { exact: true }).fill('http://192.168.1.24:7777');
-    await fits(); await page.goBack(); await sheet.getByRole('radio', { name: /Someone else/ }).waitFor();
-    assert.equal(await sheet.getByRole('radio', { name: /Someone else/ }).isChecked(), true, 'Back preserves connection type');
+    await sheet.getByLabel('My computer', { exact: true }).uncheck();
+    await sheet.getByRole('button', { name: 'Scan QR', exact: true }).click();
+    await sheet.getByRole('button', { name: 'Choose QR photo', exact: true }).waitFor();
+    await fits(); await page.goBack();
+    await sheet.getByRole('button', { name: 'Connect another computer', exact: true }).click();
+    assert.equal(await sheet.getByLabel('My computer', { exact: true }).isChecked(), false, 'Back preserves connection type');
     await page.goBack(); await sheet.locator('.cc-computer').first().waitFor();
     await choose('controls'); await sheet.locator('.pw').waitFor();
     if (width === 1280) {

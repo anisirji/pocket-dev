@@ -61,10 +61,12 @@ export async function decodePhoto(file) {
 }
 
 // Opens the rear camera into `video` and calls onText once with the first QR text it reads. Returns { stop }.
-export async function startCamera(video, onText) {
+export async function startCamera(video, onText, { signal } = {}) {
   const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
   let stopped = false, timer = 0;
-  const stop = () => { stopped = true; clearTimeout(timer); stream.getTracks().forEach((t) => t.stop()); video.srcObject = null; };
+  const stop = () => { stopped = true; clearTimeout(timer); signal?.removeEventListener('abort', stop); stream.getTracks().forEach((t) => t.stop()); if (video.srcObject === stream) video.srcObject = null; };
+  if (signal?.aborted) { stop(); return { stop }; }
+  signal?.addEventListener('abort', stop, { once: true });
   video.srcObject = stream;
   video.setAttribute('playsinline', '');
   video.muted = true;

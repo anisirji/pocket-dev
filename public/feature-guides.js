@@ -76,7 +76,8 @@
         "Open the Local connection address or scan a fresh login QR privately. Local remains available when Remote Access is enabled.",
         "Configure optional internet access from the computer’s Admin page.",
         "Keep the computer running; Pocket Dev does not wake sleeping hardware.",
-        "Use the shared Local and Remote selector to copy or open the intended connection. Sharing an address does not grant a login."
+        "Use the shared Local and Remote selector to copy or open the intended connection. Sharing an address does not grant a login.",
+        "To pair computers, open Connected computers in local Admin or phone Settings. Select My computer only for a computer you own, then Show QR on one and Scan QR on the other. Choose QR photo when the browser cannot use its camera. Both sides must select My computer for computer access; otherwise the connection is AI-only."
       ],
       "troubleshooting": "Check the current address and private-network firewall rules. A Wi-Fi HTTP address supports live alerts, but browser push and phone microphone access require a supported secure context.",
       "video": null

@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { STATE_DIR } from '../core/paths.js';
 import { peerJson } from '../network/peer-client.js';
+import { svgQr } from '../network/qr.js';
 
 export const PROVIDERS = ['claude', 'codex', 'antigravity', 'copilot'];
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
@@ -65,7 +66,10 @@ export function createConnections({ room, stateDir = STATE_DIR, installed = () =
   }
   async function summary() {
     const shared = await available();
-    return { deviceId: room.deviceId(), migration: data.migration, computers: (members().length ? members() : [{ deviceId: room.deviceId(), name: os.hostname(), status: 'online', addresses: [] }]).map((m) => {
+    const network = room.view?.().room;
+    return { deviceId: room.deviceId(), migration: data.migration,
+      pairing: { canShowQr: !network || network.hostId === room.deviceId(), hostName: members().find((m) => m.deviceId === network?.hostId)?.name || '' },
+      computers: (members().length ? members() : [{ deviceId: room.deviceId(), name: os.hostname(), status: 'online', addresses: [] }]).map((m) => {
       const self = m.deviceId === room.deviceId(), local = grant(m.deviceId);
       const remote = m.access?.[room.deviceId()];
       return { deviceId: m.deviceId, name: m.name, self, online: m.status === 'online', transport: m.addresses?.some((a) => a.startsWith('https:')) ? 'internet' : 'wifi',
@@ -84,7 +88,8 @@ export function createConnections({ room, stateDir = STATE_DIR, installed = () =
       if (req.method === 'POST' && id === 'invite') {
         const body = await readJson(req);
         if (!room.view().room) await room.create({}, req);
-        return sendJson(res, 200, room.invite(req, body));
+        const invitation = room.invite(req, body);
+        return sendJson(res, 200, { ...invitation, svg: await svgQr(invitation.invite) });
       }
       if (req.method === 'POST' && id === 'join') {
         const body = await readJson(req);

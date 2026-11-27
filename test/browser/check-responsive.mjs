@@ -215,20 +215,19 @@ try {
   await inViewport('.st-sheet');
   await page.getByRole('button', { name: /Connected computers/ }).click();
   await page.getByRole('button', { name: 'Connect another computer', exact: true }).click();
-  await page.getByRole('radio', { name: /Someone else/ }).check();
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await page.getByLabel('Connection code', { exact: true }).fill('1234-5678');
-  await page.getByLabel('Computer address', { exact: true }).fill('http://192.168.1.20:7777');
+  await page.getByLabel('My computer', { exact: true }).uncheck();
+  await page.getByText('Enter connection details instead', { exact: true }).click();
+  await page.getByLabel('Connection details or code', { exact: true }).fill('1234-5678');
+  await page.getByLabel('Computer address (if entering only a code)', { exact: true }).fill('http://192.168.1.20:7777');
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
     await page.evaluate(() => setTestViewport({}));
     await page.getByRole('button', { name: 'Connect', exact: true }).scrollIntoViewIfNeeded();
-    await inViewport('.cc .rs-body .st-primary');
+    await inViewport('.cc-manual .st-primary');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   }
   await page.setViewportSize({ width: 393, height: 852 });
   await page.evaluate(() => setTestViewport({ height: 320, offsetTop: 160 }));
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await page.getByRole('button', { name: 'Back to settings' }).click();
   await page.getByRole('button', { name: /Security & Devices/ }).click();

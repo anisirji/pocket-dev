@@ -29,7 +29,7 @@ Keep the computer awake and online. Scan the one-time QR code on the same networ
 
 ## Test the Version 3 preview
 
-Version **3.0.0** is implemented in source but is not approved for npm publication or a public release. The install command above installs the currently published package. Do not infer that it includes the preview.
+Version **3.0.1** includes the QR-pairing update tested on macOS and Windows; npm publication has been authorized by the owner. Final manual stability testing is still pending. Check the npm badge for the currently published version. No public GitHub release has been requested.
 
 For a deliberate source test, use a separate checkout on the computer you intend to test:
 

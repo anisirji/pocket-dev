@@ -10,6 +10,8 @@
 <script src="/folder-picker.js"></script>
 <link rel="stylesheet" href="/admin.css">
 <link rel="stylesheet" href="/connection-qr.css">
+<link rel="stylesheet" href="/room.css">
+<link rel="stylesheet" href="/connected-computers.css">
 <script src="/connection-qr.js"></script>
 <link rel="stylesheet" href="/feature-guides.css">
 <script src="/feature-guides.js" defer></script>
@@ -86,6 +88,11 @@
 
     <div class="group" id="group-devices" role="region" aria-labelledby="gt-devices" hidden>
       <div class="group-head"><h2 id="gt-devices" tabindex="-1">Devices &amp; access</h2><p>Who can use Pocket Dev, and how new people get in.</p></div>
+    <section class="panel" aria-labelledby="computersTitle">
+      <div class="panel-head"><h2 id="computersTitle">Connected computers</h2></div>
+      <p class="desc">Connect computers by showing a QR on one and scanning it from the other. A logged-in phone can scan for its computer too.</p>
+      <button class="btn" id="connectedComputersBtn" type="button">Connect or manage computers</button>
+    </section>
     <section id="pending" class="panel" hidden>
       <div class="panel-head"><h2>Waiting for approval</h2></div>
       <p class="note">These browsers typed the right password. Check the code on the phone matches before you approve it. Requests expire after <span id="pendingTtl">10</span> minutes. With <a href="#settings">Approve from a logged-in phone</a> on, your other phones see this list too.</p>
