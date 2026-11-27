@@ -28,7 +28,7 @@ console.log(process.argv.some(v=>v.includes('NSScreen.screens'))?JSON.stringify(
 `);
 const shell = write('demo-shell', '#!/bin/sh\nexport PS1="demo-app \\$ "\nexec /bin/bash --noprofile --norc\n');
 const hostRecord = path.join(scratch, 'camera-host-url');
-const fake = write('demo-agent.mjs', fs.readFileSync(path.join(repo, 'test/helpers/fake-claude.mjs'),'utf8').replaceAll("model: 'fake'","model: 'demo'").replace('Done. The app now has a dark mode toggle and all 12 tests still pass. Want me to remember the choice between visits?', 'Demo response: the proposed theme toggle is shown above. Review the changes before applying them.').replace('Tests: 12 passed','Scripted demo command output')); 
+const fake = write('demo-agent.mjs', fs.readFileSync(path.join(repo, 'test/helpers/fake-claude.mjs'),'utf8').replaceAll("model: 'fake'","model: 'demo'").replace('Done. The app now has a dark mode toggle and all 12 tests still pass. Want me to remember the choice between visits?', 'Demo response: the proposed theme toggle is shown above. Review the changes before applying them.').replace('Tests: 12 passed','Scripted demo command output'));
 const manifestFile = path.join(out, 'capture-manifest.json');
 let manifest = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile)) : { version: '3.0.0', assets: [] };
 async function cleanPage(page, servers) {
@@ -99,7 +99,7 @@ try {
   }
   if(want('workspace')||want('developer-tools')) {
     const {page,context}=await pageFor(a,{workspace:true});await page.getByRole('button',{name:'Folder src',exact:true}).click();await page.getByRole('button',{name:'File App.jsx',exact:true}).click();await page.locator('.cm-content').waitFor();
-    
+
     const frames=[await frame(page,'workspace',0)];await page.locator('.cm-content').click();await page.keyboard.press('ControlOrMeta+End');await page.keyboard.insertText('// Reviewed in Pocket Dev\n');await page.getByRole('button',{name:'Save',exact:true}).click();await until(()=>fs.readFileSync(path.join(a.demo,'src/App.jsx'),'utf8').includes('Reviewed in Pocket Dev'));frames.push(await frame(page,'workspace',1));
     await page.getByRole('button',{name:'New project terminal',exact:false}).click();const tools=page.frameLocator('#toolsFrame');await tools.locator('.term.active').filter({hasText:'demo-app $'}).waitFor();await tools.locator('#cmd').fill('printf "Demo project ready\\n"; git status --short');await tools.locator('#send').click();await tools.locator('.term.active').filter({hasText:'Demo project ready'}).waitFor();frames.push(await frame(page,'workspace',2));
     await page.locator('#activityGit').click();await tools.locator('.g-graph').waitFor();frames.push(await frame(page,'workspace',3));
