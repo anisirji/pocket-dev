@@ -30,3 +30,13 @@ Create a Pocket Dev terminal in the project folder when the user wants to follow
 For an authorized task requiring a Pocket Dev terminal, read [Terminal API for scripts](https://www.theani.me/work/pocket-dev/docs/reference#terminal-api-for-scripts). It documents HTTP login, cookie authentication, owner approval, terminal creation and WebSocket frames. Every mutation needs `x-pocket-dev: 1` and JSON content type. Handle pending approval before creating a session. Avoid logging passwords or cookies, and never bypass owner approval.
 
 Use ordinary local shell tools when they already serve the user's task. Pocket Dev has no bundled MCP server; this skill does not grant access or authorize exposing a computer to the internet.
+
+## Version 3 capabilities and validation boundaries
+
+Read the [feature catalogue](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/feature-catalog.json) and [verification matrix](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/FEATURE_VERIFICATION.md). Version 3.0.0 is an implemented source preview; final manual stability testing and release approval are pending. Verify the installed version: npm can still supply an older published package. Do not publish to npm or create a public release during setup.
+
+Use **AI Chat**, **AI Sharing** and **Workspace** as the primary names. The workspace computer and AI source are independent. Grant each provider explicitly and retain shared-session isolation; personal Codex browser/MCP tools do not become available to shared sessions. Sharing does not transfer a subscription or override provider terms. Antigravity and Copilot remain experimental.
+
+Use the existing help in Settings, Chat settings, Workspace and Admin. Local connectivity remains available when optional Remote Access is enabled. Media and input permissions are global to a computer's authorized connections and can be revoked locally in Admin. Browser/OS permissions still apply; camera, computer microphone and push-to-talk are independent. A secure context is needed for the speaking browser's microphone, and the computer browser may require local speaker activation.
+
+Notification sounds start off and transient alerts are deduplicated. Browser push is an independent opt-in. Do not call a generated screenshot, a protocol fixture, synthetic media or inert screen input a real hardware/manual stability test. Explain remaining platform and account checks, and preserve existing work before any restart or power action.

@@ -1,9 +1,9 @@
 {
   "product": "Pocket Dev",
   "targetVersion": "3.0.0",
-  "releaseStatus": "unpublished; manual validation pending",
+  "releaseStatus": "implemented; manual stability testing pending; unpublished",
   "tagline": "Your computer. In your pocket.",
-  "summary": "Continue AI conversations across devices, connect your team's authorized AI capabilities and develop projects from one browser-based workspace.",
+  "summary": "Continue AI conversations across devices, share authorized AI capabilities and work on projects from one browser-based workspace.",
   "package": "@anisirji/pocket-dev",
   "requirements": "Node.js 22+; awake, connected, authorized computer",
   "website": "https://www.theani.me/work/pocket-dev",
@@ -24,18 +24,40 @@
         "Optional personal Codex browser tools; local Antigravity and Copilot experimental"
       ],
       "group": "Core",
-      "visual": "docs/media/v3/ai-chat.svg",
-      "alt": "Illustrative workflow: Computer chat → Continue → Phone chat",
+      "visual": "docs/media/v3/ai-chat.png",
+      "alt": "Pocket Dev 3 AI Chat interface with sanitized demonstration data",
       "video": null,
-      "diagram": [
-        "Computer chat",
-        "Continue",
-        "Phone chat"
-      ]
+      "helpKey": "chat",
+      "instructions": [
+        "Select the project computer, open Chats and choose a Claude Code or Codex conversation. An already-open conversation can read along before you send.",
+        "Send a message to continue here. Respect an active writer and review approvals before allowing an action.",
+        "Choose a compatible provider or model in the existing chat controls. Context is passed to the next engine; native tools can differ.",
+        "Open Chat settings → Continue on computer to return to the computer. Personal Codex Browser → Separate browser requires explicit consent."
+      ],
+      "troubleshooting": "Use the provider’s own sign-in on the computer running it. Keep the host awake. Usage limits come from the provider; a reset time appears only when the provider supplies one. Antigravity and Copilot remain experimental.",
+      "media": {
+        "screenshot": "docs/media/v3/ai-chat.png",
+        "demo": "docs/media/v3/ai-chat.gif",
+        "width": 1280,
+        "height": 800,
+        "caption": "Real conversation UI with scripted agent responses. The capture checks the continuation action; native account handoff still needs manual testing.",
+        "manifest": "docs/media/v3/capture-manifest.json",
+        "mobile": {
+          "src": "docs/media/v3/ai-chat-mobile.png",
+          "width": 390,
+          "height": 844
+        }
+      },
+      "verification": {
+        "implementation": "implemented",
+        "demonstration": "isolated UI and stated assertions",
+        "manualStability": "pending",
+        "evidence": "docs/VALIDATION.md"
+      }
     },
     {
       "id": "ai-sharing",
-      "name": "AI & Resource Sharing",
+      "name": "AI Sharing",
       "headline": "One team. More AI capabilities.",
       "description": "Connect authorized computers and choose a compatible shared AI source while keeping your project on its workspace computer.",
       "guide": "docs/UNIFIED_CONNECTIONS.md",
@@ -45,14 +67,32 @@
         "Shared-session isolation; provider terms apply"
       ],
       "group": "Core",
-      "visual": "docs/media/v3/ai-sharing.svg",
-      "alt": "Illustrative workflow: Workspace PC → Authorized link → AI source",
+      "visual": "docs/media/v3/ai-sharing.png",
+      "alt": "Pocket Dev 3 AI Sharing interface with sanitized demonstration data",
       "video": null,
-      "diagram": [
-        "Workspace PC",
-        "Authorized link",
-        "AI source"
-      ]
+      "helpKey": "computers",
+      "instructions": [
+        "Create a one-time connection code on one computer and enter it on the other.",
+        "For computers you own, approve computer access explicitly on the target computer.",
+        "For AI-only connections, share and authorize each provider separately.",
+        "Choose Work on for the project computer, and choose an AI source in the existing provider selector."
+      ],
+      "troubleshooting": "AI-only connections do not grant files, screen or health readings. CPU and RAM appear only for authorized online computers. Disconnecting or revoking a grant stops affected access.",
+      "media": {
+        "screenshot": "docs/media/v3/ai-sharing.png",
+        "demo": "docs/media/v3/ai-sharing.gif",
+        "width": 1280,
+        "height": 800,
+        "caption": "Two disposable servers on one Mac exercise pairing, provider grants and AI-only access boundaries. Physical cross-computer use and provider account permissions need manual testing.",
+        "manifest": "docs/media/v3/capture-manifest.json",
+        "mobile": null
+      },
+      "verification": {
+        "implementation": "implemented",
+        "demonstration": "isolated UI and stated assertions",
+        "manualStability": "pending",
+        "evidence": "docs/VALIDATION.md"
+      }
     },
     {
       "id": "workspace",
@@ -66,56 +106,115 @@
         "Resizable panels and mobile layouts"
       ],
       "group": "Core",
-      "visual": "docs/media/v3/workspace.svg",
-      "alt": "Illustrative workflow: Files → Editor → AI chat",
+      "visual": "docs/media/v3/workspace.png",
+      "alt": "Pocket Dev 3 Workspace interface with sanitized demonstration data",
       "video": null,
-      "diagram": [
-        "Files",
-        "Editor",
-        "AI chat"
-      ]
+      "helpKey": "workspace",
+      "instructions": [
+        "Choose the computer that owns your project, then open its folder.",
+        "Edit files, use the project terminal, and select an AI source independently.",
+        "Git badges describe saved changes. Choose Changes to open the existing Git comparison.",
+        "Save explicitly or enable auto-save. If a file changes elsewhere, compare it before replacing your draft.",
+        "Use the Git action for the existing diff and Git Graph. Project terminals start in the selected folder."
+      ],
+      "troubleshooting": "Offline drafts stay in this browser. Reconnect to the same computer and project. Conflicts keep your draft until you choose how to resolve them.",
+      "media": {
+        "screenshot": "docs/media/v3/workspace.png",
+        "demo": "docs/media/v3/workspace.gif",
+        "width": 1280,
+        "height": 800,
+        "caption": "Actual editor saves, terminal output and Git Graph in a scratch repository. No private project is used.",
+        "manifest": "docs/media/v3/capture-manifest.json",
+        "mobile": {
+          "src": "docs/media/v3/workspace-mobile.png",
+          "width": 390,
+          "height": 844
+        }
+      },
+      "verification": {
+        "implementation": "implemented",
+        "demonstration": "isolated UI and stated assertions",
+        "manualStability": "pending",
+        "evidence": "docs/VALIDATION.md"
+      }
     },
     {
       "id": "notifications",
       "name": "Smart Notifications",
       "headline": "Know when your AI needs you.",
-      "description": "Get a short sound and temporary alert when a task completes, fails or needs attention — no notification inbox.",
-      "guide": "docs/FEATURES.md#smart-notifications",
+      "description": "Get a temporary alert and optional short sound when a task completes, fails or needs attention.",
+      "guide": "docs/GUIDE.md#task-alerts",
       "details": [
         "Confirmed task status in Chats",
         "Deduplicated alerts, optional sounds",
         "Opt-in browser push where supported"
       ],
       "group": "Supporting",
-      "visual": "docs/media/v3/notifications.svg",
-      "alt": "Illustrative workflow: AI task → Completed → One alert",
+      "visual": "docs/media/v3/notifications.png",
+      "alt": "Pocket Dev 3 Smart Notifications interface with sanitized demonstration data",
       "video": null,
-      "diagram": [
-        "AI task",
-        "Completed",
-        "One alert"
-      ]
+      "helpKey": "notifications",
+      "instructions": [
+        "Open Settings → Service & Updates and choose which alerts you want. Sounds start off.",
+        "Enable Notification sounds explicitly. A confirmed task outcome creates a temporary alert, not a notification inbox.",
+        "Dismiss the toast or let it expire. Repeated delivery of the same event must not replay its sound.",
+        "Browser push is a separate opt-in for supported browsers and secure connections; it needs the computer to stay online."
+      ],
+      "troubleshooting": "For an audible alert, interact with the page and check browser/system sound settings. Background push depends on browser and vendor support. A GIF demonstrates the toast but cannot demonstrate sound.",
+      "media": {
+        "screenshot": "docs/media/v3/notifications.png",
+        "demo": "docs/media/v3/notifications.gif",
+        "width": 1280,
+        "height": 800,
+        "caption": "One toast and one sound-synthesis request verified for a repeated event ID. Output was muted; no external vendor push was sent.",
+        "manifest": "docs/media/v3/capture-manifest.json",
+        "mobile": null
+      },
+      "verification": {
+        "implementation": "implemented",
+        "demonstration": "isolated UI and stated assertions",
+        "manualStability": "pending",
+        "evidence": "docs/VALIDATION.md"
+      }
     },
     {
       "id": "screen",
       "name": "Remote Screen & Control",
       "headline": "See it. Interact when needed.",
       "description": "View an authorized computer's screen and choose displays or quality where supported; optional Mac input needs local approval.",
-      "guide": "docs/FEATURES.md#remote-screen--control",
+      "guide": "docs/GUIDE.md#device-screen",
       "details": [
         "Screen viewing, pause and snapshots",
         "Display selection subject to platform validation",
         "Mac control with native permissions and host Stop"
       ],
       "group": "Supporting",
-      "visual": "docs/media/v3/screen.svg",
-      "alt": "Illustrative workflow: View screen → Approve control → Mac input",
+      "visual": "docs/media/v3/screen.png",
+      "alt": "Pocket Dev 3 Remote Screen & Control interface with sanitized demonstration data",
       "video": null,
-      "diagram": [
-        "View screen",
-        "Approve control",
-        "Mac input"
-      ]
+      "helpKey": "screen",
+      "instructions": [
+        "Keep the computer awake and signed in. Allow Screen Recording for the program running Pocket Dev on the Mac.",
+        "Use the options menu to choose a supported display or image quality. Snapshot downloads the current image.",
+        "Optional Mac input also needs Python 3 and Accessibility permission. Approve screen control once in local Admin; the approval covers all authorized connections to this computer.",
+        "Admin can be closed after approval. Stop ends a connection; Admin → Permissions disables access globally and immediately. Reconnecting requires a fresh Control request but no repeated approval while permission remains enabled."
+      ],
+      "troubleshooting": "Wallpaper without app windows usually means Screen Recording needs permission. Locked screens and macOS authorization dialogs block input. Only one controller is allowed. Native input remains subject to the Mac’s permissions; unsupported computers retain viewing.",
+      "media": {
+        "screenshot": "docs/media/v3/screen.png",
+        "demo": "docs/media/v3/screen.gif",
+        "width": 1280,
+        "height": 800,
+        "caption": "Real control UI, approval and revocation, with a demo Workspace image and inert input adapter. No owner desktop pixels or OS input are captured.",
+        "manifest": "docs/media/v3/capture-manifest.json",
+        "mobile": null
+      },
+      "verification": {
+        "implementation": "implemented",
+        "demonstration": "isolated UI and stated assertions",
+        "manualStability": "pending",
+        "evidence": "docs/VALIDATION.md"
+      }
     },
     {
       "id": "camera-audio",
@@ -126,17 +225,35 @@
       "details": [
         "Independent camera and audio controls",
         "Two-way audio and push to talk",
-        "No automatic recording; audible playback still to be verified"
+        "No automatic recording; physical device and playback behavior depends on permissions and browser policy"
       ],
       "group": "Supporting",
-      "visual": "docs/media/v3/camera-audio.svg",
-      "alt": "Illustrative workflow: Camera → Listen → Push to talk",
+      "visual": "docs/media/v3/camera-audio.png",
+      "alt": "Pocket Dev 3 Camera & Audio interface with sanitized demonstration data",
       "video": null,
-      "diagram": [
-        "Camera",
-        "Listen",
-        "Push to talk"
-      ]
+      "helpKey": "camera",
+      "instructions": [
+        "Prepare the camera from the computer’s local Admin page if you want video. Camera permission does not grant microphone access.",
+        "Choose Camera and Listen independently, then start. Turn Camera off for an audio-only session. Listen asks for the computer microphone separately.",
+        "On a supported secure phone address, hold to speak through the computer. Allow your microphone if asked, then hold again. Releasing stops its audio track.",
+        "Snapshot saves a video frame to your device. Stop, leave the page or use Stop camera & audio on the computer to end media access."
+      ],
+      "troubleshooting": "Keep the computer browser open and allow each requested permission. If speaker autoplay is blocked, use Enable speaker playback in the computer tab. Audio requires direct WebRTC; image fallback preserves video only. Phone microphone access needs HTTPS or another supported secure context. Nothing is recorded.",
+      "media": {
+        "screenshot": "docs/media/v3/camera-audio.png",
+        "demo": "docs/media/v3/camera-audio.gif",
+        "width": 1280,
+        "height": 800,
+        "caption": "Real WebRTC UI and packet flow with generated video/audio. No physical camera, private microphone recording or audible-quality claim.",
+        "manifest": "docs/media/v3/capture-manifest.json",
+        "mobile": null
+      },
+      "verification": {
+        "implementation": "implemented",
+        "demonstration": "isolated UI and stated assertions",
+        "manualStability": "pending",
+        "evidence": "docs/VALIDATION.md"
+      }
     },
     {
       "id": "developer-tools",
@@ -150,14 +267,32 @@
         "Git graph, branches and pull requests"
       ],
       "group": "Supporting",
-      "visual": "docs/media/v3/developer-tools.svg",
-      "alt": "Illustrative workflow: Terminal → Files → Git",
+      "visual": "docs/media/v3/developer-tools.png",
+      "alt": "Pocket Dev 3 Developer Tools interface with sanitized demonstration data",
       "video": null,
-      "diagram": [
-        "Terminal",
-        "Files",
-        "Git"
-      ]
+      "helpKey": "developer-tools",
+      "instructions": [
+        "Choose the project computer and open a terminal in its project folder.",
+        "Use Files for uploads, downloads, previews and folder ZIPs within your authorized roots.",
+        "Use Git for status, saved-file diffs, Git Graph and supported repository actions.",
+        "Open a development port only for the intended task, then close it when finished."
+      ],
+      "troubleshooting": "Git needs Git installed; native terminals need working PTY support. File and project permissions still apply. Only forward a service you intend to expose.",
+      "media": {
+        "screenshot": "docs/media/v3/developer-tools.png",
+        "demo": "docs/media/v3/developer-tools.gif",
+        "width": 1280,
+        "height": 800,
+        "caption": "Real scratch files, PTY output, Git status and graph. No private project or external development port is exposed.",
+        "manifest": "docs/media/v3/capture-manifest.json",
+        "mobile": null
+      },
+      "verification": {
+        "implementation": "implemented",
+        "demonstration": "isolated UI and stated assertions",
+        "manualStability": "pending",
+        "evidence": "docs/VALIDATION.md"
+      }
     },
     {
       "id": "computer-management",
@@ -171,14 +306,32 @@
         "Start at login, keep awake and power controls"
       ],
       "group": "Supporting",
-      "visual": "docs/media/v3/computer-management.svg",
-      "alt": "Illustrative workflow: Health → Apps → Power",
+      "visual": "docs/media/v3/computer-management.png",
+      "alt": "Pocket Dev 3 Computer Management interface with sanitized demonstration data",
       "video": null,
-      "diagram": [
-        "Health",
-        "Apps",
-        "Power"
-      ]
+      "helpKey": "controls",
+      "instructions": [
+        "Select the authorized computer you want to inspect.",
+        "Use Applications or Device health to inspect its actual supported capabilities.",
+        "Open Screen or Camera only when you need a preview.",
+        "Review a confirmation carefully before using power controls."
+      ],
+      "troubleshooting": "Capabilities depend on the computer and its permissions. Unsupported controls remain unavailable, and closing a preview releases its active resources.",
+      "media": {
+        "screenshot": "docs/media/v3/computer-management.png",
+        "demo": "docs/media/v3/computer-management.gif",
+        "width": 1280,
+        "height": 800,
+        "caption": "Existing controls and health interface; platform-dependent readings stay available or unavailable as reported. No power action is executed.",
+        "manifest": "docs/media/v3/capture-manifest.json",
+        "mobile": null
+      },
+      "verification": {
+        "implementation": "implemented",
+        "demonstration": "isolated UI and stated assertions",
+        "manualStability": "pending",
+        "evidence": "docs/VALIDATION.md"
+      }
     },
     {
       "id": "connectivity",
@@ -192,14 +345,33 @@
         "Separate device and provider permissions"
       ],
       "group": "Supporting",
-      "visual": "docs/media/v3/connectivity.svg",
-      "alt": "Illustrative workflow: Local Wi-Fi → QR login → Remote option",
+      "visual": "docs/media/v3/connectivity.png",
+      "alt": "Pocket Dev 3 Connected & Self-hosted interface with sanitized demonstration data",
       "video": null,
-      "diagram": [
-        "Local Wi-Fi",
-        "QR login",
-        "Remote option"
-      ]
+      "helpKey": "connection",
+      "instructions": [
+        "For Wi-Fi access, put the phone and computer on the same reachable network.",
+        "Open the Local connection address or scan a fresh login QR privately. Local remains available when Remote Access is enabled.",
+        "Configure optional internet access from the computer’s Admin page.",
+        "Keep the computer running; Pocket Dev does not wake sleeping hardware.",
+        "Use the shared Local and Remote selector to copy or open the intended connection. Sharing an address does not grant a login."
+      ],
+      "troubleshooting": "Check the current address and private-network firewall rules. A Wi-Fi HTTP address supports live alerts, but browser push and phone microphone access require a supported secure context.",
+      "media": {
+        "screenshot": "docs/media/v3/connectivity.png",
+        "demo": "docs/media/v3/connectivity.gif",
+        "width": 1280,
+        "height": 800,
+        "caption": "Local/Remote share-address UI using an isolated tunnel fixture. No login QR, credential or real public tunnel is captured.",
+        "manifest": "docs/media/v3/capture-manifest.json",
+        "mobile": null
+      },
+      "verification": {
+        "implementation": "implemented",
+        "demonstration": "isolated UI and stated assertions",
+        "manualStability": "pending",
+        "evidence": "docs/VALIDATION.md"
+      }
     },
     {
       "id": "setup",
@@ -213,14 +385,214 @@
         "Notification preferences, updates and recovery"
       ],
       "group": "Supporting",
-      "visual": "docs/media/v3/setup.svg",
-      "alt": "Illustrative workflow: Install → Configure → Connect",
+      "visual": "docs/media/v3/setup.png",
+      "alt": "Pocket Dev 3 Simple Setup & Help interface with sanitized demonstration data",
       "video": null,
-      "diagram": [
-        "Install",
-        "Configure",
-        "Connect"
-      ]
+      "helpKey": "setup",
+      "instructions": [
+        "Run pocket-dev start on your own computer.",
+        "Open its local Admin page and follow the setup and permission guidance.",
+        "Install optional AI tools and sign in through their own login flows.",
+        "Connect your phone on Wi-Fi and verify the features you intend to use before leaving the computer."
+      ],
+      "troubleshooting": "Use pocket-dev setup --check or pocket-dev doctor for diagnostics. Keep the existing config and state directories when updating. A missing optional agent does not prevent basic Pocket Dev use.",
+      "media": {
+        "screenshot": "docs/media/v3/setup.png",
+        "demo": "docs/media/v3/setup.gif",
+        "width": 1280,
+        "height": 800,
+        "caption": "Actual graphical setup and existing contextual help. No installer, system permission dialog or password change is executed.",
+        "manifest": "docs/media/v3/capture-manifest.json",
+        "mobile": null
+      },
+      "verification": {
+        "implementation": "implemented",
+        "demonstration": "isolated UI and stated assertions",
+        "manualStability": "pending",
+        "evidence": "docs/VALIDATION.md"
+      }
+    }
+  ],
+  "schemaVersion": 2,
+  "release": {
+    "implementation": "complete",
+    "manualStability": "pending",
+    "npmPublication": "not approved",
+    "publicRelease": "not approved",
+    "note": "Version 3.0.0 is a preview. Planned features are implemented; final manual stability testing and release approval are pending."
+  },
+  "mediaPolicy": "Actual application UI captured on disposable servers with sanitized sample projects. AI responses are scripted; desktop input and camera/audio sources are simulated where identified. Demonstrations do not certify physical hardware, provider entitlement or final manual stability.",
+  "manualChecks": [
+    "Safari compatibility and a real phone on the intended network",
+    "Windows physical camera, microphone and audible speaker playback",
+    "Native screen capture/input permissions, multiple monitors and host Stop on each supported target",
+    "Real provider sign-in, conversation handoff and authorized cross-computer AI with the intended accounts",
+    "External tunnel connectivity and real vendor browser-push delivery",
+    "Power controls on the intended hardware after saving work"
+  ],
+  "guides": {
+    "workspace": {
+      "title": "Workspace",
+      "steps": [
+        "Choose the computer that owns your project, then open its folder.",
+        "Edit files, use the project terminal, and select an AI source independently.",
+        "Git badges describe saved changes. Choose Changes to open the existing Git comparison.",
+        "Save explicitly or enable auto-save. If a file changes elsewhere, compare it before replacing your draft.",
+        "Use the Git action for the existing diff and Git Graph. Project terminals start in the selected folder."
+      ],
+      "troubleshooting": "Offline drafts stay in this browser. Reconnect to the same computer and project. Conflicts keep your draft until you choose how to resolve them.",
+      "video": null
+    },
+    "screen": {
+      "title": "Device screen",
+      "steps": [
+        "Keep the computer awake and signed in. Allow Screen Recording for the program running Pocket Dev on the Mac.",
+        "Use the options menu to choose a supported display or image quality. Snapshot downloads the current image.",
+        "Optional Mac input also needs Python 3 and Accessibility permission. Approve screen control once in local Admin; the approval covers all authorized connections to this computer.",
+        "Admin can be closed after approval. Stop ends a connection; Admin → Permissions disables access globally and immediately. Reconnecting requires a fresh Control request but no repeated approval while permission remains enabled."
+      ],
+      "troubleshooting": "Wallpaper without app windows usually means Screen Recording needs permission. Locked screens and macOS authorization dialogs block input. Only one controller is allowed. Native input remains subject to the Mac’s permissions; unsupported computers retain viewing.",
+      "video": null
+    },
+    "camera": {
+      "title": "Camera & audio",
+      "steps": [
+        "Prepare the camera from the computer’s local Admin page if you want video. Camera permission does not grant microphone access.",
+        "Choose Camera and Listen independently, then start. Turn Camera off for an audio-only session. Listen asks for the computer microphone separately.",
+        "On a supported secure phone address, hold to speak through the computer. Allow your microphone if asked, then hold again. Releasing stops its audio track.",
+        "Snapshot saves a video frame to your device. Stop, leave the page or use Stop camera & audio on the computer to end media access."
+      ],
+      "troubleshooting": "Keep the computer browser open and allow each requested permission. If speaker autoplay is blocked, use Enable speaker playback in the computer tab. Audio requires direct WebRTC; image fallback preserves video only. Phone microphone access needs HTTPS or another supported secure context. Nothing is recorded.",
+      "video": null
+    },
+    "computers": {
+      "title": "Connected computers",
+      "steps": [
+        "Create a one-time connection code on one computer and enter it on the other.",
+        "For computers you own, approve computer access explicitly on the target computer.",
+        "For AI-only connections, share and authorize each provider separately.",
+        "Choose Work on for the project computer, and choose an AI source in the existing provider selector."
+      ],
+      "troubleshooting": "AI-only connections do not grant files, screen or health readings. CPU and RAM appear only for authorized online computers. Disconnecting or revoking a grant stops affected access.",
+      "video": null
+    },
+    "tools": {
+      "title": "AI Tools",
+      "steps": [
+        "Install the coding agent on the computer where it will run, then use its own sign-in flow.",
+        "Open Chats and use the intended project folder and permission mode.",
+        "For personal Codex browser automation, choose Browser → Separate browser and confirm.",
+        "To share supported AI, enable sharing and authorize the recipient in Connected computers."
+      ],
+      "troubleshooting": "Browser automation needs optional Playwright MCP support plus Chrome, Edge or Chromium. Shared sessions retain isolated workspace tools and never inherit the provider’s personal browser or MCP access.",
+      "video": null
+    },
+    "security": {
+      "title": "Security & Devices",
+      "steps": [
+        "Review logged-in devices and remove any you do not recognize.",
+        "Approve a waiting login only when its code matches the other device.",
+        "Use a one-time login QR to connect your own browser.",
+        "Change the password or log out other devices when access needs to end."
+      ],
+      "troubleshooting": "A password login can wait for local approval. Use the computer’s local Admin page to recover access. Revoked devices cannot regain access by reconnecting their sockets.",
+      "video": null
+    },
+    "connection": {
+      "title": "Wi-Fi & Internet",
+      "steps": [
+        "For Wi-Fi access, put the phone and computer on the same reachable network.",
+        "Open the Local connection address or scan a fresh login QR privately. Local remains available when Remote Access is enabled.",
+        "Configure optional internet access from the computer’s Admin page.",
+        "Keep the computer running; Pocket Dev does not wake sleeping hardware.",
+        "Use the shared Local and Remote selector to copy or open the intended connection. Sharing an address does not grant a login."
+      ],
+      "troubleshooting": "Check the current address and private-network firewall rules. A Wi-Fi HTTP address supports live alerts, but browser push and phone microphone access require a supported secure context.",
+      "video": null
+    },
+    "service": {
+      "title": "Service & Updates",
+      "steps": [
+        "Configure Start at login from the computer’s local Admin page.",
+        "Choose automatic update checks independently of update reminders.",
+        "Open Settings → Service & Updates and choose which alerts you want. Sounds start off.",
+        "Enable Notification sounds explicitly. A confirmed task outcome creates a temporary alert, not a notification inbox.",
+        "Dismiss the toast or let it expire. Repeated delivery of the same event must not replay its sound.",
+        "Browser push is a separate opt-in for supported browsers and secure connections; it needs the computer to stay online."
+      ],
+      "troubleshooting": "Supported terminal hosts preserve shells through a Pocket Dev service reload; a computer reboot still ends them. Save work and check running tasks first. Browser push requires permission, a supported secure context, and an awake, reachable computer. Real vendor delivery needs separate verification.",
+      "video": null
+    },
+    "controls": {
+      "title": "Computer controls",
+      "steps": [
+        "Select the authorized computer you want to inspect.",
+        "Use Applications or Device health to inspect its actual supported capabilities.",
+        "Open Screen or Camera only when you need a preview.",
+        "Review a confirmation carefully before using power controls."
+      ],
+      "troubleshooting": "Capabilities depend on the computer and its permissions. Unsupported controls remain unavailable, and closing a preview releases its active resources.",
+      "video": null
+    },
+    "setup": {
+      "title": "Pocket Dev setup",
+      "steps": [
+        "Run pocket-dev start on your own computer.",
+        "Open its local Admin page and follow the setup and permission guidance.",
+        "Install optional AI tools and sign in through their own login flows.",
+        "Connect your phone on Wi-Fi and verify the features you intend to use before leaving the computer."
+      ],
+      "troubleshooting": "Use pocket-dev setup --check or pocket-dev doctor for diagnostics. Keep the existing config and state directories when updating. A missing optional agent does not prevent basic Pocket Dev use.",
+      "video": null
+    },
+    "chat": {
+      "title": "AI Chat",
+      "steps": [
+        "Select the project computer, open Chats and choose a Claude Code or Codex conversation. An already-open conversation can read along before you send.",
+        "Send a message to continue here. Respect an active writer and review approvals before allowing an action.",
+        "Choose a compatible provider or model in the existing chat controls. Context is passed to the next engine; native tools can differ.",
+        "Open Chat settings → Continue on computer to return to the computer. Personal Codex Browser → Separate browser requires explicit consent."
+      ],
+      "troubleshooting": "Use the provider’s own sign-in on the computer running it. Keep the host awake. Usage limits come from the provider; a reset time appears only when the provider supplies one. Antigravity and Copilot remain experimental.",
+      "video": null
+    },
+    "notifications": {
+      "title": "Smart Notifications",
+      "steps": [
+        "Open Settings → Service & Updates and choose which alerts you want. Sounds start off.",
+        "Enable Notification sounds explicitly. A confirmed task outcome creates a temporary alert, not a notification inbox.",
+        "Dismiss the toast or let it expire. Repeated delivery of the same event must not replay its sound.",
+        "Browser push is a separate opt-in for supported browsers and secure connections; it needs the computer to stay online."
+      ],
+      "troubleshooting": "For an audible alert, interact with the page and check browser/system sound settings. Background push depends on browser and vendor support. A GIF demonstrates the toast but cannot demonstrate sound.",
+      "video": null
+    },
+    "developer-tools": {
+      "title": "Developer Tools",
+      "steps": [
+        "Choose the project computer and open a terminal in its project folder.",
+        "Use Files for uploads, downloads, previews and folder ZIPs within your authorized roots.",
+        "Use Git for status, saved-file diffs, Git Graph and supported repository actions.",
+        "Open a development port only for the intended task, then close it when finished."
+      ],
+      "troubleshooting": "Git needs Git installed; native terminals need working PTY support. File and project permissions still apply. Only forward a service you intend to expose.",
+      "video": null
+    }
+  },
+  "agentPrompts": [
+    {
+      "id": "setup",
+      "title": "Set it up for me",
+      "description": "Paste into a coding assistant running on the computer you want to access.",
+      "button": "Copy setup prompt",
+      "text": "Set up Pocket Dev on this computer for AI Chat, authorized AI Sharing and Workspace access from my browser.\n\nRead https://www.theani.me/work/pocket-dev/docs/ai-setup and https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURE_VERIFICATION.md first. Version 3.0.0 is an implemented source preview with final manual stability testing pending. npm installs the currently published package, which can be older. Check the installed version before describing Version 3 controls. Do not publish a package or create a public release.\n\nVerify that your shell is on my intended computer, not a hosted sandbox. Detect OS and shell, check Node.js 22+ and npm, then inspect existing config, service and running work. Reuse an existing installation and server. For a new published installation use npm install -g @anisirji/pocket-dev and pocket-dev doctor. Use a separate checkout if I explicitly choose the source preview; do not replace a running installation as a shortcut.\n\nGuide me through local Admin setup. Let me handle passwords, provider sign-ins and OS permission dialogs. Ask only for choices and access that I have not already authorized. Start on Wi-Fi. Internet access, start at login, keep awake, optional tools, browser push and media/control permissions are separate choices. Keep credentials and one-time QR links private.\n\nHave me confirm a real phone connection before saying phone setup is complete. Keep the host awake and reachable. Report what you actually verified, what used fixtures and what still needs manual checks. Preserve provider restrictions and platform limitations."
+    },
+    {
+      "id": "project",
+      "title": "Use it with my project",
+      "description": "Keep your existing project, tasks and conversation history.",
+      "button": "Copy project prompt",
+      "text": "Help me continue this project in Pocket Dev from a browser.\n\nRead https://www.theani.me/work/pocket-dev/docs/ai-setup and check the installed version and actual computer. Preserve my config, files, open terminals, drafts and active conversations. Do not create a duplicate server or interrupt an active writer.\n\nUse AI Chat to read along or continue an existing Claude Code/Codex conversation. Return with Chat settings → Continue on computer. Do not use the removed pocket-dev takeover command. Open this project in Workspace for editor, files, terminals, diff and Git Graph. Choose the project computer independently from a compatible, explicitly authorized AI source.\n\nAI Sharing is a provider grant, not subscription transfer. Respect provider terms. Shared AI does not inherit a source host's personal browser profile, personal MCP servers or unrelated files. Personal Codex Browser → Separate browser is optional and needs explicit consent. Antigravity and Copilot remain experimental.\n\nReview existing Settings help for notifications, Local/Remote connectivity and computer controls. Camera and Listen are separate; Hold to speak needs a supported secure context and stops on release. Local Admin controls global screen, camera and microphone access; OS and browser permissions still apply. Edge can require local speaker activation. Do not perform real power actions or expose a public port without authorization.\n\nUse normal local commands when enough. If an authorized task needs the Pocket Dev terminal API, follow https://www.theani.me/work/pocket-dev/docs/reference#terminal-api-for-scripts, including login/owner approval and x-pocket-dev: 1. Keep secrets private. Confirm what works on the intended devices; do not equate a UI demo with final manual stability approval."
     }
   ]
 }

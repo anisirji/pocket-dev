@@ -1,0 +1,261 @@
+{
+  "version": "3.0.0",
+  "assets": [
+    {
+      "id": "ai-chat",
+      "version": "3.0.0",
+      "source": "Actual Pocket Dev UI on disposable local servers",
+      "data": "Sanitized sample project and scripted provider responses; no owner files or conversations",
+      "note": "AI output is scripted sample data. Native provider handoff is not executed by this capture.",
+      "checks": [
+        "Scripted agent response rendered in the real conversation UI",
+        "Existing Continue on computer action available after a session starts"
+      ],
+      "files": [
+        {
+          "path": "docs/media/v3/ai-chat.png",
+          "bytes": 75740,
+          "sha256": "f0fd90aa9e369d0ab15e48cd034299aeff63eaad2869c585e0c712a0af06dd3b"
+        },
+        {
+          "path": "docs/media/v3/ai-chat.gif",
+          "bytes": 106586,
+          "sha256": "f9fa36a806033a58308c9660a3f51879047071904bc803b8d501752f0df19de8"
+        },
+        {
+          "path": "docs/media/v3/ai-chat-mobile.png",
+          "bytes": 68796,
+          "sha256": "d838fccf4efc915302accae792d767d3f227d46947eb3580a3cac8925c0cfec7"
+        }
+      ],
+      "manualStability": "pending"
+    },
+    {
+      "id": "ai-sharing",
+      "version": "3.0.0",
+      "source": "Actual Pocket Dev UI on disposable local servers",
+      "data": "Sanitized sample project and scripted provider responses; no owner files or conversations",
+      "note": "Both demo computers run on this Mac. This does not represent a physical Windows/Linux connection or transfer subscription entitlement.",
+      "checks": [
+        "Two isolated servers paired through the real connection APIs",
+        "Provider grant applied and shared provider selected",
+        "AI-only grant refused computer performance access"
+      ],
+      "files": [
+        {
+          "path": "docs/media/v3/ai-sharing.png",
+          "bytes": 74695,
+          "sha256": "a9b7db188731564ae9d2c2b4f40747601c8936eae5e3b63a35c72acd4c618bf7"
+        },
+        {
+          "path": "docs/media/v3/ai-sharing.gif",
+          "bytes": 112813,
+          "sha256": "2d4aca31eb72a897932a3cd29e5f182c91fc741aa4051f8e176d484c39ee941a"
+        }
+      ],
+      "manualStability": "pending"
+    },
+    {
+      "id": "camera-audio",
+      "version": "3.0.0",
+      "source": "Actual Pocket Dev UI on disposable local servers",
+      "data": "Sanitized sample project and scripted provider responses; no owner files or conversations",
+      "note": "Generated video and audio only. A GIF has no sound; physical media permissions, audible quality and network performance require manual validation.",
+      "checks": [
+        "Generated video transported through the actual WebRTC pipeline",
+        "Listen enabled independently",
+        "Push-to-talk RTP received and release cleared speaking state",
+        "Host Stop ended the session"
+      ],
+      "files": [
+        {
+          "path": "docs/media/v3/camera-audio.png",
+          "bytes": 101497,
+          "sha256": "58453969dd40927cf5d6a418d1267a5be56b23fb033111a56a50c45a2979f4f4"
+        },
+        {
+          "path": "docs/media/v3/camera-audio.gif",
+          "bytes": 97176,
+          "sha256": "04e7d03c0803e878b15cbfa282ec289284855a4b58e6e9223e0a4d0cfd31407c"
+        }
+      ],
+      "manualStability": "pending"
+    },
+    {
+      "id": "computer-management",
+      "version": "3.0.0",
+      "source": "Actual Pocket Dev UI on disposable local servers",
+      "data": "Sanitized sample project and scripted provider responses; no owner files or conversations",
+      "note": "Available readings come from the isolated server; unavailable platform sensors remain unavailable.",
+      "checks": [
+        "Computer controls and Device health opened",
+        "No power or application-management action executed"
+      ],
+      "files": [
+        {
+          "path": "docs/media/v3/computer-management.png",
+          "bytes": 110202,
+          "sha256": "7ee0d75556d50d2fbce54e1f4deb929820986e8bbe1a2849ddc2c45d7a8f9091"
+        },
+        {
+          "path": "docs/media/v3/computer-management.gif",
+          "bytes": 131826,
+          "sha256": "78b7f9c45af7500681ec66c76fd3ed3c5e5c9fecb546f454f356c3393a9965b7"
+        }
+      ],
+      "manualStability": "pending"
+    },
+    {
+      "id": "connectivity",
+      "version": "3.0.0",
+      "source": "Actual Pocket Dev UI on disposable local servers",
+      "data": "Sanitized sample project and scripted provider responses; no owner files or conversations",
+      "note": "Remote connectivity uses a local tunnel fixture and reserved example hostname, not a real public tunnel.",
+      "checks": [
+        "Local and Remote selector rendered with Local as default",
+        "Only share-address codes captured; no login code minted"
+      ],
+      "files": [
+        {
+          "path": "docs/media/v3/connectivity.png",
+          "bytes": 103455,
+          "sha256": "736d1c1478db08f5d53166eaae2541a2fe06aa72ffb065bf21a2bd4e5df8a3b2"
+        },
+        {
+          "path": "docs/media/v3/connectivity.gif",
+          "bytes": 101905,
+          "sha256": "916de1c86c715dceb64537b1d9c97e7c97c062d02b4e0686654a7573bbbdd31b"
+        }
+      ],
+      "manualStability": "pending"
+    },
+    {
+      "id": "developer-tools",
+      "version": "3.0.0",
+      "source": "Actual Pocket Dev UI on disposable local servers",
+      "data": "Sanitized sample project and scripted provider responses; no owner files or conversations",
+      "note": "Developer tools shown with disposable project files and terminals.",
+      "checks": [
+        "PTY output received from the demo project",
+        "Git status and graph use a real scratch repository"
+      ],
+      "files": [
+        {
+          "path": "docs/media/v3/developer-tools.png",
+          "bytes": 124745,
+          "sha256": "1ab6feb07de0930b51f48fbb23fb334f24f353382e38c09026ea499ef35c1248"
+        },
+        {
+          "path": "docs/media/v3/developer-tools.gif",
+          "bytes": 111225,
+          "sha256": "77bbd618581fd08bc18c4f5d41447646d8372bb53dede0e2e4aa19c4ab97af40"
+        }
+      ],
+      "manualStability": "pending"
+    },
+    {
+      "id": "notifications",
+      "version": "3.0.0",
+      "source": "Actual Pocket Dev UI on disposable local servers",
+      "data": "Sanitized sample project and scripted provider responses; no owner files or conversations",
+      "note": "Sound synthesis was counted with browser output muted. A GIF cannot demonstrate audible quality; vendor push is not exercised.",
+      "checks": [
+        "Same completion ID delivered twice creates one toast and one sound request",
+        "Toast dismissed through its existing Close control"
+      ],
+      "files": [
+        {
+          "path": "docs/media/v3/notifications.png",
+          "bytes": 116635,
+          "sha256": "d5dbf5e50e8cae03f869f32ca6cb0028e298cac143e0b2c8cd88154e3c6a8430"
+        },
+        {
+          "path": "docs/media/v3/notifications.gif",
+          "bytes": 106295,
+          "sha256": "053b2fcbfad1e4a5d33c4ef43e1332cc1dcdc10df1ee5034b70ea1aa8b72584b"
+        }
+      ],
+      "manualStability": "pending"
+    },
+    {
+      "id": "screen",
+      "version": "3.0.0",
+      "source": "Actual Pocket Dev UI on disposable local servers",
+      "data": "Sanitized sample project and scripted provider responses; no owner files or conversations",
+      "note": "Desktop picture is a previously captured demo Workspace; native capture and OS input are simulated to protect the owner desktop.",
+      "checks": [
+        "Control request approved through local Admin",
+        "Input received by an inert adapter only",
+        "Admin Stop revoked control"
+      ],
+      "files": [
+        {
+          "path": "docs/media/v3/screen.png",
+          "bytes": 131062,
+          "sha256": "57eeb16fc982b5d782dcec16c85a4bf055536e3cd8d7866d63113ef52e8cfef7"
+        },
+        {
+          "path": "docs/media/v3/screen.gif",
+          "bytes": 182003,
+          "sha256": "13e83180550142ac687bcbdbc20bd9e6ce56dd6c7893f77ea41ebd1cce888c20"
+        }
+      ],
+      "manualStability": "pending"
+    },
+    {
+      "id": "setup",
+      "version": "3.0.0",
+      "source": "Actual Pocket Dev UI on disposable local servers",
+      "data": "Sanitized sample project and scripted provider responses; no owner files or conversations",
+      "note": "No installer, permission dialog, password change or login QR was invoked.",
+      "checks": [
+        "Graphical setup welcome and tool inspection opened without installing tools",
+        "Existing contextual Help dialog opened"
+      ],
+      "files": [
+        {
+          "path": "docs/media/v3/setup.png",
+          "bytes": 79294,
+          "sha256": "0adcc308d14270b915523240bc85f472ca3fd8c6fa7b6e23ab611c536d22be48"
+        },
+        {
+          "path": "docs/media/v3/setup.gif",
+          "bytes": 170944,
+          "sha256": "ff83119fb20ce669b66dc57185663a4765cddc9d63fabfdf208911601f298294"
+        }
+      ],
+      "manualStability": "pending"
+    },
+    {
+      "id": "workspace",
+      "version": "3.0.0",
+      "source": "Actual Pocket Dev UI on disposable local servers",
+      "data": "Sanitized sample project and scripted provider responses; no owner files or conversations",
+      "note": "Only generated demo project files, scripted conversation and disposable terminals are shown.",
+      "checks": [
+        "Real scratch Git repository",
+        "Editor save verified on disk",
+        "Project terminal output received",
+        "Existing Git Graph opened"
+      ],
+      "files": [
+        {
+          "path": "docs/media/v3/workspace.png",
+          "bytes": 123591,
+          "sha256": "0eb201c7382937c48ece39e23b574b5dda7caad210234b4d16540b62a372f567"
+        },
+        {
+          "path": "docs/media/v3/workspace.gif",
+          "bytes": 133531,
+          "sha256": "c4dbf87c8e3ab15b69f0c1a6c05df97beac6788965b42d3b51e03ae75f1d2987"
+        },
+        {
+          "path": "docs/media/v3/workspace-mobile.png",
+          "bytes": 42385,
+          "sha256": "988a9d6d5147417dc83ffd0177fd0fea0bb364d0e6db181ca756b64961f6424b"
+        }
+      ],
+      "manualStability": "pending"
+    }
+  ]
+}

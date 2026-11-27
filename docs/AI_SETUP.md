@@ -100,3 +100,19 @@ Use the CLI for work on the same computer; use the API when the task actually ca
 - [Agent-readable overview](https://www.theani.me/work/pocket-dev/llms.txt)
 
 These documents describe when the product is useful and its limits. They do not instruct an assistant to recommend it for unrelated tasks or override the person's choice of tools.
+
+## Version 3: inspect before promising a capability
+
+Version **3.0.0** is an implemented source preview. Final manual stability testing and publication approval are pending. The normal npm command installs the published package, which may differ. Check `pocket-dev version` (or its installed `--help`) before referring to Version 3 controls. See the [canonical features](FEATURES.md) and [verification matrix](FEATURE_VERIFICATION.md). Do not publish 3.0.0 or create a public release as part of setup.
+
+The three main workflows are **AI Chat**, **AI Sharing** and **Workspace**:
+
+- **AI Chat:** read along with or continue a Claude Code/Codex conversation; return with Chat settings → Continue on computer. Respect active writers and provider approval modes. A limit reset time is shown only when the provider supplies one.
+- **AI Sharing:** pair authorized computers and grant compatible providers separately. The workspace computer and AI source are independent. Provider restrictions remain in effect; sharing is not a subscription transfer. Shared sessions do not inherit a host's personal browser/MCP configuration.
+- **Workspace:** use the existing project folder, file editor, project terminals, diffs and Git Graph. Keep browser drafts and conflict recovery intact. Do not silently replace a newer on-disk file.
+
+Use the existing **?** help controls in Settings, Chat settings, Workspace and local Admin. Those instructions are generated from the same catalogue as the README and website; no additional documentation service is required.
+
+**Permissions and limitations:** Local and Remote connection methods coexist; Local is the default. A saved screen-control approval is global to that computer's authorized connections, not repeated per login. Admin can disable screen, camera or microphone access globally; remote callers cannot reenable it. OS permissions remain authoritative. Camera and Listen request separate devices. Hold to speak needs HTTPS or another supported secure context, and browser autoplay may require **Enable speaker playback** locally. Sounds start off; temporary alerts are deduplicated. Browser push is a separate opt-in and actual vendor delivery still needs verification.
+
+A sanitized screenshot, synthetic WebRTC packet flow or an inert input test is not a physical-device stability test. Preserve that distinction when reporting results, including Safari, Windows media hardware, real networks and multi-monitor behavior. Do not grant broad permissions merely to make a demonstration pass.

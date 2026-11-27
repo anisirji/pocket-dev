@@ -2,32 +2,15 @@
 
 **Your computer. In your pocket.**
 
-Continue AI conversations across devices, connect your team's authorized AI capabilities and develop projects from one browser-based workspace.
+Continue AI conversations across devices, share authorized AI capabilities and work on projects from one browser-based workspace.
 
-For developers and small startup teams. Free and open source (ISC). No mobile app or Pocket cloud account required.
+Free and open source. Runs on your computer. Your phone needs only a browser.
 
-[![npm](https://img.shields.io/npm/v/@anisirji/pocket-dev?label=npm)](https://www.npmjs.com/package/@anisirji/pocket-dev) ![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933) [![License ISC](https://img.shields.io/badge/license-ISC-blue)](https://github.com/anisirji/pocket-dev/blob/main/LICENSE)
+[![npm](https://img.shields.io/npm/v/@anisirji/pocket-dev?label=npm)](https://www.npmjs.com/package/@anisirji/pocket-dev) ![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933) [![ISC license](https://img.shields.io/badge/license-ISC-blue)](https://github.com/anisirji/pocket-dev/blob/main/LICENSE)
 
-[Website](https://www.theani.me/work/pocket-dev) · [Features](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md) · [Setup](https://github.com/anisirji/pocket-dev/blob/main/docs/START_HERE.md) · [YouTube](https://www.youtube.com/@afk_pocket_dev)
+[Website](https://www.theani.me/work/pocket-dev) · [All features](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md) · [Setup](https://github.com/anisirji/pocket-dev/blob/main/docs/START_HERE.md) · [Validation](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURE_VERIFICATION.md)
 
-> **Version 3 preview:** 3.0.0 is in development and not yet published to npm. Manual validation is pending. The npm badge shows the published version; diagrams illustrate workflows. See [release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_3.0.md).
-
-## Get started
-
-On your computer with [Node.js 22+](https://nodejs.org/):
-
-```bash
-npm install -g @anisirji/pocket-dev
-pocket-dev start
-```
-
-Install → Follow guided setup → Scan the QR code → Start working.
-
-Use the same network initially. Keep your computer awake and connected. Optional tools and permissions can be configured in Admin.
-
-[Windows](https://github.com/anisirji/pocket-dev/blob/main/docs/windows.md) · [macOS](https://github.com/anisirji/pocket-dev/blob/main/docs/macos.md) · [Linux](https://github.com/anisirji/pocket-dev/blob/main/docs/linux.md) · [Set up with AI](https://www.theani.me/work/pocket-dev/prompts)
-
-<p align="center"><img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/pocket-dev-demo.gif" width="760" alt="Earlier Pocket Dev demo: phone terminal, AI chat and computer switching"></p>
+> **Version 3.0.0 preview:** planned features are implemented. Final manual stability testing and release approval are pending. The npm badge and install command refer to the published package, not this preview. [Validation](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURE_VERIFICATION.md) · [Release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_3.0.md).
 
 ## Three reasons to use Pocket Dev
 
@@ -35,45 +18,71 @@ Use the same network initially. Keep your computer awake and connected. Optional
 
 **Start on your computer. Continue on your phone.**
 
-![Illustrative workflow: Computer chat → Continue → Phone chat](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/ai-chat.svg)
+Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals.
 
-Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals. [Learn more](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#chat-with-claude-code-codex-antigravity-and-copilot).
+<img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/ai-chat.png" width="960" height="600" alt="Pocket Dev 3 AI Chat interface with sanitized demonstration data">
 
-### AI & Resource Sharing
+[Phone layout](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/ai-chat-mobile.png) · [Short demonstration](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/ai-chat.gif) · [Instructions](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#chat-with-claude-code-codex-antigravity-and-copilot)
+
+### AI Sharing
 
 **One team. More AI capabilities.**
 
-![Illustrative workflow: Workspace PC → Authorized link → AI source](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/ai-sharing.svg)
+Connect authorized computers and choose a compatible shared AI source while keeping your project on its workspace computer.
 
-Connect authorized computers and choose a compatible shared AI source while keeping your project on its workspace computer. [Learn more](https://github.com/anisirji/pocket-dev/blob/main/docs/UNIFIED_CONNECTIONS.md).
+<img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/ai-sharing.png" width="960" height="600" alt="Pocket Dev 3 AI Sharing interface with sanitized demonstration data">
+
+[Short demonstration](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/ai-sharing.gif) · [Instructions](https://github.com/anisirji/pocket-dev/blob/main/docs/UNIFIED_CONNECTIONS.md)
 
 ### Workspace
 
 **Your project. One place.**
 
-![Illustrative workflow: Files → Editor → AI chat](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/workspace.svg)
+Use a VS Code-inspired editor, files, chat, terminal and Git in one workspace.
 
-Use a VS Code-inspired editor, files, chat, terminal and Git in one workspace. [Learn more](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#project-workspace).
+<img src="https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/workspace.png" width="960" height="600" alt="Pocket Dev 3 Workspace interface with sanitized demonstration data">
 
-## Everything else you need
+[Phone layout](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/workspace-mobile.png) · [Short demonstration](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/workspace.gif) · [Instructions](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#project-workspace)
 
-| | |
+*Actual Pocket Dev 3 UI, captured with disposable projects and sample data. AI responses are scripted. Media and native-control demonstrations use simulated sources where identified. [Capture details](https://github.com/anisirji/pocket-dev/blob/main/docs/media/v3/README.md).*
+
+## Get started
+
+Install the current published version on your computer with [Node.js 22+](https://nodejs.org/):
+
+```sh
+npm install -g @anisirji/pocket-dev
+pocket-dev start
+```
+
+Follow setup → connect on the same Wi-Fi → scan the login QR privately → open a project. Keep the computer awake and connected.
+
+[macOS](https://github.com/anisirji/pocket-dev/blob/main/docs/macos.md) · [Windows](https://github.com/anisirji/pocket-dev/blob/main/docs/windows.md) · [Linux](https://github.com/anisirji/pocket-dev/blob/main/docs/linux.md) · [Set up with AI](https://www.theani.me/work/pocket-dev/prompts) · [Test the 3.0.0 source preview](https://github.com/anisirji/pocket-dev/blob/main/docs/START_HERE.md#test-the-version-3-preview)
+
+## Also included
+
+| Feature | What it does |
 | --- | --- |
-| **[Smart Notifications](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#smart-notifications)**<br>![Illustrative workflow: AI task → Completed → One alert](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/notifications.svg)<br>Get a short sound and temporary alert when a task completes, fails or needs attention — no notification inbox. | **[Remote Screen & Control](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#remote-screen--control)**<br>![Illustrative workflow: View screen → Approve control → Mac input](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/screen.svg)<br>View an authorized computer's screen and choose displays or quality where supported; optional Mac input needs local approval. |
-| **[Camera & Audio](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#camera--audio)**<br>![Illustrative workflow: Camera → Listen → Push to talk](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/camera-audio.svg)<br>View the host camera, listen to its microphone and use push to talk through its speakers with authorization. | **[Developer Tools](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#developer-tools)**<br>![Illustrative workflow: Terminal → Files → Git](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/developer-tools.svg)<br>Use terminals, files, Git, development ports and device-to-device messages. |
-| **[Computer Management](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#computer-management)**<br>![Illustrative workflow: Health → Apps → Power](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/computer-management.svg)<br>See available health information, manage running apps and use supported power controls. | **[Connected & Self-hosted](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#connected--self-hosted)**<br>![Illustrative workflow: Local Wi-Fi → QR login → Remote option](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/connectivity.svg)<br>Connect locally or enable optional remote access; authorize devices with QR codes and manage permissions. |
-| **[Simple Setup & Help](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#simple-setup--help)**<br>![Illustrative workflow: Install → Configure → Connect](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/media/v3/setup.svg)<br>Install with npm, configure through guided Admin setup and use contextual instructions and diagnostics. |  |
+| [Smart Notifications](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#smart-notifications) | Get a temporary alert and optional short sound when a task completes, fails or needs attention. |
+| [Remote Screen & Control](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#remote-screen--control) | View an authorized computer's screen and choose displays or quality where supported; optional Mac input needs local approval. |
+| [Camera & Audio](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#camera--audio) | View the host camera, listen to its microphone and use push to talk through its speakers with authorization. |
+| [Developer Tools](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#developer-tools) | Use terminals, files, Git, development ports and device-to-device messages. |
+| [Computer Management](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#computer-management) | See available health information, manage running apps and use supported power controls. |
+| [Connected & Self-hosted](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#connected--self-hosted) | Connect locally or enable optional remote access; authorize devices with QR codes and manage permissions. |
+| [Simple Setup & Help](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md#simple-setup--help) | Install with npm, configure through guided Admin setup and use contextual instructions and diagnostics. |
+
+[See every feature, screenshot and instruction](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md).
 
 ## Your computer. Your control.
 
-Pocket runs on your computer with local state, no centralized Pocket database and no required Pocket cloud account. Local access is the default. Optional tunnels, browser push and external AI services may use external infrastructure. Features depend on OS, permissions and installed tools. Share AI only where authorized and permitted by provider terms. [Access and permissions](https://github.com/anisirji/pocket-dev/blob/main/ACCESS.md) · [Sharing limits](https://github.com/anisirji/pocket-dev/blob/main/docs/UNIFIED_CONNECTIONS.md).
+Local access is the default. No mobile app, centralized Pocket database or required Pocket cloud account. Optional tunnels, browser push and AI providers may use external services. Share only what you are authorized to share and what the provider permits. Platform and browser permissions still apply.
 
-## Documentation & support
+[Access and permissions](https://github.com/anisirji/pocket-dev/blob/main/ACCESS.md) · [AI sharing limits](https://github.com/anisirji/pocket-dev/blob/main/docs/UNIFIED_CONNECTIONS.md) · [Manual checks still pending](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURE_VERIFICATION.md)
 
-[Start here](https://github.com/anisirji/pocket-dev/blob/main/docs/START_HERE.md) · [All features](https://github.com/anisirji/pocket-dev/blob/main/docs/FEATURES.md) · [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#troubleshooting) · [Release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_3.0.md) · [Technical reference](https://github.com/anisirji/pocket-dev/blob/main/docs/REFERENCE.md).
+## Documentation and support
+
+[Start here](https://github.com/anisirji/pocket-dev/blob/main/docs/START_HERE.md) · [AI setup](https://github.com/anisirji/pocket-dev/blob/main/docs/AI_SETUP.md) · [Troubleshooting](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#troubleshooting) · [Reference](https://github.com/anisirji/pocket-dev/blob/main/docs/REFERENCE.md) · [Release notes](https://github.com/anisirji/pocket-dev/blob/main/docs/RELEASE_3.0.md)
 
 [Report a bug](https://github.com/anisirji/pocket-dev/issues/new/choose) · [Discussions](https://github.com/anisirji/pocket-dev/discussions) · [Instagram](https://www.instagram.com/afk_pocket_dev)
 
-Built by [anisirji](https://theani.me) and contributors, including [Rohit Kumar Das](https://www.linkedin.com/in/rohit-kumar-das-583b28223). ISC License. Preserve the copyright notice when redistributing.
-
-*Spend less time tied to a desk, without losing touch with your work.*
+Written by [theani.me](https://theani.me) and contributors, including [Rohit Kumar Das](https://www.linkedin.com/in/rohit-kumar-das-583b28223). ISC license. Preserve the copyright notice when redistributing.

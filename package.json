@@ -98,7 +98,9 @@
     "docs/START_HERE.md",
     "docs/FEATURE_STANDARD.md",
     "docs/feature-catalog.json",
-    "docs/media/v3"
+    "docs/media/v3",
+    "docs/FEATURE_VERIFICATION.md",
+    "docs/VALIDATION.md"
   ],
   "os": [
     "darwin",

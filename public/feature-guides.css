@@ -7,6 +7,7 @@
 .pd-guide ol { padding-left: 22px; margin: 20px 0; }
 .pd-guide li + li { margin-top: 12px; }
 .pd-guide p { margin: 0; color: var(--muted, #98a4b8); }
+.pd-guide-video { display: inline-flex; align-items: center; min-height: 44px; margin-top: 12px; color: var(--accent, #6aa9ff); }
 .pd-guide button { min-height: 44px; padding: 0 12px; border: 1px solid var(--line, #30394b); border-radius: 8px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .pd-guide-button:focus-visible, .pd-guide button:focus-visible { outline: 2px solid var(--accent, #6aa9ff); outline-offset: 2px; }
 @media (max-width: 700px) { .pd-guide { max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 20px); margin: auto auto 0; border-radius: 14px 14px 0 0; padding-bottom: max(22px, env(safe-area-inset-bottom, 0px)); } }

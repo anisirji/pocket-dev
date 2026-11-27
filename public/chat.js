@@ -902,7 +902,9 @@
     continueComputer.disabled = !c.sessionId;
     if (!c.sessionId) continueComputer.title = 'Send a message first.';
     body.append(where, continueComputer, perms, del);
-    sheet.replaceChildren(sheetHead('Chat settings'), body);
+    const head = sheetHead('Chat settings');
+    if (window.PocketGuides) head.append(window.PocketGuides.button('chat'));
+    sheet.replaceChildren(head, body);
   }
 
   // Permissions screen: the rules that let requests through without a card, per chat and per project file.

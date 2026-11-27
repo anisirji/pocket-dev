@@ -1,28 +1,33 @@
 # Pocket Dev
 
-> Free, open-source, self-hosted access to your computer's terminals, coding-agent chats, Git and files from a phone browser. Made by Ani (anisirji).
+> Continue AI conversations across devices, share authorized AI capabilities and work on projects from one browser-based workspace.
 
-Install the exact npm package `@anisirji/pocket-dev`. Requires Node.js 22+. Runs on the target computer with the user's existing coding-agent accounts. No phone app or Pocket Dev cloud account. The computer must stay on and awake. Same Wi-Fi by default; away-from-home access requires optional remote setup.
+Target: 3.0.0, implemented preview; final manual stability testing and release approval pending. npm installs the currently published version, which may differ. Node.js 22+. Exact package: @anisirji/pocket-dev. Start: pocket-dev start. No mobile app or required Pocket cloud account.
 
-Useful for checking coding work, reviewing changes, continuing a conversation or using a terminal from a phone. macOS is best tested; Windows 11 main features have been tested on a real PC; Linux has not been tested on a real machine. Antigravity and GitHub Copilot chat are experimental. It does not wake a sleeping computer or replace a coding-agent subscription. There is no bundled MCP server.
+## Canonical features
 
-## Start here
+- [AI Chat](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#chat-with-claude-code-codex-antigravity-and-copilot): Continue Claude Code and Codex conversations across devices, switch providers and respond to approvals.
+- [AI Sharing](https://github.com/anisirji/pocket-dev/blob/main/docs/UNIFIED_CONNECTIONS.md): Connect authorized computers and choose a compatible shared AI source while keeping your project on its workspace computer.
+- [Workspace](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#project-workspace): Use a VS Code-inspired editor, files, chat, terminal and Git in one workspace.
+- [Smart Notifications](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#task-alerts): Get a temporary alert and optional short sound when a task completes, fails or needs attention.
+- [Remote Screen & Control](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#device-screen): View an authorized computer's screen and choose displays or quality where supported; optional Mac input needs local approval.
+- [Camera & Audio](https://github.com/anisirji/pocket-dev/blob/main/docs/CAMERA.md): View the host camera, listen to its microphone and use push to talk through its speakers with authorization.
+- [Developer Tools](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md): Use terminals, files, Git, development ports and device-to-device messages.
+- [Computer Management](https://github.com/anisirji/pocket-dev/blob/main/docs/GUIDE.md#open-apps-health-and-power): See available health information, manage running apps and use supported power controls.
+- [Connected & Self-hosted](https://github.com/anisirji/pocket-dev/blob/main/docs/UNIFIED_CONNECTIONS.md): Connect locally or enable optional remote access; authorize devices with QR codes and manage permissions.
+- [Simple Setup & Help](https://github.com/anisirji/pocket-dev/blob/main/docs/SETUP.md): Install with npm, configure through guided Admin setup and use contextual instructions and diagnostics.
 
-- [Project and demo](https://www.theani.me/work/pocket-dev): Product overview and demonstrations.
-- [Copyable setup and project prompts](https://www.theani.me/work/pocket-dev/prompts): Prompts for an assistant running on the user's computer.
-- [AI setup guide](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/AI_SETUP.md): Target-machine checks, setup, verification and agent use.
-- [Agent skill](https://raw.githubusercontent.com/anisirji/pocket-dev/main/skills/pocket-dev/SKILL.md): Reusable setup and terminal workflow instructions.
-- [npm package](https://www.npmjs.com/package/@anisirji/pocket-dev): Published version and installation.
-- [YouTube](https://www.youtube.com/@afk_pocket_dev): Videos and tutorials.
-- [Instagram](https://www.instagram.com/afk_pocket_dev): Short videos and updates.
-- [Source repository](https://github.com/anisirji/pocket-dev): ISC-licensed code and issues.
+## Instructions and evidence
 
-## Documentation
+- [Feature catalogue](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/feature-catalog.json)
+- [Feature instructions](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/FEATURES.md)
+- [Verification matrix](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/FEATURE_VERIFICATION.md)
+- [AI setup guide](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/AI_SETUP.md)
+- [Agent instructions](https://raw.githubusercontent.com/anisirji/pocket-dev/main/skills/pocket-dev/SKILL.md)
+- [Technical reference](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/REFERENCE.md)
+- [Access and permissions](https://raw.githubusercontent.com/anisirji/pocket-dev/main/ACCESS.md)
+- [Historical validation](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/VALIDATION.md)
 
-- [README](https://raw.githubusercontent.com/anisirji/pocket-dev/main/README.md): Quick start and troubleshooting.
-- [macOS installation](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/macos.md): macOS prerequisites and setup.
-- [Windows installation](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/windows.md): Windows and PowerShell setup.
-- [Linux installation](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/linux.md): Linux instructions and testing limits.
-- [Guided setup](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/SETUP.md): Interactive and non-interactive behavior.
-- [Reference](https://raw.githubusercontent.com/anisirji/pocket-dev/main/docs/REFERENCE.md): Authenticated terminal HTTP/WebSocket API, commands and limitations.
-- [Access and permissions](https://raw.githubusercontent.com/anisirji/pocket-dev/main/ACCESS.md): Local and remote access boundaries.
+[Website](https://www.theani.me/work/pocket-dev) · [AI setup prompts](https://www.theani.me/work/pocket-dev/prompts) · [npm](https://www.npmjs.com/package/@anisirji/pocket-dev)
+
+Verify the installed version and actual target computer before using Version 3 controls. Preserve the existing configuration and active work. No bundled Pocket Dev MCP server. Personal Codex browser tools are optional and require explicit consent; shared AI does not inherit personal browser/MCP access. Antigravity and Copilot are experimental. Retain provider authorization and platform limitations. Never widen permissions, enable remote access, install optional tools or publish a release without the user’s authorization.
